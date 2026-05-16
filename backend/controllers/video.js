@@ -6,7 +6,7 @@ const cloudinary = require('cloudinary').v2;
 // @access  Public
 exports.getVideos = async (req, res, next) => {
   try {
-    const videos = await Video.find().populate('owner', 'name avatar');
+    const videos = await Video.find().populate('owner', 'name avatar').populate('category', 'name');
     res.status(200).json({
       success: true,
       count: videos.length,
@@ -22,7 +22,7 @@ exports.getVideos = async (req, res, next) => {
 // @access  Public
 exports.getVideo = async (req, res, next) => {
   try {
-    const video = await Video.findById(req.params.id).populate('owner', 'name avatar subscribersCount');
+    const video = await Video.findById(req.params.id).populate('owner', 'name avatar subscribersCount').populate('category', 'name');
 
     if (!video) {
       return res.status(404).json({ success: false, message: 'Video not found' });
@@ -61,13 +61,16 @@ exports.uploadVideo = async (req, res, next) => {
       folder: 'indiatube/thumbnails',
     });
 
+    const durationSec = videoResult.duration || 0;
+
     const video = await Video.create({
       title: req.body.title,
       description: req.body.description,
       category: req.body.category,
       videoUrl: videoResult.secure_url,
       thumbnail: thumbnailResult.secure_url,
-      duration: videoResult.duration,
+      duration: durationSec,
+      isShort: durationSec > 0 && durationSec <= 60,
       owner: req.user.id,
       visibility: req.body.visibility || 'public',
     });

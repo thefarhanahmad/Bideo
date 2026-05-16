@@ -4,7 +4,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import Colors from '../../constants/Colors';
 import VideoCard from '../../components/VideoCard';
 import CategoryList from '../../components/CategoryList';
-import { videoService } from '../../services/api';
+import { videoService, categoryService } from '../../services/api';
 import { fetchVideosStart, fetchVideosSuccess, fetchVideosFailure } from '../../redux/slices/videoSlice';
 import { RootState } from '../../redux/store';
 
@@ -54,25 +54,49 @@ export default function HomeScreen() {
   const dispatch = useDispatch();
   const { videos, loading, error } = useSelector((state: RootState) => state.video);
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [categoriesList, setCategoriesList] = useState<string[]>(['All']);
 
   useEffect(() => {
     loadVideos();
+    loadCategories();
   }, []);
 
   const loadVideos = async () => {
     try {
       dispatch(fetchVideosStart());
-      const response = await videoService.getVideos();
-      if (response.data && response.data.length > 0) {
-        dispatch(fetchVideosSuccess(response.data));
+      const data = await videoService.getVideos();
+      // data: array of videos
+      console.log('Fetched videos from API:', data);
+      if (data && data.length > 0) {
+        // normalize category to name if populated
+        const normalized = data.map((v: any) => ({
+          ...v,
+          category: v.category && (v.category.name || v.category),
+        }));
+        dispatch(fetchVideosSuccess(normalized));
       } else {
         // Fallback to sample data if API returns empty
         dispatch(fetchVideosSuccess(SAMPLE_VIDEOS));
       }
     } catch (err: any) {
       // Fallback to sample data on error
+      console.error('Error fetching videos:', err);
       dispatch(fetchVideosSuccess(SAMPLE_VIDEOS));
       console.log('Using sample data due to API error');
+    }
+  };
+
+  const loadCategories = async () => {
+    try {
+      const res = await categoryService.getCategories();
+      if (res && res.length > 0) {
+        const names = res.map((c: any) => c.name);
+        setCategoriesList(['All', ...names]);
+      } else {
+        setCategoriesList(['All']);
+      }
+    } catch (e) {
+      setCategoriesList(['All']);
     }
   };
 
@@ -91,6 +115,7 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       <CategoryList
+        categories={categoriesList}
         selectedCategory={selectedCategory}
         onSelectCategory={setSelectedCategory}
       />

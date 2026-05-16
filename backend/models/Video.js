@@ -39,7 +39,8 @@ const videoSchema = new mongoose.Schema({
     default: 0,
   },
   category: {
-    type: String,
+    type: mongoose.Schema.ObjectId,
+    ref: 'Category',
     required: [true, 'Please add a category'],
   },
   tags: [String],
@@ -51,6 +52,10 @@ const videoSchema = new mongoose.Schema({
   duration: {
     type: Number, // in seconds
     default: 0,
+  },
+  isShort: {
+    type: Boolean,
+    default: false,
   },
   createdAt: {
     type: Date,

@@ -2,14 +2,13 @@ import React from 'react';
 import { ScrollView, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Colors from '../constants/Colors';
 
-const categories = ['All', 'Music', 'Gaming', 'News', 'Movies', 'Fashion', 'Learning', 'Live', 'Sport'];
-
 interface CategoryListProps {
+  categories?: string[];
   selectedCategory: string;
   onSelectCategory: (category: string) => void;
 }
 
-const CategoryList: React.FC<CategoryListProps> = ({ selectedCategory, onSelectCategory }) => {
+const CategoryList: React.FC<CategoryListProps> = ({ categories = ['All'], selectedCategory, onSelectCategory }) => {
   return (
     <ScrollView 
       horizontal 

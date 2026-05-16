@@ -1,36 +1,59 @@
-import React from 'react';
-import { View, Text, StyleSheet, FlatList, Image, Dimensions, TouchableOpacity } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { View, Text, StyleSheet, FlatList, Image, Dimensions, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../../constants/Colors';
+import { videoService } from '../../services/api';
+import { Video, ResizeMode } from 'expo-av';
 
 const { height, width } = Dimensions.get('window');
 
-const SAMPLE_SHORTS = [
-  {
-    id: 's1',
-    videoUrl: 'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4',
-    thumbnail: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80',
-    owner: { name: 'VibeCheck', avatar: 'https://i.pravatar.cc/150?u=vibe' },
-    title: 'Morning vibes in the mountains 🏔️ #nature #peace',
-    likes: '1.2M',
-    comments: '12K',
-  },
-  {
-    id: 's2',
-    videoUrl: 'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4',
-    thumbnail: 'https://images.unsplash.com/photo-1514525253344-f814d0c9e58f?auto=format&fit=crop&w=800&q=80',
-    owner: { name: 'DanceIndia', avatar: 'https://i.pravatar.cc/150?u=dance' },
-    title: 'New dance moves! 🕺🔥 #dance #trending',
-    likes: '850K',
-    comments: '5.4K',
-  }
-];
-
 export default function ShortsScreen() {
+  const [shorts, setShorts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadShorts();
+  }, []);
+
+  const loadShorts = async () => {
+    setLoading(true);
+    try {
+      const data = await videoService.getVideos(); // returns array
+      const onlyShorts = (data || []).filter((v: any) => !!v.isShort).map((v: any) => ({
+        id: v._id,
+        videoUrl: v.videoUrl,
+        thumbnail: v.thumbnail,
+        owner: { name: v.owner?.name || 'Unknown', avatar: v.owner?.avatar || '' },
+        title: v.title,
+        likes: (v.likes && v.likes.length) || 0,
+        comments: v.commentsCount || 0,
+      }));
+      setShorts(onlyShorts);
+    } catch (e) {
+      console.log('Failed to load shorts', e);
+      setShorts([]);
+    }
+    setLoading(false);
+  };
+
+  if (loading) return (
+    <View style={[styles.container, styles.centerContainer]}>
+      <ActivityIndicator size="large" color={Colors.primary} />
+    </View>
+  );
+
+  if (!loading && shorts.length === 0) {
+    return (
+      <View style={[styles.container, styles.centerContainer]}>
+        <Text style={{ color: Colors.white }}>No shorts available</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <FlatList
-        data={SAMPLE_SHORTS}
+        data={shorts}
         keyExtractor={(item) => item.id}
         pagingEnabled
         vertical
@@ -76,6 +99,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: 'black',
+  },
+  centerContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   shortItem: {
     width: width,

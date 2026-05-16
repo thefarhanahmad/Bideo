@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api';
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.3.108:5000/api';
 
 const api = axios.create({
   baseURL: API_URL,
@@ -12,12 +12,20 @@ const api = axios.create({
 export const videoService = {
   getVideos: async () => {
     const response = await api.get('/videos');
-    return response.data;
+    // normalize to return the array of videos directly
+    return response.data && response.data.data ? response.data.data : [];
   },
   getVideo: async (id: string) => {
     const response = await api.get(`/videos/${id}`);
     return response.data;
   },
+};
+
+export const categoryService = {
+  getCategories: async () => {
+    const response = await api.get('/categories');
+    return response.data && response.data.data ? response.data.data : [];
+  }
 };
 
 export const authService = {
