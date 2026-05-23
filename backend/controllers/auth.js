@@ -1,5 +1,32 @@
 const User = require('../models/User');
 
+exports.signupWithPhone = async (req, res, next) => {
+  try {
+    const { name, phone, password } = req.body;
+    const existing = await User.findOne({ phone });
+    if (existing) {
+      return res.status(400).json({ success: false, message: 'Phone already registered' });
+    }
+    const user = await User.create({ name, phone, password, authProvider: 'phone' });
+    sendTokenResponse(user, 201, res);
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.loginWithPhone = async (req, res, next) => {
+  try {
+    const { phone, password } = req.body;
+    const user = await User.findOne({ phone }).select('+password');
+    if (!user || !(await user.matchPassword(password))) {
+      return res.status(401).json({ success: false, message: 'Invalid phone or password' });
+    }
+    sendTokenResponse(user, 200, res);
+  } catch (err) {
+    next(err);
+  }
+};
+
 // @desc    Google Login
 // @route   POST /api/auth/google
 // @access  Public
@@ -7,14 +34,18 @@ exports.googleLogin = async (req, res, next) => {
   try {
     const { name, email, avatar } = req.body;
 
-    let user = await User.findOne({ email });
+    let user = await User.findOne({ email }).select('+password');
 
     if (!user) {
       user = await User.create({
         name,
         email,
         avatar,
+        authProvider: 'google',
       });
+    } else if (!user.authProvider) {
+      user.authProvider = 'google';
+      await user.save();
     }
 
     sendTokenResponse(user, 200, res);
@@ -59,11 +90,13 @@ const sendTokenResponse = (user, statusCode, res) => {
     success: true,
     token,
     user: {
+        _id: user._id,
         id: user._id,
         name: user.name,
         email: user.email,
         avatar: user.avatar,
-        role: user.role
+        role: user.role,
+        phone: user.phone
     }
   });
 };

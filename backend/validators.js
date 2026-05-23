@@ -17,6 +17,17 @@ const authValidationRules = () => [
   body('avatar').optional().isString(),
 ];
 
+const phoneSignupValidationRules = () => [
+  body('name').notEmpty().withMessage('Name is required').isString(),
+  body('phone').notEmpty().withMessage('Phone is required').isLength({ min: 10, max: 10 }).withMessage('Phone must be 10 digits').isNumeric().withMessage('Phone must be numeric'),
+  body('password').notEmpty().withMessage('Password is required').isLength({ min: 6 }),
+];
+
+const phoneLoginValidationRules = () => [
+  body('phone').notEmpty().withMessage('Phone is required').isLength({ min: 10, max: 10 }).withMessage('Phone must be 10 digits').isNumeric().withMessage('Phone must be numeric'),
+  body('password').notEmpty().withMessage('Password is required'),
+];
+
 const validate = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -25,5 +36,5 @@ const validate = (req, res, next) => {
   next();
 };
 
-module.exports = { videoValidationRules, commentValidationRules, authValidationRules, validate };
+module.exports = { videoValidationRules, commentValidationRules, authValidationRules, phoneSignupValidationRules, phoneLoginValidationRules, validate };
 

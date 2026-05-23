@@ -1,28 +1,18 @@
 const User = require('../models/User');
 
-// @desc    Admin login using env credentials
+// @desc    Admin login using database credentials
 // @route   POST /api/admin/login
 // @access  Public
 exports.loginAdmin = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const { phone, password } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({ success: false, message: 'Email and password required' });
+    if (!phone || !password) {
+      return res.status(400).json({ success: false, message: 'Phone and password required' });
     }
-
-    if (email !== process.env.ADMIN_EMAIL || password !== process.env.ADMIN_PASSWORD) {
-      return res.status(401).json({ success: false, message: 'Invalid credentials' });
-    }
-
-    // Find or create admin user in DB so existing auth middleware works
-    let user = await User.findOne({ email });
-
-    if (!user) {
-      user = await User.create({ name: 'Admin', email, avatar: '', role: 'admin' });
-    } else if (user.role !== 'admin') {
-      user.role = 'admin';
-      await user.save();
+    const user = await User.findOne({ phone }).select('+password');
+    if (!user || user.role !== 'admin' || !(await user.matchPassword(password))) {
+      return res.status(401).json({ success: false, message: 'Invalid admin credentials' });
     }
 
     // Create token
@@ -37,7 +27,7 @@ exports.loginAdmin = async (req, res, next) => {
       options.secure = true;
     }
 
-    res.status(200).cookie('token', token, options).json({ success: true, token, user: { id: user._id, name: user.name, email: user.email, avatar: user.avatar, role: user.role } });
+    res.status(200).cookie('token', token, options).json({ success: true, token, user: { _id: user._id, id: user._id, name: user.name, email: user.email, phone: user.phone, avatar: user.avatar, role: user.role } });
   } catch (err) {
     next(err);
   }

@@ -4,6 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import Colors from '../constants/Colors';
 import { useRouter } from 'expo-router';
 
+const FALLBACK_IMAGE = 'https://via.placeholder.com/640x360?text=No+Image';
+
 interface VideoCardProps {
   video: {
     _id: string;
@@ -35,25 +37,25 @@ const VideoCard: React.FC<VideoCardProps> = ({ video }) => {
   };
 
   return (
-    <TouchableOpacity 
-      style={styles.container} 
+    <TouchableOpacity
+      style={styles.container}
       onPress={() => router.push(`/video/${video._id}`)}
     >
       <View style={styles.thumbnailContainer}>
-        <Image source={{ uri: video.thumbnail }} style={styles.thumbnail} />
+        <Image source={{ uri: video?.thumbnail || FALLBACK_IMAGE }} style={styles.thumbnail} />
         <View style={styles.durationBadge}>
-          <Text style={styles.durationText}>{formatDuration(video.duration)}</Text>
+          <Text style={styles.durationText}>{formatDuration(video?.duration || 0)}</Text>
         </View>
       </View>
-      
+
       <View style={styles.detailsContainer}>
-        <Image source={{ uri: video.owner.avatar }} style={styles.avatar} />
+        <Image source={{ uri: video?.owner?.avatar || FALLBACK_IMAGE }} style={styles.avatar} />
         <View style={styles.textContainer}>
           <Text style={styles.title} numberOfLines={2}>
-            {video.title}
+            {video?.title || 'Untitled'}
           </Text>
           <Text style={styles.metadata}>
-            {video.owner.name} • {formatViews(video.views)} • 1 day ago
+            {(video?.owner?.name || 'Unknown')} - {formatViews(video?.views || 0)} - 1 day ago
           </Text>
         </View>
         <TouchableOpacity style={styles.menuButton}>

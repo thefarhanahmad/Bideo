@@ -9,6 +9,14 @@ const api = axios.create({
   },
 });
 
+export const setAuthToken = (token?: string | null) => {
+  if (token) {
+    api.defaults.headers.common.Authorization = `Bearer ${token}`;
+  } else {
+    delete api.defaults.headers.common.Authorization;
+  }
+};
+
 export const videoService = {
   getVideos: async () => {
     const response = await api.get('/videos');
@@ -29,6 +37,14 @@ export const categoryService = {
 };
 
 export const authService = {
+  signupWithPhone: async (userData: { name: string; phone: string; password: string }) => {
+    const response = await api.post('/auth/signup', userData);
+    return response.data;
+  },
+  loginWithPhone: async (credentials: { phone: string; password: string }) => {
+    const response = await api.post('/auth/login', credentials);
+    return response.data;
+  },
   googleLogin: async (userData: { name: string; email: string; avatar: string }) => {
     const response = await api.post('/auth/google', userData);
     return response.data;

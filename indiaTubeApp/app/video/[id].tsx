@@ -12,6 +12,8 @@ import { useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import api from '../../services/api';
 
+const FALLBACK_IMAGE = 'https://via.placeholder.com/640x360?text=No+Image';
+
 export default function VideoScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -37,10 +39,13 @@ export default function VideoScreen() {
         videoService.getVideo(id),
         videoService.getVideos(),
       ]);
-      setVideo(videoRes.data);
-      setRecommendedVideos(allVideosRes.data.filter((v: any) => v._id !== id));
+      const videoData = videoRes?.data || videoRes;
+      const allVideos = Array.isArray(allVideosRes) ? allVideosRes : (allVideosRes?.data || []);
+
+      setVideo(videoData || null);
+      setRecommendedVideos((allVideos || []).filter((v: any) => v?._id !== id));
       
-      if (isAuthenticated && videoRes.data.likes.includes(user?._id)) {
+      if (isAuthenticated && Array.isArray(videoData?.likes) && videoData.likes.includes(user?._id)) {
         setIsLiked(true);
       }
     } catch (err) {
@@ -91,7 +96,7 @@ export default function VideoScreen() {
   return (
     <View style={styles.container}>
       <Video
-        source={{ uri: video.videoUrl }}
+        source={{ uri: video?.videoUrl || '' }}
         rate={1.0}
         volume={1.0}
         isMuted={false}
@@ -136,10 +141,10 @@ export default function VideoScreen() {
 
             <View style={styles.channelContainer}>
               <View style={styles.channelInfo}>
-                <Image source={{ uri: video.owner.avatar }} style={styles.avatar} />
+                <Image source={{ uri: video?.owner?.avatar || FALLBACK_IMAGE }} style={styles.avatar} />
                 <View>
-                  <Text style={styles.channelName}>{video.owner.name}</Text>
-                  <Text style={styles.subscriberCount}>{video.owner.subscribersCount} subscribers</Text>
+                  <Text style={styles.channelName}>{video?.owner?.name || 'Unknown channel'}</Text>
+                  <Text style={styles.subscriberCount}>{video?.owner?.subscribersCount || 0} subscribers</Text>
                 </View>
               </View>
               <TouchableOpacity 

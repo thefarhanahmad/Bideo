@@ -10,11 +10,7 @@ const HISTORY = [
 ];
 
 const MENU_ITEMS = [
-  { id: '1', icon: 'time-outline', label: 'History' },
   { id: '2', icon: 'play-outline', label: 'Your videos' },
-  { id: '3', icon: 'download-outline', label: 'Downloads' },
-  { id: '4', icon: 'film-outline', label: 'Your movies' },
-  { id: '5', icon: 'time-outline', label: 'Watch later' },
 ];
 
 export default function LibraryScreen() {
