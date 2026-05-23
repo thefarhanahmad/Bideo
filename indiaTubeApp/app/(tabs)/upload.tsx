@@ -12,8 +12,9 @@ import AuthModal from '../../components/AuthModal';
 export default function UploadScreen() {
   const router = useRouter();
   const { editId } = useLocalSearchParams<{ editId?: string }>();
-  const { isAuthenticated } = useSelector((state: RootState) => state.auth);
+  const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
   const [authModalVisible, setAuthModalVisible] = useState(false);
+  const [showChannelPrompt, setShowChannelPrompt] = useState(false);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -28,12 +29,16 @@ export default function UploadScreen() {
   useEffect(() => {
     if (!isAuthenticated) {
       setAuthModalVisible(true);
+    } else if (!user?.channelName) {
+      setShowChannelPrompt(true);
+    } else {
+      setShowChannelPrompt(false);
     }
     loadCategories();
     if (editId) {
       loadVideoDetails(editId);
     }
-  }, [isAuthenticated, editId]);
+  }, [isAuthenticated, user?.channelName, editId]);
 
   const loadVideoDetails = async (id: string) => {
     try {
@@ -93,6 +98,11 @@ export default function UploadScreen() {
   const handleUpload = async () => {
     if (!isAuthenticated) {
       setAuthModalVisible(true);
+      return;
+    }
+
+    if (!user?.channelName) {
+      setShowChannelPrompt(true);
       return;
     }
 
@@ -166,11 +176,27 @@ export default function UploadScreen() {
   if (!isAuthenticated && !authModalVisible) {
     return (
       <View style={styles.center}>
-        <Text style={{ marginBottom: 20 }}>Please login to upload videos</Text>
+        <Text style={styles.promptText}>Please login to upload videos</Text>
         <TouchableOpacity style={styles.loginBtn} onPress={() => setAuthModalVisible(true)}>
           <Text style={styles.loginBtnText}>Login</Text>
         </TouchableOpacity>
         <AuthModal visible={authModalVisible} onClose={() => setAuthModalVisible(false)} />
+      </View>
+    );
+  }
+
+  if (showChannelPrompt) {
+    return (
+      <View style={styles.center}>
+        <Ionicons name="megaphone-outline" size={80} color={Colors.primary} />
+        <Text style={styles.promptTitle}>Channel Required</Text>
+        <Text style={styles.promptText}>You need to create a channel name before you can upload videos.</Text>
+        <TouchableOpacity 
+          style={styles.actionBtn} 
+          onPress={() => router.push('/edit-channel')}
+        >
+          <Text style={styles.actionBtnText}>Create Channel</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -314,6 +340,31 @@ const styles = StyleSheet.create({
   loginBtnText: {
     color: Colors.white,
     fontWeight: 'bold',
+  },
+  actionBtn: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 30,
+    paddingVertical: 12,
+    borderRadius: 25,
+    marginTop: 20,
+  },
+  actionBtnText: {
+    color: Colors.white,
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  promptTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: Colors.text,
+    marginTop: 20,
+  },
+  promptText: {
+    fontSize: 16,
+    color: Colors.textGray,
+    textAlign: 'center',
+    marginTop: 10,
+    paddingHorizontal: 20,
   },
   label: {
     fontSize: 16,
