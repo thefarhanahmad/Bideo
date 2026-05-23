@@ -5,6 +5,7 @@ import Colors from '../constants/Colors';
 import api from '../services/api';
 import { useSelector } from 'react-redux';
 import { RootState } from '../redux/store';
+import { formatTimeAgo } from '../utils/formatDate';
 
 interface CommentListProps {
   videoId: string;
@@ -51,6 +52,7 @@ const CommentList: React.FC<CommentListProps> = ({ videoId, onCommentAdded, isAu
       user: {
         _id: user?._id,
         name: user?.name,
+        channelName: user?.channelName,
         avatar: user?.avatar,
       },
       createdAt: new Date().toISOString(),
@@ -109,8 +111,8 @@ const CommentList: React.FC<CommentListProps> = ({ videoId, onCommentAdded, isAu
           <Image source={{ uri: item.user.avatar }} style={styles.avatar} />
           <View style={styles.commentContent}>
             <View style={styles.commentHeader}>
-              <Text style={styles.username}>{item.user.name}</Text>
-              <Text style={styles.time}> • 2h ago</Text>
+              <Text style={styles.username}>{item.user.channelName || item.user.name}</Text>
+              <Text style={styles.time}> • {formatTimeAgo(item.createdAt)}</Text>
             </View>
             <Text style={styles.commentText}>{item.text}</Text>
             <View style={styles.commentActions}>

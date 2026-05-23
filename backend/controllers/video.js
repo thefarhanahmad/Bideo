@@ -120,7 +120,10 @@ exports.getFollowedVideos = async (req, res, next) => {
 // @access  Private
 exports.getMyVideos = async (req, res, next) => {
   try {
-    const videos = await Video.find({ owner: req.user.id }).populate('category', 'name').sort('-createdAt');
+    const videos = await Video.find({ owner: req.user.id })
+      .populate('owner', 'name avatar channelName')
+      .populate('category', 'name')
+      .sort('-createdAt');
     res.status(200).json({
       success: true,
       count: videos.length,

@@ -5,12 +5,13 @@ import { useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode } from 'expo-av';
 import Colors from '../../constants/Colors';
-import type { RootState } from '../../store';
+import { RootState } from '../../redux/store';
 import api, { videoService } from '../../services/api';
 import VideoCard from '../../components/VideoCard';
 import CommentList from '../../components/CommentList';
 import AuthModal from '../../components/AuthModal';
 import PlaylistModal from '../../components/PlaylistModal';
+import { formatTimeAgo } from '../../utils/formatDate';
 
 const FALLBACK_IMAGE = 'https://via.placeholder.com/80x80.png?text=User';
 
@@ -38,7 +39,7 @@ export default function VideoScreen() {
     try {
       setLoading(true);
       const [videoRes, allVideosRes] = await Promise.all([
-        videoService.getVideo(id),
+        videoService.getVideo(id as string),
         videoService.getVideos(),
       ]);
       const videoData = videoRes?.data || videoRes;
@@ -247,7 +248,7 @@ export default function VideoScreen() {
           <View style={styles.contentContainer}>
             <Text style={styles.title}>{video.title}</Text>
             <Text style={styles.metadata}>
-              {video.views} views • {new Date(video.createdAt).toLocaleDateString()}
+              {video.views} views • {formatTimeAgo(video.createdAt)}
             </Text>
 
             <View style={styles.actionButtons}>
@@ -287,14 +288,16 @@ export default function VideoScreen() {
                   <Text style={styles.followerCount}>{video?.owner?.followersCount || 0} followers</Text>
                 </View>
               </View>
-              <TouchableOpacity 
-                style={[styles.followButton, isFollowed && styles.followedButton]} 
-                onPress={handleFollow}
-              >
-                <Text style={[styles.followText, isFollowed && styles.followedText]}>
-                  {isFollowed ? 'FOLLOWED' : 'FOLLOW'}
-                </Text>
-              </TouchableOpacity>
+              {video?.owner?._id !== user?._id && (
+                <TouchableOpacity 
+                  style={[styles.followButton, isFollowed && styles.followedButton]} 
+                  onPress={handleFollow}
+                >
+                  <Text style={[styles.followText, isFollowed && styles.followedText]}>
+                    {isFollowed ? 'FOLLOWED' : 'FOLLOW'}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <View style={styles.descriptionContainer}>

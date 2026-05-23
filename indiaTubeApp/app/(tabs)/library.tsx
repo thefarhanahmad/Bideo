@@ -208,23 +208,32 @@ export default function LibraryScreen() {
           </View>
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalList}>
-          {playlists.map(item => (
-            <TouchableOpacity 
-              key={item._id} 
-              style={styles.horizontalItem}
-              onPress={() => router.push({ pathname: `/playlist/${item._id}`, params: { name: item.name } })}
-            >
-              <View style={[styles.horizontalThumbnail, styles.playlistPlaceholder]}>
-                <Ionicons name="play" size={30} color={Colors.white} />
-                <View style={styles.playlistCount}>
-                  <Text style={styles.playlistCountText}>{item.videos.length}</Text>
-                  <Ionicons name="list" size={14} color={Colors.white} />
+          {playlists.map(item => {
+            const latestVideo = item.videos && item.videos.length > 0 ? item.videos[item.videos.length - 1] : null;
+            return (
+              <TouchableOpacity 
+                key={item._id} 
+                style={styles.horizontalItem}
+                onPress={() => router.push({ pathname: `/playlist/${item._id}`, params: { name: item.name } })}
+              >
+                <View style={styles.horizontalThumbnail}>
+                  {latestVideo ? (
+                    <Image source={{ uri: latestVideo.thumbnail }} style={styles.horizontalThumbnail} />
+                  ) : (
+                    <View style={[styles.horizontalThumbnail, styles.playlistPlaceholder]}>
+                      <Ionicons name="play" size={30} color={Colors.white} />
+                    </View>
+                  )}
+                  <View style={styles.playlistCount}>
+                    <Text style={styles.playlistCountText}>{item.videos.length}</Text>
+                    <Ionicons name="list" size={14} color={Colors.white} />
+                  </View>
                 </View>
-              </View>
-              <Text style={styles.horizontalText} numberOfLines={1}>{item.name}</Text>
-              <Text style={styles.horizontalOwner}>{item.isPrivate ? 'Private' : 'Public'}</Text>
-            </TouchableOpacity>
-          ))}
+                <Text style={styles.horizontalText} numberOfLines={1}>{item.name}</Text>
+                <Text style={styles.horizontalOwner}>{item.isPrivate ? 'Private' : 'Public'}</Text>
+              </TouchableOpacity>
+            );
+          })}
           {playlists.length === 0 && <Text style={{ marginLeft: 15, color: Colors.textGray }}>No playlists yet</Text>}
         </ScrollView>
       </View>

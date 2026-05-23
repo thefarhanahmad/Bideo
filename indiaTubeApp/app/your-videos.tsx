@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, Modal, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Colors from '../constants/Colors';
@@ -10,6 +10,8 @@ export default function YourVideosScreen() {
   const router = useRouter();
   const [videos, setVideos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedVideo, setSelectedVideo] = useState<any>(null);
+  const [menuVisible, setMenuVisible] = useState(false);
 
   useEffect(() => {
     loadMyVideos();
@@ -29,7 +31,10 @@ export default function YourVideosScreen() {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async () => {
+    const id = selectedVideo?._id;
+    setMenuVisible(false);
+    
     Alert.alert(
       'Delete Video',
       'Are you sure you want to delete this video?',
@@ -50,6 +55,17 @@ export default function YourVideosScreen() {
         }
       ]
     );
+  };
+
+  const handleEdit = () => {
+    const id = selectedVideo?._id;
+    setMenuVisible(false);
+    router.push({ pathname: '/upload', params: { editId: id }});
+  };
+
+  const openMenu = (video: any) => {
+    setSelectedVideo(video);
+    setMenuVisible(true);
   };
 
   return (
@@ -73,25 +89,10 @@ export default function YourVideosScreen() {
           data={videos}
           keyExtractor={(item) => item._id}
           renderItem={({ item }) => (
-            <View>
-              <VideoCard video={item} />
-              <View style={styles.itemActions}>
-                <TouchableOpacity 
-                  style={styles.actionBtn} 
-                  onPress={() => router.push({ pathname: '/upload', params: { editId: item._id }})}
-                >
-                  <Ionicons name="pencil" size={18} color={Colors.textGray} />
-                  <Text style={styles.actionText}>Edit</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={styles.actionBtn} 
-                  onPress={() => handleDelete(item._id)}
-                >
-                  <Ionicons name="trash-outline" size={18} color={Colors.primary} />
-                  <Text style={[styles.actionText, { color: Colors.primary }]}>Delete</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+            <VideoCard 
+              video={item} 
+              onMenuPress={() => openMenu(item)}
+            />
           )}
           contentContainerStyle={styles.list}
           ListEmptyComponent={
@@ -103,6 +104,33 @@ export default function YourVideosScreen() {
           onRefresh={loadMyVideos}
         />
       )}
+
+      {/* Action Menu Modal */}
+      <Modal
+        visible={menuVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMenuVisible(false)}
+      >
+        <Pressable 
+          style={styles.modalOverlay} 
+          onPress={() => setMenuVisible(false)}
+        >
+          <View style={styles.menuContent}>
+            <TouchableOpacity style={styles.menuItem} onPress={handleEdit}>
+              <Ionicons name="pencil-outline" size={24} color={Colors.text} />
+              <Text style={styles.menuText}>Edit Video</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.menuItem, styles.deleteItem]} onPress={handleDelete}>
+              <Ionicons name="trash-outline" size={24} color={Colors.primary} />
+              <Text style={[styles.menuText, { color: Colors.primary }]}>Delete Video</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.cancelItem} onPress={() => setMenuVisible(false)}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -140,22 +168,42 @@ const styles = StyleSheet.create({
     color: Colors.textGray,
     fontSize: 16,
   },
-  itemActions: {
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  menuContent: {
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+  },
+  menuItem: {
     flexDirection: 'row',
-    paddingHorizontal: 15,
-    paddingBottom: 15,
-    marginTop: -10,
+    alignItems: 'center',
+    paddingVertical: 15,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  actionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 20,
+  menuText: {
+    fontSize: 16,
+    marginLeft: 15,
+    color: Colors.text,
   },
-  actionText: {
-    marginLeft: 5,
-    fontSize: 14,
+  deleteItem: {
+    borderBottomWidth: 0,
+  },
+  cancelItem: {
+    marginTop: 10,
+    paddingVertical: 15,
+    alignItems: 'center',
+    backgroundColor: Colors.background,
+    borderRadius: 10,
+  },
+  cancelText: {
+    fontSize: 16,
+    fontWeight: 'bold',
     color: Colors.textGray,
   },
 });

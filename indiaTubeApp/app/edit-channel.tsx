@@ -46,14 +46,14 @@ export default function EditChannelScreen() {
       formData.append('channelName', channelName);
       formData.append('about', about);
       
-      if (avatar && avatar.startsWith('file://')) {
+      if (avatar && !avatar.startsWith('http')) {
         // @ts-ignore
         formData.append('avatar', {
           uri: avatar,
           type: 'image/jpeg',
           name: 'avatar.jpg',
         });
-      } else {
+      } else if (avatar) {
         formData.append('avatar', avatar);
       }
 

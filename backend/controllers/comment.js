@@ -6,7 +6,9 @@ const Video = require('../models/Video');
 // @access  Public
 exports.getComments = async (req, res, next) => {
   try {
-    const comments = await Comment.find({ video: req.params.videoId }).populate('user', 'name avatar');
+    const comments = await Comment.find({ video: req.params.videoId })
+      .populate('user', 'name avatar channelName')
+      .sort('-createdAt');
 
     res.status(200).json({
       success: true,

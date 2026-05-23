@@ -3,6 +3,7 @@ import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../constants/Colors';
 import { useRouter } from 'expo-router';
+import { formatTimeAgo } from '../utils/formatDate';
 
 const FALLBACK_IMAGE = 'https://via.placeholder.com/640x360?text=No+Image';
 
@@ -14,15 +15,17 @@ interface VideoCardProps {
     views: number;
     createdAt: string;
     owner: {
+      _id?: string;
       name: string;
       channelName?: string;
       avatar: string;
     };
     duration: number;
   };
+  onMenuPress?: () => void;
 }
 
-const VideoCard: React.FC<VideoCardProps> = ({ video }) => {
+const VideoCard: React.FC<VideoCardProps> = ({ video, onMenuPress }) => {
   const router = useRouter();
 
   const formatViews = (views: number) => {
@@ -56,10 +59,13 @@ const VideoCard: React.FC<VideoCardProps> = ({ video }) => {
             {video?.title || 'Untitled'}
           </Text>
           <Text style={styles.metadata}>
-            {(video?.owner?.channelName || video?.owner?.name || 'Unknown')} - {formatViews(video?.views || 0)} - 1 day ago
+            {(video?.owner?.channelName || video?.owner?.name || 'Unknown')} - {formatViews(video?.views || 0)} - {formatTimeAgo(video?.createdAt)}
           </Text>
         </View>
-        <TouchableOpacity style={styles.menuButton}>
+        <TouchableOpacity style={styles.menuButton} onPress={(e) => {
+          e.stopPropagation();
+          if (onMenuPress) onMenuPress();
+        }}>
           <Ionicons name="ellipsis-vertical" size={18} color={Colors.text} />
         </TouchableOpacity>
       </View>

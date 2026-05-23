@@ -61,13 +61,16 @@ const cloudinary = require('cloudinary').v2;
 // @access  Private
 exports.updateChannel = async (req, res, next) => {
   try {
+    console.log('Update Channel request received:', req.body);
     const { channelName, about } = req.body;
     let avatar = req.body.avatar;
 
     if (req.file) {
+      console.log('File detected, uploading to Cloudinary...');
       const result = await cloudinary.uploader.upload(req.file.path, {
         folder: 'indiatube/avatars',
       });
+      console.log('Cloudinary upload success:', result.secure_url);
       avatar = result.secure_url;
     }
 
@@ -77,11 +80,13 @@ exports.updateChannel = async (req, res, next) => {
       { new: true, runValidators: true }
     );
 
+    console.log('User updated successfully');
     res.status(200).json({
       success: true,
       data: user,
     });
   } catch (err) {
+    console.error('Update Channel Error:', err);
     next(err);
   }
 };

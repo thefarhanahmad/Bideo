@@ -167,9 +167,16 @@ export default function ShortsScreen() {
                 <View style={styles.ownerRow}>
                   <Image source={{ uri: item.owner.avatar }} style={styles.ownerAvatar} />
                   <Text style={styles.ownerName}>@{item.owner.channelName || item.owner.name}</Text>
-                  <TouchableOpacity style={styles.followBtn} onPress={() => handleFollow(item.owner._id)}>
-                    <Text style={styles.followBtnText}>Follow</Text>
-                  </TouchableOpacity>
+                  {item.owner._id !== user?._id && (
+                    <TouchableOpacity 
+                      style={[styles.followBtn, item.isFollowing && styles.followedBtn]} 
+                      onPress={() => handleFollow(item.owner._id)}
+                    >
+                      <Text style={[styles.followBtnText, item.isFollowing && styles.followedBtnText]}>
+                        {item.isFollowing ? 'Followed' : 'Follow'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
                 <Text style={styles.shortTitle} numberOfLines={2}>{item.title}</Text>
               </View>
