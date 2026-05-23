@@ -19,6 +19,7 @@ const SAMPLE_VIDEOS = [
     category: 'Education',
     owner: {
       name: 'Irfan Technical',
+      channelName: 'Irfan Technical',
       avatar: 'https://instagram.fblr14-1.fna.fbcdn.net/v/t51.82787-19/683793881_18351517948215879_3075963706721152161_n.jpg?efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLmRqYW5nby4xMDgwLmMyIn0&_nc_ht=instagram.fblr14-1.fna.fbcdn.net&_nc_cat=103&_nc_oc=Q6cZ2gFsDBpHkWema8qY4QkhinxORUc93F9Wy6CMTJzt0UxuzFhkFay8IfmQkiLqwdowab8&_nc_ohc=XnL1huEZ2EIQ7kNvwHPmoRb&_nc_gid=LfzUtg5yBmFjJs41K8zqxA&edm=AOmX9WgBAAAA&ccb=7-5&oh=00_Af7Q1IjKnik3TD3pZLnEJ2OHGALRv70O0-p-iJB2zuYNJA&oe=6A04FEBB&_nc_sid=bfaa47',
     }
   },
@@ -32,6 +33,7 @@ const SAMPLE_VIDEOS = [
     category: 'Vlog',
     owner: {
       name: 'Ataul Vlogs',
+      channelName: 'Ataul Vlogs',
       avatar: 'https://instagram.fblr14-1.fna.fbcdn.net/v/t51.82787-19/541493858_18319939237215842_3331823820218590243_n.jpg?efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLmRqYW5nby4xMDgwLmMyIn0&_nc_ht=instagram.fblr14-1.fna.fbcdn.net&_nc_cat=102&_nc_oc=Q6cZ2gFKUTa7axaZK7rtRCiKv-B-UoJx10n8GUkorsb6NDn19cUClcGKxP6VoCWPrx_FR7A&_nc_ohc=JxcAavXR2ckQ7kNvwGoOA7a&_nc_gid=73mQnu13SN0avJDEBTaXcw&edm=APoiHPcBAAAA&ccb=7-5&oh=00_Af6GV2Qol-SvuujoFJdVJr0hBDFXY1XQ7Z5guw8KZvV0cQ&oe=6A050634&_nc_sid=22de04',
     }
   },
@@ -45,6 +47,7 @@ const SAMPLE_VIDEOS = [
     category: 'Tech',
     owner: {
       name: 'Tech Master',
+      channelName: 'Tech Master',
       avatar: 'https://i.pravatar.cc/150?u=tech',
     }
   }
@@ -53,13 +56,14 @@ const SAMPLE_VIDEOS = [
 export default function HomeScreen() {
   const dispatch = useDispatch();
   const { videos, loading, error } = useSelector((state: RootState) => state.video);
+  const { isAuthenticated } = useSelector((state: RootState) => state.auth);
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [categoriesList, setCategoriesList] = useState<string[]>(['All']);
 
   useEffect(() => {
     loadVideos();
     loadCategories();
-  }, []);
+  }, [isAuthenticated]);
 
   const loadVideos = async () => {
     try {

@@ -1,18 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Image, FlatList } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Image, FlatList, Share } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Video, ResizeMode } from 'expo-av';
+import { useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
+import { Video, ResizeMode } from 'expo-av';
 import Colors from '../../constants/Colors';
-import { videoService } from '../../services/api';
+import type { RootState } from '../../store';
+import api, { videoService } from '../../services/api';
 import VideoCard from '../../components/VideoCard';
 import CommentList from '../../components/CommentList';
 import AuthModal from '../../components/AuthModal';
-import { useSelector } from 'react-redux';
-import { RootState } from '../../redux/store';
-import api from '../../services/api';
+import PlaylistModal from '../../components/PlaylistModal';
 
-const FALLBACK_IMAGE = 'https://via.placeholder.com/640x360?text=No+Image';
+const FALLBACK_IMAGE = 'https://via.placeholder.com/80x80.png?text=User';
 
 export default function VideoScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -23,8 +23,10 @@ export default function VideoScreen() {
   const [recommendedVideos, setRecommendedVideos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [authModalVisible, setAuthModalVisible] = useState(false);
-  const [isSubscribed, setIsSubscribed] = useState(false);
+  const [playlistModalVisible, setPlaylistModalVisible] = useState(false);
+  const [isFollowed, setIsFollowed] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
+  const [isDisliked, setIsDisliked] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -45,8 +47,15 @@ export default function VideoScreen() {
       setVideo(videoData || null);
       setRecommendedVideos((allVideos || []).filter((v: any) => v?._id !== id));
       
-      if (isAuthenticated && Array.isArray(videoData?.likes) && videoData.likes.includes(user?._id)) {
-        setIsLiked(true);
+      if (isAuthenticated) {
+        setIsLiked(videoData.isLiked || false);
+        setIsDisliked(videoData.isDisliked || false);
+        setIsFollowed(videoData.isFollowing || false);
+      }
+
+      // Add to History
+      if (isAuthenticated && videoData?._id) {
+        api.post('/users/history', { videoId: videoData._id }).catch(() => {});
       }
     } catch (err) {
       console.error('Failed to load video data', err);
@@ -60,21 +69,148 @@ export default function VideoScreen() {
       setAuthModalVisible(true);
       return;
     }
-    // Implement like API call here
+    
+    const prevIsLiked = isLiked;
+    const prevIsDisliked = isDisliked;
+    const prevLikes = [...(video.likes || [])];
+    const prevDislikes = [...(video.dislikes || [])];
+    
+    // Optimistic update
     setIsLiked(!isLiked);
+    if (!isLiked) setIsDisliked(false);
+    
+    setVideo((prev: any) => {
+      let newLikes = [...prevLikes];
+      let newDislikes = [...prevDislikes];
+      
+      if (!prevIsLiked) {
+        newLikes.push(user?._id);
+        newDislikes = newDislikes.filter(id => id !== user?._id);
+      } else {
+        newLikes = newLikes.filter(id => id !== user?._id);
+      }
+      
+      return { ...prev, likes: newLikes, dislikes: newDislikes };
+    });
+    
+    try {
+      const res = await api.post(`/videos/${video._id}/like`);
+      if (res.data.success) {
+        setVideo((prev: any) => ({
+          ...prev,
+          likes: res.data.likes,
+          dislikes: res.data.dislikes
+        }));
+      }
+    } catch (err) {
+      setIsLiked(prevIsLiked);
+      setIsDisliked(prevIsDisliked);
+      setVideo((prev: any) => ({ ...prev, likes: prevLikes, dislikes: prevDislikes }));
+      console.error('Like failed', err);
+    }
   };
 
-  const handleSubscribe = async () => {
+  const handleDislike = async () => {
     if (!isAuthenticated) {
       setAuthModalVisible(true);
       return;
     }
+    
+    const prevIsLiked = isLiked;
+    const prevIsDisliked = isDisliked;
+    const prevLikes = [...(video.likes || [])];
+    const prevDislikes = [...(video.dislikes || [])];
+    
+    // Optimistic update
+    setIsDisliked(!isDisliked);
+    if (!isDisliked) setIsLiked(false);
+
+    setVideo((prev: any) => {
+      let newLikes = [...prevLikes];
+      let newDislikes = [...prevDislikes];
+      
+      if (!prevIsDisliked) {
+        newDislikes.push(user?._id);
+        newLikes = newLikes.filter(id => id !== user?._id);
+      } else {
+        newDislikes = newDislikes.filter(id => id !== user?._id);
+      }
+      
+      return { ...prev, likes: newLikes, dislikes: newDislikes };
+    });
+    
     try {
-      await api.post(`/subscriptions/${video.owner._id}`);
-      setIsSubscribed(!isSubscribed);
+      const res = await api.post(`/videos/${video._id}/dislike`);
+      if (res.data.success) {
+        setVideo((prev: any) => ({
+          ...prev,
+          likes: res.data.likes,
+          dislikes: res.data.dislikes
+        }));
+      }
     } catch (err) {
-      console.error('Subscription failed', err);
+      setIsLiked(prevIsLiked);
+      setIsDisliked(prevIsDisliked);
+      setVideo((prev: any) => ({ ...prev, likes: prevLikes, dislikes: prevDislikes }));
+      console.error('Dislike failed', err);
     }
+  };
+
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        message: `Check out this video on IndiaTube: ${video.title}\n${video.videoUrl}`,
+      });
+    } catch (err) {
+      console.error('Share failed', err);
+    }
+  };
+
+  const handleFollow = async () => {
+    if (!isAuthenticated) {
+      setAuthModalVisible(true);
+      return;
+    }
+
+    const ownerId = video?.owner?._id;
+    if (!ownerId) {
+      return;
+    }
+    
+    const prevIsFollowed = isFollowed;
+    const prevFollowersCount = video?.owner?.followersCount || 0;
+    
+    // Optimistic update
+    setIsFollowed(!isFollowed);
+    setVideo((prev: any) => ({
+      ...prev,
+      owner: {
+        ...(prev?.owner || {}),
+        followersCount: !isFollowed ? prevFollowersCount + 1 : prevFollowersCount - 1
+      }
+    }));
+    
+    try {
+      await api.post(`/followers/${ownerId}`);
+    } catch (err) {
+      setIsFollowed(prevIsFollowed);
+      setVideo((prev: any) => ({
+        ...prev,
+        owner: {
+          ...(prev?.owner || {}),
+          followersCount: prevFollowersCount
+        }
+      }));
+      console.error('Follow failed', err);
+    }
+  };
+
+  const handleAdd = () => {
+    if (!isAuthenticated) {
+      setAuthModalVisible(true);
+      return;
+    }
+    setPlaylistModalVisible(true);
   };
 
   if (loading) {
@@ -125,17 +261,21 @@ export default function VideoScreen() {
                   {video.likes?.length || 0}
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.actionButton}>
-                <Ionicons name="thumbs-down-outline" size={24} color={Colors.text} />
-                <Text style={styles.actionText}>Dislike</Text>
+              <TouchableOpacity style={styles.actionButton} onPress={handleDislike}>
+                <Ionicons 
+                  name={isDisliked ? "thumbs-down" : "thumbs-down-outline"} 
+                  size={24} 
+                  color={isDisliked ? Colors.primary : Colors.text} 
+                />
+                <Text style={[styles.actionText, isDisliked && { color: Colors.primary }]}>Dislike</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.actionButton}>
+              <TouchableOpacity style={styles.actionButton} onPress={handleShare}>
                 <Ionicons name="share-social-outline" size={24} color={Colors.text} />
                 <Text style={styles.actionText}>Share</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.actionButton}>
-                <Ionicons name="download-outline" size={24} color={Colors.text} />
-                <Text style={styles.actionText}>Download</Text>
+              <TouchableOpacity style={styles.actionButton} onPress={handleAdd}>
+                <Ionicons name="add-circle-outline" size={24} color={Colors.text} />
+                <Text style={styles.actionText}>Add</Text>
               </TouchableOpacity>
             </View>
 
@@ -143,16 +283,16 @@ export default function VideoScreen() {
               <View style={styles.channelInfo}>
                 <Image source={{ uri: video?.owner?.avatar || FALLBACK_IMAGE }} style={styles.avatar} />
                 <View>
-                  <Text style={styles.channelName}>{video?.owner?.name || 'Unknown channel'}</Text>
-                  <Text style={styles.subscriberCount}>{video?.owner?.subscribersCount || 0} subscribers</Text>
+                  <Text style={styles.channelName}>{video?.owner?.channelName || video?.owner?.name || 'Unknown channel'}</Text>
+                  <Text style={styles.followerCount}>{video?.owner?.followersCount || 0} followers</Text>
                 </View>
               </View>
               <TouchableOpacity 
-                style={[styles.subscribeButton, isSubscribed && styles.subscribedButton]} 
-                onPress={handleSubscribe}
+                style={[styles.followButton, isFollowed && styles.followedButton]} 
+                onPress={handleFollow}
               >
-                <Text style={[styles.subscribeText, isSubscribed && styles.subscribedText]}>
-                  {isSubscribed ? 'SUBSCRIBED' : 'SUBSCRIBE'}
+                <Text style={[styles.followText, isFollowed && styles.followedText]}>
+                  {isFollowed ? 'FOLLOWED' : 'FOLLOW'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -190,6 +330,11 @@ export default function VideoScreen() {
           setAuthModalVisible(false);
           loadVideoData();
         }}
+      />
+      <PlaylistModal 
+        visible={playlistModalVisible} 
+        onClose={() => setPlaylistModalVisible(false)}
+        videoId={video._id}
       />
     </View>
   );
@@ -264,24 +409,24 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: Colors.text,
   },
-  subscriberCount: {
+  followerCount: {
     fontSize: 12,
     color: Colors.textGray,
   },
-  subscribeButton: {
+  followButton: {
     backgroundColor: Colors.primary,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 4,
   },
-  subscribedButton: {
+  followedButton: {
     backgroundColor: '#F2F2F2',
   },
-  subscribeText: {
+  followText: {
     color: Colors.white,
     fontWeight: 'bold',
   },
-  subscribedText: {
+  followedText: {
     color: Colors.textGray,
   },
   descriptionContainer: {

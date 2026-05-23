@@ -54,6 +54,38 @@ exports.googleLogin = async (req, res, next) => {
   }
 };
 
+const cloudinary = require('cloudinary').v2;
+
+// @desc    Update current user channel
+// @route   PUT /api/auth/channel
+// @access  Private
+exports.updateChannel = async (req, res, next) => {
+  try {
+    const { channelName, about } = req.body;
+    let avatar = req.body.avatar;
+
+    if (req.file) {
+      const result = await cloudinary.uploader.upload(req.file.path, {
+        folder: 'indiatube/avatars',
+      });
+      avatar = result.secure_url;
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { channelName, about, avatar },
+      { new: true, runValidators: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      data: user,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // @desc    Get current logged in user
 // @route   GET /api/auth/me
 // @access  Private
@@ -96,7 +128,9 @@ const sendTokenResponse = (user, statusCode, res) => {
         email: user.email,
         avatar: user.avatar,
         role: user.role,
-        phone: user.phone
+        phone: user.phone,
+        channelName: user.channelName,
+        about: user.about,
     }
   });
 };

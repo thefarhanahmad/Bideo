@@ -37,11 +37,17 @@ const userSchema = new mongoose.Schema({
     enum: ['phone', 'google'],
     default: 'google',
   },
-  subscribersCount: {
+  channelName: {
+    type: String,
+  },
+  about: {
+    type: String,
+  },
+  followersCount: {
     type: Number,
     default: 0,
   },
-  subscribedChannels: [
+  followingChannels: [
     {
       type: mongoose.Schema.ObjectId,
       ref: 'User',

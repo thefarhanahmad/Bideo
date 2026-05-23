@@ -1,39 +1,108 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, Image, Dimensions, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Image, Dimensions, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../../constants/Colors';
 import { videoService } from '../../services/api';
-import { Video, ResizeMode } from 'expo-av';
+import api from '../../services/api';
+import { useSelector } from 'react-redux';
+import { RootState } from '../../redux/store';
+import AuthModal from '../../components/AuthModal';
+import CommentList from '../../components/CommentList';
+import { Modal } from 'react-native';
 
 const { height, width } = Dimensions.get('window');
 
 export default function ShortsScreen() {
+  const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
   const [shorts, setShorts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [authModalVisible, setAuthModalVisible] = useState(false);
+  const [selectedShortId, setSelectedShortId] = useState<string | null>(null);
+  const [commentModalVisible, setCommentModalVisible] = useState(false);
 
   useEffect(() => {
     loadShorts();
-  }, []);
+  }, [isAuthenticated]);
 
   const loadShorts = async () => {
     setLoading(true);
     try {
-      const data = await videoService.getVideos(); // returns array
-      const onlyShorts = (data || []).filter((v: any) => !!v.isShort).map((v: any) => ({
-        id: v._id,
+      const data = await api.get('/videos');
+      const onlyShorts = (data.data.data || []).filter((v: any) => !!v.isShort).map((v: any) => ({
+        _id: v._id,
         videoUrl: v.videoUrl,
         thumbnail: v.thumbnail,
-        owner: { name: v.owner?.name || 'Unknown', avatar: v.owner?.avatar || '' },
+        owner: { 
+          _id: v.owner?._id,
+          name: v.owner?.name || 'Unknown', 
+          channelName: v.owner?.channelName,
+          avatar: v.owner?.avatar || '' 
+        },
         title: v.title,
-        likes: (v.likes && v.likes.length) || 0,
-        comments: v.commentsCount || 0,
+        likes: v.likes || [],
+        commentsCount: v.commentsCount || 0,
+        isLiked: v.isLiked ?? (isAuthenticated && v.likes?.includes(user?._id)),
+        isFollowing: v.isFollowing || false,
       }));
       setShorts(onlyShorts);
     } catch (e) {
       console.log('Failed to load shorts', e);
-      setShorts([]);
     }
     setLoading(false);
+  };
+
+  const handleLike = async (shortId: string) => {
+    if (!isAuthenticated) {
+      setAuthModalVisible(true);
+      return;
+    }
+
+    setShorts(prev => prev.map(s => {
+      if (s._id === shortId) {
+        const alreadyLiked = s.likes.includes(user?._id);
+        const newLikes = alreadyLiked 
+          ? s.likes.filter((id: string) => id !== user?._id)
+          : [...s.likes, user?._id];
+        return { ...s, likes: newLikes, isLiked: !alreadyLiked };
+      }
+      return s;
+    }));
+
+    try {
+      await api.post(`/videos/${shortId}/like`);
+    } catch (err) {
+      loadShorts();
+    }
+  };
+
+  const handleFollow = async (channelId: string) => {
+    if (!isAuthenticated) {
+      setAuthModalVisible(true);
+      return;
+    }
+
+    const prevShorts = [...shorts];
+    setShorts(prev => prev.map(s => {
+      if (s.owner._id === channelId) {
+        return { ...s, isFollowing: !s.isFollowing };
+      }
+      return s;
+    }));
+
+    try {
+      await api.post(`/followers/${channelId}`);
+    } catch (err) {
+      setShorts(prevShorts);
+    }
+  };
+
+  const handleCommentClick = (shortId: string) => {
+    if (!isAuthenticated) {
+      setAuthModalVisible(true);
+      return;
+    }
+    setSelectedShortId(shortId);
+    setCommentModalVisible(true);
   };
 
   if (loading) return (
@@ -42,19 +111,36 @@ export default function ShortsScreen() {
     </View>
   );
 
-  if (!loading && shorts.length === 0) {
-    return (
-      <View style={[styles.container, styles.centerContainer]}>
-        <Text style={{ color: Colors.white }}>No shorts available</Text>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
+      <AuthModal visible={authModalVisible} onClose={() => setAuthModalVisible(false)} />
+      
+      <Modal visible={commentModalVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.commentModalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Comments</Text>
+              <TouchableOpacity onPress={() => setCommentModalVisible(false)}>
+                <Ionicons name="close" size={24} color={Colors.text} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView>
+              {selectedShortId && (
+                <CommentList 
+                  videoId={selectedShortId} 
+                  onCommentAdded={() => {}} 
+                  isAuthenticated={isAuthenticated} 
+                  onAuthRequired={() => setAuthModalVisible(true)} 
+                />
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       <FlatList
         data={shorts}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item._id}
         pagingEnabled
         vertical
         showsVerticalScrollIndicator={false}
@@ -63,13 +149,13 @@ export default function ShortsScreen() {
             <Image source={{ uri: item.thumbnail }} style={styles.fullThumbnail} />
             <View style={styles.overlay}>
               <View style={styles.rightActions}>
-                <TouchableOpacity style={styles.actionButton}>
-                  <Ionicons name="thumbs-up" size={32} color={Colors.white} />
-                  <Text style={styles.actionText}>{item.likes}</Text>
+                <TouchableOpacity style={styles.actionButton} onPress={() => handleLike(item._id)}>
+                  <Ionicons name={item.isLiked ? "thumbs-up" : "thumbs-up-outline"} size={32} color={item.isLiked ? Colors.primary : Colors.white} />
+                  <Text style={styles.actionText}>{item.likes.length}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.actionButton}>
+                <TouchableOpacity style={styles.actionButton} onPress={() => handleCommentClick(item._id)}>
                   <Ionicons name="chatbubble-ellipses" size={32} color={Colors.white} />
-                  <Text style={styles.actionText}>{item.comments}</Text>
+                  <Text style={styles.actionText}>{item.commentsCount}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.actionButton}>
                   <Ionicons name="share-social" size={32} color={Colors.white} />
@@ -80,9 +166,9 @@ export default function ShortsScreen() {
               <View style={styles.bottomDetails}>
                 <View style={styles.ownerRow}>
                   <Image source={{ uri: item.owner.avatar }} style={styles.ownerAvatar} />
-                  <Text style={styles.ownerName}>@{item.owner.name}</Text>
-                  <TouchableOpacity style={styles.subscribeBtn}>
-                    <Text style={styles.subscribeBtnText}>Subscribe</Text>
+                  <Text style={styles.ownerName}>@{item.owner.channelName || item.owner.name}</Text>
+                  <TouchableOpacity style={styles.followBtn} onPress={() => handleFollow(item.owner._id)}>
+                    <Text style={styles.followBtnText}>Follow</Text>
                   </TouchableOpacity>
                 </View>
                 <Text style={styles.shortTitle} numberOfLines={2}>{item.title}</Text>
@@ -158,14 +244,14 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     fontSize: 16,
   },
-  subscribeBtn: {
+  followBtn: {
     backgroundColor: Colors.primary,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 4,
     marginLeft: 15,
   },
-  subscribeBtnText: {
+  followBtnText: {
     color: Colors.white,
     fontWeight: 'bold',
     fontSize: 12,
@@ -175,4 +261,28 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  commentModalContent: {
+    backgroundColor: Colors.white,
+    height: '60%',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
 });
+

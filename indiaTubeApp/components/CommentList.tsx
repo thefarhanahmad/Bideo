@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, Image, A
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../constants/Colors';
 import api from '../services/api';
+import { useSelector } from 'react-redux';
+import { RootState } from '../redux/store';
 
 interface CommentListProps {
   videoId: string;
@@ -12,6 +14,7 @@ interface CommentListProps {
 }
 
 const CommentList: React.FC<CommentListProps> = ({ videoId, onCommentAdded, isAuthenticated, onAuthRequired }) => {
+  const { user } = useSelector((state: RootState) => state.auth);
   const [comments, setComments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState('');
@@ -41,19 +44,35 @@ const CommentList: React.FC<CommentListProps> = ({ videoId, onCommentAdded, isAu
 
     if (!newComment.trim()) return;
 
+    const tempId = Date.now().toString();
+    const commentData = {
+      _id: tempId,
+      text: newComment,
+      user: {
+        _id: user?._id,
+        name: user?.name,
+        avatar: user?.avatar,
+      },
+      createdAt: new Date().toISOString(),
+      likes: [],
+    };
+
+    // Optimistic update
+    setComments([commentData, ...comments]);
+    setNewComment('');
+
     try {
-      setSubmitting(true);
       await api.post('/comments', {
         video: videoId,
         text: newComment,
       });
-      setNewComment('');
+      // Refresh to get actual DB record
       fetchComments();
       onCommentAdded();
     } catch (err) {
+      // Revert on failure
+      setComments(comments.filter(c => c._id !== tempId));
       console.error('Failed to add comment', err);
-    } finally {
-      setSubmitting(false);
     }
   };
 

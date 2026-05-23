@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
-const subscriptionSchema = new mongoose.Schema({
-  subscriber: {
+const followerSchema = new mongoose.Schema({
+  follower: {
     type: mongoose.Schema.ObjectId,
     ref: 'User',
     required: true,
@@ -17,7 +17,7 @@ const subscriptionSchema = new mongoose.Schema({
   },
 });
 
-// One user can subscribe to a channel only once
-subscriptionSchema.index({ subscriber: 1, channel: 1 }, { unique: true });
+// One user can follow a channel only once
+followerSchema.index({ follower: 1, channel: 1 }, { unique: true });
 
-module.exports = mongoose.model('Subscription', subscriptionSchema);
+module.exports = mongoose.model('Follower', followerSchema);

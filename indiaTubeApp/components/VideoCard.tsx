@@ -15,6 +15,7 @@ interface VideoCardProps {
     createdAt: string;
     owner: {
       name: string;
+      channelName?: string;
       avatar: string;
     };
     duration: number;
@@ -55,7 +56,7 @@ const VideoCard: React.FC<VideoCardProps> = ({ video }) => {
             {video?.title || 'Untitled'}
           </Text>
           <Text style={styles.metadata}>
-            {(video?.owner?.name || 'Unknown')} - {formatViews(video?.views || 0)} - 1 day ago
+            {(video?.owner?.channelName || video?.owner?.name || 'Unknown')} - {formatViews(video?.views || 0)} - 1 day ago
           </Text>
         </View>
         <TouchableOpacity style={styles.menuButton}>

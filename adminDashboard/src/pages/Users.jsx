@@ -83,6 +83,7 @@ const Users = () => {
             <tr className="text-left">
               <th className="p-2">Name</th>
               <th className="p-2">Email</th>
+              <th className="p-2">Channel</th>
               <th className="p-2">Role</th>
               <th className="p-2">Actions</th>
             </tr>
@@ -92,6 +93,7 @@ const Users = () => {
               <tr key={u._id} className="border-t">
                 <td className="p-2">{u.name}</td>
                 <td className="p-2">{u.email}</td>
+                <td className="p-2">{u.channelName || '-'}</td>
                 <td className="p-2">{u.role}</td>
                 <td className="p-2">
                   <button onClick={()=>{ setEditUser(u); setShowEdit(true); }} className="px-2 py-1 bg-yellow-400 rounded mr-2">Edit</button>
@@ -125,11 +127,12 @@ const Users = () => {
 const UserForm = ({ initial = {}, onSubmit, onCancel }) => {
   const [name, setName] = useState(initial.name || '');
   const [email, setEmail] = useState(initial.email || '');
+  const [channelName, setChannelName] = useState(initial.channelName || '');
   const [role, setRole] = useState(initial.role || 'user');
 
   const submit = (e) => {
     e.preventDefault();
-    onSubmit({ name, email, role });
+    onSubmit({ name, email, channelName, role });
   };
 
   return (
@@ -138,6 +141,8 @@ const UserForm = ({ initial = {}, onSubmit, onCancel }) => {
       <input value={name} onChange={e=>setName(e.target.value)} className="w-full p-2 border rounded mb-3" />
       <label className="block mb-2">Email</label>
       <input value={email} onChange={e=>setEmail(e.target.value)} className="w-full p-2 border rounded mb-3" />
+      <label className="block mb-2">Channel Name</label>
+      <input value={channelName} onChange={e=>setChannelName(e.target.value)} className="w-full p-2 border rounded mb-3" />
       <label className="block mb-2">Role</label>
       <select value={role} onChange={e=>setRole(e.target.value)} className="w-full p-2 border rounded mb-4">
         <option value="user">User</option>

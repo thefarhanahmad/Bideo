@@ -17,7 +17,8 @@ const users = require("./routes/users");
 const categories = require("./routes/categories");
 const video = require("./routes/video");
 const comment = require("./routes/comment");
-const subscription = require("./routes/subscription");
+const followers = require("./routes/followers");
+const playlist = require("./routes/playlist");
 
 // Middlewares
 app.use(express.json());
@@ -54,7 +55,8 @@ app.use("/api/users", users);
 app.use("/api/categories", categories);
 app.use("/api/videos", video);
 app.use("/api/comments", comment);
-app.use("/api/subscriptions", subscription);
+app.use("/api/followers", followers);
+app.use("/api/playlists", playlist);
 
 // Basic route
 app.get("/", (req, res) => {

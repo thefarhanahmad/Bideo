@@ -5,7 +5,7 @@ import { store } from '../redux/store';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api, { setAuthToken } from '../services/api';
-import { loginSuccess } from '../redux/slices/authSlice';
+import { loginSuccess, loginStart, loginFailure } from '../redux/slices/authSlice';
 
 function Startup() {
   const dispatch = useDispatch();
@@ -15,6 +15,7 @@ function Startup() {
       try {
         const token = await AsyncStorage.getItem('token');
         if (token) {
+          dispatch(loginStart());
           setAuthToken(token);
           // fetch current user
           const res = await api.get('/auth/me');
@@ -22,6 +23,7 @@ function Startup() {
           dispatch(loginSuccess({ user, token } as any));
         }
       } catch (err) {
+        dispatch(loginFailure('Session expired'));
         console.warn('Auth bootstrap failed', err);
       }
     };

@@ -18,6 +18,24 @@ exports.createUser = async (req, res, next) => {
   }
 };
 
+// @desc Update user channel info
+// @route PUT /api/users/channel
+// @access Private
+exports.updateChannel = async (req, res, next) => {
+  try {
+    const { channelName, about, avatar } = req.body;
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { channelName, about, avatar },
+      { new: true, runValidators: true }
+    ).select('-password');
+
+    res.status(200).json({ success: true, data: user });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // @desc Get all users
 // @route GET /api/users
 // @access Private/Admin
@@ -52,6 +70,46 @@ exports.updateUser = async (req, res, next) => {
     const user = await User.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: true }).select('-__v');
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     res.status(200).json({ success: true, data: user });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Add video to watch history
+// @route   POST /api/users/history
+// @access  Private
+exports.addToHistory = async (req, res, next) => {
+  try {
+    const { videoId } = req.body;
+    const user = await User.findById(req.user.id);
+
+    // Remove if already exists to move to top
+    user.watchHistory = user.watchHistory.filter(id => id.toString() !== videoId);
+    user.watchHistory.unshift(videoId);
+    
+    // Keep only last 50
+    if (user.watchHistory.length > 50) {
+      user.watchHistory = user.watchHistory.slice(0, 50);
+    }
+
+    await user.save();
+    res.status(200).json({ success: true, data: user.watchHistory });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Get watch history
+// @route   GET /api/users/history
+// @access  Private
+exports.getHistory = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id).populate({
+      path: 'watchHistory',
+      populate: { path: 'owner', select: 'name channelName avatar' }
+    });
+
+    res.status(200).json({ success: true, data: user.watchHistory });
   } catch (err) {
     next(err);
   }

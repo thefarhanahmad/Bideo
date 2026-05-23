@@ -1,8 +1,10 @@
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { TouchableOpacity } from 'react-native';
 import Colors from '../../constants/Colors';
 
 export default function TabsLayout() {
+  const router = useRouter();
   return (
     <Tabs
       screenOptions={{
@@ -31,6 +33,14 @@ export default function TabsLayout() {
             fontSize: 22,
             fontWeight: 'bold',
           },
+          headerRight: () => (
+            <TouchableOpacity 
+              style={{ marginRight: 15 }} 
+              onPress={() => router.push('/search')}
+            >
+              <Ionicons name="search" size={24} color={Colors.text} />
+            </TouchableOpacity>
+          ),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="home-outline" size={size} color={color} />
           ),
@@ -56,9 +66,9 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="subscriptions"
+        name="followings"
         options={{
-          title: 'Subscriptions',
+          title: 'Followings',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="copy-outline" size={size} color={color} />
           ),
@@ -68,6 +78,17 @@ export default function TabsLayout() {
         name="library"
         options={{
           title: 'Library',
+          headerRight: () => (
+            <TouchableOpacity 
+              style={{ marginRight: 15 }} 
+              onPress={() => {
+                // We'll trigger a logout via a custom event or shared state if needed, 
+                // but for now let's keep it simple or use a better way.
+                // Actually, it's easier to handle logout in the screen itself if it has its own header.
+              }}
+            >
+            </TouchableOpacity>
+          ),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="library-outline" size={size} color={color} />
           ),
