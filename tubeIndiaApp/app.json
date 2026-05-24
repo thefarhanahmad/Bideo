@@ -11,8 +11,8 @@
 
     "splash": {
       "image": "./assets/splash-icon.jpg",
-      "resizeMode": "cover",
-      "backgroundColor": "#ffffff"
+      "resizeMode": "native",
+      "backgroundColor": "#FF7A00"
     },
 
     "ios": {
@@ -30,8 +30,8 @@
       },
       "splash": {
         "image": "./assets/splash-icon.jpg",
-        "resizeMode": "cover",
-        "backgroundColor": "#ffffff"
+        "resizeMode": "native",
+        "backgroundColor": "#FF7A00"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
@@ -46,9 +46,9 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#ffffff",
+          "backgroundColor": "#FF7A00",
           "image": "./assets/splash-icon.jpg",
-          "resizeMode": "cover"
+          "resizeMode": "native"
         }
       ]
     ],
