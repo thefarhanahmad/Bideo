@@ -5,32 +5,19 @@
     "scheme": "tubeindia",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.jpg",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-
-    "splash": {
-      "image": "./assets/splash-icon.jpg",
-      "resizeMode": "native",
-      "backgroundColor": "#FF7A00"
-    },
-
     "ios": {
       "supportsTablet": true,
-      "icon": "./assets/icon.jpg",
+      "icon": "./assets/icon.png",
       "bundleIdentifier": "com.farhan.tubeindiaapp"
     },
-
     "android": {
       "package": "com.farhan.tubeindiaapp",
-      "icon": "./assets/icon.jpg",
+      "icon": "./assets/icon.png",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.jpg",
-        "backgroundColor": "#ffffff"
-      },
-      "splash": {
-        "image": "./assets/splash-icon.jpg",
-        "resizeMode": "native",
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FF7A00"
       },
       "edgeToEdgeEnabled": true,
@@ -38,7 +25,7 @@
       "usesCleartextTraffic": true
     },
     "web": {
-      "favicon": "./assets/fevicon.jpg"
+      "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-secure-store",
@@ -47,15 +34,15 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#FF7A00",
-          "image": "./assets/splash-icon.jpg",
-          "resizeMode": "native"
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "cover"
         }
       ]
     ],
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "b8f0dab9-34ff-472b-8693-4bed3ae31861"
+        "projectId": "fdae7a54-8b7f-4cd8-8585-3d169174ee84"
       }
     }
   }

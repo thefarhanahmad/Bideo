@@ -176,7 +176,7 @@ TubeIndia/
 │   ├── .env.example
 │   └── package.json
 │
-├── indiaTubeApp/
+├── tubeIndiaApp/
 │   ├── app/
 │   ├── assets/
 │   ├── components/

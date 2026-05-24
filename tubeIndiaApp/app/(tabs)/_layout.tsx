@@ -28,12 +28,11 @@ export default function TabsLayout() {
         options={{
           title: 'Home',
           headerTitle: () => (
-            <Image 
-              source={require('../../assets/app-logo.jpg')} 
+            <Image
+              source={require('../../assets/app-logo.png')}
               style={{ width: 120, height: 40 }}
               resizeMode="contain"
-            />
-          ),
+            />          ),
           headerTitleAlign: 'left',
           headerRight: () => (
             <TouchableOpacity 
