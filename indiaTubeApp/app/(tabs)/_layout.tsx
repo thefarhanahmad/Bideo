@@ -29,7 +29,7 @@ export default function TabsLayout() {
           title: 'Home',
           headerTitle: () => (
             <Image 
-              source={require('../../assets/app-logo.jpeg')} 
+              source={require('../../assets/app-logo.jpg')} 
               style={{ width: 120, height: 40 }}
               resizeMode="contain"
             />

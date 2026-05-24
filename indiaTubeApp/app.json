@@ -5,27 +5,32 @@
     "scheme": "indiatube",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/app-icon.jpeg",
+    "icon": "./assets/icon.jpg",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
 
     "splash": {
-      "image": "./assets/splash-screen.jpeg",
-      "resizeMode": "contain",
+      "image": "./assets/splash-icon.jpg",
+      "resizeMode": "cover",
       "backgroundColor": "#ffffff"
     },
 
     "ios": {
       "supportsTablet": true,
-      "icon": "./assets/app-icon.jpeg",
+      "icon": "./assets/icon.jpg",
       "bundleIdentifier": "com.farhan.indiatubeapp"
     },
 
     "android": {
       "package": "com.farhan.indiatubeapp",
-      "icon": "./assets/app-icon.jpeg",
+      "icon": "./assets/icon.jpg",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/app-icon.jpeg",
+        "foregroundImage": "./assets/adaptive-icon.jpg",
+        "backgroundColor": "#ffffff"
+      },
+      "splash": {
+        "image": "./assets/splash-icon.jpg",
+        "resizeMode": "cover",
         "backgroundColor": "#ffffff"
       },
 
@@ -35,9 +40,19 @@
     },
 
     "web": {
-      "favicon": "./assets/app-icon.jpeg"
+      "favicon": "./assets/fevicon.jpg"
     },
 
-    "plugins": ["expo-secure-store", "expo-router"]
+    "plugins": [
+      "expo-secure-store", 
+      "expo-router", 
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#ffffff",
+          "image": "./assets/splash-icon.jpg"
+        }
+      ]
+    ]
   }
 }
