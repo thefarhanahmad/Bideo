@@ -20,7 +20,7 @@ export default function UploadScreen() {
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
   const [tags, setTags] = useState('');
-  const [visibility, setVisibility] = useState('private');
+  const [visibility, setVisibility] = useState('public');
   const [video, setVideo] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [thumbnail, setThumbnail] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -42,8 +42,23 @@ export default function UploadScreen() {
       setShowChannelPrompt(false);
     }
     loadCategories();
+    
     if (editId) {
       loadVideoDetails(editId);
+      setUploadType('video');
+    } else {
+      // Reset state for new upload if not in edit mode
+      setTitle('');
+      setDescription('');
+      setCategory('');
+      setTags('');
+      setVisibility('public');
+      setVideo(null);
+      setThumbnail(null);
+      setUploadType(null);
+      setThumbnailChanged(false);
+      setPostText('');
+      setPostImage(null);
     }
   }, [isAuthenticated, user?.channelName, editId]);
 
@@ -217,6 +232,7 @@ export default function UploadScreen() {
       setUploadType(null);
       setPostText('');
       setPostImage(null);
+      router.replace('/');
     } catch (err: any) {
       Alert.alert('Post Failed', err.response?.data?.message || 'Something went wrong');
     } finally {

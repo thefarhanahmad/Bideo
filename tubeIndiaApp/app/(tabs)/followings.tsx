@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, Image, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import Colors from '../../constants/Colors';
 import VideoCard from '../../components/VideoCard';
+import PostCard from '../../components/PostCard';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import api from '../../services/api';
@@ -10,9 +11,10 @@ import AuthModal from '../../components/AuthModal';
 const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
 
 export default function FollowingsScreen() {
+  const router = useRouter();
   const { isAuthenticated } = useSelector((state: RootState) => state.auth);
   const [followings, setFollowings] = useState<any[]>([]);
-  const [recentVideos, setRecentVideos] = useState<any[]>([]);
+  const [feedItems, setFeedItems] = useState<any[]>([]);
   const [filter, setFilter] = useState<'all' | 'short' | 'long'>('all');
   const [loading, setLoading] = useState(false);
   const [authModalVisible, setAuthModalVisible] = useState(false);
@@ -30,17 +32,26 @@ export default function FollowingsScreen() {
   const loadFollowings = async () => {
     setLoading(true);
     try {
-      const [fRes, vRes] = await Promise.all([
+      const [fRes, vRes, pRes] = await Promise.all([
         api.get('/followers/me'),
-        api.get('/videos/followed', { params: filter === 'all' ? {} : { type: filter === 'short' ? 'short' : 'long' } })
+        api.get('/videos/followed', { params: filter === 'all' ? {} : { type: filter === 'short' ? 'short' : 'long' } }),
+        api.get('/posts/followed')
       ]);
 
       if (fRes.data.success) {
         setFollowings(fRes.data.data);
       }
+      
+      let combined = [];
       if (vRes.data.success) {
-        setRecentVideos(vRes.data.data);
+        combined.push(...vRes.data.data.map((v: any) => ({ ...v, itemType: 'video' })));
       }
+      if (pRes.data.success && filter === 'all') {
+        combined.push(...pRes.data.data.map((p: any) => ({ ...p, itemType: 'post' })));
+      }
+      
+      combined.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      setFeedItems(combined);
     } catch (err) {
       console.error('Failed to load followings', err);
     } finally {
@@ -66,7 +77,11 @@ export default function FollowingsScreen() {
       <View style={styles.channelBar}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           {followings.map(item => (
-            <TouchableOpacity key={item._id} style={styles.channelItem}>
+            <TouchableOpacity
+              key={item._id}
+              style={styles.channelItem}
+              onPress={() => item.channel?._id && router.push(`/channel/${item.channel._id}`)}
+            >
               <Image source={{ uri: item.channel?.avatar || FALLBACK_AVATAR }} style={styles.channelAvatar} />
               <Text style={styles.channelName} numberOfLines={1}>{item.channel.channelName || item.channel.name}</Text>
             </TouchableOpacity>
@@ -88,15 +103,15 @@ export default function FollowingsScreen() {
       </View>
 
       <FlatList
-        data={recentVideos}
+        data={feedItems}
         keyExtractor={(item) => item._id}
-        renderItem={({ item }) => <VideoCard video={item} />}
+        renderItem={({ item }) => item.itemType === 'post' ? <PostCard post={item} /> : <VideoCard video={item} />}
         contentContainerStyle={styles.listContent}
-        ListHeaderComponent={<Text style={styles.sectionTitle}>{recentVideos.length > 0 ? 'Recent Uploads' : ''}</Text>}
+        ListHeaderComponent={<Text style={styles.sectionTitle}>{feedItems.length > 0 ? 'Recent Activity' : ''}</Text>}
         ListEmptyComponent={
           !loading ? (
             <View style={styles.center}>
-              <Text style={styles.emptyText}>No recent videos from followed channels</Text>
+              <Text style={styles.emptyText}>No recent activity from followed channels</Text>
             </View>
           ) : null
         }

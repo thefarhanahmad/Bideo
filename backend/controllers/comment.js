@@ -1,18 +1,25 @@
 const Comment = require('../models/Comment');
 const Video = require('../models/Video');
+const Post = require('../models/Post');
 const Notification = require('../models/Notification');
 
-const createNotification = async ({ recipient, actor, type, video, comment, message }) => {
+const createNotification = async ({ recipient, actor, type, video, post, comment, message }) => {
   if (!recipient || !actor || recipient.toString() === actor.toString()) return;
-  await Notification.create({ recipient, actor, type, video, comment, message });
+  await Notification.create({ recipient, actor, type, video, post, comment, message });
 };
 
-// @desc    Get comments for a video
-// @route   GET /api/comments/:videoId
+// @desc    Get comments for a video or post
+// @route   GET /api/comments/:id
 // @access  Public
 exports.getComments = async (req, res, next) => {
   try {
-    const comments = await Comment.find({ video: req.params.videoId })
+    const { videoId, postId } = req.query;
+    const query = {};
+    if (videoId) query.video = videoId;
+    else if (postId) query.post = postId;
+    else query.video = req.params.videoId; // fallback for old route
+
+    const comments = await Comment.find(query)
       .populate('user', 'name avatar channelName')
       .populate('replies.user', 'name avatar channelName')
       .sort('-createdAt');
@@ -34,25 +41,38 @@ exports.addComment = async (req, res, next) => {
   try {
     req.body.user = req.user.id;
 
-    const video = await Video.findById(req.body.video);
+    let parent;
+    let type;
+    let message;
 
-    if (!video) {
-      return res.status(404).json({ success: false, message: 'Video not found' });
+    if (req.body.video) {
+      parent = await Video.findById(req.body.video);
+      type = 'video_comment';
+      message = `${req.user.channelName || req.user.name} commented on your video`;
+    } else if (req.body.post) {
+      parent = await Post.findById(req.body.post);
+      type = 'post_comment';
+      message = `${req.user.channelName || req.user.name} commented on your post`;
+    }
+
+    if (!parent) {
+      return res.status(404).json({ success: false, message: 'Video or Post not found' });
     }
 
     const comment = await Comment.create(req.body);
     await comment.populate('user', 'name avatar channelName');
 
-    // Increment commentsCount in Video model
-    video.commentsCount += 1;
-    await video.save();
+    parent.commentsCount += 1;
+    await parent.save();
+
     await createNotification({
-      recipient: video.owner,
+      recipient: parent.owner,
       actor: req.user.id,
-      type: 'video_comment',
-      video: video._id,
+      type,
+      video: req.body.video,
+      post: req.body.post,
       comment: comment._id,
-      message: `${req.user.channelName || req.user.name} commented on your video`,
+      message,
     });
 
     res.status(201).json({
@@ -83,6 +103,7 @@ exports.toggleCommentLike = async (req, res, next) => {
         actor: req.user.id,
         type: 'comment_like',
         video: comment.video,
+        post: comment.post,
         comment: comment._id,
         message: `${req.user.channelName || req.user.name} liked your comment`,
       });
@@ -115,6 +136,7 @@ exports.addReply = async (req, res, next) => {
       actor: req.user.id,
       type: 'comment_reply',
       video: comment.video,
+      post: comment.post,
       comment: comment._id,
       message: `${req.user.channelName || req.user.name} replied to your comment`,
     });
@@ -136,12 +158,13 @@ exports.deleteComment = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Comment not found' });
     }
 
-    // Make sure user is comment owner or video owner or admin
-    const video = await Video.findById(comment.video);
+    let parent;
+    if (comment.video) parent = await Video.findById(comment.video);
+    else if (comment.post) parent = await Post.findById(comment.post);
 
     if (
       comment.user.toString() !== req.user.id &&
-      (!video || video.owner.toString() !== req.user.id) &&
+      (!parent || parent.owner.toString() !== req.user.id) &&
       req.user.role !== 'admin'
     ) {
       return res.status(401).json({ success: false, message: 'Not authorized to delete this comment' });
@@ -149,10 +172,9 @@ exports.deleteComment = async (req, res, next) => {
 
     await comment.deleteOne();
 
-    // Decrement commentsCount in Video model
-    if (video) {
-      video.commentsCount = Math.max(0, video.commentsCount - 1);
-      await video.save();
+    if (parent) {
+      parent.commentsCount = Math.max(0, parent.commentsCount - 1);
+      await parent.save();
     }
 
     res.status(200).json({

@@ -14,12 +14,16 @@ const notificationSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['video_like', 'video_comment', 'comment_like', 'comment_reply'],
+    enum: ['video_like', 'video_comment', 'comment_like', 'comment_reply', 'post_like', 'post_comment'],
     required: true,
   },
   video: {
     type: mongoose.Schema.ObjectId,
     ref: 'Video',
+  },
+  post: {
+    type: mongoose.Schema.ObjectId,
+    ref: 'Post',
   },
   comment: {
     type: mongoose.Schema.ObjectId,

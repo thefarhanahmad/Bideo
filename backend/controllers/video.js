@@ -21,6 +21,16 @@ const normalizeTags = (tags) => {
   return tags.split(',').map((tag) => tag.trim()).filter(Boolean);
 };
 
+const normalizeOptionalValue = (value) => {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === 'undefined' || trimmed === 'null') return undefined;
+    return trimmed;
+  }
+  return value;
+};
+
 const isNineBySixteen = (aspectRatio) => {
   if (!aspectRatio) return false;
   const target = 9 / 16;
@@ -28,10 +38,7 @@ const isNineBySixteen = (aspectRatio) => {
 };
 
 const getVideoQuery = (req, onlyPublic = false) => {
-  const query = {};
-  if (onlyPublic || !req.user || req.query.visibility === 'public') {
-    query.visibility = 'public';
-  }
+  const query = { visibility: 'public' };
   if (req.query.owner) query.owner = req.query.owner;
   if (req.query.type === 'short') query.isShort = true;
   if (req.query.type === 'video' || req.query.type === 'long') query.isShort = false;
@@ -105,6 +112,13 @@ exports.getVideo = async (req, res, next) => {
       .populate('category', 'name');
 
     if (!video) return res.status(404).json({ success: false, message: 'Video not found' });
+    if (video.visibility !== 'public') {
+      const isOwner = req.user && video.owner && video.owner._id && video.owner._id.toString() === req.user.id.toString();
+      const isAdmin = req.user && req.user.role === 'admin';
+      if (!isOwner && !isAdmin) {
+        return res.status(404).json({ success: false, message: 'Video not found' });
+      }
+    }
 
     const [videoData] = await decorateVideos([video], req);
     res.status(200).json({ success: true, data: videoData });
@@ -284,7 +298,8 @@ exports.updateVideo = async (req, res, next) => {
 
     const updates = {};
     ['title', 'description', 'category', 'visibility'].forEach((key) => {
-      if (req.body[key] !== undefined) updates[key] = req.body[key];
+      const value = normalizeOptionalValue(req.body[key]);
+      if (value !== undefined) updates[key] = value;
     });
     if (req.body.tags !== undefined) updates.tags = normalizeTags(req.body.tags);
 

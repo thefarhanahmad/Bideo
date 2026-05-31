@@ -10,13 +10,15 @@ import PostCard from '../../components/PostCard';
 const FALLBACK_AVATAR = 'https://via.placeholder.com/100x100.png?text=User';
 
 export default function ChannelScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id?: string | string[] }>();
+  const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [channel, setChannel] = useState<any>(null);
   const [videos, setVideos] = useState<any[]>([]);
   const [posts, setPosts] = useState<any[]>([]);
-  const [filter, setFilter] = useState<'all' | 'popular' | 'latest'>('all');
+  const [filter, setFilter] = useState<'all' | 'popular' | 'shorts'>('all');
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadChannel();
@@ -25,16 +27,33 @@ export default function ChannelScreen() {
   const loadChannel = async () => {
     if (!id) return;
     setLoading(true);
+    setError(null);
     try {
-      const res = await api.get(`/users/channels/${id}`, { params: { filter } });
+      const res = await api.get(`/channels/${id}`, { params: { filter } });
       if (res.data.success) {
         setChannel(res.data.data.channel);
         setVideos(res.data.data.videos || []);
-        const postsRes = await api.get('/posts', { params: { owner: id } });
-        setPosts(postsRes.data.success ? postsRes.data.data || [] : []);
+        if (filter === 'all') {
+          const postsRes = await api.get('/posts', { params: { owner: id } });
+          setPosts(postsRes.data.success ? postsRes.data.data || [] : []);
+        } else {
+          setPosts([]);
+        }
+        return;
       }
+      throw new Error('Channel not found');
     } catch (err) {
-      console.error('Failed to load channel', err);
+      const apiError: any = err;
+      const status = apiError?.response?.status;
+      const message =
+        status === 404
+          ? 'Channel profile not found'
+          : apiError?.response?.data?.message || 'Failed to load channel';
+      setError(message);
+      setChannel(null);
+      setVideos([]);
+      setPosts([]);
+      console.error('Failed to load channel', apiError);
     } finally {
       setLoading(false);
     }
@@ -42,6 +61,17 @@ export default function ChannelScreen() {
 
   if (loading && !channel) {
     return <View style={styles.center}><ActivityIndicator color={Colors.primary} size="large" /></View>;
+  }
+
+  if (error && !channel) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.errorTitle}>{error}</Text>
+        <TouchableOpacity style={styles.retryBtn} onPress={loadChannel}>
+          <Text style={styles.retryText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
   }
 
   return (
@@ -65,14 +95,14 @@ export default function ChannelScreen() {
               {!!channel?.about && <Text style={styles.about}>{channel.about}</Text>}
             </View>
             <View style={styles.filters}>
-              {(['all', 'popular', 'latest'] as const).map((item) => (
+              {(['all', 'popular', 'shorts'] as const).map((item) => (
                 <TouchableOpacity
                   key={item}
                   style={[styles.filterBtn, filter === item && styles.filterBtnActive]}
                   onPress={() => setFilter(item)}
                 >
                   <Text style={[styles.filterText, filter === item && styles.filterTextActive]}>
-                    {item === 'all' ? 'All' : item === 'popular' ? 'Popular' : 'Latest'}
+                    {item === 'all' ? 'All' : item === 'popular' ? 'Popular' : 'Shorts'}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -102,4 +132,21 @@ const styles = StyleSheet.create({
   filterText: { color: Colors.text, fontWeight: '600' },
   filterTextActive: { color: Colors.white },
   empty: { textAlign: 'center', color: Colors.textGray, marginTop: 40 },
+  errorTitle: {
+    color: Colors.text,
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  retryBtn: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  retryText: {
+    color: Colors.white,
+    fontWeight: '700',
+  },
 });

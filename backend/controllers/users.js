@@ -42,8 +42,13 @@ exports.getChannelProfile = async (req, res, next) => {
     const channel = await User.findById(req.params.id).select('name avatar channelName about followersCount createdAt');
     if (!channel) return res.status(404).json({ success: false, message: 'Channel not found' });
 
-    const sort = req.query.filter === 'popular' ? { views: -1, createdAt: -1 } : { createdAt: -1 };
-    const videos = await require('../models/Video').find({ owner: channel._id, visibility: 'public' })
+    const Video = require('../models/Video');
+    const filter = (req.query.filter || 'all').toLowerCase();
+    const query = { owner: channel._id, visibility: 'public' };
+    if (filter === 'shorts') query.isShort = true;
+    const sort = filter === 'popular' ? { views: -1, createdAt: -1 } : { createdAt: -1 };
+
+    const videos = await Video.find(query)
       .populate('owner', 'name avatar channelName followersCount')
       .populate('category', 'name')
       .sort(sort);

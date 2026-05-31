@@ -11,13 +11,14 @@ import { formatTimeAgo } from '../utils/formatDate';
 const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
 
 interface CommentListProps {
-  videoId: string;
+  videoId?: string;
+  postId?: string;
   onCommentAdded: () => void;
   isAuthenticated: boolean;
   onAuthRequired: () => void;
 }
 
-const CommentList: React.FC<CommentListProps> = ({ videoId, onCommentAdded, isAuthenticated, onAuthRequired }) => {
+const CommentList: React.FC<CommentListProps> = ({ videoId, postId, onCommentAdded, isAuthenticated, onAuthRequired }) => {
   const { user } = useSelector((state: RootState) => state.auth);
   const router = useRouter();
   const [comments, setComments] = useState<any[]>([]);
@@ -27,12 +28,13 @@ const CommentList: React.FC<CommentListProps> = ({ videoId, onCommentAdded, isAu
 
   useEffect(() => {
     fetchComments();
-  }, [videoId]);
+  }, [videoId, postId]);
 
   const fetchComments = async () => {
     try {
       setLoading(true);
-      const response = await api.get(`/comments/${videoId}`);
+      const params = videoId ? { videoId } : { postId };
+      const response = await api.get('/comments', { params });
       setComments(response.data.data || []);
     } catch (err) {
       console.error('Failed to fetch comments', err);
@@ -47,7 +49,11 @@ const CommentList: React.FC<CommentListProps> = ({ videoId, onCommentAdded, isAu
 
     setSubmitting(true);
     try {
-      await api.post('/comments', { video: videoId, text: newComment });
+      await api.post('/comments', { 
+        video: videoId, 
+        post: postId,
+        text: newComment 
+      });
       setNewComment('');
       fetchComments();
       onCommentAdded();

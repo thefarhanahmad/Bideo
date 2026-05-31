@@ -67,6 +67,13 @@ export default function TabsLayout() {
           ),
           tabBarLabel: () => null,
         }}
+        listeners={{
+          tabPress: (e) => {
+            // Ensure we go to the upload screen without any params
+            e.preventDefault();
+            router.push('/upload');
+          },
+        }}
       />
       <Tabs.Screen
         name="followings"

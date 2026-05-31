@@ -21,6 +21,7 @@ const followers = require("./routes/followers");
 const playlist = require("./routes/playlist");
 const notifications = require("./routes/notifications");
 const posts = require("./routes/posts");
+const channels = require("./routes/channels");
 
 // Middlewares
 app.use(express.json());
@@ -61,6 +62,7 @@ app.use("/api/followers", followers);
 app.use("/api/playlists", playlist);
 app.use("/api/notifications", notifications);
 app.use("/api/posts", posts);
+app.use("/api/channels", channels);
 
 // Basic route
 app.get("/", (req, res) => {

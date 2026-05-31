@@ -112,13 +112,17 @@ export default function HomeScreen() {
       const res = await categoryService.getCategories();
       if (res && res.length > 0) {
         const names = res.map((c: any) => c.name);
-        setCategoriesList(['All', ...names]);
+        setCategoriesList(['All', 'Posts', ...names]);
       } else {
-        setCategoriesList(['All']);
+        setCategoriesList(['All', 'Posts']);
       }
     } catch (e) {
-      setCategoriesList(['All']);
+      setCategoriesList(['All', 'Posts']);
     }
+  };
+
+  const handleRefresh = async () => {
+    await Promise.all([loadVideos(), loadPosts()]);
   };
 
   const loadPosts = async () => {
@@ -132,11 +136,16 @@ export default function HomeScreen() {
 
   const filteredVideos = selectedCategory === 'All'
     ? videos
-    : videos.filter(v => v.category === selectedCategory);
-  const feedItems = selectedCategory === 'All'
-    ? [...filteredVideos.map((item: any) => ({ ...item, itemType: 'video' })), ...posts.map((item: any) => ({ ...item, itemType: 'post' }))]
-      .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
-    : filteredVideos.map((item: any) => ({ ...item, itemType: 'video' }));
+    : selectedCategory === 'Posts'
+      ? []
+      : videos.filter(v => v.category === selectedCategory);
+
+  const filteredPosts = (selectedCategory === 'All' || selectedCategory === 'Posts')
+    ? posts
+    : [];
+
+  const feedItems = [...filteredVideos.map((item: any) => ({ ...item, itemType: 'video' })), ...filteredPosts.map((item: any) => ({ ...item, itemType: 'post' }))]
+      .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
 
   if (loading && videos.length === 0) {
     return (
@@ -160,7 +169,7 @@ export default function HomeScreen() {
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
         refreshing={loading}
-        onRefresh={loadVideos}
+        onRefresh={handleRefresh}
         ListEmptyComponent={
           <View style={styles.centerContainer}>
             <Text style={styles.emptyText}>No videos found</Text>

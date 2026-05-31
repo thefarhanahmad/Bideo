@@ -77,7 +77,7 @@ export default function YourVideosScreen() {
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Your Videos</Text>
-        <TouchableOpacity onPress={() => router.push('/upload')}>
+        <TouchableOpacity onPress={() => router.push({ pathname: '/upload', params: { editId: undefined }})}>
           <Ionicons name="add" size={28} color={Colors.primary} />
         </TouchableOpacity>
       </View>

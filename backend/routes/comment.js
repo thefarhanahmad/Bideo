@@ -13,6 +13,7 @@ const router = express.Router();
 const { commentValidationRules, validate } = require('../validators');
 
 router.route('/')
+  .get(getComments)
   .post(protect, commentValidationRules(), validate, addComment);
 
 router.route('/:videoId')

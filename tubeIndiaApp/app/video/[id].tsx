@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Image, FlatList, Share } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode, VideoFullscreenUpdate } from 'expo-av';
 import * as ScreenOrientation from 'expo-screen-orientation';
+import { useFocusEffect } from '@react-navigation/native';
 import Colors from '../../constants/Colors';
 import { RootState } from '../../redux/store';
 import api, { videoService } from '../../services/api';
@@ -20,6 +21,7 @@ export default function VideoScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
+  const videoRef = useRef<Video | null>(null);
   
   const [video, setVideo] = useState<any>(null);
   const [recommendedVideos, setRecommendedVideos] = useState<any[]>([]);
@@ -35,6 +37,17 @@ export default function VideoScreen() {
       loadVideoData();
     }
   }, [id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        if (videoRef.current) {
+          videoRef.current.stopAsync?.().catch(() => {});
+          videoRef.current.unloadAsync?.().catch(() => {});
+        }
+      };
+    }, [])
+  );
 
   const loadVideoData = async () => {
     try {
@@ -247,6 +260,7 @@ export default function VideoScreen() {
   return (
     <View style={styles.container}>
       <Video
+        ref={videoRef}
         source={{ uri: video?.videoUrl || '' }}
         rate={1.0}
         volume={1.0}
