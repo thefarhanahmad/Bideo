@@ -30,6 +30,9 @@ export default function NotificationsScreen() {
   const openItem = async (item: any) => {
     if (!item.read) api.put(`/notifications/${item._id}/read`).catch(() => {});
     if (item.video?._id) router.push(`/video/${item.video._id}`);
+    else if (item.post?._id) router.push(`/post/${item.post._id}`);
+    else if (item.video) router.push(`/video/${item.video}`);
+    else if (item.post) router.push(`/post/${item.post}`);
   };
 
   return (

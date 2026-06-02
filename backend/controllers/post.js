@@ -44,6 +44,16 @@ exports.getPosts = async (req, res, next) => {
   }
 };
 
+exports.getPost = async (req, res, next) => {
+  try {
+    const post = await Post.findById(req.params.id).populate('owner', 'name avatar channelName');
+    if (!post) return res.status(404).json({ success: false, message: 'Post not found' });
+    res.status(200).json({ success: true, data: post });
+  } catch (err) {
+    next(err);
+  }
+};
+
 exports.getFollowedPosts = async (req, res, next) => {
   try {
     const followings = await Follower.find({ follower: req.user.id });

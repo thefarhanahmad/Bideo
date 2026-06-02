@@ -147,6 +147,40 @@ exports.addReply = async (req, res, next) => {
   }
 };
 
+// @desc    Toggle like on reply
+// @route   POST /api/comments/:id/replies/:replyId/like
+// @access  Private
+exports.toggleReplyLike = async (req, res, next) => {
+  try {
+    const comment = await Comment.findById(req.params.id);
+    if (!comment) return res.status(404).json({ success: false, message: 'Comment not found' });
+
+    const reply = comment.replies.id(req.params.replyId);
+    if (!reply) return res.status(404).json({ success: false, message: 'Reply not found' });
+
+    const userId = req.user.id.toString();
+    const alreadyLiked = reply.likes.some((id) => id.toString() === userId);
+    if (alreadyLiked) {
+      reply.likes = reply.likes.filter((id) => id.toString() !== userId);
+    } else {
+      reply.likes.addToSet(req.user.id);
+      await createNotification({
+        recipient: reply.user,
+        actor: req.user.id,
+        type: 'comment_like',
+        video: comment.video,
+        post: comment.post,
+        comment: comment._id,
+        message: `${req.user.channelName || req.user.name} liked your reply`,
+      });
+    }
+    await comment.save();
+    res.status(200).json({ success: true, likes: reply.likes, isLiked: !alreadyLiked });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // @desc    Delete comment
 // @route   DELETE /api/comments/:id
 // @access  Private

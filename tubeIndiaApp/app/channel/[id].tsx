@@ -1,15 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Image, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Image, FlatList, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../../constants/Colors';
 import api from '../../services/api';
 import VideoCard from '../../components/VideoCard';
 import PostCard from '../../components/PostCard';
+import { useSelector } from 'react-redux';
+import { RootState } from '../../redux/store';
+import AuthModal from '../../components/AuthModal';
 
 const FALLBACK_AVATAR = 'https://via.placeholder.com/100x100.png?text=User';
 
 export default function ChannelScreen() {
+  const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
@@ -19,6 +23,7 @@ export default function ChannelScreen() {
   const [posts, setPosts] = useState<any[]>([]);
   const [filter, setFilter] = useState<'all' | 'popular' | 'shorts'>('all');
   const [error, setError] = useState<string | null>(null);
+  const [authModalVisible, setAuthModalVisible] = useState(false);
 
   useEffect(() => {
     loadChannel();
@@ -59,6 +64,34 @@ export default function ChannelScreen() {
     }
   };
 
+  const handleFollow = async () => {
+    if (!isAuthenticated) {
+      setAuthModalVisible(true);
+      return;
+    }
+    if (!channel) return;
+
+    const prevFollowing = channel.isFollowing;
+    const prevCount = channel.followersCount || 0;
+
+    setChannel({
+      ...channel,
+      isFollowing: !prevFollowing,
+      followersCount: prevFollowing ? prevCount - 1 : prevCount + 1
+    });
+
+    try {
+      await api.post(`/followers/${id}`);
+    } catch (err) {
+      setChannel({
+        ...channel,
+        isFollowing: prevFollowing,
+        followersCount: prevCount
+      });
+      Alert.alert('Error', 'Failed to update follow status');
+    }
+  };
+
   if (loading && !channel) {
     return <View style={styles.center}><ActivityIndicator color={Colors.primary} size="large" /></View>;
   }
@@ -76,6 +109,7 @@ export default function ChannelScreen() {
 
   return (
     <View style={styles.container}>
+      <AuthModal visible={authModalVisible} onClose={() => setAuthModalVisible(false)} />
       <FlatList
         data={[
           ...(filter === 'all' ? posts.map((item) => ({ ...item, itemType: 'post' })) : []),
@@ -92,6 +126,18 @@ export default function ChannelScreen() {
               <Image source={{ uri: channel?.avatar || FALLBACK_AVATAR }} style={styles.avatar} />
               <Text style={styles.name}>{channel?.channelName || channel?.name || 'Channel'}</Text>
               <Text style={styles.meta}>{channel?.followersCount || 0} followers</Text>
+              
+              {user?._id !== id && (
+                <TouchableOpacity 
+                  style={[styles.followBtn, channel?.isFollowing && styles.followedBtn]} 
+                  onPress={handleFollow}
+                >
+                  <Text style={[styles.followBtnText, channel?.isFollowing && styles.followedBtnText]}>
+                    {channel?.isFollowing ? 'Following' : 'Follow'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+
               {!!channel?.about && <Text style={styles.about}>{channel.about}</Text>}
             </View>
             <View style={styles.filters}>
@@ -102,14 +148,14 @@ export default function ChannelScreen() {
                   onPress={() => setFilter(item)}
                 >
                   <Text style={[styles.filterText, filter === item && styles.filterTextActive]}>
-                    {item === 'all' ? 'All' : item === 'popular' ? 'Popular' : 'Shorts'}
+                    {item === 'all' ? 'All' : item === 'popular' ? 'Popular' : item === 'shorts' ? 'Shorts' : item}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
           </View>
         }
-        ListEmptyComponent={!loading ? <Text style={styles.empty}>No videos found</Text> : null}
+        ListEmptyComponent={!loading ? <Text style={styles.empty}>No content found</Text> : null}
         refreshing={loading}
         onRefresh={loadChannel}
       />
@@ -124,7 +170,25 @@ const styles = StyleSheet.create({
   backBtn: { position: 'absolute', left: 16, top: 52, padding: 4 },
   avatar: { width: 86, height: 86, borderRadius: 43, backgroundColor: Colors.border },
   name: { marginTop: 12, fontSize: 22, fontWeight: 'bold', color: Colors.text },
-  meta: { marginTop: 4, color: Colors.textGray },
+  meta: { marginTop: 4, color: Colors.textGray, marginBottom: 15 },
+  followBtn: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 40,
+    paddingVertical: 10,
+    borderRadius: 25,
+    marginBottom: 10,
+  },
+  followedBtn: {
+    backgroundColor: '#F3F4F6',
+  },
+  followBtnText: {
+    color: Colors.white,
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  followedBtnText: {
+    color: Colors.text,
+  },
   about: { marginTop: 10, color: Colors.textGray, textAlign: 'center', lineHeight: 19 },
   filters: { flexDirection: 'row', padding: 12, gap: 8, backgroundColor: Colors.white },
   filterBtn: { flex: 1, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingVertical: 10, alignItems: 'center' },

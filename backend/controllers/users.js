@@ -1,4 +1,6 @@
 const User = require('../models/User');
+const Video = require('../models/Video');
+const Follower = require('../models/Follower');
 const { deleteFromCloudinary } = require('../utils/cloudinary');
 
 // @desc Create user
@@ -39,10 +41,20 @@ exports.updateChannel = async (req, res, next) => {
 
 exports.getChannelProfile = async (req, res, next) => {
   try {
-    const channel = await User.findById(req.params.id).select('name avatar channelName about followersCount createdAt');
-    if (!channel) return res.status(404).json({ success: false, message: 'Channel not found' });
+    const channelObj = await User.findById(req.params.id).select('name avatar channelName about followersCount createdAt');
+    if (!channelObj) return res.status(404).json({ success: false, message: 'Channel not found' });
 
-    const Video = require('../models/Video');
+    const channel = channelObj.toObject();
+    if (req.user) {
+      const isFollowing = await Follower.findOne({
+        follower: req.user.id,
+        channel: req.params.id,
+      });
+      channel.isFollowing = !!isFollowing;
+    } else {
+      channel.isFollowing = false;
+    }
+
     const filter = (req.query.filter || 'all').toLowerCase();
     const query = { owner: channel._id, visibility: 'public' };
     if (filter === 'shorts') query.isShort = true;
@@ -107,7 +119,7 @@ exports.addToHistory = async (req, res, next) => {
     const user = await User.findById(req.user.id);
 
     // Remove if already exists to move to top
-    user.watchHistory = user.watchHistory.filter(id => id.toString() !== videoId);
+    user.watchHistory = (user.watchHistory || []).filter(id => id.toString() !== videoId);
     user.watchHistory.unshift(videoId);
     
     // Keep only last 50
@@ -132,7 +144,7 @@ exports.getHistory = async (req, res, next) => {
       populate: { path: 'owner', select: 'name channelName avatar' }
     });
 
-    res.status(200).json({ success: true, data: user.watchHistory });
+    res.status(200).json({ success: true, data: user.watchHistory || [] });
   } catch (err) {
     next(err);
   }

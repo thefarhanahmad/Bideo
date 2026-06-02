@@ -53,6 +53,7 @@ export default function TabsLayout() {
         name="shorts"
         options={{
           title: 'Shorts',
+          headerShown: false,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="play-circle-outline" size={size} color={color} />
           ),

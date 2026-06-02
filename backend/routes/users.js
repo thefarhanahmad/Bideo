@@ -13,11 +13,11 @@ const {
   clearSearchHistory,
   getChannelProfile,
 } = require('../controllers/users');
-const { protect, authorize } = require('../middlewares/auth');
+const { protect, authorize, softProtect } = require('../middlewares/auth');
 
 const router = express.Router();
 
-router.get('/channels/:id', getChannelProfile);
+router.get('/channels/:id', softProtect, getChannelProfile);
 
 router.use(protect);
 

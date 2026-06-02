@@ -33,6 +33,45 @@ exports.loginWithPhone = async (req, res, next) => {
   }
 };
 
+// @desc    Forgot Password - Request OTP (Dummy 1234)
+// @route   POST /api/auth/forgot-password
+// @access  Public
+exports.forgotPassword = async (req, res, next) => {
+  try {
+    const { phone } = req.body;
+    const user = await User.findOne({ phone });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    // Since we use dummy OTP "1234", we don't actually need to store it or send it.
+    // In a real app, we would generate a token, save it with expiry, and send SMS.
+    res.status(200).json({ success: true, message: 'OTP sent to phone' });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Reset Password
+// @route   POST /api/auth/reset-password
+// @access  Public
+exports.resetPassword = async (req, res, next) => {
+  try {
+    const { phone, otp, password } = req.body;
+    if (otp !== '1234') {
+      return res.status(400).json({ success: false, message: 'Invalid OTP' });
+    }
+    const user = await User.findOne({ phone });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    user.password = password;
+    await user.save();
+    res.status(200).json({ success: true, message: 'Password reset successful' });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // @desc    Google Login
 // @route   POST /api/auth/google
 // @access  Public

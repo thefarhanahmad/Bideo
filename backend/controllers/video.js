@@ -83,9 +83,10 @@ exports.searchVideos = async (req, res, next) => {
         { tags: { $regex: q, $options: 'i' } },
       ],
       visibility: 'public',
-    }).populate('owner', 'name avatar channelName').populate('category', 'name').sort('-createdAt');
+    }).populate('owner', 'name avatar channelName followersCount').populate('category', 'name').sort('-createdAt');
 
-    res.status(200).json({ success: true, count: videos.length, data: videos });
+    const results = await decorateVideos(videos, req);
+    res.status(200).json({ success: true, count: results.length, data: results });
   } catch (err) {
     next(err);
   }
@@ -165,11 +166,12 @@ exports.getFollowedVideos = async (req, res, next) => {
     if (req.query.type === 'video' || req.query.type === 'long') query.isShort = false;
 
     const videos = await Video.find(query)
-      .populate('owner', 'name avatar channelName')
+      .populate('owner', 'name avatar channelName followersCount')
       .populate('category', 'name')
       .sort('-createdAt');
 
-    res.status(200).json({ success: true, count: videos.length, data: videos });
+    const results = await decorateVideos(videos, req);
+    res.status(200).json({ success: true, count: results.length, data: results });
   } catch (err) {
     next(err);
   }

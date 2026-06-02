@@ -5,6 +5,7 @@ const {
   deleteComment,
   toggleCommentLike,
   addReply,
+  toggleReplyLike,
 } = require('../controllers/comment');
 const { protect } = require('../middlewares/auth');
 
@@ -21,6 +22,7 @@ router.route('/:videoId')
 
 router.post('/:id/like', protect, toggleCommentLike);
 router.post('/:id/replies', protect, addReply);
+router.post('/:id/replies/:replyId/like', protect, toggleReplyLike);
 
 router.route('/:id')
   .delete(protect, deleteComment);

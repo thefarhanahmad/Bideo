@@ -1,22 +1,23 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, Image, Dimensions, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Image, Dimensions, TouchableOpacity, ActivityIndicator, ScrollView, Platform, Modal, Pressable, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode } from 'expo-av';
 import { useIsFocused } from '@react-navigation/native';
 import Colors from '../../constants/Colors';
-import { videoService } from '../../services/api';
 import api from '../../services/api';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import AuthModal from '../../components/AuthModal';
 import CommentList from '../../components/CommentList';
-import { Modal } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
 
-const { height, width } = Dimensions.get('window');
+const { height: WINDOW_HEIGHT, width: WINDOW_WIDTH } = Dimensions.get('window');
 
 export default function ShortsScreen() {
+  const insets = useSafeAreaInsets();
   const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
   const router = useRouter();
   const isFocused = useIsFocused();
@@ -26,6 +27,7 @@ export default function ShortsScreen() {
   const [selectedShortId, setSelectedShortId] = useState<string | null>(null);
   const [commentModalVisible, setCommentModalVisible] = useState(false);
   const [activeVideoIndex, setActiveVideoIndex] = useState(0);
+  const [containerHeight, setContainerHeight] = useState(WINDOW_HEIGHT);
 
   useEffect(() => {
     loadShorts();
@@ -35,23 +37,26 @@ export default function ShortsScreen() {
     setLoading(true);
     try {
       const data = await api.get('/videos', { params: { type: 'short' } });
-      const onlyShorts = (data.data.data || []).map((v: any) => ({
-        _id: v._id,
-        videoUrl: v.videoUrl,
-        thumbnail: v.thumbnail,
-        owner: { 
-          _id: v.owner?._id,
-          name: v.owner?.name || 'Unknown', 
-          channelName: v.owner?.channelName,
-          avatar: v.owner?.avatar || '' 
-        },
-        title: v.title,
-        likes: v.likes || [],
-        commentsCount: v.commentsCount || 0,
-        isLiked: v.isLiked ?? (isAuthenticated && v.likes?.includes(user?._id)),
-        isFollowing: v.isFollowing || false,
-        createdAt: v.createdAt,
-      }));
+      const onlyShorts = (data.data.data || [])
+        .filter((v: any) => v.isShort === true) // Extra check
+        .map((v: any) => ({
+          _id: v._id,
+          videoUrl: v.videoUrl,
+          thumbnail: v.thumbnail,
+          owner: { 
+            _id: v.owner?._id,
+            name: v.owner?.name || 'Unknown', 
+            channelName: v.owner?.channelName,
+            avatar: v.owner?.avatar || '' 
+          },
+          title: v.title,
+          likes: v.likes || [],
+          commentsCount: v.commentsCount || 0,
+          isLiked: v.isLiked ?? (isAuthenticated && v.likes?.includes(user?._id)),
+          isFollowing: v.isFollowing || false,
+          createdAt: v.createdAt,
+        }));
+      
       const orderedShorts = [...onlyShorts].sort((a: any, b: any) => {
         const aFollowing = a?.isFollowing ? 1 : 0;
         const bFollowing = b?.isFollowing ? 1 : 0;
@@ -112,6 +117,16 @@ export default function ShortsScreen() {
     }
   };
 
+  const handleShare = async (short: any) => {
+    try {
+      await Share.share({
+        message: `Check out this short on TubeIndia: ${short.title}\n${short.videoUrl}`,
+      });
+    } catch (err) {
+      console.error('Share failed', err);
+    }
+  };
+
   const handleCommentClick = (shortId: string) => {
     if (!isAuthenticated) {
       setAuthModalVisible(true);
@@ -128,7 +143,7 @@ export default function ShortsScreen() {
   }).current;
 
   const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 50
+    itemVisiblePercentThreshold: 80 // Higher threshold for better snapping
   }).current;
 
   if (loading) return (
@@ -138,12 +153,15 @@ export default function ShortsScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <View 
+      style={styles.container} 
+      onLayout={(e) => setContainerHeight(e.nativeEvent.layout.height)}
+    >
       <AuthModal visible={authModalVisible} onClose={() => setAuthModalVisible(false)} />
       
-      <Modal visible={commentModalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.commentModalContent}>
+      <Modal visible={commentModalVisible} transparent animationType="slide" onRequestClose={() => setCommentModalVisible(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setCommentModalVisible(false)}>
+          <Pressable style={styles.commentModalContent} onPress={(e) => e.stopPropagation()}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Comments</Text>
               <TouchableOpacity onPress={() => setCommentModalVisible(false)}>
@@ -156,23 +174,38 @@ export default function ShortsScreen() {
                   videoId={selectedShortId} 
                   onCommentAdded={() => {}} 
                   isAuthenticated={isAuthenticated} 
-                  onAuthRequired={() => setAuthModalVisible(true)} 
+                  onAuthRequired={() => {
+                    setCommentModalVisible(false);
+                    setAuthModalVisible(true);
+                  }} 
                 />
               )}
             </ScrollView>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
 
       <FlatList
         data={shorts}
         keyExtractor={(item) => item._id}
         pagingEnabled
+        snapToInterval={containerHeight}
+        snapToAlignment="start"
+        decelerationRate="fast"
         showsVerticalScrollIndicator={false}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
+        removeClippedSubviews={true}
+        initialNumToRender={2}
+        maxToRenderPerBatch={3}
+        windowSize={5}
+        getItemLayout={(data, index) => ({
+          length: containerHeight,
+          offset: containerHeight * index,
+          index,
+        })}
         renderItem={({ item, index }) => (
-          <View style={styles.shortItem}>
+          <View style={[styles.shortItem, { height: containerHeight }]}>
             <Video
               source={{ uri: item.videoUrl }}
               style={styles.fullVideo}
@@ -184,6 +217,10 @@ export default function ShortsScreen() {
               usePoster
             />
             <View style={styles.overlay}>
+              <View style={[styles.topHeader, { top: insets.top + 10 }]}>
+                <Text style={styles.shortsHeaderTitle}>Shorts</Text>
+              </View>
+
               <View style={styles.rightActions}>
                 <TouchableOpacity style={styles.actionButton} onPress={() => handleLike(item._id)}>
                   <Ionicons name={item.isLiked ? "thumbs-up" : "thumbs-up-outline"} size={32} color={item.isLiked ? Colors.primary : Colors.white} />
@@ -193,7 +230,7 @@ export default function ShortsScreen() {
                   <Ionicons name="chatbubble-ellipses" size={32} color={Colors.white} />
                   <Text style={styles.actionText}>{item.commentsCount}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.actionButton}>
+                <TouchableOpacity style={styles.actionButton} onPress={() => handleShare(item)}>
                   <Ionicons name="share-social" size={32} color={Colors.white} />
                   <Text style={styles.actionText}>Share</Text>
                 </TouchableOpacity>
@@ -234,9 +271,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   shortItem: {
-    width: width,
-    height: height - 120, // Adjust for bottom tabs
+    width: WINDOW_WIDTH,
     position: 'relative',
+    backgroundColor: 'black',
   },
   fullVideo: {
     width: '100%',
@@ -247,16 +284,17 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.1)',
     justifyContent: 'flex-end',
     padding: 20,
+    paddingBottom: 15,
   },
   rightActions: {
     position: 'absolute',
     right: 12,
-    bottom: 120,
+    bottom: 70,
     alignItems: 'center',
   },
   actionButton: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   actionText: {
     color: Colors.white,
@@ -265,7 +303,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   bottomDetails: {
-    marginBottom: 20,
+    marginBottom: 0,
     paddingRight: 60,
   },
   ownerRow: {
@@ -314,6 +352,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
+  topHeader: {
+    position: 'absolute',
+    left: 20,
+    zIndex: 10,
+  },
+  shortsHeaderTitle: {
+    color: Colors.white,
+    fontSize: 22,
+    fontWeight: 'bold',
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: -1, height: 1 },
+    textShadowRadius: 10,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -338,4 +389,3 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 });
-

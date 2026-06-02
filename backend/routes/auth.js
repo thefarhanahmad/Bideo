@@ -1,5 +1,5 @@
 const express = require('express');
-const { googleLogin, getMe, signupWithPhone, loginWithPhone, updateChannel } = require('../controllers/auth');
+const { googleLogin, getMe, signupWithPhone, loginWithPhone, updateChannel, forgotPassword, resetPassword } = require('../controllers/auth');
 const { protect } = require('../middlewares/auth');
 const { authValidationRules, phoneSignupValidationRules, phoneLoginValidationRules, validate } = require('../validators');
 
@@ -10,6 +10,8 @@ const router = express.Router();
 router.post('/google', authValidationRules(), validate, googleLogin);
 router.post('/signup', phoneSignupValidationRules(), validate, signupWithPhone);
 router.post('/login', phoneLoginValidationRules(), validate, loginWithPhone);
+router.post('/forgot-password', forgotPassword);
+router.post('/reset-password', resetPassword);
 router.get('/me', protect, getMe);
 router.put('/channel', protect, upload.single('avatar'), updateChannel);
 
