@@ -34,17 +34,25 @@
     },
 
     "plugins": [
-      "expo-secure-store",
-      "expo-router",
-
       [
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",
-          "resizeMode": "contain",
-          "backgroundColor": "#FFFFFF"
+          "resizeMode": "cover",
+          "backgroundColor": "#ffffff",
+          "dark": {
+            "backgroundColor": "#000000"
+          }
         }
-      ]
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to upload business images.",
+          "cameraPermission": "The app accesses your camera to take photos for uploads."
+        }
+      ],
+      "expo-web-browser"
     ],
 
     "experiments": {
