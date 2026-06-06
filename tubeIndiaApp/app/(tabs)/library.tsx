@@ -4,7 +4,6 @@ import { Ionicons } from '@expo/vector-icons';
 import Colors from '../../constants/Colors';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../../redux/store';
-import { logout } from '../../redux/slices/authSlice';
 import AuthModal from '../../components/AuthModal';
 import api, { setAuthToken } from '../../services/api';
 import { useRouter, useNavigation, useFocusEffect } from 'expo-router';
@@ -55,8 +54,8 @@ export default function LibraryScreen() {
   useEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <TouchableOpacity style={{ marginRight: 15 }} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={24} color={Colors.primary} />
+        <TouchableOpacity style={{ marginRight: 15 }} onPress={() => router.push('/settings')}>
+          <Ionicons name="settings-outline" size={24} color={Colors.primary} />
         </TouchableOpacity>
       ),
     });
@@ -126,30 +125,6 @@ export default function LibraryScreen() {
       loadLikedVideos()
     ]);
     setRefreshing(false);
-  };
-
-  const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Logout', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await AsyncStorage.removeItem('token');
-              setAuthToken(null);
-              dispatch(logout());
-              router.replace('/');
-            } catch (err) {
-              console.error('Logout failed', err);
-            }
-          }
-        }
-      ]
-    );
   };
 
   if (!isAuthenticated && !authModalVisible) {
