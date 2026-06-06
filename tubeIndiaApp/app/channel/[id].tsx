@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Image, FlatList, TouchableOpacity, ActivityIndicator, Alert, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Image, FlatList, TouchableOpacity, ActivityIndicator, Alert, ScrollView, Dimensions, Share } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../../constants/Colors';
@@ -10,6 +10,7 @@ import { RootState } from '../../redux/store';
 import AuthModal from '../../components/AuthModal';
 import { formatTimeAgo } from '../../utils/formatDate';
 
+const { width } = Dimensions.get('window');
 const FALLBACK_AVATAR = 'https://via.placeholder.com/100x100.png?text=User';
 
 export default function ChannelScreen() {
@@ -17,6 +18,7 @@ export default function ChannelScreen() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
+
   const [loading, setLoading] = useState(true);
   const [channel, setChannel] = useState<any>(null);
   const [videos, setVideos] = useState<any[]>([]);
@@ -35,8 +37,8 @@ export default function ChannelScreen() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get(`/channels/${id}`, { 
-        params: { filter: activeFilter, sort: activeSort } 
+      const res = await api.get(`/channels/${id}`, {
+        params: { filter: activeFilter, sort: activeSort }
       });
       if (res.data.success) {
         setChannel(res.data.data.channel);
@@ -47,16 +49,9 @@ export default function ChannelScreen() {
       throw new Error('Channel not found');
     } catch (err) {
       const apiError: any = err;
-      const status = apiError?.response?.status;
-      const message =
-        status === 404
-          ? 'Channel profile not found'
-          : apiError?.response?.data?.message || 'Failed to load channel';
-      setError(message);
+      setError(apiError?.response?.data?.message || 'Failed to load channel');
       setChannel(null);
-      setVideos([]);
-      setPosts([]);
-      console.error('Failed to load channel', apiError);
+      console.error('Load Channel Error:', apiError);
     } finally {
       setLoading(false);
     }
@@ -90,6 +85,19 @@ export default function ChannelScreen() {
     }
   };
 
+  const handleShare = async () => {
+    if (!channel) return;
+    try {
+      const url = `https://tubeindia.app/channel/${channel._id}`;
+      await Share.share({
+        message: `Check out ${channel.channelName || channel.name} on TubeIndia!\n${url}`,
+        url: url,
+      });
+    } catch (error) {
+      console.error('Share Error:', error);
+    }
+  };
+
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
@@ -98,9 +106,10 @@ export default function ChannelScreen() {
 
   const renderHorizontalVideoCard = (item: any) => {
     return (
-      <TouchableOpacity 
-        style={styles.horizontalCard} 
+      <TouchableOpacity
+        style={styles.horizontalCard}
         onPress={() => router.push(`/video/${item._id}`)}
+        activeOpacity={0.7}
       >
         <View style={styles.thumbnailContainer}>
           <Image source={{ uri: item.thumbnail }} style={styles.thumbnail} />
@@ -113,8 +122,8 @@ export default function ChannelScreen() {
           <Text style={styles.videoMeta}>
             {item.views} views • {formatTimeAgo(item.createdAt)}
           </Text>
-          <TouchableOpacity style={styles.menuDots}>
-            <Ionicons name="ellipsis-vertical" size={16} color={Colors.text} />
+          <TouchableOpacity style={styles.menuDots} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Ionicons name="ellipsis-vertical" size={16} color={Colors.textGray} />
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -123,9 +132,10 @@ export default function ChannelScreen() {
 
   const renderShortGridItem = (item: any) => {
     return (
-      <TouchableOpacity 
-        style={styles.shortGridItem} 
+      <TouchableOpacity
+        style={styles.shortGridItem}
         onPress={() => router.push({ pathname: '/shorts', params: { initialShortId: item._id } })}
+        activeOpacity={0.9}
       >
         <View style={styles.shortGridThumbnailContainer}>
           <Image source={{ uri: item.thumbnail }} style={styles.shortGridThumbnail} />
@@ -163,6 +173,7 @@ export default function ChannelScreen() {
   if (error && !channel) {
     return (
       <View style={styles.center}>
+        <Ionicons name="alert-circle-outline" size={60} color={Colors.textGray} />
         <Text style={styles.errorTitle}>{error}</Text>
         <TouchableOpacity style={styles.retryBtn} onPress={() => loadChannel(filter, sort)}>
           <Text style={styles.retryText}>Retry</Text>
@@ -174,6 +185,7 @@ export default function ChannelScreen() {
   return (
     <View style={styles.container}>
       <AuthModal visible={authModalVisible} onClose={() => setAuthModalVisible(false)} />
+
       <FlatList
         key={filter === 'shorts' ? 'shorts-grid' : 'videos-list'}
         data={content}
@@ -187,56 +199,78 @@ export default function ChannelScreen() {
         }}
         ListHeaderComponent={
           <View>
+            {/* Banner Section */}
             <View style={styles.header}>
               <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-                <Ionicons name="arrow-back" size={24} color={Colors.white} style={styles.backIconShadow} />
+                <Ionicons name="arrow-back" size={24} color={Colors.white} />
               </TouchableOpacity>
-              
-              {/* Cover Image */}
+
               {channel?.coverImage ? (
                 <Image source={{ uri: channel.coverImage }} style={styles.coverImage} />
               ) : (
                 <View style={styles.coverPlaceholder} />
               )}
-              
-              <View style={styles.profileInfoContainer}>
+            </View>
+
+            {/* Profile Section */}
+            <View style={styles.profileSection}>
+              <View style={styles.avatarWrapper}>
                 <Image source={{ uri: channel?.avatar || FALLBACK_AVATAR }} style={styles.avatar} />
-                <Text style={styles.name}>{channel?.channelName || channel?.name || 'Channel'}</Text>
-                <Text style={styles.username}>@{channel?.name || 'user'}</Text>
-                <Text style={styles.metaText}>{channel?.followersCount || 0} subscribers</Text>
-                
+              </View>
+
+              <View style={styles.identityContainer}>
+                <Text style={styles.name} numberOfLines={1}>
+                  {channel?.channelName || channel?.name || 'Channel'}
+                </Text>
+                <Text style={styles.handle}>@{channel?.name || 'user'}</Text>
+                <Text style={styles.subscribers}>{channel?.followersCount || 0} subscribers</Text>
+
+                {!!channel?.about && (
+                  <TouchableOpacity activeOpacity={0.7} style={styles.aboutContainer} onPress={() => Alert.alert('About', channel.about)}>
+                    <Text style={styles.aboutPreview} numberOfLines={2}>
+                      {channel.about}
+                    </Text>
+                    <Text style={styles.moreAboutText}>more <Ionicons name="chevron-forward" size={10} color={Colors.textGray} /></Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <View style={styles.actionRow}>
                 {isOwner ? (
                   <TouchableOpacity style={styles.editBtn} onPress={() => router.push('/edit-channel')}>
-                    <Ionicons name="create-outline" size={18} color={Colors.white} />
                     <Text style={styles.editBtnText}>Edit Channel</Text>
                   </TouchableOpacity>
                 ) : (
-                  <TouchableOpacity 
-                    style={[styles.followBtn, channel?.isFollowing && styles.followedBtn]} 
+                  <TouchableOpacity
+                    style={[styles.followBtn, channel?.isFollowing && styles.followedBtn]}
                     onPress={handleFollow}
                   >
                     <Text style={[styles.followBtnText, channel?.isFollowing && styles.followedBtnText]}>
-                      {channel?.isFollowing ? 'Following' : 'Follow'}
+                      {channel?.isFollowing ? 'Following' : 'Subscribe'}
                     </Text>
                   </TouchableOpacity>
                 )}
-
-                {!!channel?.about && <Text style={styles.about}>{channel.about}</Text>}
+                <TouchableOpacity style={styles.iconActionBtn} onPress={handleShare}>
+                  <Ionicons name="share-social-outline" size={22} color={Colors.text} />
+                </TouchableOpacity>
               </View>
             </View>
-            
-            <View style={styles.tabsContainer}>
-              {tabItems.map((item) => (
-                <TouchableOpacity
-                  key={item.key}
-                  style={[styles.tabBtn, filter === item.key && styles.tabBtnActive]}
-                  onPress={() => setFilter(item.key)}
-                >
-                  <Text style={[styles.tabText, filter === item.key && styles.tabTextActive]}>
-                    {item.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+
+            {/* Tabs & Filters */}
+            <View style={styles.tabsSection}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsScroll}>
+                {tabItems.map((item) => (
+                  <TouchableOpacity
+                    key={item.key}
+                    style={[styles.tabBtn, filter === item.key && styles.tabBtnActive]}
+                    onPress={() => setFilter(item.key)}
+                  >
+                    <Text style={[styles.tabText, filter === item.key && styles.tabTextActive]}>
+                      {item.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             </View>
 
             <View style={styles.sortContainer}>
@@ -256,10 +290,18 @@ export default function ChannelScreen() {
             </View>
           </View>
         }
-        ListEmptyComponent={!loading ? <Text style={styles.empty}>No {filter} found</Text> : null}
+        ListEmptyComponent={!loading ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="videocam-outline" size={60} color={Colors.border} />
+            <Text style={styles.empty}>No {filter} found yet</Text>
+          </View>
+        ) : null}
         refreshing={loading}
         onRefresh={() => loadChannel(filter, sort)}
-        contentContainerStyle={filter === 'shorts' ? styles.shortsListPadding : null}
+        contentContainerStyle={[
+          styles.listContent,
+          filter === 'shorts' ? styles.shortsListPadding : null
+        ]}
       />
     </View>
   );
@@ -268,84 +310,155 @@ export default function ChannelScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.white },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  header: { position: 'relative' },
-  backBtn: { position: 'absolute', left: 16, top: 52, padding: 4, zIndex: 10 },
-  backIconShadow: {
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+
+  // Header / Banner
+  header: { backgroundColor: Colors.white, position: 'relative' },
+  backBtn: {
+    position: 'absolute',
+    left: 16,
+    top: 40,
+    width: 30,
+    height: 30,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 20
   },
   coverImage: {
     width: '100%',
-    aspectRatio: 16 / 9,
+    aspectRatio: 20 / 9, // Restored ratio
     backgroundColor: Colors.border,
   },
   coverPlaceholder: {
     width: '100%',
-    aspectRatio: 16 / 9,
+    aspectRatio: 20 / 9,
     backgroundColor: '#E5E7EB',
   },
-  profileInfoContainer: {
-    padding: 20,
+
+  // Profile Info
+  profileSection: {
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+  },
+  avatarWrapper: {
+    marginTop: -40, // Perfect overlap
+    marginBottom: 9,
+    alignSelf: 'flex-start',
+    padding: 3,
+    backgroundColor: Colors.white,
+    borderRadius: 45,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+  },
+  avatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: Colors.border
+  },
+  identityContainer: {
+    width: '100%',
+  },
+  name: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors.text,
+    letterSpacing: -0.5,
+  },
+  handle: {
+    fontSize: 12,
+    color: Colors.text,
+    marginTop: 4,
+    fontWeight: '600',
+  },
+  subscribers: {
+    fontSize: 13,
+    color: Colors.textGray,
+    marginTop: 4,
+    fontWeight: '500',
+  },
+  aboutContainer: {
+    marginTop: 12,
+  },
+  aboutPreview: {
+    fontSize: 13,
+    color: Colors.textGray,
+    lineHeight: 18,
+  },
+  moreAboutText: {
+    fontSize: 13,
+    color: Colors.textGray,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+
+  // Actions
+  actionRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: -43, // Pull half of avatar over cover
+    marginTop: 18,
+    gap: 12,
   },
-  avatar: { 
-    width: 86, 
-    height: 86, 
-    borderRadius: 43, 
-    backgroundColor: Colors.border,
-    borderWidth: 4,
-    borderColor: Colors.white,
-  },
-  name: { marginTop: 12, fontSize: 22, fontWeight: 'bold', color: Colors.text },
-  username: { marginTop: 3, color: Colors.textGray, fontSize: 14 },
-  metaText: { marginTop: 4, color: Colors.textGray, marginBottom: 15 },
   followBtn: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 40,
-    paddingVertical: 10,
-    borderRadius: 25,
-    marginBottom: 10,
+    flex: 1,
+    backgroundColor: Colors.text,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   followedBtn: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#F2F2F2',
   },
   followBtnText: {
     color: Colors.white,
-    fontWeight: 'bold',
-    fontSize: 16,
+    fontWeight: '700',
+    fontSize: 15,
   },
   followedBtnText: {
     color: Colors.text,
   },
   editBtn: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    borderRadius: 25,
-    marginBottom: 10,
-    flexDirection: 'row',
+    flex: 1,
+    backgroundColor: '#F2F2F2',
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'center',
   },
   editBtnText: {
-    color: Colors.white,
-    fontWeight: 'bold',
-    fontSize: 16,
+    color: Colors.text,
+    fontWeight: '700',
+    fontSize: 15,
   },
-  about: { marginTop: 10, color: Colors.textGray, textAlign: 'center', lineHeight: 19 },
-  
-  tabsContainer: {
-    flexDirection: 'row',
+  iconActionBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#F2F2F2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Tabs
+  tabsSection: {
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
-    paddingHorizontal: 10,
+    backgroundColor: Colors.white,
+    marginTop: -10,
+  },
+  tabsScroll: {
+    paddingHorizontal: 16,
   },
   tabBtn: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderBottomWidth: 2,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginRight: 8,
+    borderBottomWidth: 3,
     borderBottomColor: 'transparent',
   },
   tabBtnActive: {
@@ -353,16 +466,17 @@ const styles = StyleSheet.create({
   },
   tabText: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
     color: Colors.textGray,
   },
   tabTextActive: {
     color: Colors.text,
   },
 
+  // Sort Filters
   sortContainer: {
     paddingVertical: 12,
-    paddingHorizontal: 15,
+    paddingHorizontal: 16,
   },
   sortBtn: {
     paddingHorizontal: 16,
@@ -383,18 +497,19 @@ const styles = StyleSheet.create({
     color: Colors.white,
   },
 
+  // Horizontal Card (Videos)
   horizontalCard: {
     flexDirection: 'row',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     gap: 12,
   },
   thumbnailContainer: {
     width: 160,
-    aspectRatio: 16 / 9,
-    borderRadius: 8,
+    aspectRatio: 20 / 9,
+    borderRadius: 12,
     overflow: 'hidden',
-    backgroundColor: '#E5E7EB',
+    backgroundColor: '#F3F4F6',
   },
   thumbnail: {
     width: '100%',
@@ -402,11 +517,11 @@ const styles = StyleSheet.create({
   },
   durationBadge: {
     position: 'absolute',
-    bottom: 4,
-    right: 4,
+    bottom: 6,
+    right: 6,
     backgroundColor: 'rgba(0,0,0,0.8)',
-    paddingHorizontal: 4,
-    paddingVertical: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     borderRadius: 4,
   },
   durationText: {
@@ -416,26 +531,28 @@ const styles = StyleSheet.create({
   },
   videoInfo: {
     flex: 1,
-    paddingRight: 15,
+    justifyContent: 'flex-start',
+    paddingRight: 10,
   },
   videoTitle: {
     fontSize: 15,
     fontWeight: '600',
     color: Colors.text,
     lineHeight: 20,
+    marginBottom: 4,
   },
   videoMeta: {
     fontSize: 12,
     color: Colors.textGray,
-    marginTop: 4,
   },
   menuDots: {
     position: 'absolute',
-    top: 0,
+    top: -4,
     right: -10,
     padding: 10,
   },
 
+  // Short Grid
   shortsRow: {
     paddingHorizontal: 2,
   },
@@ -443,11 +560,11 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   shortGridItem: {
-    flex: 1/3,
+    flex: 1 / 3,
     aspectRatio: 9 / 16,
     margin: 2,
     backgroundColor: '#F3F4F6',
-    borderRadius: 4,
+    borderRadius: 8,
     overflow: 'hidden',
   },
   shortGridThumbnailContainer: {
@@ -464,45 +581,62 @@ const styles = StyleSheet.create({
     left: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: 'rgba(0,0,0,0.4)',
     paddingHorizontal: 4,
-    borderRadius: 2,
+    borderRadius: 4,
   },
   shortViewsText: {
     color: Colors.white,
-    fontSize: 10,
-    fontWeight: 'bold',
-    marginLeft: 2,
+    fontSize: 11,
+    fontWeight: '700',
+    marginLeft: 3,
   },
   shortGridTitle: {
     position: 'absolute',
-    top: 8,
+    bottom: 25,
     left: 8,
     right: 8,
     color: Colors.white,
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
     textShadowColor: 'rgba(0, 0, 0, 0.8)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
   },
 
-  empty: { textAlign: 'center', color: Colors.textGray, marginTop: 40 },
+  // Utils
+  listContent: {
+    paddingBottom: 40,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 60,
+  },
+  empty: {
+    textAlign: 'center',
+    color: Colors.textGray,
+    marginTop: 16,
+    fontSize: 16,
+    fontWeight: '500',
+  },
   errorTitle: {
     color: Colors.text,
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
-    marginBottom: 12,
+    marginTop: 16,
+    marginBottom: 20,
     textAlign: 'center',
   },
   retryBtn: {
     backgroundColor: Colors.primary,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 25,
   },
   retryText: {
     color: Colors.white,
     fontWeight: '700',
+    fontSize: 15,
   },
 });
