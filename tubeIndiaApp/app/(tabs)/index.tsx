@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, FlatList, StyleSheet, ActivityIndicator, Text, Modal, TouchableOpacity, TextInput, Alert } from 'react-native';
+import { View, FlatList, StyleSheet, ActivityIndicator, Text, Modal, TouchableOpacity, TextInput, Alert, Image } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import Colors from '../../constants/Colors';
 import VideoCard from '../../components/VideoCard';
 import PostCard from '../../components/PostCard';
@@ -60,6 +61,7 @@ const SAMPLE_VIDEOS = [
 
 export default function HomeScreen() {
   const dispatch = useDispatch();
+  const router = useRouter();
   const { videos, loading, error } = useSelector((state: RootState) => state.video);
   const { isAuthenticated } = useSelector((state: RootState) => state.auth);
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -150,8 +152,54 @@ export default function HomeScreen() {
     ? posts
     : [];
 
-  const feedItems = [...filteredVideos.map((item: any) => ({ ...item, itemType: 'video' })), ...filteredPosts.map((item: any) => ({ ...item, itemType: 'post' }))]
+  const longVideosAndPosts = [...filteredVideos.filter(v => !v.isShort).map((item: any) => ({ ...item, itemType: 'video' })), ...filteredPosts.map((item: any) => ({ ...item, itemType: 'post' }))]
       .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+
+  const shortsItems = filteredVideos.filter(v => v.isShort);
+
+  const feedData = [];
+  if (selectedCategory === 'All') {
+    // Top 2 items
+    feedData.push(...longVideosAndPosts.slice(0, 2));
+    
+    // Insert Shorts Shelf if we have shorts
+    if (shortsItems.length > 0) {
+      feedData.push({ 
+        _id: 'shorts_shelf', 
+        itemType: 'shorts_shelf', 
+        data: shortsItems.slice(0, 4) 
+      });
+    }
+    
+    // Remaining items
+    feedData.push(...longVideosAndPosts.slice(2));
+  } else if (selectedCategory === 'Posts') {
+    feedData.push(...filteredPosts.map(p => ({ ...p, itemType: 'post' })));
+  } else {
+    feedData.push(...filteredVideos.filter(v => !v.isShort).map(v => ({ ...v, itemType: 'video' })));
+  }
+
+  const renderShortsShelf = (shorts: any[]) => (
+    <View style={styles.shortsShelf}>
+      <View style={styles.shelfHeader}>
+        <Ionicons name="flash" size={20} color={Colors.primary} />
+        <Text style={styles.shelfTitle}>Shorts</Text>
+      </View>
+      <View style={styles.shortsGrid}>
+        {shorts.map((item) => (
+          <TouchableOpacity 
+            key={item._id} 
+            style={styles.shortGridItem}
+            onPress={() => router.push({ pathname: '/shorts', params: { initialShortId: item._id } })}
+          >
+            <Image source={{ uri: item.thumbnail }} style={styles.shortThumbnail} />
+            <Text style={styles.shortTitle} numberOfLines={1} ellipsizeMode="tail">{item.title}</Text>
+            <Text style={styles.shortViews}>{item.views} views</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
 
   if (loading && videos.length === 0) {
     return (
@@ -169,25 +217,31 @@ export default function HomeScreen() {
         onSelectCategory={setSelectedCategory}
       />
       <FlatList
-        data={feedItems}
+        data={feedData}
         keyExtractor={(item) => item._id}
-        renderItem={({ item }) => item.itemType === 'post' ? (
-          <PostCard post={item} />
-        ) : (
-          <VideoCard 
-            video={item} 
-            onPlaylistPress={(id) => {
-              if (!isAuthenticated) return setAuthModalVisible(true);
-              setSelectedVideo(item);
-              setPlaylistModalVisible(true);
-            }}
-            onReportPress={(v) => {
-              if (!isAuthenticated) return setAuthModalVisible(true);
-              setSelectedVideo(v);
-              setReportModalVisible(true);
-            }}
-          />
-        )}
+        renderItem={({ item }) => {
+          if (item.itemType === 'shorts_shelf') {
+            return renderShortsShelf(item.data);
+          }
+          if (item.itemType === 'post') {
+            return <PostCard post={item} />;
+          }
+          return (
+            <VideoCard 
+              video={item} 
+              onPlaylistPress={(id) => {
+                if (!isAuthenticated) return setAuthModalVisible(true);
+                setSelectedVideo(item);
+                setPlaylistModalVisible(true);
+              }}
+              onReportPress={(v) => {
+                if (!isAuthenticated) return setAuthModalVisible(true);
+                setSelectedVideo(v);
+                setReportModalVisible(true);
+              }}
+            />
+          );
+        }}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
         refreshing={loading}
@@ -305,4 +359,51 @@ const styles = StyleSheet.create({
   cancelText: { color: Colors.textGray, fontWeight: '600' },
   submitReport: { backgroundColor: Colors.primary, borderRadius: 8, paddingHorizontal: 18, paddingVertical: 10 },
   submitReportText: { color: Colors.white, fontWeight: 'bold' },
+  // Shorts Shelf Styles
+  shortsShelf: {
+    paddingVertical: 15,
+    backgroundColor: Colors.white,
+    marginVertical: 10,
+  },
+  shelfHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 15,
+    marginBottom: 15,
+  },
+  shelfTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginLeft: 8,
+    color: Colors.text,
+  },
+  shortsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 10,
+  },
+  shortGridItem: {
+    width: '50%',
+    padding: 5,
+    marginBottom: 10,
+  },
+  shortThumbnail: {
+    width: '100%',
+    aspectRatio: 9 / 16,
+    borderRadius: 12,
+    backgroundColor: '#E5E7EB',
+  },
+  shortTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.text,
+    marginTop: 8,
+    paddingHorizontal: 2,
+  },
+  shortViews: {
+    fontSize: 12,
+    color: Colors.textGray,
+    marginTop: 2,
+    paddingHorizontal: 2,
+  },
 });

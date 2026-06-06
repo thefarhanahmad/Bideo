@@ -9,7 +9,7 @@ import { useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import AuthModal from '../../components/AuthModal';
 import CommentList from '../../components/CommentList';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
@@ -20,8 +20,10 @@ export default function ShortsScreen() {
   const insets = useSafeAreaInsets();
   const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
   const router = useRouter();
+  const { initialShortId } = useLocalSearchParams<{ initialShortId?: string }>();
   const isFocused = useIsFocused();
   const [shorts, setShorts] = useState<any[]>([]);
+  const flatListRef = useRef<FlatList>(null);
   const [loading, setLoading] = useState(true);
   const [authModalVisible, setAuthModalVisible] = useState(false);
   const [selectedShortId, setSelectedShortId] = useState<string | null>(null);
@@ -31,6 +33,18 @@ export default function ShortsScreen() {
 
   const [menuVisible, setMenuVisible] = useState(false);
   const [selectedShort, setSelectedShort] = useState<any>(null);
+
+  useEffect(() => {
+    if (initialShortId && shorts.length > 0) {
+      const index = shorts.findIndex(s => s._id === initialShortId);
+      if (index !== -1 && index !== activeVideoIndex) {
+        setActiveVideoIndex(index);
+        setTimeout(() => {
+          flatListRef.current?.scrollToIndex({ index, animated: false });
+        }, 100);
+      }
+    }
+  }, [initialShortId, shorts.length]);
 
   useEffect(() => {
     loadShorts();
@@ -69,6 +83,17 @@ export default function ShortsScreen() {
         return bTime - aTime;
       });
       setShorts(orderedShorts);
+
+      // Scroll to initial short if it exists
+      if (initialShortId && orderedShorts.length > 0) {
+        const index = orderedShorts.findIndex(s => s._id === initialShortId);
+        if (index !== -1) {
+          setTimeout(() => {
+            flatListRef.current?.scrollToIndex({ index, animated: false });
+            setActiveVideoIndex(index);
+          }, 100);
+        }
+      }
     } catch (e) {
       console.log('Failed to load shorts', e);
     }
@@ -292,6 +317,7 @@ export default function ShortsScreen() {
       </Modal>
 
       <FlatList
+        ref={flatListRef}
         data={shorts}
         keyExtractor={(item) => item._id}
         pagingEnabled
