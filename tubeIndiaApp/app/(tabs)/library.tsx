@@ -79,7 +79,7 @@ export default function LibraryScreen() {
   const loadMyVideos = async () => {
     setLoadingMyVideos(true);
     try {
-      const res = await api.get('/videos/me', { params: { type: 'video' } });
+      const res = await api.get('/videos/me');
       if (res.data.success) {
         setMyVideos(res.data.data || []);
       }

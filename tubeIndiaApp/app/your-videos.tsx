@@ -22,7 +22,7 @@ export default function YourVideosScreen() {
   const loadMyVideos = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/videos/me', { params: { type: 'video' } });
+      const res = await api.get('/videos/me');
       if (res.data.success) {
         setVideos(res.data.data);
       }

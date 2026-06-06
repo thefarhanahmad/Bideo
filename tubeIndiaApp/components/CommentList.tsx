@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, ActivityIndicator, KeyboardAvoidingView, Platform, FlatList } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, ActivityIndicator, KeyboardAvoidingView, Platform, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '../constants/Colors';
 import api from '../services/api';
 import { useSelector } from 'react-redux';
@@ -21,14 +22,26 @@ interface CommentListProps {
 const CommentList: React.FC<CommentListProps> = ({ videoId, postId, onCommentAdded, isAuthenticated, onAuthRequired }) => {
   const { user } = useSelector((state: RootState) => state.auth);
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [comments, setComments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [replyTarget, setReplyTarget] = useState<any | null>(null);
+  const [replyText, setReplyText] = useState('');
+  const [replySubmitting, setReplySubmitting] = useState(false);
+  const replyInputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     fetchComments();
   }, [videoId, postId]);
+
+  useEffect(() => {
+    if (replyTarget) {
+      const timer = setTimeout(() => replyInputRef.current?.focus(), 120);
+      return () => clearTimeout(timer);
+    }
+  }, [replyTarget]);
 
   const fetchComments = async (silent = false) => {
     try {
@@ -49,10 +62,10 @@ const CommentList: React.FC<CommentListProps> = ({ videoId, postId, onCommentAdd
 
     setSubmitting(true);
     try {
-      await api.post('/comments', { 
-        video: videoId, 
+      await api.post('/comments', {
+        video: videoId,
         post: postId,
-        text: newComment 
+        text: newComment
       });
       setNewComment('');
       fetchComments(true);
@@ -87,9 +100,25 @@ const CommentList: React.FC<CommentListProps> = ({ videoId, postId, onCommentAdd
     try {
       await api.post(`/comments/${commentId}/replies`, { text });
       fetchComments(true);
+      setReplyTarget(null);
+      setReplyText('');
     } catch (err) {
       console.error('Failed to reply', err);
+    } finally {
+      setReplySubmitting(false);
     }
+  };
+
+  const openReplyComposer = (comment: any) => {
+    if (!isAuthenticated) return onAuthRequired();
+    setReplyTarget(comment);
+    setReplyText('');
+  };
+
+  const submitReply = () => {
+    if (!replyTarget || !replyText.trim() || replySubmitting) return;
+    setReplySubmitting(true);
+    handleReply(replyTarget._id, replyText);
   };
 
   const handleLikeReply = async (commentId: string, replyId: string) => {
@@ -111,14 +140,14 @@ const CommentList: React.FC<CommentListProps> = ({ videoId, postId, onCommentAdd
   return (
     <View style={styles.container}>
       <Text style={styles.headerText}>{comments.length} Comments</Text>
-      
+
       <View style={styles.inputSection}>
         <View style={styles.inputContainer}>
-          <TextInput 
-            style={styles.input} 
-            placeholder="Add a comment..." 
-            value={newComment} 
-            onChangeText={setNewComment} 
+          <TextInput
+            style={styles.input}
+            placeholder="Add a comment..."
+            value={newComment}
+            onChangeText={setNewComment}
             multiline
           />
           <TouchableOpacity style={styles.sendButton} onPress={handleAddComment} disabled={submitting}>
@@ -135,18 +164,71 @@ const CommentList: React.FC<CommentListProps> = ({ videoId, postId, onCommentAdd
             userId={user?._id}
             onOpenChannel={(channelId: string) => router.push(`/channel/${channelId}`)}
             onLike={() => handleLikeComment(item._id)}
-            onReply={(text: string) => handleReply(item._id, text)}
+            onReply={() => openReplyComposer(item)}
             onLikeReply={(replyId: string) => handleLikeReply(item._id, replyId)}
           />
         ))}
       </View>
+
+      <Modal
+        visible={!!replyTarget}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setReplyTarget(null)}
+      >
+        <KeyboardAvoidingView
+          style={styles.replyModal}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={0}
+        >
+          <TouchableOpacity style={styles.replyBackdrop} activeOpacity={1} onPress={() => setReplyTarget(null)} />
+          <View
+            style={[
+              styles.replyComposer,
+              {
+                paddingBottom: Math.max(insets.bottom, 6) + 8,
+                marginBottom: Platform.OS === 'android' ? Math.max(insets.bottom, 4) + 4 : 2,
+              },
+            ]}
+          >
+            <View style={styles.replyComposerHeader}>
+              <Text style={styles.replyingToText} numberOfLines={1}>
+                Replying to {replyTarget?.user?.channelName || replyTarget?.user?.name || 'User'}
+              </Text>
+              <TouchableOpacity onPress={() => setReplyTarget(null)} style={styles.closeReplyBtn}>
+                <Ionicons name="close" size={20} color={Colors.textGray} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.replyComposerRow}>
+              <TextInput
+                ref={replyInputRef}
+                style={styles.replyComposerInput}
+                placeholder="Write a reply..."
+                value={replyText}
+                onChangeText={setReplyText}
+                multiline
+                returnKeyType="send"
+              />
+              <TouchableOpacity
+                style={[styles.replySendBtn, !replyText.trim() && styles.replySendBtnDisabled]}
+                onPress={submitReply}
+                disabled={!replyText.trim() || replySubmitting}
+              >
+                {replySubmitting ? (
+                  <ActivityIndicator size="small" color={Colors.white} />
+                ) : (
+                  <Ionicons name="send" size={18} color={Colors.white} />
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 };
 
 const CommentItem = ({ item, userId, onOpenChannel, onLike, onReply, onLikeReply }: any) => {
-  const [replying, setReplying] = useState(false);
-  const [replyText, setReplyText] = useState('');
   const liked = item.likes?.some((id: string) => id === userId);
 
   return (
@@ -167,25 +249,10 @@ const CommentItem = ({ item, userId, onOpenChannel, onLike, onReply, onLikeReply
             <Ionicons name={liked ? 'thumbs-up' : 'thumbs-up-outline'} size={14} color={liked ? Colors.primary : Colors.textGray} />
             <Text style={styles.actionText}>{item.likes?.length || 0}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionItem} onPress={() => setReplying(!replying)}>
+          <TouchableOpacity style={styles.actionItem} onPress={onReply}>
             <Text style={styles.replyBtnText}>Reply</Text>
           </TouchableOpacity>
         </View>
-
-        {replying && (
-          <View style={styles.replyInputRow}>
-            <TextInput 
-              style={styles.replyInput} 
-              placeholder="Write a reply..." 
-              value={replyText} 
-              onChangeText={setReplyText} 
-              autoFocus
-            />
-            <TouchableOpacity onPress={() => { onReply(replyText); setReplyText(''); setReplying(false); }}>
-              <Ionicons name="send" size={18} color={Colors.primary} />
-            </TouchableOpacity>
-          </View>
-        )}
 
         {(item.replies || []).map((reply: any) => {
           const replyLiked = reply.likes?.some((id: string) => id === userId);
@@ -201,7 +268,7 @@ const CommentItem = ({ item, userId, onOpenChannel, onLike, onReply, onLikeReply
                   <Ionicons name={replyLiked ? 'thumbs-up' : 'thumbs-up-outline'} size={12} color={replyLiked ? Colors.primary : Colors.textGray} />
                   <Text style={styles.actionText}>{reply.likes?.length || 0}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.actionItem} onPress={() => setReplying(true)}>
+                <TouchableOpacity style={styles.actionItem} onPress={onReply}>
                   <Text style={styles.replyBtnText}>Reply</Text>
                 </TouchableOpacity>
               </View>
@@ -214,14 +281,14 @@ const CommentItem = ({ item, userId, onOpenChannel, onLike, onReply, onLikeReply
 };
 
 const styles = StyleSheet.create({
-  container: { padding: 12, paddingBottom: 100 },
+  container: { padding: 12, paddingBottom: 24 },
   headerText: { fontSize: 16, fontWeight: 'bold', marginBottom: 16 },
-  inputSection: { marginBottom: 20 },
+  inputSection: { marginBottom: 12 },
   inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f9f9f9', borderRadius: 20, paddingHorizontal: 15, paddingVertical: 8, borderWidth: 1, borderColor: Colors.border },
   input: { flex: 1, fontSize: 14, color: Colors.text, maxHeight: 100 },
   sendButton: { padding: 5, marginLeft: 10 },
-  commentsList: { marginTop: 10 },
-  commentItem: { flexDirection: 'row', marginBottom: 24 },
+  commentsList: { marginTop: 6 },
+  commentItem: { flexDirection: 'row', marginBottom: 18 },
   avatar: { width: 36, height: 36, borderRadius: 18, marginRight: 12, backgroundColor: '#E5E7EB' },
   commentContent: { flex: 1 },
   commentHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
@@ -232,10 +299,47 @@ const styles = StyleSheet.create({
   actionItem: { flexDirection: 'row', alignItems: 'center', marginRight: 20 },
   actionText: { fontSize: 12, color: Colors.textGray, marginLeft: 4 },
   replyBtnText: { fontSize: 12, fontWeight: 'bold', color: Colors.textGray },
-  replyInputRow: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: Colors.border, marginTop: 10, paddingBottom: 5 },
-  replyInput: { flex: 1, fontSize: 13, color: Colors.text, paddingVertical: 5 },
   replyItem: { marginTop: 15, paddingLeft: 12, borderLeftWidth: 2, borderLeftColor: Colors.border },
   replyHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 2 },
+  replyModal: { flex: 1, justifyContent: 'flex-end' },
+  replyBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.18)' },
+  replyComposer: {
+    backgroundColor: Colors.white,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: -3 },
+    elevation: 8,
+  },
+  replyComposerHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  replyingToText: { flex: 1, color: Colors.textGray, fontSize: 12, fontWeight: '600' },
+  closeReplyBtn: { padding: 4, marginLeft: 8 },
+  replyComposerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingLeft: 14,
+    paddingRight: 6,
+    paddingVertical: 6,
+  },
+  replyComposerInput: { flex: 1, color: Colors.text, fontSize: 14, maxHeight: 110, paddingVertical: 6 },
+  replySendBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  replySendBtnDisabled: { opacity: 0.45 },
 });
 
 export default CommentList;
