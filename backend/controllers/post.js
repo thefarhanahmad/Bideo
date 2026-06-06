@@ -2,6 +2,7 @@ const Post = require('../models/Post');
 const Follower = require('../models/Follower');
 const Notification = require('../models/Notification');
 const cloudinary = require('cloudinary').v2;
+const { deleteFromCloudinary } = require('../utils/cloudinary');
 
 const createNotification = async ({ recipient, actor, type, video, post, comment, message }) => {
   if (!recipient || !actor || recipient.toString() === actor.toString()) return;
@@ -28,6 +29,43 @@ exports.createPost = async (req, res, next) => {
       visibility: req.body.visibility || 'public',
     });
     res.status(201).json({ success: true, data: post });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.updatePost = async (req, res, next) => {
+  try {
+    const post = await Post.findById(req.params.id);
+    if (!post) return res.status(404).json({ success: false, message: 'Post not found' });
+    if (post.owner.toString() !== req.user.id && req.user.role !== 'admin') {
+      return res.status(401).json({ success: false, message: 'Not authorized to update this post' });
+    }
+
+    const text = typeof req.body.text === 'string' ? req.body.text.trim() : post.text;
+    let imageUrl = post.imageUrl;
+
+    if (req.file) {
+      const result = await cloudinary.uploader.upload(req.file.path, {
+        folder: 'tubeindia/posts',
+      });
+      imageUrl = result.secure_url;
+      if (post.imageUrl) await deleteFromCloudinary(post.imageUrl, 'image');
+    } else if (req.body.removeImage === 'true') {
+      if (post.imageUrl) await deleteFromCloudinary(post.imageUrl, 'image');
+      imageUrl = '';
+    }
+
+    if (!text && !imageUrl) {
+      return res.status(400).json({ success: false, message: 'Post text or image is required' });
+    }
+
+    post.text = text;
+    post.imageUrl = imageUrl;
+    if (req.body.visibility) post.visibility = req.body.visibility;
+    await post.save();
+
+    res.status(200).json({ success: true, data: post });
   } catch (err) {
     next(err);
   }
@@ -90,6 +128,23 @@ exports.togglePostLike = async (req, res, next) => {
 
     await post.save();
     res.status(200).json({ success: true, likes: post.likes, isLiked: !alreadyLiked });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.deletePost = async (req, res, next) => {
+  try {
+    const post = await Post.findById(req.params.id);
+    if (!post) return res.status(404).json({ success: false, message: 'Post not found' });
+    if (post.owner.toString() !== req.user.id && req.user.role !== 'admin') {
+      return res.status(401).json({ success: false, message: 'Not authorized to delete this post' });
+    }
+
+    if (post.imageUrl) await deleteFromCloudinary(post.imageUrl, 'image');
+    await post.deleteOne();
+
+    res.status(200).json({ success: true, data: {} });
   } catch (err) {
     next(err);
   }

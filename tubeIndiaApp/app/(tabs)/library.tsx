@@ -271,11 +271,23 @@ export default function LibraryScreen() {
         ) : (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalList}>
             {myVideos.map(item => (
-              <TouchableOpacity key={item._id} style={styles.horizontalItem} onPress={() => router.push(`/video/${item._id}`)}>
-                <Image source={{ uri: item.thumbnail }} style={styles.horizontalThumbnail} />
-                <Text style={styles.horizontalText} numberOfLines={2}>{item.title}</Text>
-                <Text style={styles.horizontalOwner}>{item.views} views</Text>
-              </TouchableOpacity>
+              <View key={item._id} style={styles.horizontalItemContainer}>
+                <TouchableOpacity style={styles.horizontalItem} onPress={() => router.push(`/video/${item._id}`)}>
+                  <Image source={{ uri: item.thumbnail }} style={styles.horizontalThumbnail} />
+                  <View style={styles.horizontalInfo}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.horizontalText} numberOfLines={2}>{item.title}</Text>
+                      <Text style={styles.horizontalOwner}>{item.views} views</Text>
+                    </View>
+                    <TouchableOpacity 
+                      style={styles.moreBtn} 
+                      onPress={() => router.push({ pathname: '/your-videos', params: { autoOpenId: item._id } })}
+                    >
+                      <Ionicons name="ellipsis-vertical" size={16} color={Colors.text} />
+                    </TouchableOpacity>
+                  </View>
+                </TouchableOpacity>
+              </View>
             ))}
             {myVideos.length === 0 && <Text style={{ marginLeft: 15, color: Colors.textGray }}>No videos uploaded yet</Text>}
           </ScrollView>
@@ -451,9 +463,19 @@ const styles = StyleSheet.create({
   horizontalList: {
     paddingLeft: 15,
   },
+  horizontalItemContainer: {
+    marginRight: 15,
+  },
   horizontalItem: {
     width: 140,
-    marginRight: 15,
+  },
+  horizontalInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  moreBtn: {
+    padding: 4,
+    marginTop: -2,
   },
   horizontalThumbnail: {
     width: 140,

@@ -30,12 +30,16 @@ interface VideoCardProps {
   onMenuPress?: () => void;
   onPlaylistPress?: (videoId: string) => void;
   onReportPress?: (video: any) => void;
+  onEditPress?: (video: any) => void;
+  onDeletePress?: (video: any) => void;
 }
 
-const VideoCard: React.FC<VideoCardProps> = ({ video, onPlaylistPress, onReportPress }) => {
+const VideoCard: React.FC<VideoCardProps> = ({ video, onMenuPress, onPlaylistPress, onReportPress, onEditPress, onDeletePress }) => {
   const router = useRouter();
-  const { isAuthenticated } = useSelector((state: RootState) => state.auth);
+  const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
   const [menuVisible, setMenuVisible] = useState(false);
+
+  const isOwner = user?._id === video.owner?._id;
 
   const formatViews = (views: number) => {
     if (views >= 1000000) return `${(views / 1000000).toFixed(1)}M views`;
@@ -74,6 +78,47 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, onPlaylistPress, onReportP
     }
   };
 
+  const handleEdit = () => {
+    setMenuVisible(false);
+    if (onEditPress) {
+      onEditPress(video);
+    } else {
+      router.push({ pathname: '/upload', params: { editId: video._id } });
+    }
+  };
+
+  const handleDelete = () => {
+    setMenuVisible(false);
+    if (onDeletePress) {
+      onDeletePress(video);
+    } else {
+      Alert.alert(
+        'Delete Video',
+        'Are you sure you want to delete this video?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                const res = await api.delete(`/videos/${video._id}`);
+                if (res.data.success) {
+                  Alert.alert('Success', 'Video deleted');
+                  // Since we don't have a way to refresh the list here without props, 
+                  // it's better if the parent handles delete. 
+                  // But we'll leave this as a fallback.
+                }
+              } catch (err) {
+                Alert.alert('Error', 'Failed to delete video');
+              }
+            }
+          }
+        ]
+      );
+    }
+  };
+
   return (
     <TouchableOpacity
       style={styles.container}
@@ -103,7 +148,11 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, onPlaylistPress, onReportP
         </View>
         <TouchableOpacity style={styles.menuButton} onPress={(e) => {
           e.stopPropagation();
-          setMenuVisible(true);
+          if (onMenuPress) {
+            onMenuPress();
+          } else {
+            setMenuVisible(true);
+          }
         }}>
           <Ionicons name="ellipsis-vertical" size={18} color={Colors.text} />
         </TouchableOpacity>
@@ -121,6 +170,19 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, onPlaylistPress, onReportP
           onPress={() => setMenuVisible(false)}
         >
           <View style={styles.menuContent}>
+            {isOwner && (
+              <>
+                <TouchableOpacity style={styles.menuItem} onPress={handleEdit}>
+                  <Ionicons name="pencil-outline" size={24} color={Colors.text} />
+                  <Text style={styles.menuText}>Edit Video</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.menuItem} onPress={handleDelete}>
+                  <Ionicons name="trash-outline" size={24} color={Colors.primary} />
+                  <Text style={[styles.menuText, { color: Colors.primary }]}>Delete Video</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
             <TouchableOpacity style={styles.menuItem} onPress={handlePlaylist}>
               <Ionicons name="add-circle-outline" size={24} color={Colors.text} />
               <Text style={styles.menuText}>Add to Playlist</Text>
@@ -131,10 +193,12 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, onPlaylistPress, onReportP
               <Text style={styles.menuText}>Share</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.menuItem} onPress={handleReport}>
-              <Ionicons name="flag-outline" size={24} color={Colors.text} />
-              <Text style={styles.menuText}>Report</Text>
-            </TouchableOpacity>
+            {!isOwner && (
+              <TouchableOpacity style={styles.menuItem} onPress={handleReport}>
+                <Ionicons name="flag-outline" size={24} color={Colors.text} />
+                <Text style={styles.menuText}>Report</Text>
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity style={styles.cancelItem} onPress={() => setMenuVisible(false)}>
               <Text style={styles.cancelText}>Cancel</Text>

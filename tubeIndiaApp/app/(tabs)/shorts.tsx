@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, Image, Dimensions, TouchableOpacity, ActivityIndicator, ScrollView, Platform, Modal, Pressable, Share } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Image, Dimensions, TouchableOpacity, ActivityIndicator, ScrollView, Platform, Modal, Pressable, Share, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode } from 'expo-av';
 import { useIsFocused } from '@react-navigation/native';
@@ -28,6 +28,9 @@ export default function ShortsScreen() {
   const [commentModalVisible, setCommentModalVisible] = useState(false);
   const [activeVideoIndex, setActiveVideoIndex] = useState(0);
   const [containerHeight, setContainerHeight] = useState(WINDOW_HEIGHT);
+
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [selectedShort, setSelectedShort] = useState<any>(null);
 
   useEffect(() => {
     loadShorts();
@@ -136,6 +139,68 @@ export default function ShortsScreen() {
     setCommentModalVisible(true);
   };
 
+  const handleMenuClick = (short: any) => {
+    setSelectedShort(short);
+    setMenuVisible(true);
+  };
+
+  const handleDelete = async () => {
+    if (!selectedShort) return;
+    setMenuVisible(false);
+    
+    Alert.alert(
+      'Delete Short',
+      'Are you sure you want to delete this short?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.delete(`/videos/${selectedShort._id}`);
+              setShorts(shorts.filter(s => s._id !== selectedShort._id));
+              Alert.alert('Success', 'Short deleted');
+            } catch (err) {
+              Alert.alert('Error', 'Failed to delete short');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleEdit = () => {
+    if (!selectedShort) return;
+    setMenuVisible(false);
+    router.push({ pathname: '/upload', params: { editId: selectedShort._id } });
+  };
+
+  const handleReport = async () => {
+    if (!selectedShort) return;
+    setMenuVisible(false);
+    if (!isAuthenticated) return setAuthModalVisible(true);
+    
+    Alert.prompt(
+      'Report Short',
+      'Reason for reporting:',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Report',
+          onPress: async (reason) => {
+            try {
+              await api.post(`/videos/${selectedShort._id}/report`, { reason });
+              Alert.alert('Report sent', 'Thanks for your feedback');
+            } catch (err) {
+              Alert.alert('Error', 'Failed to send report');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
     if (viewableItems.length > 0) {
       setActiveVideoIndex(viewableItems[0].index);
@@ -159,6 +224,47 @@ export default function ShortsScreen() {
     >
       <AuthModal visible={authModalVisible} onClose={() => setAuthModalVisible(false)} />
       
+      {/* Action Menu Modal */}
+      <Modal
+        visible={menuVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMenuVisible(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setMenuVisible(false)}>
+          <View style={styles.menuContent}>
+            {selectedShort?.owner?._id === user?._id && (
+              <>
+                <TouchableOpacity style={styles.menuItem} onPress={handleEdit}>
+                  <Ionicons name="pencil-outline" size={24} color={Colors.text} />
+                  <Text style={styles.menuText}>Edit Short</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.menuItem} onPress={handleDelete}>
+                  <Ionicons name="trash-outline" size={24} color={Colors.primary} />
+                  <Text style={[styles.menuText, { color: Colors.primary }]}>Delete Short</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuVisible(false); handleShare(selectedShort); }}>
+              <Ionicons name="share-social-outline" size={24} color={Colors.text} />
+              <Text style={styles.menuText}>Share</Text>
+            </TouchableOpacity>
+
+            {selectedShort?.owner?._id !== user?._id && (
+              <TouchableOpacity style={styles.menuItem} onPress={handleReport}>
+                <Ionicons name="flag-outline" size={24} color={Colors.text} />
+                <Text style={styles.menuText}>Report</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity style={styles.cancelItem} onPress={() => setMenuVisible(false)}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
       <Modal visible={commentModalVisible} transparent animationType="slide" onRequestClose={() => setCommentModalVisible(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setCommentModalVisible(false)}>
           <Pressable style={styles.commentModalContent} onPress={(e) => e.stopPropagation()}>
@@ -233,6 +339,9 @@ export default function ShortsScreen() {
                 <TouchableOpacity style={styles.actionButton} onPress={() => handleShare(item)}>
                   <Ionicons name="share-social" size={32} color={Colors.white} />
                   <Text style={styles.actionText}>Share</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.actionButton} onPress={() => handleMenuClick(item)}>
+                  <Ionicons name="ellipsis-vertical" size={30} color={Colors.white} />
                 </TouchableOpacity>
               </View>
 
@@ -387,5 +496,35 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  menuContent: {
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  menuText: {
+    fontSize: 16,
+    marginLeft: 15,
+    color: Colors.text,
+  },
+  cancelItem: {
+    marginTop: 10,
+    paddingVertical: 15,
+    alignItems: 'center',
+    backgroundColor: Colors.background,
+    borderRadius: 10,
+  },
+  cancelText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: Colors.textGray,
   },
 });

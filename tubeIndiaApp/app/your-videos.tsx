@@ -1,13 +1,14 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, Modal, Pressable } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, Modal, Pressable, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import Colors from '../constants/Colors';
 import VideoCard from '../components/VideoCard';
 import api from '../services/api';
 
 export default function YourVideosScreen() {
   const router = useRouter();
+  const { autoOpenId } = useLocalSearchParams<{ autoOpenId?: string }>();
   const [videos, setVideos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedVideo, setSelectedVideo] = useState<any>(null);
@@ -24,7 +25,15 @@ export default function YourVideosScreen() {
     try {
       const res = await api.get('/videos/me');
       if (res.data.success) {
-        setVideos(res.data.data);
+        const data = res.data.data;
+        setVideos(data);
+        if (autoOpenId) {
+          const video = data.find((v: any) => v._id === autoOpenId);
+          if (video) {
+            setSelectedVideo(video);
+            setMenuVisible(true);
+          }
+        }
       }
     } catch (err) {
       console.error('Failed to load your videos', err);
@@ -57,6 +66,18 @@ export default function YourVideosScreen() {
         }
       ]
     );
+  };
+
+  const handleShare = async () => {
+    if (!selectedVideo) return;
+    setMenuVisible(false);
+    try {
+      await Share.share({
+        message: `Check out this video on TubeIndia: ${selectedVideo.title}\n${selectedVideo.videoUrl || ''}`,
+      });
+    } catch (err) {
+      console.error('Share failed', err);
+    }
   };
 
   const handleEdit = () => {
@@ -123,10 +144,17 @@ export default function YourVideosScreen() {
               <Ionicons name="pencil-outline" size={24} color={Colors.text} />
               <Text style={styles.menuText}>Edit Video</Text>
             </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem} onPress={handleShare}>
+              <Ionicons name="share-social-outline" size={24} color={Colors.text} />
+              <Text style={styles.menuText}>Share Video</Text>
+            </TouchableOpacity>
+
             <TouchableOpacity style={[styles.menuItem, styles.deleteItem]} onPress={handleDelete}>
               <Ionicons name="trash-outline" size={24} color={Colors.primary} />
               <Text style={[styles.menuText, { color: Colors.primary }]}>Delete Video</Text>
             </TouchableOpacity>
+
             <TouchableOpacity style={styles.cancelItem} onPress={() => setMenuVisible(false)}>
               <Text style={styles.cancelText}>Cancel</Text>
             </TouchableOpacity>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity, Modal, ScrollView, Dimensions, Share } from 'react-native';
+import { View, Text, Image, StyleSheet, TouchableOpacity, Modal, ScrollView, Dimensions, Share, Pressable, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../constants/Colors';
@@ -12,18 +12,26 @@ import AuthModal from './AuthModal';
 
 const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
 
-const PostCard = ({ post }: { post: any }) => {
+interface PostCardProps {
+  post: any;
+  onDelete?: (postId: string) => void;
+}
+
+const PostCard = ({ post, onDelete }: PostCardProps) => {
   const router = useRouter();
   const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
   const [likes, setLikes] = useState(post.likes || []);
   const [commentsCount, setCommentsCount] = useState(post.commentsCount || 0);
   const [showComments, setShowComments] = useState(false);
   const [authModalVisible, setAuthModalVisible] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
 
   const owner = post.owner || {};
   const isLiked = likes.includes(user?._id);
+  const isOwner = user?._id === owner?._id;
 
   const handleShare = async () => {
+    setMenuVisible(false);
     try {
       const shareMessage = post.text 
         ? `${post.text}\n\nCheck out this post on TubeIndia!`
@@ -61,17 +69,54 @@ const PostCard = ({ post }: { post: any }) => {
     }
   };
 
+  const handleEdit = () => {
+    setMenuVisible(false);
+    router.push({ pathname: '/upload', params: { editPostId: post._id } });
+  };
+
+  const handleDelete = () => {
+    setMenuVisible(false);
+    Alert.alert(
+      'Delete Post',
+      'Are you sure you want to delete this post?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const res = await api.delete(`/posts/${post._id}`);
+              if (res.data.success) {
+                Alert.alert('Success', 'Post deleted');
+                if (onDelete) onDelete(post._id);
+              }
+            } catch (err) {
+              Alert.alert('Error', 'Failed to delete post');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   return (
     <View style={styles.container}>
       <AuthModal visible={authModalVisible} onClose={() => setAuthModalVisible(false)} />
       
-      <TouchableOpacity style={styles.header} onPress={() => owner._id && router.push(`/channel/${owner._id}`)}>
-        <Image source={{ uri: owner.avatar || FALLBACK_AVATAR }} style={styles.avatar} />
-        <View style={styles.headerText}>
-          <Text style={styles.ownerName}>{owner.channelName || owner.name || 'User'}</Text>
-          <Text style={styles.time}>{formatTimeAgo(post.createdAt)}</Text>
-        </View>
-      </TouchableOpacity>
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.headerInfo} onPress={() => owner._id && router.push(`/channel/${owner._id}`)}>
+          <Image source={{ uri: owner.avatar || FALLBACK_AVATAR }} style={styles.avatar} />
+          <View style={styles.headerText}>
+            <Text style={styles.ownerName}>{owner.channelName || owner.name || 'User'}</Text>
+            <Text style={styles.time}>{formatTimeAgo(post.createdAt)}</Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)}>
+          <Ionicons name="ellipsis-vertical" size={20} color={Colors.text} />
+        </TouchableOpacity>
+      </View>
 
       {!!post.text && <Text style={styles.text}>{post.text}</Text>}
       {!!post.imageUrl && (
@@ -98,13 +143,54 @@ const PostCard = ({ post }: { post: any }) => {
         </TouchableOpacity>
       </View>
 
+      {/* Action Menu Modal */}
+      <Modal
+        visible={menuVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMenuVisible(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setMenuVisible(false)}>
+          <View style={styles.menuContent}>
+            {isOwner && (
+              <>
+                <TouchableOpacity style={styles.menuItem} onPress={handleEdit}>
+                  <Ionicons name="pencil-outline" size={24} color={Colors.text} />
+                  <Text style={styles.menuText}>Edit Post</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.menuItem} onPress={handleDelete}>
+                  <Ionicons name="trash-outline" size={24} color={Colors.primary} />
+                  <Text style={[styles.menuText, { color: Colors.primary }]}>Delete Post</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            <TouchableOpacity style={styles.menuItem} onPress={handleShare}>
+              <Ionicons name="share-social-outline" size={24} color={Colors.text} />
+              <Text style={styles.menuText}>Share</Text>
+            </TouchableOpacity>
+
+            {!isOwner && (
+              <TouchableOpacity style={styles.menuItem} onPress={() => setMenuVisible(false)}>
+                <Ionicons name="flag-outline" size={24} color={Colors.text} />
+                <Text style={styles.menuText}>Report</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity style={styles.cancelItem} onPress={() => setMenuVisible(false)}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
       <Modal
         visible={showComments}
         animationType="slide"
         transparent={false}
         onRequestClose={() => setShowComments(false)}
       >
-        <View style={styles.modalContainer}>
+        <View style={styles.commentModalContainer}>
           <View style={styles.modalHeader}>
             <TouchableOpacity onPress={() => setShowComments(false)} style={styles.closeButton}>
               <Ionicons name="close" size={28} color={Colors.text} />
@@ -137,7 +223,13 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 10,
+  },
+  headerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
   },
   avatar: {
     width: 38,
@@ -158,6 +250,9 @@ const styles = StyleSheet.create({
     color: Colors.textGray,
     fontSize: 12,
     marginTop: 2,
+  },
+  menuButton: {
+    padding: 5,
   },
   text: {
     color: Colors.text,
@@ -191,7 +286,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.text,
   },
-  modalContainer: {
+  commentModalContainer: {
     flex: 1,
     backgroundColor: Colors.white,
     paddingTop: 50,
@@ -212,6 +307,41 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginLeft: 15,
     color: Colors.text,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  menuContent: {
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  menuText: {
+    fontSize: 16,
+    marginLeft: 15,
+    color: Colors.text,
+  },
+  cancelItem: {
+    marginTop: 10,
+    paddingVertical: 15,
+    alignItems: 'center',
+    backgroundColor: Colors.background,
+    borderRadius: 10,
+  },
+  cancelText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: Colors.textGray,
   },
 });
 

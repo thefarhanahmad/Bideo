@@ -11,7 +11,7 @@ import AuthModal from '../../components/AuthModal';
 
 export default function UploadScreen() {
   const router = useRouter();
-  const { editId } = useLocalSearchParams<{ editId?: string }>();
+  const { editId, editPostId } = useLocalSearchParams<{ editId?: string; editPostId?: string }>();
   const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
   const [authModalVisible, setAuthModalVisible] = useState(false);
   const [showChannelPrompt, setShowChannelPrompt] = useState(false);
@@ -28,16 +28,16 @@ export default function UploadScreen() {
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [thumbnailChanged, setThumbnailChanged] = useState(false);
-  const [uploadType, setUploadType] = useState<'video' | 'short' | 'post' | null>(editId ? 'video' : null);
+  const [uploadType, setUploadType] = useState<'video' | 'short' | 'post' | null>(editId ? 'video' : editPostId ? 'post' : null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [postText, setPostText] = useState('');
   const [postImage, setPostImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [postImageChanged, setPostImageChanged] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
-      if (!editId) {
+      if (!editId && !editPostId) {
         setUploadType(null);
-        // Also reset other fields for a fresh start
         setTitle('');
         setDescription('');
         setCategory('');
@@ -47,8 +47,9 @@ export default function UploadScreen() {
         setThumbnail(null);
         setPostText('');
         setPostImage(null);
+        setPostImageChanged(false);
       }
-    }, [editId])
+    }, [editId, editPostId])
   );
 
   useEffect(() => {
@@ -64,8 +65,27 @@ export default function UploadScreen() {
     if (editId) {
       loadVideoDetails(editId);
       setUploadType('video');
+    } else if (editPostId) {
+      loadPostDetails(editPostId);
+      setUploadType('post');
     }
-  }, [isAuthenticated, user?.channelName, editId]);
+  }, [isAuthenticated, user?.channelName, editId, editPostId]);
+
+  const loadPostDetails = async (id: string) => {
+    try {
+      const res = await api.get(`/posts/${id}`);
+      if (res.data.success) {
+        const p = res.data.data;
+        setPostText(p.text || '');
+        setVisibility(p.visibility || 'public');
+        if (p.imageUrl) {
+          setPostImage({ uri: p.imageUrl } as ImagePicker.ImagePickerAsset);
+        }
+      }
+    } catch (err) {
+      console.log('Failed to load post details');
+    }
+  };
 
   const loadVideoDetails = async (id: string) => {
     try {
@@ -123,7 +143,10 @@ export default function UploadScreen() {
       allowsEditing: true,
       quality: 1,
     });
-    if (!result.canceled) setPostImage(result.assets[0]);
+    if (!result.canceled) {
+      setPostImage(result.assets[0]);
+      setPostImageChanged(true);
+    }
   };
 
   const pickThumbnail = async () => {
@@ -153,6 +176,11 @@ export default function UploadScreen() {
 
     if (editId) {
       handleUpdate();
+      return;
+    }
+
+    if (editPostId) {
+      handlePostUpdate();
       return;
     }
 
@@ -245,6 +273,34 @@ export default function UploadScreen() {
     }
   };
 
+  const handlePostUpdate = async () => {
+    setUploading(true);
+    setUploadProgress(0);
+    try {
+      if (postImageChanged && postImage) {
+        const formData = new FormData();
+        formData.append('text', postText);
+        formData.append('visibility', visibility);
+        // @ts-ignore
+        formData.append('image', { uri: postImage.uri, type: 'image/jpeg', name: 'post.jpg' });
+        await api.put(`/posts/${editPostId}`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          onUploadProgress: (event) => {
+            if (event.total) setUploadProgress(Math.round((event.loaded / event.total) * 100));
+          },
+        });
+      } else {
+        await api.put(`/posts/${editPostId}`, { text: postText, visibility });
+      }
+      Alert.alert('Success', 'Post updated successfully!');
+      router.replace('/');
+    } catch (err: any) {
+      Alert.alert('Update Failed', err.response?.data?.message || 'Something went wrong');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleUpdate = async () => {
     setUploading(true);
     setUploadProgress(0);
@@ -319,11 +375,11 @@ export default function UploadScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <AuthModal visible={authModalVisible} onClose={() => setAuthModalVisible(false)} />
-      <ProgressOverlay visible={uploading} progress={uploadProgress} label={editId ? 'Saving' : uploadType === 'post' ? 'Publishing' : 'Uploading'} />
+      <ProgressOverlay visible={uploading} progress={uploadProgress} label={editId || editPostId ? 'Saving' : uploadType === 'post' ? 'Publishing' : 'Uploading'} />
       
-      <Text style={styles.headerTitle}>{editId ? 'Edit Video' : uploadType ? `Upload ${uploadType === 'short' ? 'Short' : uploadType === 'post' ? 'Post' : 'Video'}` : 'Create'}</Text>
+      <Text style={styles.headerTitle}>{editId || editPostId ? `Edit ${editId ? 'Video' : 'Post'}` : uploadType ? `Upload ${uploadType === 'short' ? 'Short' : uploadType === 'post' ? 'Post' : 'Video'}` : 'Create'}</Text>
 
-      {!editId && !uploadType && (
+      {!editId && !editPostId && !uploadType && (
         <View style={styles.typeGrid}>
           {[
             { key: 'video', label: 'Video', icon: 'videocam-outline' },
@@ -338,7 +394,7 @@ export default function UploadScreen() {
         </View>
       )}
 
-      {!editId && uploadType === 'post' && (
+      {(editPostId || (!editId && uploadType === 'post')) && (
         <>
           <Text style={styles.label}>Post Text</Text>
           <TextInput style={[styles.input, styles.textArea]} placeholder="Share an update..." multiline value={postText} onChangeText={setPostText} />
@@ -351,10 +407,34 @@ export default function UploadScreen() {
               </>
             )}
           </TouchableOpacity>
+
+          <Text style={styles.label}>Visibility</Text>
+          <View style={styles.selectContainer}>
+            <TouchableOpacity style={styles.selectTrigger} onPress={() => setVisibilityOpen(!visibilityOpen)}>
+              <Text style={styles.selectValue}>{visibility === 'private' ? 'Private' : 'Public'}</Text>
+              <Ionicons name={visibilityOpen ? 'chevron-up' : 'chevron-down'} size={18} color={Colors.textGray} />
+            </TouchableOpacity>
+            {visibilityOpen && (
+              <View style={styles.selectMenu}>
+                {['public', 'private'].map((v) => (
+                  <TouchableOpacity
+                    key={v}
+                    style={styles.selectOption}
+                    onPress={() => {
+                      setVisibility(v);
+                      setVisibilityOpen(false);
+                    }}
+                  >
+                    <Text style={[styles.selectOptionText, visibility === v && styles.selectOptionTextActive]}>{v.toUpperCase()}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
         </>
       )}
 
-      {!editId && uploadType && uploadType !== 'post' && (
+      {!editId && !editPostId && uploadType && uploadType !== 'post' && (
         <>
           <Text style={styles.label}>Video File *</Text>
           <TouchableOpacity style={styles.picker} onPress={pickVideo}>
@@ -472,7 +552,7 @@ export default function UploadScreen() {
         onPress={handleUpload}
         disabled={uploading}
       >
-        <Text style={styles.uploadButtonText}>{editId ? 'Save Changes' : uploadType === 'post' ? 'Publish Post' : 'Upload Video'}</Text>
+        <Text style={styles.uploadButtonText}>{editId || editPostId ? 'Save Changes' : uploadType === 'post' ? 'Publish Post' : 'Upload Video'}</Text>
       </TouchableOpacity>
       )}
     </ScrollView>
