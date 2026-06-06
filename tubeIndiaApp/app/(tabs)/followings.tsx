@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, Image, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import Colors from '../../constants/Colors';
 import VideoCard from '../../components/VideoCard';
@@ -63,10 +64,28 @@ export default function FollowingsScreen() {
   if (!isAuthenticated && !authModalVisible) {
     return (
       <View style={styles.center}>
-        <Text style={{ marginBottom: 20 }}>Please login to see followings</Text>
-        <TouchableOpacity style={styles.loginBtn} onPress={() => setAuthModalVisible(true)}>
-          <Text style={styles.loginBtnText}>Login</Text>
-        </TouchableOpacity>
+        <View style={styles.loginCard}>
+          <View style={styles.iconCircle}>
+            <Ionicons name="people" size={50} color={Colors.primary} />
+          </View>
+          <Text style={styles.loginTitle}>Followings</Text>
+          <Text style={styles.loginSubtitle}>Login to see recent activity from your favorite creators and community posts.</Text>
+          
+          <TouchableOpacity 
+            style={styles.mainLoginBtn} 
+            onPress={() => setAuthModalVisible(true)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.mainLoginBtnText}>Sign In / Sign Up</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.secondaryBtn} 
+            onPress={() => router.replace('/')}
+          >
+            <Text style={styles.secondaryBtnText}>Discover Content</Text>
+          </TouchableOpacity>
+        </View>
         <AuthModal visible={authModalVisible} onClose={() => setAuthModalVisible(false)} />
       </View>
     );
@@ -132,7 +151,75 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 20,
+    padding: 24,
+    backgroundColor: '#F9FAFB',
+  },
+  loginCard: {
+    backgroundColor: Colors.white,
+    padding: 32,
+    borderRadius: 24,
+    alignItems: 'center',
+    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  iconCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: Colors.primary + '10',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  loginTitle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: Colors.primary + '10',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  loginTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: Colors.text,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  loginSubtitle: {
+    fontSize: 15,
+    color: Colors.textGray,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 32,
+    paddingHorizontal: 10,
+  },
+  mainLoginBtn: {
+    backgroundColor: Colors.primary,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 999,
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  mainLoginBtnText: {
+    color: Colors.white,
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  secondaryBtn: {
+    paddingVertical: 12,
+  },
+  secondaryBtnText: {
+    color: Colors.textGray,
+    fontSize: 15,
+    fontWeight: '600',
   },
   loginBtn: {
     backgroundColor: Colors.primary,

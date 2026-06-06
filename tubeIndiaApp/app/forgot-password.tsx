@@ -11,6 +11,7 @@ export default function ForgotPasswordScreen() {
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleRequestOtp = async () => {
@@ -53,7 +54,7 @@ export default function ForgotPasswordScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
       style={styles.container}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
@@ -96,13 +97,26 @@ export default function ForgotPasswordScreen() {
               keyboardType="number-pad"
               maxLength={4}
             />
-            <TextInput
-              style={styles.input}
-              placeholder="New Password"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
+            <View style={styles.passwordRow}>
+              <TextInput
+                style={[styles.input, styles.passwordInput]}
+                placeholder="New Password"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+              />
+              <TouchableOpacity 
+                style={styles.eyeButton} 
+                onPress={() => setShowPassword(!showPassword)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons 
+                  name={showPassword ? "eye-off-outline" : "eye-outline"} 
+                  size={22} 
+                  color={Colors.textGray} 
+                />
+              </TouchableOpacity>
+            </View>
             <TouchableOpacity 
               style={styles.primaryButton} 
               onPress={handleResetPassword}
@@ -163,6 +177,25 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     marginBottom: 16,
     fontSize: 16,
+    color: Colors.text,
+  },
+  passwordRow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    marginBottom: 16,
+    paddingRight: 8,
+  },
+  passwordInput: {
+    flex: 1,
+    marginBottom: 0,
+    borderWidth: 0,
+  },
+  eyeButton: {
+    padding: 10,
   },
   primaryButton: {
     backgroundColor: Colors.primary,

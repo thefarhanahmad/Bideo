@@ -130,10 +130,28 @@ export default function LibraryScreen() {
   if (!isAuthenticated && !authModalVisible) {
     return (
       <View style={styles.center}>
-        <Text style={{ marginBottom: 20 }}>Please login to view your library</Text>
-        <TouchableOpacity style={styles.loginBtn} onPress={() => setAuthModalVisible(true)}>
-          <Text style={styles.loginBtnText}>Login</Text>
-        </TouchableOpacity>
+        <View style={styles.loginCard}>
+          <View style={styles.iconCircle}>
+            <Ionicons name="library" size={50} color={Colors.primary} />
+          </View>
+          <Text style={styles.loginTitle}>Your Library</Text>
+          <Text style={styles.loginSubtitle}>Login to see your watch history, liked videos, and personal playlists.</Text>
+          
+          <TouchableOpacity 
+            style={styles.mainLoginBtn} 
+            onPress={() => setAuthModalVisible(true)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.mainLoginBtnText}>Sign In / Sign Up</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.secondaryBtn} 
+            onPress={() => router.replace('/')}
+          >
+            <Text style={styles.secondaryBtnText}>Explore Home</Text>
+          </TouchableOpacity>
+        </View>
         <AuthModal visible={authModalVisible} onClose={() => setAuthModalVisible(false)} />
       </View>
     );
@@ -321,7 +339,66 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 20,
+    padding: 24,
+    backgroundColor: '#F9FAFB',
+  },
+  loginCard: {
+    backgroundColor: Colors.white,
+    padding: 32,
+    borderRadius: 24,
+    alignItems: 'center',
+    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  iconCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: Colors.primary + '10',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  loginTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: Colors.text,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  loginSubtitle: {
+    fontSize: 15,
+    color: Colors.textGray,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 32,
+    paddingHorizontal: 10,
+  },
+  mainLoginBtn: {
+    backgroundColor: Colors.primary,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 999,
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  mainLoginBtnText: {
+    color: Colors.white,
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  secondaryBtn: {
+    paddingVertical: 12,
+  },
+  secondaryBtnText: {
+    color: Colors.textGray,
+    fontSize: 15,
+    fontWeight: '600',
   },
   loginBtn: {
     backgroundColor: Colors.primary,
