@@ -213,7 +213,7 @@ export default function ShortsScreen() {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Report',
-          onPress: async (reason) => {
+          onPress: async (reason?: string) => {
             try {
               await api.post(`/videos/${selectedShort._id}/report`, { reason });
               Alert.alert('Report sent', 'Thanks for your feedback');

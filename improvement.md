@@ -2,6 +2,6 @@ In my project many systems are already working perfect now i have to inhance mor
 
 - Home Page - where all categories are showing as tabs, which is correct. but i want to change the categories ordering everytime when open app, becasue i want to show users random categories every time, not always fix orders of categories.
 
-- When new videos 
+- 
 
 all UI designs and functionalities should be perfect and linked proeprly with backend which required, and system should be production level scalable system. dont break anything working system , everything should be work perfectly, UIs should be responsive.

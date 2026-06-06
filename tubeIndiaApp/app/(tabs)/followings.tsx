@@ -95,7 +95,7 @@ export default function FollowingsScreen() {
     <View style={styles.container}>
       <AuthModal visible={authModalVisible} onClose={() => setAuthModalVisible(false)} />
       <View style={styles.channelBar}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.channelListContent}>
           {followings.map(item => (
             <TouchableOpacity
               key={item._id}
@@ -107,7 +107,7 @@ export default function FollowingsScreen() {
             </TouchableOpacity>
           ))}
           {followings.length === 0 && !loading && (
-            <Text style={{ marginLeft: 15, color: Colors.textGray, alignSelf: 'center' }}>No followed channels</Text>
+            <Text style={{ color: Colors.textGray, alignSelf: 'center' }}>No followed channels</Text>
           )}
           {loading && <ActivityIndicator style={{ marginLeft: 15 }} color={Colors.primary} />}
         </ScrollView>
@@ -228,10 +228,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
+  channelListContent: {
+    paddingHorizontal: 15,
+  },
   channelItem: {
     alignItems: 'center',
     width: 80,
-    marginLeft: 12,
+    marginRight: 12,
   },
   channelAvatar: {
     width: 50,

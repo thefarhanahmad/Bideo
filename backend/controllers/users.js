@@ -57,6 +57,7 @@ exports.getChannelProfile = async (req, res, next) => {
     }
 
     const filter = (req.query.filter || 'videos').toLowerCase();
+    const sort = (req.query.sort || 'latest').toLowerCase();
     const isOwner = req.user && req.user.id.toString() === channel._id.toString();
     const isAdmin = req.user && req.user.role === 'admin';
     const visibilityQuery = isOwner || isAdmin
@@ -64,13 +65,18 @@ exports.getChannelProfile = async (req, res, next) => {
       : { $or: [{ visibility: 'public' }, { visibility: { $exists: false } }] };
     const videoQuery = { owner: channel._id, ...visibilityQuery };
     const postQuery = { owner: channel._id, ...visibilityQuery };
+
+    let sortQuery = { createdAt: -1 };
+    if (sort === 'popular') sortQuery = { views: -1, createdAt: -1 };
+    if (sort === 'oldest') sortQuery = { createdAt: 1 };
+
     let videos = [];
     let posts = [];
 
     if (filter === 'posts') {
       posts = await Post.find(postQuery)
         .populate('owner', 'name avatar channelName')
-        .sort('-createdAt');
+        .sort(sortQuery);
     } else {
       if (filter === 'shorts') {
         videoQuery.isShort = true;
@@ -81,7 +87,7 @@ exports.getChannelProfile = async (req, res, next) => {
       videos = await Video.find(videoQuery)
         .populate('owner', 'name avatar channelName followersCount')
         .populate('category', 'name')
-        .sort('-createdAt');
+        .sort(sortQuery);
     }
 
     res.status(200).json({ success: true, data: { channel, videos, posts } });

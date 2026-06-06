@@ -8,6 +8,7 @@ import AuthModal from '../../components/AuthModal';
 import api, { setAuthToken } from '../../services/api';
 import { useRouter, useNavigation, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
 const getAvatarUri = (avatar?: string) => {
   if (!avatar) return null;
   const value = avatar.trim();
@@ -116,6 +117,12 @@ export default function LibraryScreen() {
     loadLikedVideos();
   };
 
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
     await Promise.all([
@@ -213,15 +220,20 @@ export default function LibraryScreen() {
         {loadingHistory ? (
           <ActivityIndicator color={Colors.primary} />
         ) : (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalList}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalListContent}>
             {history.map(item => (
               <TouchableOpacity key={item._id} style={styles.horizontalItem} onPress={() => router.push(`/video/${item._id}`)}>
-                <Image source={{ uri: item.thumbnail }} style={styles.horizontalThumbnail} />
+                <View style={styles.thumbnailContainer}>
+                  <Image source={{ uri: item.thumbnail }} style={styles.horizontalThumbnail} />
+                  <View style={styles.durationBadge}>
+                    <Text style={styles.durationText}>{formatDuration(item.duration || 0)}</Text>
+                  </View>
+                </View>
                 <Text style={styles.horizontalText} numberOfLines={2}>{item.title}</Text>
                 <Text style={styles.horizontalOwner}>{item.owner?.channelName || item.owner?.name}</Text>
               </TouchableOpacity>
             ))}
-            {history.length === 0 && <Text style={{ marginLeft: 15, color: Colors.textGray }}>No history yet</Text>}
+            {history.length === 0 && <Text style={{ color: Colors.textGray }}>No history yet</Text>}
           </ScrollView>
         )}
       </View>
@@ -234,16 +246,24 @@ export default function LibraryScreen() {
             <Ionicons name="thumbs-up-outline" size={24} color={Colors.text} />
             <Text style={styles.sectionTitle}>Liked Videos</Text>
           </View>
+          <TouchableOpacity onPress={() => router.push('/liked-videos')}>
+            <Text style={styles.viewAll}>View all</Text>
+          </TouchableOpacity>
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalList}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalListContent}>
           {likedVideos.map(item => (
             <TouchableOpacity key={item._id} style={styles.horizontalItem} onPress={() => router.push(`/video/${item._id}`)}>
-              <Image source={{ uri: item.thumbnail }} style={styles.horizontalThumbnail} />
+              <View style={styles.thumbnailContainer}>
+                <Image source={{ uri: item.thumbnail }} style={styles.horizontalThumbnail} />
+                <View style={styles.durationBadge}>
+                  <Text style={styles.durationText}>{formatDuration(item.duration || 0)}</Text>
+                </View>
+              </View>
               <Text style={styles.horizontalText} numberOfLines={2}>{item.title}</Text>
               <Text style={styles.horizontalOwner}>{item.owner?.channelName || item.owner?.name}</Text>
             </TouchableOpacity>
           ))}
-          {likedVideos.length === 0 && <Text style={{ marginLeft: 15, color: Colors.textGray }}>No liked videos yet</Text>}
+          {likedVideos.length === 0 && <Text style={{ color: Colors.textGray }}>No liked videos yet</Text>}
         </ScrollView>
       </View>
 
@@ -262,27 +282,30 @@ export default function LibraryScreen() {
         {loadingMyVideos ? (
           <ActivityIndicator color={Colors.primary} />
         ) : (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalList}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalListContent}>
             {myVideos.map(item => (
-              <View key={item._id} style={styles.horizontalItemContainer}>
-                <TouchableOpacity style={styles.horizontalItem} onPress={() => router.push(`/video/${item._id}`)}>
+              <TouchableOpacity key={item._id} style={styles.horizontalItem} onPress={() => router.push(`/video/${item._id}`)}>
+                <View style={styles.thumbnailContainer}>
                   <Image source={{ uri: item.thumbnail }} style={styles.horizontalThumbnail} />
-                  <View style={styles.horizontalInfo}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.horizontalText} numberOfLines={2}>{item.title}</Text>
-                      <Text style={styles.horizontalOwner}>{item.views} views</Text>
-                    </View>
-                    <TouchableOpacity 
-                      style={styles.moreBtn} 
-                      onPress={() => router.push({ pathname: '/your-videos', params: { autoOpenId: item._id } })}
-                    >
-                      <Ionicons name="ellipsis-vertical" size={16} color={Colors.text} />
-                    </TouchableOpacity>
+                  <View style={styles.durationBadge}>
+                    <Text style={styles.durationText}>{formatDuration(item.duration || 0)}</Text>
                   </View>
-                </TouchableOpacity>
-              </View>
+                </View>
+                <View style={styles.horizontalInfo}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.horizontalText} numberOfLines={2}>{item.title}</Text>
+                    <Text style={styles.horizontalOwner}>{item.views} views</Text>
+                  </View>
+                  <TouchableOpacity 
+                    style={styles.moreBtn} 
+                    onPress={() => router.push({ pathname: '/your-videos', params: { autoOpenId: item._id } })}
+                  >
+                    <Ionicons name="ellipsis-vertical" size={16} color={Colors.text} />
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
             ))}
-            {myVideos.length === 0 && <Text style={{ marginLeft: 15, color: Colors.textGray }}>No videos uploaded yet</Text>}
+            {myVideos.length === 0 && <Text style={{ color: Colors.textGray }}>No videos uploaded yet</Text>}
           </ScrollView>
         )}
       </View>
@@ -296,7 +319,7 @@ export default function LibraryScreen() {
             <Text style={styles.sectionTitle}>Playlists</Text>
           </View>
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalList}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalListContent}>
           {playlists.map(item => {
             const latestVideo = item.videos && item.videos.length > 0 ? item.videos[item.videos.length - 1] : null;
             return (
@@ -323,11 +346,13 @@ export default function LibraryScreen() {
               </TouchableOpacity>
             );
           })}
-          {playlists.length === 0 && <Text style={{ marginLeft: 15, color: Colors.textGray }}>No playlists yet</Text>}
+          {playlists.length === 0 && <Text style={{ color: Colors.textGray }}>No playlists yet</Text>}
         </ScrollView>
       </View>
     </ScrollView>
   );
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -400,64 +425,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     backgroundColor: '#F9FAFB',
-  },
-  loginCard: {
-    backgroundColor: Colors.white,
-    padding: 32,
-    borderRadius: 24,
-    alignItems: 'center',
-    width: '100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  iconCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: Colors.primary + '10',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
-  },
-  loginTitle: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: Colors.text,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  loginSubtitle: {
-    fontSize: 15,
-    color: Colors.textGray,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 32,
-    paddingHorizontal: 10,
-  },
-  mainLoginBtn: {
-    backgroundColor: Colors.primary,
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 999,
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  mainLoginBtnText: {
-    color: Colors.white,
-    fontSize: 17,
-    fontWeight: '700',
-  },
-  secondaryBtn: {
-    paddingVertical: 12,
-  },
-  secondaryBtnText: {
-    color: Colors.textGray,
-    fontSize: 15,
-    fontWeight: '600',
   },
   loginBtn: {
     backgroundColor: Colors.primary,
@@ -571,14 +538,35 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontWeight: 'bold',
   },
-  horizontalList: {
-    paddingLeft: 15,
-  },
-  horizontalItemContainer: {
-    marginRight: 15,
+  horizontalListContent: {
+    paddingHorizontal: 15,
   },
   horizontalItem: {
     width: 140,
+    marginRight: 15,
+  },
+  thumbnailContainer: {
+    position: 'relative',
+    marginBottom: 6,
+  },
+  horizontalThumbnail: {
+    width: 140,
+    height: 80,
+    borderRadius: 8,
+  },
+  durationBadge: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  durationText: {
+    color: Colors.white,
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   horizontalInfo: {
     flexDirection: 'row',
@@ -587,12 +575,6 @@ const styles = StyleSheet.create({
   moreBtn: {
     padding: 4,
     marginTop: -2,
-  },
-  horizontalThumbnail: {
-    width: 140,
-    height: 80,
-    borderRadius: 8,
-    marginBottom: 6,
   },
   horizontalText: {
     fontSize: 13,
@@ -631,4 +613,3 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 });
-
