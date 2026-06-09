@@ -367,12 +367,6 @@ exports.uploadVideo = async (req, res, next) => {
       console.log("Generated Thumbnail URL:", thumbnail);
     }
 
-    const hasOnlyVideo =
-      !req.body.title &&
-      !req.body.description &&
-      !req.body.category &&
-      !req.body.tags &&
-      !req.files.thumbnail;
     const video = await Video.create({
       title: req.body.title || formatDefaultTitle(),
       description: req.body.description || "",
@@ -384,7 +378,7 @@ exports.uploadVideo = async (req, res, next) => {
       isShort: uploadType === "short",
       aspectRatio,
       owner: req.user.id,
-      visibility: req.body.visibility || (hasOnlyVideo ? "private" : "public"),
+      visibility: req.body.visibility || "public",
     });
 
     res.status(201).json({ success: true, data: video });

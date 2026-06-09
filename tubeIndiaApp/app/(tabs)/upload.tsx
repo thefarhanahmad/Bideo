@@ -234,7 +234,7 @@ export default function UploadScreen() {
       if (description.trim()) formData.append('description', description.trim());
       if (category) formData.append('category', category);
       if (tags.trim()) formData.append('tags', tags.trim());
-      formData.append('visibility', hasMetadata ? visibility : 'private');
+      formData.append('visibility', visibility);
       
       // @ts-ignore
       formData.append('video', {
