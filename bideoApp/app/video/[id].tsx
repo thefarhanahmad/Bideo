@@ -197,7 +197,7 @@ export default function VideoScreen() {
   const handleShare = async () => {
     try {
       await Share.share({
-        message: `Check out this video on TubeIndia: ${video.title}\n${video.videoUrl}`,
+        message: `Check out this video on Bideo: ${video.title}\n${video.videoUrl}`,
       });
     } catch (err) {
       console.error('Share failed', err);

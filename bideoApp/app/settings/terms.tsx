@@ -10,11 +10,11 @@ export default function TermsScreen() {
   const sections = [
     {
       title: '1. Acceptance of Terms',
-      content: 'By accessing and using TubeIndia, you agree to comply with and be bound by these Terms and Conditions. If you do not agree to these terms, please do not use our services.'
+      content: 'By accessing and using Bideo, you agree to comply with and be bound by these Terms and Conditions. If you do not agree to these terms, please do not use our services.'
     },
     {
       title: '2. User Content',
-      content: 'You retain ownership of the content you upload to TubeIndia. However, by uploading content, you grant TubeIndia a worldwide, non-exclusive, royalty-free license to use, reproduce, and distribute your content.'
+      content: 'You retain ownership of the content you upload to Bideo. However, by uploading content, you grant Bideo a worldwide, non-exclusive, royalty-free license to use, reproduce, and distribute your content.'
     },
     {
       title: '3. Prohibited Conduct',
@@ -26,7 +26,7 @@ export default function TermsScreen() {
     },
     {
       title: '5. Termination',
-      content: 'TubeIndia reserves the right to terminate or suspend your account at any time, without prior notice, for conduct that we believe violates these Terms or is harmful to other users.'
+      content: 'Bideo reserves the right to terminate or suspend your account at any time, without prior notice, for conduct that we believe violates these Terms or is harmful to other users.'
     }
   ];
 
@@ -54,7 +54,7 @@ export default function TermsScreen() {
         ))}
 
         <View style={styles.footer}>
-          <Text style={styles.footerText}>Thank you for using TubeIndia!</Text>
+          <Text style={styles.footerText}>Thank you for using Bideo!</Text>
           <View style={styles.dotRow}>
              <View style={styles.dot} /><View style={styles.dot} /><View style={styles.dot} />
           </View>

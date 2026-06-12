@@ -22,7 +22,7 @@ export default function AboutScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>About TubeIndia</Text>
+        <Text style={styles.headerTitle}>About Bideo</Text>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -30,7 +30,7 @@ export default function AboutScreen() {
            <View style={styles.logoWrapper}>
               <Image source={require('../../assets/app-logo.png')} style={styles.logo} resizeMode="contain" />
            </View>
-           <Text style={styles.appName}>TubeIndia</Text>
+           <Text style={styles.appName}>Bideo</Text>
            <Text style={styles.appTagline}>Connecting Creators across India</Text>
            <View style={styles.versionBadge}>
               <Text style={styles.versionText}>v1.0.0</Text>
@@ -40,7 +40,7 @@ export default function AboutScreen() {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Our Mission</Text>
           <Text style={styles.description}>
-            TubeIndia is a community-driven video sharing platform designed for the Indian audience. 
+            Bideo is a community-driven video sharing platform designed for the Indian audience. 
             We aim to provide a platform where creators can share their passion, knowledge, and entertainment with the world.
           </Text>
           <Text style={styles.description}>
@@ -65,7 +65,7 @@ export default function AboutScreen() {
 
         <View style={styles.footer}>
           <View style={styles.divider} />
-          <Text style={styles.footerText}>© 2026 TubeIndia Platform</Text>
+          <Text style={styles.footerText}>© 2026 Bideo Platform</Text>
           <Text style={styles.footerSubText}>Made with ❤️ in India</Text>
         </View>
       </ScrollView>

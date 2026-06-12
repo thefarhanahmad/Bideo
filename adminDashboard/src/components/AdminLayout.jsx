@@ -14,7 +14,7 @@ const AdminLayout = () => {
   return (
     <div className="min-h-screen flex bg-gray-50">
       <aside className="w-64 bg-white border-r">
-        <div className="p-4 font-bold text-xl border-b">TubeIndia Admin</div>
+        <div className="p-4 font-bold text-xl border-b">Bideo Admin</div>
         <nav className="p-4 space-y-1">
           <NavLink to="/" end className={linkClass}>Dashboard</NavLink>
           <NavLink to="/users" className={linkClass}>Users</NavLink>

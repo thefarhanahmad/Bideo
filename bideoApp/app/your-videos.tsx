@@ -86,7 +86,7 @@ export default function YourVideosScreen() {
     setMenuVisible(false);
     try {
       await Share.share({
-        message: `Check out this video on TubeIndia: ${selectedVideo.title}\n${selectedVideo.videoUrl || ''}`,
+        message: `Check out this video on Bideo: ${selectedVideo.title}\n${selectedVideo.videoUrl || ''}`,
       });
     } catch (err) {
       console.error('Share failed', err);

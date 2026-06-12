@@ -34,8 +34,8 @@ const PostCard = ({ post, onDelete }: PostCardProps) => {
     setMenuVisible(false);
     try {
       const shareMessage = post.text 
-        ? `${post.text}\n\nCheck out this post on TubeIndia!`
-        : 'Check out this post on TubeIndia!';
+        ? `${post.text}\n\nCheck out this post on Bideo!`
+        : 'Check out this post on Bideo!';
         
       await Share.share({
         message: shareMessage,

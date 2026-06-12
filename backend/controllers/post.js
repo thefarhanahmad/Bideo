@@ -15,7 +15,7 @@ exports.createPost = async (req, res, next) => {
     let imageUrl = req.body.imageUrl;
     if (req.file) {
       const result = await cloudinary.uploader.upload(req.file.path, {
-        folder: 'tubeindia/posts',
+        folder: 'bideo/posts',
       });
       imageUrl = result.secure_url;
     }
@@ -47,7 +47,7 @@ exports.updatePost = async (req, res, next) => {
 
     if (req.file) {
       const result = await cloudinary.uploader.upload(req.file.path, {
-        folder: 'tubeindia/posts',
+        folder: 'bideo/posts',
       });
       imageUrl = result.secure_url;
       if (post.imageUrl) await deleteFromCloudinary(post.imageUrl, 'image');

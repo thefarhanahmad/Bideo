@@ -23,7 +23,7 @@ export default function HelpScreen() {
     },
     {
       question: 'How can I contact support?',
-      answer: 'You can email us at support@tubeindia.com for any technical issues or inquiries.'
+      answer: 'You can email us at support@bideo.com for any technical issues or inquiries.'
     }
   ];
 
@@ -76,20 +76,20 @@ export default function HelpScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Contact Us</Text>
           <View style={styles.contactContainer}>
-            <TouchableOpacity style={styles.contactCard} onPress={() => Linking.openURL('mailto:support@tubeindia.com')}>
+            <TouchableOpacity style={styles.contactCard} onPress={() => Linking.openURL('mailto:support@bideo.com')}>
               <View style={[styles.contactIcon, {backgroundColor: '#E8F5E9'}]}>
                 <Ionicons name="mail" size={24} color="#4CAF50" />
               </View>
               <Text style={styles.contactLabel}>Email Support</Text>
-              <Text style={styles.contactValue}>support@tubeindia.com</Text>
+              <Text style={styles.contactValue}>support@bideo.com</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.contactCard} onPress={() => Linking.openURL('https://tubeindia.com')}>
+            <TouchableOpacity style={styles.contactCard} onPress={() => Linking.openURL('https://bideo.com')}>
               <View style={[styles.contactIcon, {backgroundColor: '#E3F2FD'}]}>
                 <Ionicons name="globe" size={24} color="#2196F3" />
               </View>
               <Text style={styles.contactLabel}>Our Website</Text>
-              <Text style={styles.contactValue}>www.tubeindia.com</Text>
+              <Text style={styles.contactValue}>www.bideo.com</Text>
             </TouchableOpacity>
           </View>
         </View>

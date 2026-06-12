@@ -149,7 +149,7 @@ export default function ShortsScreen() {
   const handleShare = async (short: any) => {
     try {
       await Share.share({
-        message: `Check out this short on TubeIndia: ${short.title}\n${short.videoUrl}`,
+        message: `Check out this short on Bideo: ${short.title}\n${short.videoUrl}`,
       });
     } catch (err) {
       console.error('Share failed', err);

@@ -1,8 +1,8 @@
 ﻿{
   "expo": {
-    "name": "Tube India",
-    "slug": "tubeIndiaApp",
-    "scheme": "tubeindia",
+    "name": "Bideo",
+    "slug": "bideoApp",
+    "scheme": "bideo",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -12,11 +12,11 @@
     "ios": {
       "supportsTablet": true,
       "icon": "./assets/icon.png",
-      "bundleIdentifier": "com.farhan.tubeindiaapp"
+      "bundleIdentifier": "com.farhan.bideoapp"
     },
 
     "android": {
-      "package": "com.farhan.tubeindiaapp",
+      "package": "com.farhan.bideoapp",
       "icon": "./assets/icon.png",
 
       "adaptiveIcon": {

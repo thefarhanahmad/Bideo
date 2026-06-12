@@ -66,7 +66,7 @@ app.use("/api/channels", channels);
 
 // Basic route
 app.get("/", (req, res) => {
-  res.json({ message: "Welcome to TubeIndia API" });
+  res.json({ message: "Welcome to Bideo API" });
 });
 
 // Error handling middleware

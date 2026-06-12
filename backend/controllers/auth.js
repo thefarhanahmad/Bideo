@@ -113,13 +113,13 @@ exports.updateChannel = async (req, res, next) => {
     if (req.files) {
       if (req.files.avatar && req.files.avatar[0]) {
         const result = await cloudinary.uploader.upload(req.files.avatar[0].path, {
-          folder: 'tubeindia/avatars',
+          folder: 'bideo/avatars',
         });
         avatar = result.secure_url;
       }
       if (req.files.coverImage && req.files.coverImage[0]) {
         const result = await cloudinary.uploader.upload(req.files.coverImage[0].path, {
-          folder: 'tubeindia/covers',
+          folder: 'bideo/covers',
         });
         coverImage = result.secure_url;
       }

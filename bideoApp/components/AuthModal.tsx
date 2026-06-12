@@ -141,7 +141,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onLoginSuccess 
               <View style={styles.header}>
                 <Ionicons name="person-circle-outline" size={70} color={Colors.primary} />
                 <Text style={styles.title}>{isSignup ? 'Create Account' : 'Welcome Back'}</Text>
-                <Text style={styles.subtitle}>{isSignup ? 'Join TubeIndia community today.' : 'Login to your account to continue.'}</Text>
+                <Text style={styles.subtitle}>{isSignup ? 'Join Bideo community today.' : 'Login to your account to continue.'}</Text>
               </View>
 
               {isSignup && (

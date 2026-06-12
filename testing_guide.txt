@@ -1,4 +1,4 @@
-# TubeIndia App Testing & Distribution Guide
+# Bideo App Testing & Distribution Guide
 
 This guide explains how to share your app with others for testing and how to prepare for production.
 

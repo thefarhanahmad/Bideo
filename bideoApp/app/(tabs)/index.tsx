@@ -295,7 +295,7 @@ export default function HomeScreen() {
                 onPress={async () => {
                   try {
                     await api.post(`/videos/${selectedVideo?._id}/report`, { reason: reportReason });
-                    Alert.alert('Report sent', 'Thanks for helping keep Tube India safe.');
+                    Alert.alert('Report sent', 'Thanks for helping keep Bideo safe.');
                     setReportModalVisible(false);
                     setSelectedVideo(null);
                     setReportReason('');

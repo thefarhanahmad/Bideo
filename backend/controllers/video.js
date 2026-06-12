@@ -329,7 +329,7 @@ exports.uploadVideo = async (req, res, next) => {
       req.files.video[0].path,
       {
         resource_type: "video",
-        folder: "tubeindia/videos",
+        folder: "bideo/videos",
       },
     );
 
@@ -349,7 +349,7 @@ exports.uploadVideo = async (req, res, next) => {
       const thumbnailResult = await cloudinary.uploader.upload(
         req.files.thumbnail[0].path,
         {
-          folder: "tubeindia/thumbnails",
+          folder: "bideo/thumbnails",
         },
       );
       thumbnail = thumbnailResult.secure_url;
@@ -413,7 +413,7 @@ exports.updateVideo = async (req, res, next) => {
       const thumbnailResult = await cloudinary.uploader.upload(
         req.files.thumbnail[0].path,
         {
-          folder: "tubeindia/thumbnails",
+          folder: "bideo/thumbnails",
         },
       );
       updates.thumbnail = thumbnailResult.secure_url;

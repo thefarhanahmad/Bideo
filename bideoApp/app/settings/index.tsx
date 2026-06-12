@@ -124,7 +124,7 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.footer}>
-          <Text style={styles.versionText}>TubeIndia for Android</Text>
+          <Text style={styles.versionText}>Bideo for Android</Text>
           <Text style={styles.versionNumber}>Version 1.0.0</Text>
         </View>
       </ScrollView>
