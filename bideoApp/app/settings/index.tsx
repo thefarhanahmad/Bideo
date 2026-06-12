@@ -1,3 +1,4 @@
+import { showAlert } from '../../components/AppAlert';
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,7 +18,7 @@ export default function SettingsScreen() {
   const { user } = useSelector((state: RootState) => state.auth);
 
   const handleLogout = () => {
-    Alert.alert(
+    showAlert(
       'Logout',
       'Are you sure you want to logout?',
       [
@@ -86,6 +87,40 @@ export default function SettingsScreen() {
           <TouchableOpacity style={styles.editProfileBtn} onPress={() => router.push('/edit-channel')}>
             <Text style={styles.editProfileText}>Edit Channel</Text>
           </TouchableOpacity>
+        </View>
+
+        <View style={styles.earningsWrap}>
+          <View style={styles.earningsCard}>
+            <View style={styles.earningsTop}>
+              <View style={styles.earningsIcon}>
+                <Ionicons name="wallet" size={22} color={Colors.white} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.earningsLabel}>Your Earnings</Text>
+                <Text style={styles.earningsAmount}>₹0.00</Text>
+              </View>
+              <View style={styles.earningsBadge}>
+                <Text style={styles.earningsBadgeText}>Coming soon</Text>
+              </View>
+            </View>
+            <Text style={styles.earningsNote}>
+              Monetization is on the way! We're building a secure payment gateway so you can
+              earn from your videos. This feature will be available in a few days.
+            </Text>
+            <TouchableOpacity
+              style={styles.earningsBtn}
+              activeOpacity={0.85}
+              onPress={() =>
+                showAlert(
+                  'Earnings — Coming Soon',
+                  'We are currently building the payment gateway and creator monetization. You will be able to track and withdraw your earnings here very soon. Thanks for your patience!'
+                )
+              }
+            >
+              <Text style={styles.earningsBtnText}>Learn more</Text>
+              <Ionicons name="arrow-forward" size={16} color={Colors.primary} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.menuSection}>
@@ -216,6 +251,77 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: Colors.text,
+  },
+  earningsWrap: {
+    paddingHorizontal: 20,
+    paddingTop: 25,
+  },
+  earningsCard: {
+    backgroundColor: Colors.primary,
+    borderRadius: 20,
+    padding: 18,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 14,
+    elevation: 5,
+  },
+  earningsTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  earningsIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  earningsLabel: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  earningsAmount: {
+    color: Colors.white,
+    fontSize: 26,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  earningsBadge: {
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+  },
+  earningsBadgeText: {
+    color: Colors.white,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  earningsNote: {
+    color: 'rgba(255,255,255,0.92)',
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 14,
+  },
+  earningsBtn: {
+    marginTop: 14,
+    alignSelf: 'flex-start',
+    backgroundColor: Colors.white,
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  earningsBtnText: {
+    color: Colors.primary,
+    fontSize: 14,
+    fontWeight: '700',
   },
   menuSection: {
     paddingHorizontal: 20,

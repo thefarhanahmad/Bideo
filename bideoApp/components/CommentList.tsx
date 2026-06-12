@@ -1,3 +1,4 @@
+import { showAlert } from './AppAlert';
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, ActivityIndicator, KeyboardAvoidingView, Platform, Modal, Keyboard, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -373,22 +374,20 @@ const CommentItem = ({ item, userId, onOpenChannel, onLike, onReply, onLikeReply
       return;
     }
     
-    import('react-native').then(({ Alert }) => {
-      Alert.alert(
-        'Comment Options',
-        'What would you like to do?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Edit', onPress: onEdit },
-          { text: 'Delete', onPress: () => {
-            Alert.alert('Delete', 'Are you sure?', [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Delete', style: 'destructive', onPress: onDelete }
-            ]);
-          }, style: 'destructive' },
-        ]
-      );
-    });
+    showAlert(
+      'Comment Options',
+      'What would you like to do?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Edit', onPress: onEdit },
+        { text: 'Delete', style: 'destructive', onPress: () => {
+          showAlert('Delete', 'Are you sure?', [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Delete', style: 'destructive', onPress: onDelete }
+          ]);
+        } },
+      ]
+    );
   };
 
   return (

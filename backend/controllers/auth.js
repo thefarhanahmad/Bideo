@@ -100,6 +100,7 @@ exports.googleLogin = async (req, res, next) => {
 };
 
 const cloudinary = require('cloudinary').v2;
+const { imageUploadOptions } = require('../utils/cloudinary');
 
 // @desc    Update current user channel
 // @route   PUT /api/auth/channel
@@ -112,15 +113,11 @@ exports.updateChannel = async (req, res, next) => {
 
     if (req.files) {
       if (req.files.avatar && req.files.avatar[0]) {
-        const result = await cloudinary.uploader.upload(req.files.avatar[0].path, {
-          folder: 'bideo/avatars',
-        });
+        const result = await cloudinary.uploader.upload(req.files.avatar[0].path, imageUploadOptions('bideo/avatars'));
         avatar = result.secure_url;
       }
       if (req.files.coverImage && req.files.coverImage[0]) {
-        const result = await cloudinary.uploader.upload(req.files.coverImage[0].path, {
-          folder: 'bideo/covers',
-        });
+        const result = await cloudinary.uploader.upload(req.files.coverImage[0].path, imageUploadOptions('bideo/covers'));
         coverImage = result.secure_url;
       }
     }

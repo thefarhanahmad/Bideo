@@ -1,3 +1,4 @@
+import { showAlert } from '../../components/AppAlert';
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, Image, Dimensions, TouchableOpacity, ActivityIndicator, ScrollView, Platform, Modal, Pressable, Share, Alert, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -174,7 +175,7 @@ export default function ShortsScreen() {
     if (!selectedShort) return;
     setMenuVisible(false);
     
-    Alert.alert(
+    showAlert(
       'Delete Short',
       'Are you sure you want to delete this short?',
       [
@@ -186,9 +187,9 @@ export default function ShortsScreen() {
             try {
               await api.delete(`/videos/${selectedShort._id}`);
               setShorts(shorts.filter(s => s._id !== selectedShort._id));
-              Alert.alert('Success', 'Short deleted');
+              showAlert('Success', 'Short deleted');
             } catch (err) {
-              Alert.alert('Error', 'Failed to delete short');
+              showAlert('Error', 'Failed to delete short');
             }
           }
         }
@@ -217,9 +218,9 @@ export default function ShortsScreen() {
           onPress: async (reason?: string) => {
             try {
               await api.post(`/videos/${selectedShort._id}/report`, { reason });
-              Alert.alert('Report sent', 'Thanks for your feedback');
+              showAlert('Report sent', 'Thanks for your feedback');
             } catch (err) {
-              Alert.alert('Error', 'Failed to send report');
+              showAlert('Error', 'Failed to send report');
             }
           }
         }

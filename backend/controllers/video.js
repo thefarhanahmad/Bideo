@@ -5,7 +5,11 @@ const VideoView = require("../models/VideoView");
 const VideoReport = require("../models/VideoReport");
 const Notification = require("../models/Notification");
 const cloudinary = require("cloudinary").v2;
-const { deleteFromCloudinary } = require("../utils/cloudinary");
+const {
+  deleteFromCloudinary,
+  optimizedVideoUrl,
+  imageUploadOptions,
+} = require("../utils/cloudinary");
 
 const FALLBACK_THUMBNAIL =
   "https://via.placeholder.com/640x360.png?text=Tube+India";
@@ -344,13 +348,14 @@ exports.uploadVideo = async (req, res, next) => {
       });
     }
 
+    // Compressed delivery URL (Cloudinary transcodes on first request and caches).
+    const optimizedVideo = optimizedVideoUrl(videoResult.public_id);
+
     let thumbnail = FALLBACK_THUMBNAIL;
     if (req.files.thumbnail && req.files.thumbnail[0]) {
       const thumbnailResult = await cloudinary.uploader.upload(
         req.files.thumbnail[0].path,
-        {
-          folder: "bideo/thumbnails",
-        },
+        imageUploadOptions("bideo/thumbnails"),
       );
       thumbnail = thumbnailResult.secure_url;
     } else {
@@ -372,7 +377,7 @@ exports.uploadVideo = async (req, res, next) => {
       description: req.body.description || "",
       category: req.body.category || undefined,
       tags: normalizeTags(req.body.tags),
-      videoUrl: videoResult.secure_url,
+      videoUrl: optimizedVideo || videoResult.secure_url,
       thumbnail: thumbnail || FALLBACK_THUMBNAIL,
       duration: videoResult.duration || 0,
       isShort: uploadType === "short",
@@ -412,9 +417,7 @@ exports.updateVideo = async (req, res, next) => {
     if (req.files && req.files.thumbnail && req.files.thumbnail[0]) {
       const thumbnailResult = await cloudinary.uploader.upload(
         req.files.thumbnail[0].path,
-        {
-          folder: "bideo/thumbnails",
-        },
+        imageUploadOptions("bideo/thumbnails"),
       );
       updates.thumbnail = thumbnailResult.secure_url;
       if (video.thumbnail) await deleteFromCloudinary(video.thumbnail, "image");

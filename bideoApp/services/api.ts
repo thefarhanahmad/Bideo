@@ -1,7 +1,10 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.3.101:5000/api';
+// EXPO_PUBLIC_API_URL is inlined at build time. In dev it comes from .env (LAN IP);
+// for standalone builds it is injected per-profile via eas.json. The fallback is the
+// hosted backend so an installed APK is never left pointing at an unreachable LAN IP.
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://bideo.onrender.com/api';
 
 const api = axios.create({
   baseURL: API_URL,

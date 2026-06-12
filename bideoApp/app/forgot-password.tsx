@@ -1,3 +1,4 @@
+import { showAlert } from '../components/AppAlert';
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -15,35 +16,35 @@ export default function ForgotPasswordScreen() {
   const [loading, setLoading] = useState(false);
 
   const handleRequestOtp = async () => {
-    if (phone.length !== 10) return Alert.alert('Error', 'Enter a valid 10-digit phone number');
+    if (phone.length !== 10) return showAlert('Error', 'Enter a valid 10-digit phone number');
     setLoading(true);
     try {
       const res = await api.post('/auth/forgot-password', { phone });
       if (res.data.success) {
         setStep(2);
-        Alert.alert('OTP Sent', 'Use dummy OTP 1234 to proceed');
+        showAlert('OTP Sent', 'Use dummy OTP 1234 to proceed');
       }
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.message || 'Failed to request OTP');
+      showAlert('Error', err.response?.data?.message || 'Failed to request OTP');
     } finally {
       setLoading(false);
     }
   };
 
   const handleResetPassword = async () => {
-    if (otp !== '1234') return Alert.alert('Error', 'Invalid OTP. Use 1234');
-    if (password.length < 6) return Alert.alert('Error', 'Password must be at least 6 characters');
+    if (otp !== '1234') return showAlert('Error', 'Invalid OTP. Use 1234');
+    if (password.length < 6) return showAlert('Error', 'Password must be at least 6 characters');
     
     setLoading(true);
     try {
       const res = await api.post('/auth/reset-password', { phone, otp, password });
       if (res.data.success) {
-        Alert.alert('Success', 'Password reset successfully. You can now login.', [
+        showAlert('Success', 'Password reset successfully. You can now login.', [
           { text: 'OK', onPress: () => router.back() }
         ]);
       }
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.message || 'Failed to reset password');
+      showAlert('Error', err.response?.data?.message || 'Failed to reset password');
     } finally {
       setLoading(false);
     }

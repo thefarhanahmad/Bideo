@@ -1,10 +1,11 @@
+import { showAlert } from './AppAlert';
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { View, Text, StyleSheet, Modal, TouchableOpacity, Alert, TextInput, KeyboardAvoidingView, Platform, ScrollView, Pressable } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import * as Google from "expo-auth-session/providers/google";
 import * as AuthSession from "expo-auth-session";
-import Constants from 'expo-constants';
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "../constants/Colors";
 import { useDispatch } from 'react-redux';
 import { loginStart, loginSuccess, loginFailure } from '../redux/slices/authSlice';
@@ -23,13 +24,16 @@ interface AuthModalProps {
 const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onLoginSuccess }) => {
   const dispatch = useDispatch();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [isSignup, setIsSignup] = useState(false);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  const CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || (Constants.manifest?.extra && (Constants.manifest.extra.EXPO_PUBLIC_GOOGLE_CLIENT_ID || Constants.manifest.extra.EXPO_PUBLIC_GOOGLE_CLIENT_ID)) || '';
+  // Feature flag — hide Google login entirely unless explicitly enabled via env.
+  const GOOGLE_ENABLED = process.env.EXPO_PUBLIC_GOOGLE_LOGIN_ENABLED === 'true';
+  const CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || '';
   const ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || '';
 
   const googleConfig = useMemo(() => ({
@@ -70,10 +74,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onLoginSuccess 
       }
       catch (err: any) { 
         dispatch(loginFailure('Backend login failed')); 
-        Alert.alert('Login Failed','Unable to complete login with backend'); 
+        showAlert('Login Failed','Unable to complete login with backend'); 
       }
     } catch { 
-      Alert.alert("Login Failed", "Could not fetch user info"); 
+      showAlert("Login Failed", "Could not fetch user info"); 
     }
   }, [dispatch, persistAuth]);
 
@@ -85,8 +89,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onLoginSuccess 
   }, [response, getUserInfo]);
 
   const handlePhoneAuth = useCallback(async () => {
-    if ((isSignup && !name.trim()) || !phone.trim() || !password) return Alert.alert('Missing Fields', 'Please fill name, phone and password.');
-    if (phone.trim().length !== 10) return Alert.alert('Invalid Phone', 'Phone number must be 10 digits.');
+    if ((isSignup && !name.trim()) || !phone.trim() || !password) return showAlert('Missing Fields', 'Please fill name, phone and password.');
+    if (phone.trim().length !== 10) return showAlert('Invalid Phone', 'Phone number must be 10 digits.');
     
     dispatch(loginStart());
     try {
@@ -97,13 +101,13 @@ const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onLoginSuccess 
     } catch (err: any) {
       dispatch(loginFailure('Phone auth failed'));
       const apiError = err?.response?.data?.message || err?.response?.data?.errors?.[0]?.msg;
-      Alert.alert('Authentication Failed', apiError || 'Unable to authenticate');
+      showAlert('Authentication Failed', apiError || 'Unable to authenticate');
     }
   }, [isSignup, name, phone, password, dispatch, persistAuth]);
 
   const handleGoogleLogin = useCallback(async () => {
-    if (Platform.OS === 'android' && !ANDROID_CLIENT_ID) return Alert.alert('Google Login Not Configured','Set EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID in your app env to enable Google login on Android.');
-    try { await promptAsync(); } catch { Alert.alert("Login Error", "Something went wrong"); }
+    if (Platform.OS === 'android' && !ANDROID_CLIENT_ID) return showAlert('Google Login Not Configured','Set EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID in your app env to enable Google login on Android.');
+    try { await promptAsync(); } catch { showAlert("Login Error", "Something went wrong"); }
   }, [ANDROID_CLIENT_ID, promptAsync]);
 
   const handleForgotPassword = useCallback(() => {
@@ -123,13 +127,13 @@ const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onLoginSuccess 
       statusBarTranslucent
     >
       <Pressable style={styles.overlay} onPress={onClose}>
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === "ios" ? "padding" : "padding"} 
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={styles.keyboardView}
         >
           <Pressable style={styles.modalContent} onPress={e => e.stopPropagation()}>
-            <ScrollView 
-              contentContainerStyle={styles.scrollContent} 
+            <ScrollView
+              contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 16) + 12 }]}
               bounces={false}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
@@ -195,21 +199,25 @@ const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onLoginSuccess 
                 </Text>
               </TouchableOpacity>
 
-              <View style={styles.dividerRow}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.orText}>or</Text>
-                <View style={styles.dividerLine} />
-              </View>
+              {GOOGLE_ENABLED && (
+                <>
+                  <View style={styles.dividerRow}>
+                    <View style={styles.dividerLine} />
+                    <Text style={styles.orText}>or</Text>
+                    <View style={styles.dividerLine} />
+                  </View>
 
-              <TouchableOpacity 
-                style={styles.googleButton} 
-                onPress={handleGoogleLogin} 
-                disabled={!request}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="logo-google" size={22} color={Colors.white} />
-                <Text style={styles.googleButtonText}>Continue with Google</Text>
-              </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.googleButton}
+                    onPress={handleGoogleLogin}
+                    disabled={!request}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="logo-google" size={22} color={Colors.white} />
+                    <Text style={styles.googleButtonText}>Continue with Google</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </ScrollView>
           </Pressable>
         </KeyboardAvoidingView>

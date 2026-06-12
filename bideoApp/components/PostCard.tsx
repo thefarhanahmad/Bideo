@@ -1,3 +1,4 @@
+import { showAlert } from './AppAlert';
 import React, { useState } from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity, Modal, ScrollView, Dimensions, Share, Pressable, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -76,7 +77,7 @@ const PostCard = ({ post, onDelete }: PostCardProps) => {
 
   const handleDelete = () => {
     setMenuVisible(false);
-    Alert.alert(
+    showAlert(
       'Delete Post',
       'Are you sure you want to delete this post?',
       [
@@ -88,11 +89,11 @@ const PostCard = ({ post, onDelete }: PostCardProps) => {
             try {
               const res = await api.delete(`/posts/${post._id}`);
               if (res.data.success) {
-                Alert.alert('Success', 'Post deleted');
+                showAlert('Success', 'Post deleted');
                 if (onDelete) onDelete(post._id);
               }
             } catch (err) {
-              Alert.alert('Error', 'Failed to delete post');
+              showAlert('Error', 'Failed to delete post');
             }
           }
         }

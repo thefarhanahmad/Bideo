@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Stack } from 'expo-router';
 import { Provider, useDispatch } from 'react-redux';
 import { store } from '../redux/store';
@@ -7,6 +7,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SplashScreen from 'expo-splash-screen';
 import api, { setAuthToken } from '../services/api';
 import { loginSuccess, loginStart, loginFailure } from '../redux/slices/authSlice';
+import { AlertHost } from '../components/AppAlert';
+import AppSplash from '../components/AppSplash';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
@@ -47,16 +49,16 @@ function Startup({ onReady }: { onReady: () => void }) {
 export default function RootLayout() {
   const [appIsReady, setAppIsReady] = useState(false);
 
-  useEffect(() => {
-    if (appIsReady) {
-      SplashScreen.hideAsync().catch(() => {});
-    }
-  }, [appIsReady]);
+  // Hide the native splash as soon as our full-screen branded splash is on
+  // screen, so users see a full-bleed splash instead of the small system icon.
+  const onSplashLayout = useCallback(() => {
+    SplashScreen.hideAsync().catch(() => {});
+  }, []);
 
   return (
     <Provider store={store}>
       <Startup onReady={() => setAppIsReady(true)} />
-      {appIsReady && (
+      {appIsReady ? (
         <GestureHandlerRootView style={{ flex: 1 }}>
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="(tabs)" />
@@ -64,7 +66,10 @@ export default function RootLayout() {
             <Stack.Screen name="channel/[id]" />
             <Stack.Screen name="notifications" />
           </Stack>
+          <AlertHost />
         </GestureHandlerRootView>
+      ) : (
+        <AppSplash onLayout={onSplashLayout} />
       )}
     </Provider>
   );

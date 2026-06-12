@@ -28,10 +28,5 @@ In my project many systems are already working perfect now i have to inhance mor
 - All screens,components and UIs should be beautiful and attractive. right now its showing very basic everything.
 - All fucntionalities should be work properly, and everything should be production level scalabale system.
 
-## Dashboard FIXING =
-
-- Dashboard UI should be beautiful and attractive without remove anything working system.
-- Inhance everything.
-- we should have controller for everything in admin dashboard.
 
 all UI designs and functionalities should be perfect and linked proeprly with backend which required, and system should be production level scalable system. dont break anything working system , everything should be work perfectly, UIs should be responsive.

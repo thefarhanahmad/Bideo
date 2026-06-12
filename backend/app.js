@@ -71,6 +71,19 @@ app.get("/", (req, res) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
+  // Friendly messages for file-upload (multer) errors instead of a generic 500.
+  if (err && err.name === "MulterError") {
+    const messages = {
+      LIMIT_FILE_SIZE:
+        "This file is too large. Please upload a file under 100MB (try a shorter or lower-resolution video).",
+      LIMIT_UNEXPECTED_FILE: "Unexpected file field in upload.",
+    };
+    return res.status(413).json({
+      success: false,
+      message: messages[err.code] || "Upload error. Please try a smaller file.",
+    });
+  }
+
   const statusCode = err.statusCode || 500;
   res.status(statusCode).json({
     success: false,

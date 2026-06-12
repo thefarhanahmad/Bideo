@@ -2,7 +2,7 @@ const Post = require('../models/Post');
 const Follower = require('../models/Follower');
 const Notification = require('../models/Notification');
 const cloudinary = require('cloudinary').v2;
-const { deleteFromCloudinary } = require('../utils/cloudinary');
+const { deleteFromCloudinary, imageUploadOptions } = require('../utils/cloudinary');
 
 const createNotification = async ({ recipient, actor, type, video, post, comment, message }) => {
   if (!recipient || !actor || recipient.toString() === actor.toString()) return;
@@ -14,9 +14,7 @@ exports.createPost = async (req, res, next) => {
     const text = (req.body.text || '').trim();
     let imageUrl = req.body.imageUrl;
     if (req.file) {
-      const result = await cloudinary.uploader.upload(req.file.path, {
-        folder: 'bideo/posts',
-      });
+      const result = await cloudinary.uploader.upload(req.file.path, imageUploadOptions('bideo/posts'));
       imageUrl = result.secure_url;
     }
     if (!text && !imageUrl) {
@@ -46,9 +44,7 @@ exports.updatePost = async (req, res, next) => {
     let imageUrl = post.imageUrl;
 
     if (req.file) {
-      const result = await cloudinary.uploader.upload(req.file.path, {
-        folder: 'bideo/posts',
-      });
+      const result = await cloudinary.uploader.upload(req.file.path, imageUploadOptions('bideo/posts'));
       imageUrl = result.secure_url;
       if (post.imageUrl) await deleteFromCloudinary(post.imageUrl, 'image');
     } else if (req.body.removeImage === 'true') {

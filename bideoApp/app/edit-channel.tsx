@@ -1,3 +1,4 @@
+import { showAlert } from '../components/AppAlert';
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -41,7 +42,7 @@ export default function EditChannelScreen() {
   const pickAvatar = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission Denied', 'We need access to your photos to update your profile picture.');
+      showAlert('Permission Denied', 'We need access to your photos to update your profile picture.');
       return;
     }
 
@@ -57,14 +58,14 @@ export default function EditChannelScreen() {
         setAvatar(result.assets[0].uri);
       }
     } catch (err) {
-      Alert.alert('Error', 'Failed to pick image.');
+      showAlert('Error', 'Failed to pick image.');
     }
   };
 
   const pickCoverImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission Denied', 'We need access to your photos to update your channel banner.');
+      showAlert('Permission Denied', 'We need access to your photos to update your channel banner.');
       return;
     }
 
@@ -80,13 +81,13 @@ export default function EditChannelScreen() {
         setCoverImage(result.assets[0].uri);
       }
     } catch (err) {
-      Alert.alert('Error', 'Failed to pick cover image.');
+      showAlert('Error', 'Failed to pick cover image.');
     }
   };
 
   const handleSave = async () => {
     if (!channelName.trim()) {
-      Alert.alert('Error', 'Channel name is required');
+      showAlert('Error', 'Channel name is required');
       return;
     }
 
@@ -133,11 +134,11 @@ export default function EditChannelScreen() {
 
       if (res.data.success) {
         dispatch(loginSuccess({ user: res.data.data, token: token! }));
-        Alert.alert('Success', 'Channel customization saved');
+        showAlert('Success', 'Channel customization saved');
         router.back();
       }
     } catch (err: any) {
-      Alert.alert('Error', 'Failed to update channel. Please check your network and try again.');
+      showAlert('Error', 'Failed to update channel. Please check your network and try again.');
     } finally {
       setLoading(false);
     }

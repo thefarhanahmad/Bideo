@@ -87,7 +87,6 @@ export default function LibraryScreen() {
     } catch (err) {
       console.error('Failed to load your videos', err);
     } finally {
-      setMyVideos([]);
       setLoadingMyVideos(false);
     }
   };

@@ -1,3 +1,4 @@
+import { showAlert } from './AppAlert';
 import React, { useState } from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity, Modal, TextInput, Alert, Pressable, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -86,7 +87,7 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, onMenuPress, onPlaylistPre
     if (onDeletePress) {
       onDeletePress(video);
     } else {
-      Alert.alert(
+      showAlert(
         'Delete Video',
         'Are you sure you want to delete this video?',
         [
@@ -98,13 +99,13 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, onMenuPress, onPlaylistPre
               try {
                 const res = await api.delete(`/videos/${video._id}`);
                 if (res.data.success) {
-                  Alert.alert('Success', 'Video deleted');
+                  showAlert('Success', 'Video deleted');
                   // Since we don't have a way to refresh the list here without props, 
                   // it's better if the parent handles delete. 
                   // But we'll leave this as a fallback.
                 }
               } catch (err) {
-                Alert.alert('Error', 'Failed to delete video');
+                showAlert('Error', 'Failed to delete video');
               }
             }
           }

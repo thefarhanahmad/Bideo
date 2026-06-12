@@ -1,3 +1,4 @@
+import { showAlert } from '../../components/AppAlert';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Image, ActivityIndicator, Alert, Modal, Animated, Easing } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -121,7 +122,7 @@ export default function UploadScreen() {
     if (editId) return; // Cannot change video on edit
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission Denied', 'We need access to your files to upload videos.');
+      showAlert('Permission Denied', 'We need access to your files to upload videos.');
       return;
     }
 
@@ -133,24 +134,33 @@ export default function UploadScreen() {
       });
 
       if (!result.canceled) {
+        const asset: any = result.assets[0];
+        const MAX_BYTES = 100 * 1024 * 1024; // 100MB
+        if (asset.fileSize && asset.fileSize > MAX_BYTES) {
+          const sizeMb = Math.round(asset.fileSize / (1024 * 1024));
+          showAlert(
+            'Video too large',
+            `This video is about ${sizeMb}MB. Please choose one under 100MB — try trimming it or picking a lower resolution.`
+          );
+          return;
+        }
         if (uploadType === 'short') {
-          const asset: any = result.assets[0];
           if (asset.width && asset.height && Math.abs((asset.width / asset.height) - (9 / 16)) > 0.035) {
-            Alert.alert('Invalid short', 'Shorts must be portrait 9:16 videos.');
+            showAlert('Invalid short', 'Shorts must be portrait 9:16 videos.');
             return;
           }
         }
-        setVideo(result.assets[0]);
+        setVideo(asset);
       }
     } catch (err) {
-      Alert.alert('Error', 'Failed to pick video.');
+      showAlert('Error', 'Failed to pick video.');
     }
   };
 
   const pickPostImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission Denied', 'We need access to your photos to create a post.');
+      showAlert('Permission Denied', 'We need access to your photos to create a post.');
       return;
     }
 
@@ -165,14 +175,14 @@ export default function UploadScreen() {
         setPostImageChanged(true);
       }
     } catch (err) {
-      Alert.alert('Error', 'Failed to pick or crop image.');
+      showAlert('Error', 'Failed to pick or crop image.');
     }
   };
 
   const pickThumbnail = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission Denied', 'We need access to your photos to set a thumbnail.');
+      showAlert('Permission Denied', 'We need access to your photos to set a thumbnail.');
       return;
     }
 
@@ -189,7 +199,7 @@ export default function UploadScreen() {
         setThumbnailChanged(true);
       }
     } catch (err) {
-      Alert.alert('Error', 'Failed to pick or crop thumbnail.');
+      showAlert('Error', 'Failed to pick or crop thumbnail.');
     }
   };
 
@@ -220,7 +230,7 @@ export default function UploadScreen() {
     }
 
     if (!video) {
-      Alert.alert('Error', 'Please select a video');
+      showAlert('Error', 'Please select a video');
       return;
     }
 
@@ -261,10 +271,10 @@ export default function UploadScreen() {
         },
       });
 
-      Alert.alert('Success', 'Video uploaded successfully!');
+      showAlert('Success', 'Video uploaded successfully!');
       router.replace('/');
     } catch (err: any) {
-      Alert.alert('Upload Failed', err.response?.data?.message || 'Something went wrong');
+      showAlert('Upload Failed', err.response?.data?.message || 'Something went wrong');
     } finally {
       setUploading(false);
     }
@@ -272,7 +282,7 @@ export default function UploadScreen() {
 
   const handlePostUpload = async () => {
     if (!postText.trim() && !postImage) {
-      Alert.alert('Error', 'Add text or an image for your post');
+      showAlert('Error', 'Add text or an image for your post');
       return;
     }
     setUploading(true);
@@ -291,13 +301,13 @@ export default function UploadScreen() {
           if (event.total) setUploadProgress(Math.round((event.loaded / event.total) * 100));
         },
       });
-      Alert.alert('Success', 'Post published successfully!');
+      showAlert('Success', 'Post published successfully!');
       setUploadType(null);
       setPostText('');
       setPostImage(null);
       router.replace('/');
     } catch (err: any) {
-      Alert.alert('Post Failed', err.response?.data?.message || 'Something went wrong');
+      showAlert('Post Failed', err.response?.data?.message || 'Something went wrong');
     } finally {
       setUploading(false);
     }
@@ -322,10 +332,10 @@ export default function UploadScreen() {
       } else {
         await api.put(`/posts/${editPostId}`, { text: postText, visibility });
       }
-      Alert.alert('Success', 'Post updated successfully!');
+      showAlert('Success', 'Post updated successfully!');
       router.replace('/');
     } catch (err: any) {
-      Alert.alert('Update Failed', err.response?.data?.message || 'Something went wrong');
+      showAlert('Update Failed', err.response?.data?.message || 'Something went wrong');
     } finally {
       setUploading(false);
     }
@@ -365,10 +375,10 @@ export default function UploadScreen() {
           visibility
         });
       }
-      Alert.alert('Success', 'Video updated successfully!');
+      showAlert('Success', 'Video updated successfully!');
       router.replace('/your-videos');
     } catch (err: any) {
-      Alert.alert('Update Failed', err.response?.data?.message || 'Something went wrong');
+      showAlert('Update Failed', err.response?.data?.message || 'Something went wrong');
     } finally {
       setUploading(false);
     }

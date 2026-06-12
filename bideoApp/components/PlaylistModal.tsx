@@ -1,3 +1,4 @@
+import { showAlert } from './AppAlert';
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, FlatList, TextInput, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -39,10 +40,10 @@ const PlaylistModal: React.FC<PlaylistModalProps> = ({ visible, onClose, videoId
   const addToPlaylist = async (playlistId: string) => {
     try {
       await api.put(`/playlists/${playlistId}/add`, { videoId });
-      Alert.alert('Success', 'Video added to playlist');
+      showAlert('Success', 'Video added to playlist');
       onClose();
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.message || 'Failed to add video');
+      showAlert('Error', err.response?.data?.message || 'Failed to add video');
     }
   };
 
@@ -50,12 +51,12 @@ const PlaylistModal: React.FC<PlaylistModalProps> = ({ visible, onClose, videoId
     if (!newPlaylistName.trim()) return;
     try {
       await api.post('/playlists', { name: newPlaylistName, videoId });
-      Alert.alert('Success', 'Playlist created and video added');
+      showAlert('Success', 'Playlist created and video added');
       setNewPlaylistName('');
       setIsCreating(false);
       onClose();
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.message || 'Failed to create playlist');
+      showAlert('Error', err.response?.data?.message || 'Failed to create playlist');
     }
   };
 

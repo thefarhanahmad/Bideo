@@ -1,3 +1,4 @@
+import { showAlert } from '../../components/AppAlert';
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Image, FlatList, TouchableOpacity, ActivityIndicator, Alert, ScrollView, Dimensions, Share } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -81,7 +82,7 @@ export default function ChannelScreen() {
         isFollowing: prevFollowing,
         followersCount: prevCount
       });
-      Alert.alert('Error', 'Failed to update follow status');
+      showAlert('Error', 'Failed to update follow status');
     }
   };
 
@@ -226,7 +227,7 @@ export default function ChannelScreen() {
                 <Text style={styles.subscribers}>{channel?.followersCount || 0} subscribers</Text>
                 
                 {!!channel?.about && (
-                  <TouchableOpacity activeOpacity={0.7} style={styles.aboutContainer} onPress={() => Alert.alert('About', channel.about)}>
+                  <TouchableOpacity activeOpacity={0.7} style={styles.aboutContainer} onPress={() => showAlert('About', channel.about)}>
                     <Text style={styles.aboutPreview} numberOfLines={2}>
                       {channel.about}
                     </Text>

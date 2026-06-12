@@ -1,3 +1,4 @@
+import { showAlert } from '../../components/AppAlert';
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, FlatList, StyleSheet, ActivityIndicator, Text, Modal, TouchableOpacity, TextInput, Alert, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -295,12 +296,12 @@ export default function HomeScreen() {
                 onPress={async () => {
                   try {
                     await api.post(`/videos/${selectedVideo?._id}/report`, { reason: reportReason });
-                    Alert.alert('Report sent', 'Thanks for helping keep Bideo safe.');
+                    showAlert('Report sent', 'Thanks for helping keep Bideo safe.');
                     setReportModalVisible(false);
                     setSelectedVideo(null);
                     setReportReason('');
                   } catch (err: any) {
-                    Alert.alert('Report failed', err.response?.data?.message || 'Please try again');
+                    showAlert('Report failed', err.response?.data?.message || 'Please try again');
                   }
                 }}
               >

@@ -1,3 +1,4 @@
+import { showAlert } from '../components/AppAlert';
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, Modal, Pressable, Share, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -59,7 +60,7 @@ export default function YourVideosScreen() {
     const id = selectedVideo?._id;
     setMenuVisible(false);
     
-    Alert.alert(
+    showAlert(
       'Delete Video',
       'Are you sure you want to delete this video?',
       [
@@ -71,9 +72,9 @@ export default function YourVideosScreen() {
             try {
               await api.delete(`/videos/${id}`);
               setVideos(videos.filter(v => v._id !== id));
-              Alert.alert('Success', 'Video deleted');
+              showAlert('Success', 'Video deleted');
             } catch (err) {
-              Alert.alert('Error', 'Failed to delete video');
+              showAlert('Error', 'Failed to delete video');
             }
           }
         }
