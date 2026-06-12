@@ -64,7 +64,7 @@ This is the professional way to test, using "Internal Testing" tracks.
 ## Important Pre-Testing Checklist
 1. **API URL:** Ensure `EXPO_PUBLIC_API_URL` in your `.env` is pointing to your hosted backend (e.g., Heroku, Render, AWS) and not `localhost`.
 2. **Google Login:** If using Google Login, ensure the Redirect URIs in the Google Cloud Console include the production bundle IDs.
-3. **Assets:** Verify that `icon.jpg` and `splash-icon.jpg` look correct in the final build.
+3. **Assets:** Verify that `icon.jpg` and `splash-screen.jpg` look correct in the final build.
 
 ## Troubleshooting
 - **App Won't Load:** Check if the backend server is running and accessible from the internet.

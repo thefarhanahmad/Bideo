@@ -27,6 +27,10 @@ const CommentList: React.FC<CommentListProps> = ({ videoId, postId, onCommentAdd
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [editingComment, setEditingComment] = useState<any | null>(null);
+  const [editingReply, setEditingReply] = useState<{commentId: string, reply: any} | null>(null);
+  const [editText, setEditText] = useState('');
+  const [editSubmitting, setEditSubmitting] = useState(false);
   const [replyTarget, setReplyTarget] = useState<any | null>(null);
   const [replyText, setReplyText] = useState('');
   const [replySubmitting, setReplySubmitting] = useState(false);
@@ -74,6 +78,44 @@ const CommentList: React.FC<CommentListProps> = ({ videoId, postId, onCommentAdd
       console.error('Failed to add comment', err);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleUpdateComment = async () => {
+    if ((!editingComment && !editingReply) || !editText.trim() || editSubmitting) return;
+    setEditSubmitting(true);
+    try {
+      if (editingComment) {
+        await api.put(`/comments/${editingComment._id}`, { text: editText });
+      } else if (editingReply) {
+        await api.put(`/comments/${editingReply.commentId}/replies/${editingReply.reply._id}`, { text: editText });
+      }
+      setEditingComment(null);
+      setEditingReply(null);
+      setEditText('');
+      fetchComments(true);
+    } catch (err) {
+      console.error('Failed to update', err);
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    try {
+      await api.delete(`/comments/${commentId}`);
+      fetchComments(true);
+    } catch (err) {
+      console.error('Failed to delete comment', err);
+    }
+  };
+
+  const handleDeleteReply = async (commentId: string, replyId: string) => {
+    try {
+      await api.delete(`/comments/${commentId}/replies/${replyId}`);
+      fetchComments(true);
+    } catch (err) {
+      console.error('Failed to delete reply', err);
     }
   };
 
@@ -171,9 +213,85 @@ const CommentList: React.FC<CommentListProps> = ({ videoId, postId, onCommentAdd
             onLike={() => handleLikeComment(item._id)}
             onReply={() => openReplyComposer(item)}
             onLikeReply={(replyId: string) => handleLikeReply(item._id, replyId)}
+            onEdit={() => {
+              setEditingComment(item);
+              setEditText(item.text);
+            }}
+            onDelete={() => handleDeleteComment(item._id)}
+            onEditReply={(reply: any) => {
+              setEditingReply({ commentId: item._id, reply });
+              setEditText(reply.text);
+            }}
+            onDeleteReply={(replyId: string) => handleDeleteReply(item._id, replyId)}
           />
         ))}
       </View>
+
+      {/* Edit Modal */}
+      <Modal
+        visible={!!editingComment || !!editingReply}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          setEditingComment(null);
+          setEditingReply(null);
+        }}
+        statusBarTranslucent
+      >
+        <Pressable 
+          style={styles.replyModal} 
+          onPress={() => {
+            setEditingComment(null);
+            setEditingReply(null);
+          }}
+        >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+            style={{ width: '100%', justifyContent: 'flex-end', flex: 1 }}
+          >
+            <Pressable 
+              style={[
+                styles.replyComposer,
+                {
+                  paddingBottom: Math.max(insets.bottom, 12) + 10,
+                },
+              ]}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <View style={styles.replyComposerHeader}>
+                <Text style={styles.replyingToText}>{editingReply ? 'Edit Reply' : 'Edit Comment'}</Text>
+                <TouchableOpacity onPress={() => {
+                  setEditingComment(null);
+                  setEditingReply(null);
+                }} style={styles.closeReplyBtn}>
+                  <Ionicons name="close" size={22} color={Colors.textGray} />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.replyComposerRow}>
+                <TextInput
+                  style={styles.replyComposerInput}
+                  placeholder="Edit your comment..."
+                  value={editText}
+                  onChangeText={setEditText}
+                  multiline
+                  autoFocus
+                />
+                <TouchableOpacity
+                  style={[styles.replySendBtn, !editText.trim() && styles.replySendBtnDisabled]}
+                  onPress={handleUpdateComment}
+                  disabled={!editText.trim() || editSubmitting}
+                >
+                  {editSubmitting ? (
+                    <ActivityIndicator size="small" color={Colors.white} />
+                  ) : (
+                    <Ionicons name="checkmark" size={20} color={Colors.white} />
+                  )}
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </Pressable>
+      </Modal>
 
       <Modal
         visible={!!replyTarget}
@@ -245,8 +363,33 @@ const CommentList: React.FC<CommentListProps> = ({ videoId, postId, onCommentAdd
   );
 };
 
-const CommentItem = ({ item, userId, onOpenChannel, onLike, onReply, onLikeReply }: any) => {
+const CommentItem = ({ item, userId, onOpenChannel, onLike, onReply, onLikeReply, onEdit, onDelete }: any) => {
   const liked = item.likes?.some((id: string) => id === userId);
+  const isOwner = item.user?._id === userId;
+
+  const showOptions = () => {
+    if (Platform.OS === 'web') {
+      if (confirm('Delete this comment?')) onDelete();
+      return;
+    }
+    
+    import('react-native').then(({ Alert }) => {
+      Alert.alert(
+        'Comment Options',
+        'What would you like to do?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Edit', onPress: onEdit },
+          { text: 'Delete', onPress: () => {
+            Alert.alert('Delete', 'Are you sure?', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Delete', style: 'destructive', onPress: onDelete }
+            ]);
+          }, style: 'destructive' },
+        ]
+      );
+    });
+  };
 
   return (
     <View style={styles.commentItem}>
@@ -255,10 +398,17 @@ const CommentItem = ({ item, userId, onOpenChannel, onLike, onReply, onLikeReply
       </TouchableOpacity>
       <View style={styles.commentContent}>
         <View style={styles.commentHeader}>
-          <Text style={styles.username} onPress={() => item.user?._id && onOpenChannel(item.user._id)}>
-            {item.user?.channelName || item.user?.name || 'User'}
-          </Text>
-          <Text style={styles.time}> - {formatTimeAgo(item.createdAt)}</Text>
+          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={styles.username} onPress={() => item.user?._id && onOpenChannel(item.user._id)}>
+              {item.user?.channelName || item.user?.name || 'User'}
+            </Text>
+            <Text style={styles.time}> - {formatTimeAgo(item.createdAt)}</Text>
+          </View>
+          {isOwner && (
+            <TouchableOpacity onPress={showOptions} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="ellipsis-vertical" size={14} color={Colors.textGray} />
+            </TouchableOpacity>
+          )}
         </View>
         <Text style={styles.commentText}>{item.text}</Text>
         <View style={styles.commentActions}>

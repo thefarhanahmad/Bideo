@@ -181,6 +181,83 @@ exports.toggleReplyLike = async (req, res, next) => {
   }
 };
 
+// @desc    Update reply
+// @route   PUT /api/comments/:id/replies/:replyId
+// @access  Private
+exports.updateReply = async (req, res, next) => {
+  try {
+    const comment = await Comment.findById(req.params.id);
+    if (!comment) return res.status(404).json({ success: false, message: 'Comment not found' });
+
+    const reply = comment.replies.id(req.params.replyId);
+    if (!reply) return res.status(404).json({ success: false, message: 'Reply not found' });
+
+    if (reply.user.toString() !== req.user.id && req.user.role !== 'admin') {
+      return res.status(401).json({ success: false, message: 'Not authorized to update this reply' });
+    }
+
+    reply.text = req.body.text;
+    await comment.save();
+
+    res.status(200).json({ success: true, data: reply });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Delete reply
+// @route   DELETE /api/comments/:id/replies/:replyId
+// @access  Private
+exports.deleteReply = async (req, res, next) => {
+  try {
+    const comment = await Comment.findById(req.params.id);
+    if (!comment) return res.status(404).json({ success: false, message: 'Comment not found' });
+
+    const reply = comment.replies.id(req.params.replyId);
+    if (!reply) return res.status(404).json({ success: false, message: 'Reply not found' });
+
+    if (reply.user.toString() !== req.user.id && req.user.role !== 'admin') {
+      return res.status(401).json({ success: false, message: 'Not authorized to delete this reply' });
+    }
+
+    reply.remove ? reply.remove() : comment.replies.pull(req.params.replyId);
+    await comment.save();
+
+    res.status(200).json({ success: true, data: {} });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Update comment
+// @route   PUT /api/comments/:id
+// @access  Private
+exports.updateComment = async (req, res, next) => {
+  try {
+    let comment = await Comment.findById(req.params.id);
+
+    if (!comment) {
+      return res.status(404).json({ success: false, message: 'Comment not found' });
+    }
+
+    if (comment.user.toString() !== req.user.id && req.user.role !== 'admin') {
+      return res.status(401).json({ success: false, message: 'Not authorized to update this comment' });
+    }
+
+    comment = await Comment.findByIdAndUpdate(req.params.id, { text: req.body.text }, {
+      new: true,
+      runValidators: true
+    }).populate('user', 'name avatar channelName');
+
+    res.status(200).json({
+      success: true,
+      data: comment,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // @desc    Delete comment
 // @route   DELETE /api/comments/:id
 // @access  Private
