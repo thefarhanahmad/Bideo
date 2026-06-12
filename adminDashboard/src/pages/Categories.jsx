@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Modal from '../components/Modal';
 import ConfirmModal from '../components/ConfirmModal';
+import { API_URL } from '../config';
 
 const Categories = () => {
   const [cats, setCats] = useState([]);
@@ -17,7 +18,7 @@ const Categories = () => {
     setLoading(true);
     setError(null);
     try{
-      const res = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:5000') + '/api/categories', { credentials: 'include' });
+      const res = await fetch(API_URL + '/api/categories', { credentials: 'include' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed');
       setCats(data.data || []);
@@ -29,7 +30,7 @@ const Categories = () => {
 
   const handleCreate = async (payload) => {
     try{
-      const res = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:5000') + '/api/categories', {
+      const res = await fetch(API_URL + '/api/categories', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), credentials: 'include'
       });
       const data = await res.json();
@@ -40,7 +41,7 @@ const Categories = () => {
 
   const handleUpdate = async (id, payload) => {
     try{
-      const res = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:5000') + '/api/categories/' + id, {
+      const res = await fetch(API_URL + '/api/categories/' + id, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), credentials: 'include'
       });
       const data = await res.json();
@@ -51,36 +52,46 @@ const Categories = () => {
 
   const handleDelete = async (id) => {
     try{
-      const res = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:5000') + '/api/categories/' + id, { method: 'DELETE', credentials: 'include' });
+      const res = await fetch(API_URL + '/api/categories/' + id, { method: 'DELETE', credentials: 'include' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Delete failed');
       setShowDelete(false); setDeleteCat(null); fetchCats();
     }catch(err){ alert(err.message); }
   };
 
-  if (loading) return <div>Loading categories...</div>;
-  if (error) return <div className="text-red-600">{error}</div>;
-
   return (
     <div>
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold">Categories</h2>
-        <button onClick={()=>setShowAdd(true)} className="px-3 py-1 bg-blue-600 text-white rounded">Add Category</button>
+      <div className="mb-5 flex items-center justify-between">
+        <div>
+          <h2 className="font-display text-2xl font-extrabold text-ink">Categories</h2>
+          <p className="mt-1 text-sm text-muted">{cats.length} content categories</p>
+        </div>
+        <button onClick={()=>setShowAdd(true)} className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white shadow-brand transition-all hover:-translate-y-0.5 hover:bg-brand-dark">+ Add Category</button>
       </div>
 
-      <div className="bg-white rounded shadow p-4">
-        <ul>
+      {loading ? (
+        <div className="rounded-2xl border border-line bg-white p-8 text-center text-muted shadow-card">Loading categories...</div>
+      ) : error ? (
+        <div className="rounded-2xl border border-red-100 bg-red-50 p-6 text-red-700">{error}</div>
+      ) : (
+      <div className="rounded-2xl border border-line bg-white p-2 shadow-card">
+        {cats.length === 0 && <p className="p-6 text-center text-muted">No categories yet.</p>}
+        <ul className="divide-y divide-line">
           {cats.map(c=> (
-            <li key={c._id} className="p-2 border-b flex justify-between items-center">
-              <span>{c.name}</span>
-              <span>
-                <button onClick={()=>{ setEditCat(c); setShowEdit(true); }} className="px-2 py-1 bg-yellow-400 rounded mr-2">Edit</button>
-                <button onClick={()=>{ setDeleteCat(c); setShowDelete(true); }} className="px-2 py-1 bg-red-500 text-white rounded">Delete</button>
+            <li key={c._id} className="flex items-center justify-between gap-3 px-4 py-3">
+              <span className="flex items-center gap-3 font-medium text-ink">
+                <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-50 text-xs font-bold uppercase text-brand">{(c.name||'?').charAt(0)}</span>
+                {c.name}
+              </span>
+              <span className="flex gap-2">
+                <button onClick={()=>{ setEditCat(c); setShowEdit(true); }} className="rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-200">Edit</button>
+                <button onClick={()=>{ setDeleteCat(c); setShowDelete(true); }} className="rounded-lg bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-200">Delete</button>
               </span>
             </li>
           ))}
         </ul>
       </div>
+      )}
 
       {showAdd && (
         <Modal title="Add Category" onClose={()=>setShowAdd(false)}>
@@ -106,11 +117,11 @@ const CategoryForm = ({ initial = {}, onSubmit, onCancel }) => {
   const submit = (e) => { e.preventDefault(); onSubmit({ name }); };
   return (
     <form onSubmit={submit}>
-      <label className="block mb-2">Name</label>
-      <input value={name} onChange={e=>setName(e.target.value)} className="w-full p-2 border rounded mb-4" />
-      <div className="flex justify-end space-x-2">
-        <button type="button" onClick={onCancel} className="px-3 py-1 bg-gray-200 rounded">Cancel</button>
-        <button type="submit" className="px-3 py-1 bg-blue-600 text-white rounded">Save</button>
+      <label className="block text-sm font-medium text-ink">Name</label>
+      <input value={name} onChange={e=>setName(e.target.value)} placeholder="Category name" className="mt-1.5 w-full rounded-lg border border-line p-2.5 outline-none transition-colors focus:border-brand focus:ring-2 focus:ring-brand/20" />
+      <div className="mt-6 flex justify-end gap-2">
+        <button type="button" onClick={onCancel} className="rounded-full bg-surface px-4 py-2 text-sm font-semibold text-ink hover:bg-line">Cancel</button>
+        <button type="submit" className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white shadow-brand hover:bg-brand-dark">Save</button>
       </div>
     </form>
   );

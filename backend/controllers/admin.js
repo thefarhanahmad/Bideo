@@ -1,5 +1,62 @@
 const User = require('../models/User');
 const VideoReport = require('../models/VideoReport');
+const Video = require('../models/Video');
+const Category = require('../models/Category');
+
+// @desc    Aggregated stats for the admin dashboard overview
+// @route   GET /api/admin/stats
+// @access  Private/Admin
+exports.getStats = async (req, res, next) => {
+  try {
+    const [
+      usersTotal,
+      adminsTotal,
+      videosTotal,
+      categoriesTotal,
+      reportsTotal,
+      reportsOpen,
+      visibilityAgg,
+      viewsAgg,
+      recentVideos,
+      recentUsers,
+    ] = await Promise.all([
+      User.countDocuments(),
+      User.countDocuments({ role: 'admin' }),
+      Video.countDocuments(),
+      Category.countDocuments(),
+      VideoReport.countDocuments(),
+      VideoReport.countDocuments({ status: 'open' }),
+      Video.aggregate([{ $group: { _id: '$visibility', count: { $sum: 1 } } }]),
+      Video.aggregate([{ $group: { _id: null, total: { $sum: '$views' } } }]),
+      Video.find()
+        .sort('-createdAt')
+        .limit(5)
+        .populate('owner', 'name channelName avatar')
+        .select('title thumbnail views visibility createdAt owner'),
+      User.find().sort('-createdAt').limit(5).select('name email phone avatar role createdAt'),
+    ]);
+
+    const visibility = { public: 0, unlisted: 0, private: 0 };
+    visibilityAgg.forEach((row) => {
+      if (row._id) visibility[row._id] = row.count;
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        users: { total: usersTotal, admins: adminsTotal },
+        videos: { total: videosTotal, ...visibility },
+        categories: { total: categoriesTotal },
+        reports: { total: reportsTotal, open: reportsOpen },
+        totalViews: viewsAgg[0] ? viewsAgg[0].total : 0,
+        recentVideos,
+        recentUsers,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
 
 // @desc    Admin login using database credentials
 // @route   POST /api/admin/login

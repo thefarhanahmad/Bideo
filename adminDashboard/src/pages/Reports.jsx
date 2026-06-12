@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { API_URL } from "../config";
 
 const Reports = () => {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
-  const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
+  const API = API_URL;
 
   const fetchReports = async () => {
     setLoading(true);
@@ -26,6 +27,7 @@ const Reports = () => {
 
   useEffect(() => {
     fetchReports();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
   const updateStatus = async (id, nextStatus) => {
@@ -65,13 +67,24 @@ const Reports = () => {
     }
   };
 
-  if (loading) return <div>Loading reports...</div>;
+  const statusBadge = (s) => {
+    const map = {
+      open: "bg-amber-50 text-amber-600",
+      reviewed: "bg-sky-50 text-sky-600",
+      dismissed: "bg-surface text-muted",
+      actioned: "bg-emerald-50 text-emerald-600",
+    };
+    return map[s] || "bg-surface text-muted";
+  };
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold">Reported Videos</h2>
-        <select value={status} onChange={(e) => setStatus(e.target.value)} className="border rounded p-2">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="font-display text-2xl font-extrabold text-ink">Reported Videos</h2>
+          <p className="mt-1 text-sm text-muted">Moderate content flagged by users</p>
+        </div>
+        <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded-lg border border-line bg-white p-2.5 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20">
           <option value="">All statuses</option>
           <option value="open">Open</option>
           <option value="reviewed">Reviewed</option>
@@ -80,46 +93,52 @@ const Reports = () => {
         </select>
       </div>
 
-      <div className="bg-white rounded shadow p-4 overflow-x-auto">
-        <table className="w-full table-auto">
+      {loading ? (
+        <div className="rounded-2xl border border-line bg-white p-8 text-center text-muted shadow-card">Loading reports...</div>
+      ) : (
+      <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-card">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[820px] text-sm">
           <thead>
-            <tr className="text-left">
-              <th className="p-2">Video</th>
-              <th className="p-2">Reporter</th>
-              <th className="p-2">Reason</th>
-              <th className="p-2">Status</th>
-              <th className="p-2">Actions</th>
+            <tr className="border-b border-line bg-surface/60 text-left text-xs uppercase tracking-wider text-muted">
+              <th className="p-4 font-semibold">Video</th>
+              <th className="p-4 font-semibold">Reporter</th>
+              <th className="p-4 font-semibold">Reason</th>
+              <th className="p-4 font-semibold">Status</th>
+              <th className="p-4 font-semibold">Actions</th>
             </tr>
           </thead>
           <tbody>
             {reports.map((report) => (
-              <tr key={report._id} className="border-t align-top">
-                <td className="p-2">
+              <tr key={report._id} className="border-t border-line align-top hover:bg-surface/50">
+                <td className="p-4">
                   <div className="flex gap-3">
-                    {report.video?.thumbnail && <img src={report.video.thumbnail} className="w-24 h-14 object-cover rounded" />}
-                    <div>
-                      <div className="font-semibold">{report.video?.title || "Deleted video"}</div>
-                      <div className="text-sm text-gray-500">{report.video?.owner?.channelName || report.video?.owner?.name || "-"}</div>
+                    {report.video?.thumbnail && <img src={report.video.thumbnail} alt="" className="h-14 w-24 shrink-0 rounded-lg bg-surface object-cover" onError={(e)=>{e.currentTarget.style.visibility='hidden';}} />}
+                    <div className="min-w-0">
+                      <div className="truncate font-semibold text-ink">{report.video?.title || "Deleted video"}</div>
+                      <div className="truncate text-xs text-muted">{report.video?.owner?.channelName || report.video?.owner?.name || "-"}</div>
                     </div>
                   </div>
                 </td>
-                <td className="p-2">{report.reporter?.channelName || report.reporter?.name || "-"}</td>
-                <td className="p-2 max-w-md">{report.reason}</td>
-                <td className="p-2 capitalize">{report.status}</td>
-                <td className="p-2">
+                <td className="p-4 text-muted">{report.reporter?.channelName || report.reporter?.name || "-"}</td>
+                <td className="p-4 max-w-xs text-muted">{report.reason}</td>
+                <td className="p-4">
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${statusBadge(report.status)}`}>{report.status}</span>
+                </td>
+                <td className="p-4">
                   <div className="flex flex-wrap gap-2">
                     {["reviewed", "dismissed", "actioned"].map((next) => (
-                      <button key={next} onClick={() => updateStatus(report._id, next)} className="px-2 py-1 bg-blue-600 text-white rounded capitalize">
+                      <button key={next} onClick={() => updateStatus(report._id, next)} className="rounded-lg bg-brand-50 px-2.5 py-1.5 text-xs font-semibold capitalize text-brand hover:bg-brand-100">
                         {next}
                       </button>
                     ))}
                     {report.video?.videoUrl && (
-                      <a href={report.video.videoUrl} target="_blank" rel="noreferrer" className="px-2 py-1 bg-gray-700 text-white rounded">
+                      <a href={report.video.videoUrl} target="_blank" rel="noreferrer" className="rounded-lg bg-surface px-2.5 py-1.5 text-xs font-semibold text-ink hover:bg-line">
                         Open
                       </a>
                     )}
                     {report.video?._id && (
-                      <button onClick={() => deleteVideo(report.video._id)} className="px-2 py-1 bg-red-600 text-white rounded">
+                      <button onClick={() => deleteVideo(report.video._id)} className="rounded-lg bg-red-100 px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-200">
                         Delete Video
                       </button>
                     )}
@@ -129,12 +148,14 @@ const Reports = () => {
             ))}
             {reports.length === 0 && (
               <tr>
-                <td className="p-4 text-gray-500" colSpan="5">No reports found</td>
+                <td className="p-8 text-center text-muted" colSpan="5">No reports found</td>
               </tr>
             )}
           </tbody>
         </table>
+        </div>
       </div>
+      )}
     </div>
   );
 };
