@@ -61,10 +61,7 @@
     },
     "extra": {
       "router": {},
-      "ADMOB_BANNER_ID": "ca-app-pub-3940256099942544/6300978111",
-      "eas": {
-        "projectId": "fdae7a54-8b7f-4cd8-8585-3d169174ee84"
-      }
+      "ADMOB_BANNER_ID": "ca-app-pub-3940256099942544/6300978111"
     }
   }
 }
