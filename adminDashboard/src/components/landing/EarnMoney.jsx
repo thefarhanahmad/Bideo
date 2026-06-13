@@ -1,4 +1,12 @@
-import { UploadIcon, EyeIcon, CashIcon, GiftIcon, UsersIcon, TrendingUpIcon, SparkIcon } from "../Icons";
+import {
+  UploadIcon,
+  EyeIcon,
+  CashIcon,
+  GiftIcon,
+  UsersIcon,
+  TrendingUpIcon,
+  SparkIcon,
+} from "../Icons";
 
 const creatorPerks = [
   { icon: TrendingUpIcon, text: "Ad revenue share on your videos" },
@@ -16,15 +24,21 @@ const EarnCard = ({ tone, icon: Icon, kicker, title, desc, perks }) => (
   <div className="reveal flex-1 overflow-hidden rounded-3xl border border-line bg-white shadow-card">
     <div
       className={`flex items-center gap-3 px-7 py-6 ${
-        tone === "creator" ? "bg-gradient-to-r from-brand-dark to-brand" : "bg-ink"
+        tone === "creator"
+          ? "bg-gradient-to-r from-brand-dark to-brand"
+          : "bg-ink"
       }`}
     >
       <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white/20">
         <Icon className="h-6 w-6 text-white" />
       </span>
       <div>
-        <div className="text-xs font-bold uppercase tracking-wider text-white/80">{kicker}</div>
-        <div className="font-display text-xl font-extrabold text-white">{title}</div>
+        <div className="text-xs font-bold uppercase tracking-wider text-white/80">
+          {kicker}
+        </div>
+        <div className="font-display text-xl font-extrabold text-white">
+          {title}
+        </div>
       </div>
     </div>
     <div className="px-7 py-6">
@@ -54,8 +68,8 @@ const EarnMoney = () => (
           Get paid to create — and to watch
         </h2>
         <p className="mt-4 text-lg text-muted">
-          On Bideo your time is rewarded. Creators earn from their content and viewers earn
-          just for watching and engaging. Everyone wins.
+          On Bideo your time is rewarded. Creators earn from their content and
+          viewers earn just for watching and engaging. Everyone wins.
         </p>
       </div>
 
@@ -79,8 +93,8 @@ const EarnMoney = () => (
       </div>
 
       <p className="reveal mt-8 text-center text-sm text-muted">
-        💡 Monetization &amp; the secure payment gateway are rolling out soon — start building your
-        audience today so you're ready on day one.
+        💡 Monetization &amp; the secure payment gateway are rolling out soon —
+        start building your audience today so you're ready on day one.
       </p>
     </div>
   </section>

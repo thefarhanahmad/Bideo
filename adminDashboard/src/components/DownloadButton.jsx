@@ -6,15 +6,22 @@ import { DownloadIcon } from "./Icons";
  * When the link is not configured it renders a disabled button with a hint
  * instead of a dead link, so the page never looks broken.
  */
-const DownloadButton = ({ size = "md", variant = "solid", className = "", label = "Download App" }) => {
+const DownloadButton = ({
+  size = "md",
+  variant = "solid",
+  className = "",
+  label = "Download App",
+}) => {
   const sizes = {
     sm: "px-4 py-2 text-sm",
     md: "px-5 py-3 text-sm",
     lg: "px-7 py-4 text-base",
   };
   const variants = {
-    solid: "bg-brand-dark text-white hover:bg-brand shadow-brand hover:shadow-lg transform hover:scale-105",
-    white: "bg-white text-brand-darker border border-brand-darker hover:bg-brand-50 shadow-lg hover:shadow-xl",
+    solid:
+      "bg-brand-dark text-white hover:bg-brand shadow-brand hover:shadow-lg transform hover:scale-105",
+    white:
+      "bg-white text-brand-darker border border-brand-darker hover:bg-brand-50 shadow-lg hover:shadow-xl",
     outline: "border-2 border-white/80 text-white hover:bg-white/10",
   };
   const cls = `inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-all duration-200 hover:-translate-y-0.5 ${sizes[size]} ${variants[variant]} ${className}`;

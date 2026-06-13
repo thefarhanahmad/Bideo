@@ -56,7 +56,11 @@ const Navbar = () => {
           aria-label="Toggle menu"
         >
           {open ? <MenuIcon className="hidden" /> : null}
-          {open ? <CloseIcon className="h-6 w-6" /> : <MenuIcon className="h-6 w-6" />}
+          {open ? (
+            <CloseIcon className="h-6 w-6" />
+          ) : (
+            <MenuIcon className="h-6 w-6" />
+          )}
         </button>
       </nav>
 

@@ -36,8 +36,8 @@ const Footer = () => (
         <div className="lg:col-span-2">
           <Logo dark />
           <p className="mt-4 max-w-xs text-sm leading-relaxed text-white/60">
-            The mobile-first video platform for India. Watch, create and grow your
-            audience — all in one beautiful app.
+            The mobile-first video platform for India. Watch, create and grow
+            your audience — all in one beautiful app.
           </p>
           <div className="mt-6">
             <DownloadButton size="sm" />
@@ -75,7 +75,9 @@ const Footer = () => (
       </div>
 
       <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-white/10 pt-8 sm:flex-row">
-        <p className="text-sm text-white/50">© 2026 Bideo Platform. All rights reserved.</p>
+        <p className="text-sm text-white/50">
+          © 2026 Bideo Platform. All rights reserved.
+        </p>
       </div>
     </div>
   </footer>

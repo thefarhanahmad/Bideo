@@ -25,9 +25,9 @@ const Hero = () => (
         </h1>
 
         <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-muted lg:mx-0">
-          The mobile-first video platform for India. Watch videos and shorts, earn
-          rewards while you watch, or upload your own content to grow your channel
-          and income.
+          The mobile-first video platform for India. Watch videos and shorts,
+          earn rewards while you watch, or upload your own content to grow your
+          channel and income.
         </p>
 
         <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row lg:justify-start">
@@ -41,11 +41,17 @@ const Hero = () => (
         </div>
 
         <div className="mt-8 flex flex-col items-center gap-3 text-sm text-muted lg:flex-row lg:justify-start">
-          <span><strong className="text-ink">Earn rewards</strong> while you watch</span>
+          <span>
+            <strong className="text-ink">Earn rewards</strong> while you watch
+          </span>
           <span className="hidden h-4 w-px bg-line lg:inline-block" />
-          <span><strong className="text-ink">Android</strong> APK ready</span>
+          <span>
+            <strong className="text-ink">Android</strong> APK ready
+          </span>
           <span className="hidden h-4 w-px bg-line lg:inline-block" />
-          <span><strong className="text-ink">Upload</strong> your videos and earn</span>
+          <span>
+            <strong className="text-ink">Upload</strong> your videos and earn
+          </span>
         </div>
       </div>
 

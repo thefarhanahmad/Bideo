@@ -12,8 +12,8 @@ const DownloadCTA = () => (
           Ready to start earning on Bideo?
         </h2>
         <p className="relative mx-auto mt-4 max-w-xl text-lg text-white/90">
-          Download the app now and start earning today — whether you watch, create,
-          or share videos on Bideo.
+          Download the app now and start earning today — whether you watch,
+          create, or share videos on Bideo.
         </p>
         <div className="relative mt-8 flex justify-center">
           <DownloadButton size="lg" variant="solid" label="Download the app" />
