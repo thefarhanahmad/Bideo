@@ -5,18 +5,7 @@ const Logo = ({ className = "", dark = false, compact = false }) => (
   <span
     className={`inline-flex items-center gap-3 font-display font-bold ${className}`}
   >
-    <img
-      src={logoSrc}
-      alt="Bideo logo"
-      className="h-10 w-10 rounded-2xl object-cover"
-    />
-    {!compact && (
-      <span
-        className={`text-xl tracking-tight ${dark ? "text-white" : "text-ink"}`}
-      >
-        Bideo
-      </span>
-    )}
+    <img src={logoSrc} alt="Bideo logo" className="w-16 object-cover" />
   </span>
 );
 

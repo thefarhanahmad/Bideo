@@ -1,14 +1,23 @@
-import { useState } from 'react';
-import { NavLink, Outlet, useNavigate, Link } from 'react-router-dom';
-import Logo from './Logo';
-import { GridIcon, UsersIcon, TagIcon, PlayIcon, FlagIcon, LogoutIcon, MenuIcon, CloseIcon } from './Icons';
+import { useState } from "react";
+import { NavLink, Outlet, useNavigate, Link } from "react-router-dom";
+import Logo from "./Logo";
+import {
+  GridIcon,
+  UsersIcon,
+  TagIcon,
+  PlayIcon,
+  FlagIcon,
+  LogoutIcon,
+  MenuIcon,
+  CloseIcon,
+} from "./Icons";
 
 const nav = [
-  { to: '/admin', label: 'Dashboard', icon: GridIcon, end: true },
-  { to: '/admin/users', label: 'Users', icon: UsersIcon },
-  { to: '/admin/categories', label: 'Categories', icon: TagIcon },
-  { to: '/admin/videos', label: 'Videos', icon: PlayIcon },
-  { to: '/admin/reports', label: 'Reports', icon: FlagIcon },
+  { to: "/admin", label: "Dashboard", icon: GridIcon, end: true },
+  { to: "/admin/users", label: "Users", icon: UsersIcon },
+  { to: "/admin/categories", label: "Categories", icon: TagIcon },
+  { to: "/admin/videos", label: "Videos", icon: PlayIcon },
+  { to: "/admin/reports", label: "Reports", icon: FlagIcon },
 ];
 
 const AdminLayout = () => {
@@ -16,15 +25,15 @@ const AdminLayout = () => {
   const [open, setOpen] = useState(false);
 
   const logout = () => {
-    localStorage.removeItem('admin_token');
-    navigate('/login');
+    localStorage.removeItem("admin_token");
+    navigate("/login");
   };
 
   const linkClass = ({ isActive }) =>
     `flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors ${
       isActive
-        ? 'bg-brand text-white shadow-brand'
-        : 'text-ink/70 hover:bg-brand-50 hover:text-brand'
+        ? "bg-brand text-white shadow-brand"
+        : "text-ink/70 hover:bg-brand-50 hover:text-brand"
     }`;
 
   const SidebarContent = () => (
@@ -32,9 +41,7 @@ const AdminLayout = () => {
       <Link to="/" className="flex items-center gap-2 px-2 py-1">
         <Logo />
       </Link>
-      <p className="mt-1 px-2 text-xs font-semibold uppercase tracking-wider text-muted">
-        Admin Panel
-      </p>
+
       <nav className="mt-6 space-y-1.5">
         {nav.map((item) => (
           <NavLink
@@ -68,7 +75,10 @@ const AdminLayout = () => {
       {/* Mobile drawer */}
       {open && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setOpen(false)}
+          />
           <aside className="absolute inset-y-0 left-0 flex w-64 flex-col border-r border-line bg-white p-4">
             <button
               onClick={() => setOpen(false)}
@@ -99,7 +109,9 @@ const AdminLayout = () => {
             >
               <MenuIcon className="h-6 w-6" />
             </button>
-            <h1 className="font-display text-lg font-bold text-ink">Dashboard</h1>
+            <h1 className="font-display text-lg font-bold text-ink">
+              Dashboard
+            </h1>
           </div>
           <button
             onClick={logout}

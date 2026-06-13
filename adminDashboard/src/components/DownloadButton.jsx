@@ -19,7 +19,7 @@ const DownloadButton = ({
   };
   const variants = {
     solid:
-      "bg-brand-dark text-white hover:bg-brand shadow-brand hover:shadow-lg transform hover:scale-105",
+      "bg-brand-dark border border-brand-dark text-white hover:bg-brand shadow-brand hover:shadow-lg transform hover:scale-105",
     white:
       "bg-white text-brand-darker border border-brand-darker hover:bg-brand-50 shadow-lg hover:shadow-xl",
     outline: "border-2 border-white/80 text-white hover:bg-white/10",
