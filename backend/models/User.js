@@ -43,6 +43,9 @@ const userSchema = new mongoose.Schema({
   },
   channelName: {
     type: String,
+    unique: true,
+    sparse: true,
+    trim: true,
   },
   about: {
     type: String,
