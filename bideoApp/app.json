@@ -22,7 +22,10 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "usesCleartextTraffic": true
+      "usesCleartextTraffic": true,
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -61,7 +64,10 @@
     },
     "extra": {
       "router": {},
-      "ADMOB_BANNER_ID": "ca-app-pub-3940256099942544/6300978111"
+      "ADMOB_BANNER_ID": "ca-app-pub-3940256099942544/6300978111",
+      "eas": {
+        "projectId": "c9d54950-dd5f-4e87-bf77-fcc184d8bcf7"
+      }
     }
   }
 }
