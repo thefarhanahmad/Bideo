@@ -16,6 +16,7 @@ import AuthModal from '../../components/AuthModal';
 import PlaylistModal from '../../components/PlaylistModal';
 import { formatTimeAgo, formatViews } from '../../utils/formatDate';
 import { hapticLight } from '../../utils/haptics';
+import { AppAdBanner } from '../../components/AppAds';
 
 const FALLBACK_IMAGE = 'https://via.placeholder.com/80x80.png?text=User';
 
@@ -307,6 +308,8 @@ export default function VideoScreen() {
             <Text style={styles.metadata}>
               {formatViews(video.views || 0)} views • {formatTimeAgo(video.createdAt)}
             </Text>
+
+            <AppAdBanner />
 
             <ScrollView
               horizontal

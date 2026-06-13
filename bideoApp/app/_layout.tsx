@@ -9,6 +9,7 @@ import api, { setAuthToken } from '../services/api';
 import { loginSuccess, loginStart, loginFailure } from '../redux/slices/authSlice';
 import { AlertHost } from '../components/AppAlert';
 import AppSplash from '../components/AppSplash';
+import Constants from 'expo-constants';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
@@ -20,6 +21,27 @@ function Startup({ onReady }: { onReady: () => void }) {
     const init = async () => {
       const startTime = Date.now();
       try {
+        // Initialize AdMob safely (skip in Expo Go)
+        try {
+          const isExpoGo = Constants.appOwnership === 'expo';
+          if (!isExpoGo) {
+            const mobileAdsModule = await import('react-native-google-mobile-ads').then(m => (m && (m.default || m)));
+            try {
+              if (typeof mobileAdsModule === 'function') {
+                mobileAdsModule().initialize().catch((e: any) => console.log('AdMob init error', e));
+              } else if (mobileAdsModule && mobileAdsModule.initialize) {
+                mobileAdsModule.initialize().catch((e: any) => console.log('AdMob init error', e));
+              }
+            } catch (e) {
+              console.log('AdMob init failed:', e);
+            }
+          } else {
+            console.log('Expo Go detected — skipping AdMob initialization');
+          }
+        } catch (adError) {
+          console.log('AdMob module not available:', adError);
+        }
+
         const token = await AsyncStorage.getItem('token');
         if (token) {
           dispatch(loginStart());

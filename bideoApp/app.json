@@ -29,6 +29,13 @@
     },
     "plugins": [
       [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
+          "iosAppId": "ca-app-pub-3940256099942544~1458002511"
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/splash_screen.png",
@@ -54,6 +61,7 @@
     },
     "extra": {
       "router": {},
+      "ADMOB_BANNER_ID": "ca-app-pub-3940256099942544/6300978111",
       "eas": {
         "projectId": "fdae7a54-8b7f-4cd8-8585-3d169174ee84"
       }

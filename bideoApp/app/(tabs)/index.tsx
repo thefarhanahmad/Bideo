@@ -17,6 +17,7 @@ import api from '../../services/api';
 import AuthModal from '../../components/AuthModal';
 import PlaylistModal from '../../components/PlaylistModal';
 import { formatViews } from '../../utils/formatDate';
+import { AppAdBanner } from '../../components/AppAds';
 
 const SAMPLE_VIDEOS = [
   {
@@ -168,10 +169,13 @@ export default function HomeScreen() {
 
   const shortsItems = filteredVideos.filter(v => v.isShort);
 
-  const feedData = [];
+  const feedData: any[] = [];
   if (selectedCategory === 'All') {
     // Top 2 items
     feedData.push(...longVideosAndPosts.slice(0, 2));
+    
+    // Insert Ad Banner
+    feedData.push({ _id: 'ad_banner_1', itemType: 'ad_banner' });
     
     // Insert Shorts Shelf if we have shorts
     if (shortsItems.length > 0) {
@@ -246,6 +250,9 @@ export default function HomeScreen() {
         data={feedData}
         keyExtractor={(item) => item._id}
         renderItem={({ item }) => {
+          if (item.itemType === 'ad_banner') {
+            return <AppAdBanner />;
+          }
           if (item.itemType === 'shorts_shelf') {
             return renderShortsShelf(item.data);
           }
