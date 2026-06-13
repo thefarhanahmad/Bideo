@@ -1,16 +1,14 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
-  ],
+  content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
       colors: {
         brand: {
-          DEFAULT: "#FF7A00",
-          light: "#FFA447",
-          dark: "#E56A00",
+          DEFAULT: "#E56A00",
+          light: "#FF8A1A",
+          dark: "#CC5A00",
+          darker: "#A64600",
           50: "#FFF4EB",
           100: "#FFE6D1",
         },
@@ -25,7 +23,7 @@ export default {
       },
       boxShadow: {
         card: "0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(17,17,17,0.04)",
-        brand: "0 10px 30px rgba(255,122,0,0.30)",
+        brand: "0 10px 30px rgba(229,106,0,0.35)",
       },
       keyframes: {
         "fade-up": {
@@ -53,4 +51,4 @@ export default {
     },
   },
   plugins: [],
-}
+};

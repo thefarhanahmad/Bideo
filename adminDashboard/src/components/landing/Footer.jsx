@@ -8,7 +8,7 @@ const cols = [
     links: [
       { label: "Features", href: "/#features" },
       { label: "How it works", href: "/#how" },
-      { label: "Earn money", href: "/#earn" },
+      { label: "Earn while watching", href: "/#earn" },
       { label: "FAQ", href: "/#faq" },
     ],
   },
@@ -17,7 +17,6 @@ const cols = [
     links: [
       { label: "About", to: "/about" },
       { label: "Contact", to: "/contact" },
-      { label: "Admin Login", to: "/login" },
     ],
   },
   {
@@ -77,12 +76,6 @@ const Footer = () => (
 
       <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-white/10 pt-8 sm:flex-row">
         <p className="text-sm text-white/50">© 2026 Bideo Platform. All rights reserved.</p>
-        <Link
-          to="/login"
-          className="text-sm font-medium text-white/60 transition-colors hover:text-brand-light"
-        >
-          Admin Login
-        </Link>
       </div>
     </div>
   </footer>

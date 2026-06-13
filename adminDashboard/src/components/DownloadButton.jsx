@@ -13,8 +13,8 @@ const DownloadButton = ({ size = "md", variant = "solid", className = "", label 
     lg: "px-7 py-4 text-base",
   };
   const variants = {
-    solid: "bg-brand text-white hover:bg-brand-dark shadow-brand",
-    white: "bg-white text-brand hover:bg-brand-50",
+    solid: "bg-brand-dark text-white hover:bg-brand shadow-brand hover:shadow-lg transform hover:scale-105",
+    white: "bg-white text-brand-darker border border-brand-darker hover:bg-brand-50 shadow-lg hover:shadow-xl",
     outline: "border-2 border-white/80 text-white hover:bg-white/10",
   };
   const cls = `inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-all duration-200 hover:-translate-y-0.5 ${sizes[size]} ${variants[variant]} ${className}`;

@@ -16,7 +16,7 @@ const EarnCard = ({ tone, icon: Icon, kicker, title, desc, perks }) => (
   <div className="reveal flex-1 overflow-hidden rounded-3xl border border-line bg-white shadow-card">
     <div
       className={`flex items-center gap-3 px-7 py-6 ${
-        tone === "creator" ? "bg-gradient-to-r from-brand to-brand-light" : "bg-ink"
+        tone === "creator" ? "bg-gradient-to-r from-brand-dark to-brand" : "bg-ink"
       }`}
     >
       <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white/20">

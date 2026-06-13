@@ -46,12 +46,6 @@ const Navbar = () => {
         </div>
 
         <div className="hidden items-center gap-3 md:flex">
-          <Link
-            to="/login"
-            className="text-sm font-semibold text-ink/80 transition-colors hover:text-brand"
-          >
-            Admin Login
-          </Link>
           <DownloadButton size="sm" />
         </div>
 
@@ -80,13 +74,6 @@ const Navbar = () => {
                 {l.label}
               </a>
             ))}
-            <Link
-              to="/login"
-              onClick={() => setOpen(false)}
-              className="rounded-lg px-2 py-2 text-sm font-semibold text-ink/80 hover:bg-brand-50 hover:text-brand"
-            >
-              Admin Login
-            </Link>
             <DownloadButton size="sm" className="w-full" />
           </div>
         </div>
