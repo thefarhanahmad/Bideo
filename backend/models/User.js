@@ -96,9 +96,15 @@ const userSchema = new mongoose.Schema({
 });
 
 userSchema.pre('save', async function() {
-  if (!this.isModified('password') || !this.password) return;
-  const salt = await bcrypt.genSalt(10);
-  this.password = await bcrypt.hash(this.password, salt);
+  if (this.isModified('password') && this.password) {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+  }
+
+  // Set default avatar if not present
+  if (!this.avatar) {
+    this.avatar = `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(this.name)}&backgroundColor=00acc1,1e88e5,5e35b1,7b1fa2,c2185b,e53935,f4511e,fb8c00,fdd835,ffb300`;
+  }
 });
 
 userSchema.methods.matchPassword = async function(enteredPassword) {

@@ -1,6 +1,6 @@
 import { showAlert } from './AppAlert';
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { View, Text, StyleSheet, Modal, TouchableOpacity, Alert, TextInput, KeyboardAvoidingView, Platform, ScrollView, Pressable } from "react-native";
+import { View, Text, StyleSheet, Modal, TouchableOpacity, Alert, TextInput, KeyboardAvoidingView, Platform, ScrollView, Pressable, ActivityIndicator } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import * as Google from "expo-auth-session/providers/google";
 import * as AuthSession from "expo-auth-session";
@@ -30,6 +30,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onLoginSuccess 
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
 
   // Feature flag — hide Google login entirely unless explicitly enabled via env.
   const GOOGLE_ENABLED = process.env.EXPO_PUBLIC_GOOGLE_LOGIN_ENABLED === 'true';
@@ -92,16 +93,19 @@ const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onLoginSuccess 
     if ((isSignup && !name.trim()) || !phone.trim() || !password) return showAlert('Missing Fields', 'Please fill name, phone and password.');
     if (phone.trim().length !== 10) return showAlert('Invalid Phone', 'Phone number must be 10 digits.');
 
+    setAuthLoading(true);
     dispatch(loginStart());
     try {
-      const backendRes = isSignup
-        ? await authService.signupWithPhone({ name: name.trim(), phone: phone.trim(), password })
+      const backendRes = isSignup 
+        ? await authService.signupWithPhone({ name: name.trim(), phone: phone.trim(), password }) 
         : await authService.loginWithPhone({ phone: phone.trim(), password });
       await persistAuth(backendRes);
     } catch (err: any) {
       dispatch(loginFailure('Phone auth failed'));
       const apiError = err?.response?.data?.message || err?.response?.data?.errors?.[0]?.msg;
       showAlert('Authentication Failed', apiError || 'Unable to authenticate');
+    } finally {
+      setAuthLoading(false);
     }
   }, [isSignup, name, phone, password, dispatch, persistAuth]);
 
@@ -143,7 +147,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onLoginSuccess 
               </TouchableOpacity>
 
               <View style={styles.header}>
-                <Ionicons name="person-circle-outline" size={70} color={Colors.primary} />
+
                 <Text style={styles.title}>{isSignup ? 'Create Account' : 'Welcome Back'}</Text>
                 <Text style={styles.subtitle}>{isSignup ? 'Join Bideo community today.' : 'Login to your account to continue.'}</Text>
               </View>
@@ -188,8 +192,17 @@ const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onLoginSuccess 
                 </TouchableOpacity>
               )}
 
-              <TouchableOpacity style={styles.primaryButton} onPress={handlePhoneAuth} activeOpacity={0.8}>
-                <Text style={styles.primaryButtonText}>{isSignup ? 'Sign Up' : 'Login'}</Text>
+              <TouchableOpacity 
+                style={[styles.primaryButton, authLoading && { opacity: 0.7 }]} 
+                onPress={handlePhoneAuth} 
+                activeOpacity={0.8}
+                disabled={authLoading}
+              >
+                {authLoading ? (
+                  <ActivityIndicator color={Colors.white} />
+                ) : (
+                  <Text style={styles.primaryButtonText}>{isSignup ? 'Sign Up' : 'Login'}</Text>
+                )}
               </TouchableOpacity>
 
               <TouchableOpacity onPress={toggleSignup} activeOpacity={0.7}>
@@ -257,7 +270,7 @@ const styles = StyleSheet.create({
   header: {
     alignItems: "center",
     marginBottom: 20,
-    marginTop: -20,
+    marginTop: -60,
   },
   title: {
     fontSize: 28,

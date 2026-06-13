@@ -77,7 +77,7 @@ exports.resetPassword = async (req, res, next) => {
 // @access  Public
 exports.googleLogin = async (req, res, next) => {
   try {
-    const { name, email, avatar } = req.body;
+    const { name, email, avatar: providedAvatar } = req.body;
 
     let user = await User.findOne({ email }).select('+password');
 
@@ -85,7 +85,7 @@ exports.googleLogin = async (req, res, next) => {
       user = await User.create({
         name,
         email,
-        avatar: normalizeAvatar(avatar),
+        avatar: normalizeAvatar(providedAvatar),
         authProvider: 'google',
       });
     } else if (!user.authProvider) {
@@ -108,7 +108,7 @@ const { imageUploadOptions } = require('../utils/cloudinary');
 exports.updateChannel = async (req, res, next) => {
   try {
     const { name, channelName, about } = req.body;
-    let avatar = normalizeAvatar(req.body.avatar);
+    let avatar = req.body.avatar ? normalizeAvatar(req.body.avatar) : undefined;
     let coverImage = req.body.coverImage;
 
     if (req.files) {
@@ -122,9 +122,13 @@ exports.updateChannel = async (req, res, next) => {
       }
     }
 
+    const updateData = { name, channelName, about };
+    if (avatar !== undefined) updateData.avatar = avatar;
+    if (coverImage !== undefined) updateData.coverImage = coverImage;
+
     const user = await User.findByIdAndUpdate(
       req.user.id,
-      { name, channelName, about, avatar, coverImage },
+      updateData,
       { new: true, runValidators: true }
     );
 

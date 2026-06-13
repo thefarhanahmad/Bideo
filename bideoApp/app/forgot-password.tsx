@@ -1,6 +1,6 @@
 import { showAlert } from '../components/AppAlert';
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../constants/Colors';
@@ -84,11 +84,15 @@ export default function ForgotPasswordScreen() {
               maxLength={10}
             />
             <TouchableOpacity 
-              style={styles.primaryButton} 
+              style={[styles.primaryButton, loading && { opacity: 0.7 }]} 
               onPress={handleRequestOtp}
               disabled={loading}
             >
-              <Text style={styles.buttonText}>{loading ? 'Sending...' : 'Send OTP'}</Text>
+              {loading ? (
+                <ActivityIndicator color={Colors.white} />
+              ) : (
+                <Text style={styles.buttonText}>Send OTP</Text>
+              )}
             </TouchableOpacity>
           </View>
         ) : (
@@ -124,11 +128,15 @@ export default function ForgotPasswordScreen() {
               </TouchableOpacity>
             </View>
             <TouchableOpacity 
-              style={styles.primaryButton} 
+              style={[styles.primaryButton, loading && { opacity: 0.7 }]} 
               onPress={handleResetPassword}
               disabled={loading}
             >
-              <Text style={styles.buttonText}>{loading ? 'Resetting...' : 'Reset Password'}</Text>
+              {loading ? (
+                <ActivityIndicator color={Colors.white} />
+              ) : (
+                <Text style={styles.buttonText}>Reset Password</Text>
+              )}
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setStep(1)} style={styles.backToStepBtn}>
               <Text style={styles.backToStepText}>Change Phone Number</Text>
