@@ -146,7 +146,7 @@ export default function ChannelScreen() {
           <Image source={{ uri: item.thumbnail }} style={styles.shortGridThumbnail} contentFit="cover" transition={250} />
           <View style={styles.shortViewsBadge}>
             <Ionicons name="play-outline" size={10} color={Colors.white} />
-            <Text style={styles.shortViewsText}>{item.views}</Text>
+            <Text style={styles.shortViewsText}>{formatViews(item.views || 0)}</Text>
           </View>
         </View>
         <Text style={styles.shortGridTitle} numberOfLines={2}>{item.title}</Text>
@@ -523,7 +523,7 @@ const styles = StyleSheet.create({
   },
   thumbnailContainer: {
     width: 160,
-    aspectRatio: 20 / 9,
+    aspectRatio: 16 / 9,
     borderRadius: 12,
     overflow: 'hidden',
     backgroundColor: '#F3F4F6',

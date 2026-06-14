@@ -18,7 +18,13 @@ const Users = () => {
     setLoading(true);
     setError(null);
     try{
-      const res = await fetch(API_URL + '/api/users', { credentials: 'include' });
+      const token = localStorage.getItem('admin_token');
+      const res = await fetch(API_URL + '/api/users', { 
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        credentials: 'include' 
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed');
       setUsers(data.data || []);
@@ -30,9 +36,13 @@ const Users = () => {
 
   const handleCreate = async (payload) => {
     try{
+      const token = localStorage.getItem('admin_token');
       const res = await fetch(API_URL + '/api/users', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify(payload),
         credentials: 'include'
       });
@@ -45,9 +55,13 @@ const Users = () => {
 
   const handleUpdate = async (id, payload) => {
     try{
+      const token = localStorage.getItem('admin_token');
       const res = await fetch(API_URL + '/api/users/' + id, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify(payload),
         credentials: 'include'
       });
@@ -60,7 +74,14 @@ const Users = () => {
 
   const handleDelete = async (id) => {
     try{
-      const res = await fetch(API_URL + '/api/users/' + id, { method: 'DELETE', credentials: 'include' });
+      const token = localStorage.getItem('admin_token');
+      const res = await fetch(API_URL + '/api/users/' + id, { 
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        credentials: 'include' 
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Delete failed');
       setShowDelete(false); setDeleteUser(null);

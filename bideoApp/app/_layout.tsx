@@ -69,6 +69,11 @@ export default function RootLayout() {
   // Hide the native splash as soon as our full-screen branded splash is on
   // screen, so users see a full-bleed splash instead of the small system icon.
   const onSplashLayout = useCallback(() => {
+    // Already hidden in render to avoid double splash
+  }, []);
+
+  // Hide native splash immediately so our custom AppSplash takes over
+  useEffect(() => {
     SplashScreen.hideAsync().catch(() => {});
   }, []);
 

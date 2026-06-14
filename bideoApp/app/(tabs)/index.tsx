@@ -72,7 +72,7 @@ export default function HomeScreen() {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [categoriesList, setCategoriesList] = useState<string[]>(['All']);
   const [posts, setPosts] = useState<any[]>([]);
-  
+
   const [selectedVideo, setSelectedVideo] = useState<any>(null);
   const [reportModalVisible, setReportModalVisible] = useState(false);
   const [playlistModalVisible, setPlaylistModalVisible] = useState(false);
@@ -92,7 +92,7 @@ export default function HomeScreen() {
       dispatch(fetchVideosStart());
       const data = await videoService.getVideos();
       // data: array of videos
-      console.log('Fetched videos from API:', data);
+      console.log('Fetched videos from API ✅');
       if (data && data.length > 0) {
         // normalize category to name if populated
         const normalized = data.map((v: any) => ({
@@ -125,7 +125,7 @@ export default function HomeScreen() {
       const res = await categoryService.getCategories();
       if (res && res.length > 0) {
         let names = res.map((c: any) => c.name);
-        
+
         // Fisher-Yates shuffle for randomness
         for (let i = names.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
@@ -165,7 +165,7 @@ export default function HomeScreen() {
     : [];
 
   const longVideosAndPosts = [...filteredVideos.filter(v => !v.isShort).map((item: any) => ({ ...item, itemType: 'video' })), ...filteredPosts.map((item: any) => ({ ...item, itemType: 'post' }))]
-      .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
 
   const shortsItems = filteredVideos.filter(v => v.isShort);
 
@@ -173,19 +173,19 @@ export default function HomeScreen() {
   if (selectedCategory === 'All') {
     // Top 2 items
     feedData.push(...longVideosAndPosts.slice(0, 2));
-    
+
     // Insert Ad Banner
     feedData.push({ _id: 'ad_banner_1', itemType: 'ad_banner' });
-    
+
     // Insert Shorts Shelf if we have shorts
     if (shortsItems.length > 0) {
-      feedData.push({ 
-        _id: 'shorts_shelf', 
-        itemType: 'shorts_shelf', 
-        data: shortsItems.slice(0, 4) 
+      feedData.push({
+        _id: 'shorts_shelf',
+        itemType: 'shorts_shelf',
+        data: shortsItems.slice(0, 4)
       });
     }
-    
+
     // Remaining items
     feedData.push(...longVideosAndPosts.slice(2));
   } else if (selectedCategory === 'Posts') {
@@ -260,8 +260,8 @@ export default function HomeScreen() {
             return <PostCard post={item} />;
           }
           return (
-            <VideoCard 
-              video={item} 
+            <VideoCard
+              video={item}
               onPlaylistPress={(id) => {
                 if (!isAuthenticated) return setAuthModalVisible(true);
                 setSelectedVideo(item);
@@ -286,13 +286,13 @@ export default function HomeScreen() {
         }
       />
 
-      <AuthModal 
-        visible={authModalVisible} 
-        onClose={() => setAuthModalVisible(false)} 
+      <AuthModal
+        visible={authModalVisible}
+        onClose={() => setAuthModalVisible(false)}
       />
 
-      <PlaylistModal 
-        visible={playlistModalVisible} 
+      <PlaylistModal
+        visible={playlistModalVisible}
         onClose={() => {
           setPlaylistModalVisible(false);
           setSelectedVideo(null);

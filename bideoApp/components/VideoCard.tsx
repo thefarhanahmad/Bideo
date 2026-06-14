@@ -246,7 +246,7 @@ const styles = StyleSheet.create({
   },
   thumbnail: {
     width: '100%',
-    height: 200,
+    height: 220,
     backgroundColor: '#E5E7EB',
   },
   thumbGradient: {
