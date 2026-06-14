@@ -32,6 +32,7 @@ const allowedOrigins = [
   "http://192.168.3.107:5173",
   "exp://192.168.3.107:8081",
   "https://bideo-t.netlify.app",
+  "https://bideo.in/",
 ];
 
 app.use(
@@ -66,8 +67,11 @@ app.use("/api/posts", posts);
 app.use("/api/channels", channels);
 
 // Basic route
-app.get("/", (req, res) => {
-  res.json({ message: "Welcome to Bideo API" });
+app.get("/api/health", (req, res) => {
+  res.json({
+    success: true,
+    message: "Bideo API Running",
+  });
 });
 
 // Error handling middleware
