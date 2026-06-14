@@ -7,7 +7,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "ios": {
       "supportsTablet": true,
       "icon": "./assets/icon.png",
@@ -31,6 +31,8 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "expo-router",
+      "expo-secure-store",
       [
         "react-native-google-mobile-ads",
         {
@@ -60,7 +62,7 @@
       "expo-video"
     ],
     "experiments": {
-      "reactCompiler": true
+      "reactCompiler": false
     },
     "extra": {
       "router": {},

@@ -21,25 +21,20 @@ function Startup({ onReady }: { onReady: () => void }) {
     const init = async () => {
       const startTime = Date.now();
       try {
-        // Initialize AdMob safely (skip in Expo Go)
-        try {
-          const isExpoGo = Constants.appOwnership === 'expo';
-          if (!isExpoGo) {
-            const mobileAdsModule = await import('react-native-google-mobile-ads').then(m => (m && (m.default || m)));
-            try {
-              if (typeof mobileAdsModule === 'function') {
-                mobileAdsModule().initialize().catch((e: any) => console.log('AdMob init error', e));
-              } else if (mobileAdsModule && mobileAdsModule.initialize) {
-                mobileAdsModule.initialize().catch((e: any) => console.log('AdMob init error', e));
-              }
-            } catch (e) {
-              console.log('AdMob init failed:', e);
+        // Initialize AdMob safely (skip in Expo Go or if native module missing)
+        const isExpoGo = Constants.appOwnership === 'expo';
+        if (!isExpoGo) {
+          try {
+            // Use dynamic require to prevent crash if native module is missing from binary
+            const mobileAds = require('react-native-google-mobile-ads').default;
+            if (mobileAds) {
+              await mobileAds().initialize();
             }
-          } else {
-            console.log('Expo Go detected — skipping AdMob initialization');
+          } catch (adError) {
+            console.log('AdMob native module not found or failed to init:', adError);
           }
-        } catch (adError) {
-          console.log('AdMob module not available:', adError);
+        } else {
+          console.log('Expo Go detected — skipping AdMob initialization');
         }
 
         const token = await AsyncStorage.getItem('token');
