@@ -32,7 +32,7 @@ const allowedOrigins = [
   "http://192.168.3.107:5173",
   "exp://192.168.3.107:8081",
   "https://bideo-t.netlify.app",
-  "https://bideo.in/",
+  "https://bideo.in",
 ];
 
 app.use(
