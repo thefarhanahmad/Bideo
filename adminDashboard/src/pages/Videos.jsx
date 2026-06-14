@@ -22,7 +22,13 @@ const Videos = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(API + "/api/videos", { credentials: "include" });
+      const token = localStorage.getItem('admin_token');
+      const res = await fetch(API + "/api/videos", { 
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        credentials: "include" 
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed");
       setVideos(data.data || []);
@@ -34,7 +40,11 @@ const Videos = () => {
 
   const fetchCategories = async () => {
     try {
+      const token = localStorage.getItem('admin_token');
       const res = await fetch(API + "/api/categories", {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
         credentials: "include",
       });
       const data = await res.json();
@@ -52,8 +62,12 @@ const Videos = () => {
 
   const handleUpload = async (formData) => {
     try {
+      const token = localStorage.getItem('admin_token');
       const res = await fetch(API + "/api/videos/upload", {
         method: "POST",
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
         body: formData,
         credentials: "include",
       });
@@ -68,9 +82,13 @@ const Videos = () => {
 
   const handleUpdate = async (id, payload) => {
     try {
+      const token = localStorage.getItem('admin_token');
       const res = await fetch(API + "/api/videos/" + id, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify(payload),
         credentials: "include",
       });
@@ -86,8 +104,12 @@ const Videos = () => {
 
   const handleDelete = async (id) => {
     try {
+      const token = localStorage.getItem('admin_token');
       const res = await fetch(API + "/api/videos/" + id, {
         method: "DELETE",
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
         credentials: "include",
       });
       const data = await res.json();

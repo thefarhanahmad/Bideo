@@ -18,7 +18,13 @@ const Categories = () => {
     setLoading(true);
     setError(null);
     try{
-      const res = await fetch(API_URL + '/api/categories', { credentials: 'include' });
+      const token = localStorage.getItem('admin_token');
+      const res = await fetch(API_URL + '/api/categories', { 
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        credentials: 'include' 
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed');
       setCats(data.data || []);
@@ -30,8 +36,15 @@ const Categories = () => {
 
   const handleCreate = async (payload) => {
     try{
+      const token = localStorage.getItem('admin_token');
       const res = await fetch(API_URL + '/api/categories', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), credentials: 'include'
+        method: 'POST', 
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }, 
+        body: JSON.stringify(payload), 
+        credentials: 'include'
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Create failed');
@@ -41,8 +54,15 @@ const Categories = () => {
 
   const handleUpdate = async (id, payload) => {
     try{
+      const token = localStorage.getItem('admin_token');
       const res = await fetch(API_URL + '/api/categories/' + id, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), credentials: 'include'
+        method: 'PUT', 
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }, 
+        body: JSON.stringify(payload), 
+        credentials: 'include'
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Update failed');
@@ -52,7 +72,14 @@ const Categories = () => {
 
   const handleDelete = async (id) => {
     try{
-      const res = await fetch(API_URL + '/api/categories/' + id, { method: 'DELETE', credentials: 'include' });
+      const token = localStorage.getItem('admin_token');
+      const res = await fetch(API_URL + '/api/categories/' + id, { 
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        credentials: 'include' 
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Delete failed');
       setShowDelete(false); setDeleteCat(null); fetchCats();
