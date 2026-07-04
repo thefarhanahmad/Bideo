@@ -34,6 +34,17 @@ const Users = () => {
 
   useEffect(()=>{ fetchUsers(); },[]);
 
+  const formatJoinedDate = (date) => {
+    if (!date) return '-';
+    return new Intl.DateTimeFormat('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date(date));
+  };
+
   const handleCreate = async (payload) => {
     try{
       const token = localStorage.getItem('admin_token');
@@ -106,13 +117,14 @@ const Users = () => {
       ) : (
       <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-card">
         <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] text-sm">
+        <table className="w-full min-w-[780px] text-sm">
           <thead>
             <tr className="border-b border-line bg-surface/60 text-left text-xs uppercase tracking-wider text-muted">
               <th className="p-4 font-semibold">Name</th>
-              <th className="p-4 font-semibold">Email</th>
+              <th className="p-4 font-semibold">Phone</th>
               <th className="p-4 font-semibold">Channel</th>
               <th className="p-4 font-semibold">Role</th>
+              <th className="p-4 font-semibold">Joined</th>
               <th className="p-4 text-right font-semibold">Actions</th>
             </tr>
           </thead>
@@ -120,11 +132,12 @@ const Users = () => {
             {users.map(u=> (
               <tr key={u._id} className="border-t border-line hover:bg-surface/50">
                 <td className="p-4 font-medium text-ink">{u.name}</td>
-                <td className="p-4 text-muted">{u.email || '-'}</td>
+                <td className="p-4 text-muted">{u.phone || '-'}</td>
                 <td className="p-4 text-muted">{u.channelName || '-'}</td>
                 <td className="p-4">
                   <span className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${u.role === 'admin' ? 'bg-brand-50 text-brand' : 'bg-surface text-muted'}`}>{u.role}</span>
                 </td>
+                <td className="p-4 text-muted whitespace-nowrap">{formatJoinedDate(u.createdAt)}</td>
                 <td className="p-4">
                   <div className="flex justify-end gap-2">
                     <button onClick={()=>{ setEditUser(u); setShowEdit(true); }} className="rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-200">Edit</button>
@@ -134,7 +147,7 @@ const Users = () => {
               </tr>
             ))}
             {users.length === 0 && (
-              <tr><td colSpan="5" className="p-8 text-center text-muted">No users found.</td></tr>
+              <tr><td colSpan="6" className="p-8 text-center text-muted">No users found.</td></tr>
             )}
           </tbody>
         </table>
