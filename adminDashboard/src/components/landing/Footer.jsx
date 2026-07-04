@@ -8,7 +8,7 @@ const cols = [
     links: [
       { label: "Features", href: "/#features" },
       { label: "How it works", href: "/#how" },
-      { label: "Earn while watching", href: "/#earn" },
+      { label: "Creators", href: "/#earn" },
       { label: "FAQ", href: "/#faq" },
     ],
   },
@@ -20,11 +20,16 @@ const cols = [
     ],
   },
   {
-    title: "Legal",
+    title: "Policies",
     links: [
-      { label: "Terms & Conditions", to: "/terms" },
-      { label: "Privacy Policy", to: "/privacy" },
+      { label: "Terms", to: "/terms" },
+      { label: "Privacy", to: "/privacy" },
       { label: "Community Guidelines", to: "/guidelines" },
+      { label: "Copyright / DMCA", to: "/copyright" },
+      { label: "Moderation", to: "/moderation" },
+      { label: "Cookies", to: "/cookies" },
+      { label: "Account Deletion", to: "/account-deletion" },
+      { label: "Refunds", to: "/refunds" },
     ],
   },
 ];
@@ -36,8 +41,8 @@ const Footer = () => (
         <div className="lg:col-span-2">
           <Logo dark />
           <p className="mt-4 max-w-xs text-sm leading-relaxed text-white/60">
-            The mobile-first video platform for India. Watch, create and grow
-            your audience — all in one beautiful app.
+            A mobile-first video platform for watching, creating, and building
+            communities around original content.
           </p>
           <div className="mt-6">
             <DownloadButton size="sm" />
@@ -76,7 +81,7 @@ const Footer = () => (
 
       <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-white/10 pt-8 sm:flex-row">
         <p className="text-sm text-white/50">
-          © 2026 Bideo Platform. All rights reserved.
+          Copyright 2026 Bideo Platform. All rights reserved.
         </p>
       </div>
     </div>

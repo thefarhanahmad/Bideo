@@ -3,37 +3,54 @@ import InfoPage, { Section } from "../components/InfoPage";
 const Guidelines = () => (
   <InfoPage
     title="Community Guidelines"
-    subtitle="Keeping Bideo safe, respectful and fun for everyone."
-    updated="June 12, 2026"
+    subtitle="Rules for keeping Bideo safe, respectful, and advertiser-friendly."
+    updated="July 4, 2026"
   >
-    <Section heading="Be respectful">
+    <Section heading="User responsibility">
       <p>
-        Treat other creators and viewers with respect. Harassment, bullying, hate speech and
-        threats are not allowed on Bideo.
+        Bideo is a user-generated content platform. You are responsible for the
+        videos, shorts, comments, profile details, and other content you upload or
+        share. Only post content that you have the legal right to use.
       </p>
     </Section>
-    <Section heading="Keep it legal & original">
+    <Section heading="No sexual or explicit content">
       <p>
-        Only upload content you have the rights to share. Do not post content that infringes
-        copyright, promotes illegal activity, or impersonates others.
+        Do not upload nudity, sexually explicit content, sexual exploitation,
+        or content that sexualizes minors. Child safety violations may be reported
+        to appropriate authorities.
       </p>
     </Section>
-    <Section heading="No harmful or explicit content">
+    <Section heading="No violence or dangerous content">
       <p>
-        Content that is violent, sexually explicit, or that endangers minors is strictly prohibited
-        and will be removed. Accounts that repeatedly violate this rule will be terminated.
+        Do not post graphic violence, threats, instructions for harm, dangerous
+        challenges, or content that encourages injury, self-harm, or illegal acts.
       </p>
     </Section>
-    <Section heading="No spam or misleading content">
+    <Section heading="No hate, harassment, or abuse">
       <p>
-        Do not use misleading thumbnails or titles, post spam, or attempt to artificially inflate
-        views, likes or rewards. This protects both creators and our monetization system.
+        Hate speech, bullying, targeted harassment, threats, doxxing, and content
+        attacking protected groups are not allowed.
       </p>
     </Section>
-    <Section heading="Reporting">
+    <Section heading="No spam, scams, or misleading behavior">
       <p>
-        If you see content that breaks these guidelines, use the in-app report button. Our team
-        reviews reports and takes action to keep the community safe.
+        Do not post scams, deceptive promotions, fake engagement schemes,
+        misleading thumbnails or titles, impersonation, malware, phishing, or
+        repetitive spam.
+      </p>
+    </Section>
+    <Section heading="Respect copyright">
+      <p>
+        Upload only original content or content you are authorized to share. Do
+        not upload copyrighted music, movies, TV clips, sports broadcasts, or
+        other protected material without permission.
+      </p>
+    </Section>
+    <Section heading="Reporting and enforcement">
+      <p>
+        Users can report content in the app. We may remove content, limit access,
+        issue warnings, suspend accounts, or terminate repeat violators. Severe
+        violations may result in immediate action.
       </p>
     </Section>
   </InfoPage>

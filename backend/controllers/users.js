@@ -101,7 +101,7 @@ exports.getChannelProfile = async (req, res, next) => {
 // @access Private/Admin
 exports.getUsers = async (req, res, next) => {
   try {
-    const users = await User.find().select('-__v');
+    const users = await User.find().sort('-createdAt').select('-__v');
     res.status(200).json({ success: true, count: users.length, data: users });
   } catch (err) {
     next(err);

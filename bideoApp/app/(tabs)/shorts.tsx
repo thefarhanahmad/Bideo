@@ -59,7 +59,7 @@ export default function ShortsScreen() {
   const loadShorts = async () => {
     setLoading(true);
     try {
-      const data = await api.get('/videos', { params: { type: 'short' } });
+      const data = await api.get('/videos', { params: { type: 'short', sort: 'latest' } });
       const onlyShorts = (data.data.data || [])
         .filter((v: any) => v.isShort === true) // Extra check
         .map((v: any) => ({
@@ -81,9 +81,6 @@ export default function ShortsScreen() {
         }));
       
       const orderedShorts = [...onlyShorts].sort((a: any, b: any) => {
-        const aFollowing = a?.isFollowing ? 1 : 0;
-        const bFollowing = b?.isFollowing ? 1 : 0;
-        if (aFollowing !== bFollowing) return bFollowing - aFollowing;
         const aTime = new Date(a?.createdAt || 0).getTime();
         const bTime = new Date(b?.createdAt || 0).getTime();
         return bTime - aTime;

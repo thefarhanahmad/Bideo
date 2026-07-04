@@ -4,23 +4,27 @@ import { ChevronDownIcon } from "../Icons";
 const faqs = [
   {
     q: "Is Bideo free to use?",
-    a: "Yes. Watching videos and shorts is completely free. You only need to sign in when you want to like, comment, subscribe or upload.",
+    a: "Yes. You can browse and watch videos for free. Sign-in is required for actions such as uploading, commenting, following creators, and managing your profile.",
   },
   {
     q: "How do I download the app?",
-    a: "Tap any “Download App” button on this page to get the latest Android APK. Install it on your phone and you're ready to go.",
-  },
-  {
-    q: "Do I need an account to watch?",
-    a: "No. Bideo opens straight to the home feed so you can browse and watch right away. An account is only required for actions like uploading or subscribing.",
+    a: "Use any Download App button on this website to get the Android app. Only install Bideo from links provided by Bideo or trusted app distribution channels.",
   },
   {
     q: "Can I upload my own videos?",
-    a: "Absolutely. Create your channel, then upload long videos or shorts with thumbnails, categories and visibility controls — all from your phone.",
+    a: "Yes. You may upload original videos or content you have permission to share. Content must follow our Community Guidelines, copyright rules, and applicable law.",
+  },
+  {
+    q: "Does Bideo guarantee earnings?",
+    a: "No. Bideo does not guarantee income, rewards, payouts, or audience growth. Creator monetization features are planned for eligible creators in the future and may be subject to review, policy compliance, and additional terms.",
+  },
+  {
+    q: "How does Bideo handle unsafe content?",
+    a: "Users can report content in the app. We review reports and may remove content, limit distribution, or suspend accounts that violate our policies.",
   },
   {
     q: "Is an iOS version available?",
-    a: "We're starting with Android. The app is built with a cross-platform stack, so an iOS release can follow as we grow.",
+    a: "Bideo is currently focused on Android. Future platform availability may change as the product develops.",
   },
 ];
 

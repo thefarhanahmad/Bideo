@@ -23,7 +23,7 @@ const Videos = () => {
     setError(null);
     try {
       const token = localStorage.getItem('admin_token');
-      const res = await fetch(API + "/api/videos", { 
+      const res = await fetch(API + "/api/videos?sort=latest", { 
         headers: {
           'Authorization': `Bearer ${token}`
         },
@@ -131,6 +131,17 @@ const Videos = () => {
     return map[v] || "bg-surface text-muted";
   };
 
+  const formatCreatedDate = (date) => {
+    if (!date) return "-";
+    return new Intl.DateTimeFormat("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(date));
+  };
+
   return (
     <div>
       <div className="mb-5 flex items-center justify-between">
@@ -148,7 +159,7 @@ const Videos = () => {
       ) : (
       <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-card">
         <div className="overflow-x-auto">
-        <table className="w-full min-w-[760px] text-sm">
+        <table className="w-full min-w-[900px] text-sm">
           <thead>
             <tr className="border-b border-line bg-surface/60 text-left text-xs uppercase tracking-wider text-muted">
               <th className="p-4 font-semibold">Video</th>
@@ -156,6 +167,7 @@ const Videos = () => {
               <th className="p-4 font-semibold">Category</th>
               <th className="p-4 font-semibold">Views</th>
               <th className="p-4 font-semibold">Visibility</th>
+              <th className="p-4 font-semibold">Created</th>
               <th className="p-4 text-right font-semibold">Actions</th>
             </tr>
           </thead>
@@ -177,6 +189,7 @@ const Videos = () => {
                 <td className="p-4">
                   <span className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${visibilityBadge(v.visibility || 'public')}`}>{v.visibility || 'public'}</span>
                 </td>
+                <td className="p-4 text-muted whitespace-nowrap">{formatCreatedDate(v.createdAt)}</td>
                 <td className="p-4">
                   <div className="flex justify-end gap-2">
                     <button onClick={() => { setEditVideo(v); setShowEdit(true); }} className="rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-200">Edit</button>
@@ -186,7 +199,7 @@ const Videos = () => {
               </tr>
             ))}
             {videos.length === 0 && (
-              <tr><td colSpan="6" className="p-8 text-center text-muted">No videos found.</td></tr>
+              <tr><td colSpan="7" className="p-8 text-center text-muted">No videos found.</td></tr>
             )}
           </tbody>
         </table>

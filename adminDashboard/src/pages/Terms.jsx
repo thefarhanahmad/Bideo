@@ -2,63 +2,73 @@ import InfoPage, { Section } from "../components/InfoPage";
 
 const Terms = () => (
   <InfoPage
-    title="Terms & Conditions"
-    subtitle="The rules for using the Bideo platform."
-    updated="June 12, 2026"
+    title="Terms and Conditions"
+    subtitle="The rules for using Bideo."
+    updated="July 4, 2026"
   >
-    <Section heading="1. Acceptance of Terms">
+    <Section heading="1. Acceptance of terms">
       <p>
-        By accessing or using Bideo (the “Service”), you agree to be bound by these Terms &
-        Conditions. If you do not agree to these terms, please do not use our Service.
+        By accessing or using Bideo, you agree to these Terms and Conditions and
+        any policies referenced here, including our Community Guidelines, Privacy
+        Policy, and Copyright Policy. If you do not agree, do not use Bideo.
       </p>
     </Section>
-    <Section heading="2. Your Account">
+    <Section heading="2. Accounts and eligibility">
       <p>
-        You are responsible for keeping your account credentials secure and for all activity that
-        happens under your account. You must be at least 13 years old to create an account.
+        You are responsible for your account and all activity under it. You must
+        provide accurate information and keep your login credentials secure. Users
+        must meet the minimum age required by applicable law to create an account.
       </p>
     </Section>
-    <Section heading="3. Your Content">
+    <Section heading="3. User content">
       <p>
-        You retain ownership of the content you upload. By posting content, you grant Bideo a
-        worldwide, non-exclusive, royalty-free licence to host, store, reproduce and distribute it
-        for the purpose of operating and promoting the Service.
+        You retain ownership of content you upload. By uploading content, you
+        grant Bideo a worldwide, non-exclusive, royalty-free license to host,
+        store, process, display, distribute, and promote that content for the
+        purpose of operating and improving the service.
       </p>
       <p>
-        You are solely responsible for your content and must have all rights necessary to share it.
-      </p>
-    </Section>
-    <Section heading="4. Acceptable Use">
-      <p>
-        You agree not to upload content that is illegal, harmful, hateful, infringing, or that
-        violates our Community Guidelines. We may remove content and suspend accounts that break
-        these rules.
+        You are solely responsible for your content and must have all rights,
+        permissions, and licenses needed to upload it.
       </p>
     </Section>
-    <Section heading="5. Monetization & Earnings">
+    <Section heading="4. Prohibited content and conduct">
       <p>
-        Creator monetization and viewer rewards are offered at Bideo’s discretion and may change.
-        Eligibility, payout thresholds and the payment gateway will be governed by additional terms
-        published when these features launch.
+        You may not upload or share content involving nudity or sexual content,
+        graphic violence, hate speech, harassment, threats, scams, spam,
+        impersonation, illegal activity, child safety violations, or copyrighted
+        material you do not have permission to use.
       </p>
     </Section>
-    <Section heading="6. Termination">
+    <Section heading="5. Moderation and enforcement">
       <p>
-        We may suspend or terminate your access at any time if you violate these terms or engage in
-        conduct that is harmful to other users or the Service.
+        We may review, restrict, remove, or reduce distribution of content that
+        violates our policies or creates legal, safety, or advertiser-suitability
+        risk. Repeat or severe violations may result in account suspension or
+        termination.
       </p>
     </Section>
-    <Section heading="7. Changes to These Terms">
+    <Section heading="6. Monetization">
       <p>
-        We may update these terms from time to time. Continued use of the Service after changes take
-        effect constitutes acceptance of the revised terms.
+        Bideo does not guarantee income, rewards, payouts, views, followers, or
+        audience growth. Creator monetization features are planned for eligible
+        creators in the future and may depend on eligibility, location, policy
+        compliance, advertiser suitability, review status, and separate program
+        terms.
+      </p>
+    </Section>
+    <Section heading="7. Service changes">
+      <p>
+        We may update, suspend, limit, or discontinue features at any time. We
+        may also update these Terms. Continued use of Bideo after updates means
+        you accept the revised terms.
       </p>
     </Section>
     <Section heading="8. Contact">
       <p>
-        Questions about these terms? Email us at{" "}
-        <a className="font-medium text-brand hover:underline" href="mailto:support@bideo.com">
-          support@bideo.com
+        Questions about these terms can be sent to{" "}
+        <a className="font-medium text-brand hover:underline" href="mailto:bideoapps@gmail.com">
+          bideoapps@gmail.com
         </a>
         .
       </p>

@@ -1,31 +1,37 @@
 import InfoPage, { Section } from "../components/InfoPage";
 
 const Contact = () => (
-  <InfoPage title="Contact Us" subtitle="We'd love to hear from you.">
-    <Section heading="Support">
+  <InfoPage title="Contact Us" subtitle="Support, safety, and business enquiries.">
+    <Section heading="User support">
       <p>
-        Need help with your account, an upload, or anything else? Email our support team and we’ll
-        get back to you as soon as we can.
+        For help with your account, uploads, login, or app experience, contact
+        our support team.
       </p>
       <p>
-        <a className="font-semibold text-brand hover:underline" href="mailto:support@bideo.com">
-          support@bideo.com
+        <a className="font-semibold text-brand hover:underline" href="mailto:bideoapps@gmail.com">
+          bideoapps@gmail.com
         </a>
       </p>
     </Section>
-    <Section heading="Business & creators">
+    <Section heading="Safety and policy reports">
       <p>
-        For partnerships, brand deals or creator program enquiries, reach out at{" "}
-        <a className="font-semibold text-brand hover:underline" href="mailto:partners@bideo.com">
-          partners@bideo.com
+        If you need to report unsafe content, policy violations, copyright issues,
+        impersonation, or account abuse, use the in-app report tools when possible
+        or email us with relevant links and details.
+      </p>
+      <p>
+        <a className="font-semibold text-brand hover:underline" href="mailto:bideoapps@gmail.com">
+          bideoapps@gmail.com
         </a>
-        .
       </p>
     </Section>
-    <Section heading="Feedback">
+    <Section heading="Business and creators">
       <p>
-        Have an idea to make Bideo better? We read every message — tell us what you’d love to see
-        next.
+        For partnerships, creator program enquiries, or brand enquiries, contact{" "}
+        <a className="font-semibold text-brand hover:underline" href="mailto:bideoapps@gmail.com">
+          bideoapps@gmail.com
+        </a>
+        . We do not promise creator income, paid placement, or monetization access.
       </p>
     </Section>
   </InfoPage>

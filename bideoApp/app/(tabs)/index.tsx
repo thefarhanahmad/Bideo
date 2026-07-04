@@ -90,7 +90,7 @@ export default function HomeScreen() {
   const loadVideos = async () => {
     try {
       dispatch(fetchVideosStart());
-      const data = await videoService.getVideos();
+      const data = await videoService.getVideos({ sort: 'latest' });
       // data: array of videos
       console.log('Fetched videos from API ✅');
       if (data && data.length > 0) {
@@ -100,9 +100,6 @@ export default function HomeScreen() {
           category: v.category && (v.category.name || v.category),
         }));
         const ordered = [...normalized].sort((a: any, b: any) => {
-          const aFollowing = a?.isFollowing ? 1 : 0;
-          const bFollowing = b?.isFollowing ? 1 : 0;
-          if (aFollowing !== bFollowing) return bFollowing - aFollowing;
           const aTime = new Date(a?.createdAt || 0).getTime();
           const bTime = new Date(b?.createdAt || 0).getTime();
           return bTime - aTime;
