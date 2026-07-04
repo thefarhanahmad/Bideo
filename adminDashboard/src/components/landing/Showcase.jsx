@@ -3,15 +3,14 @@ import UnsplashImage from "./UnsplashImage";
 const highlights = [
   { value: "HD", label: "Smooth playback" },
   { value: "Shorts", label: "Vertical video feed" },
-  { value: "Channels", label: "For every creator" },
-  { value: "0₹", label: "Free to start" },
+  { value: "Channels", label: "For creators" },
+  { value: "Free", label: "To start watching" },
 ];
 
 const Showcase = () => (
   <section className="py-20 sm:py-28">
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
       <div className="grid items-center gap-12 lg:grid-cols-2">
-        {/* image collage */}
         <div className="reveal grid grid-cols-2 gap-4">
           <div className="space-y-4">
             <UnsplashImage
@@ -43,18 +42,17 @@ const Showcase = () => (
           </div>
         </div>
 
-        {/* copy + highlights */}
         <div className="reveal reveal-delay-1">
           <span className="text-sm font-bold uppercase tracking-wider text-brand">
-            Built for the way India watches
+            Built for mobile viewing
           </span>
           <h2 className="mt-3 font-display text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">
-            A premium experience, optimized for mobile
+            A fast experience for viewers and creators
           </h2>
           <p className="mt-4 text-lg leading-relaxed text-muted">
-            Fast lists, lazy-loaded videos and a clean orange-and-white design make
-            Bideo feel light and effortless — whether you're binge-watching shorts or
-            uploading your latest creation.
+            Fast lists, lazy-loaded media, and a clean interface help Bideo feel
+            light and reliable whether you are browsing shorts, watching videos,
+            or uploading original work.
           </p>
 
           <div className="mt-8 grid grid-cols-2 gap-4">

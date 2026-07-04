@@ -6,6 +6,11 @@ import Privacy from './pages/Privacy';
 import Guidelines from './pages/Guidelines';
 import About from './pages/About';
 import Contact from './pages/Contact';
+import CopyrightPolicy from './pages/CopyrightPolicy';
+import ModerationPolicy from './pages/ModerationPolicy';
+import CookiePolicy from './pages/CookiePolicy';
+import AccountDeletion from './pages/AccountDeletion';
+import RefundPolicy from './pages/RefundPolicy';
 import AdminLayout from './components/AdminLayout';
 import DashboardHome from './pages/DashboardHome';
 import Users from './pages/Users';
@@ -33,6 +38,11 @@ function App() {
         <Route path="/guidelines" element={<Guidelines />} />
         <Route path="/about" element={<About />} />
         <Route path="/contact" element={<Contact />} />
+        <Route path="/copyright" element={<CopyrightPolicy />} />
+        <Route path="/moderation" element={<ModerationPolicy />} />
+        <Route path="/cookies" element={<CookiePolicy />} />
+        <Route path="/account-deletion" element={<AccountDeletion />} />
+        <Route path="/refunds" element={<RefundPolicy />} />
 
         {/* Admin login */}
         <Route

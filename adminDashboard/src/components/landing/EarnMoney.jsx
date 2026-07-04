@@ -1,7 +1,6 @@
 import {
   UploadIcon,
   EyeIcon,
-  CashIcon,
   GiftIcon,
   UsersIcon,
   TrendingUpIcon,
@@ -9,15 +8,15 @@ import {
 } from "../Icons";
 
 const creatorPerks = [
-  { icon: TrendingUpIcon, text: "Ad revenue share on your videos" },
-  { icon: UsersIcon, text: "Channel memberships from your fans" },
-  { icon: GiftIcon, text: "Tips & Super Chats from viewers" },
+  { icon: TrendingUpIcon, text: "Planned creator eligibility criteria" },
+  { icon: UsersIcon, text: "Audience and channel growth tools" },
+  { icon: GiftIcon, text: "Future monetization features for eligible creators" },
 ];
 
-const viewerPerks = [
-  { icon: CashIcon, text: "Watch-to-earn reward points" },
-  { icon: SparkIcon, text: "Daily streaks & engagement bonuses" },
-  { icon: UsersIcon, text: "Refer friends and earn together" },
+const platformPerks = [
+  { icon: EyeIcon, text: "Advertiser-friendly content standards" },
+  { icon: SparkIcon, text: "Reporting and moderation workflows" },
+  { icon: UsersIcon, text: "Community guidelines for all users" },
 ];
 
 const EarnCard = ({ tone, icon: Icon, kicker, title, desc, perks }) => (
@@ -62,14 +61,15 @@ const EarnMoney = () => (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
       <div className="reveal mx-auto max-w-2xl text-center">
         <span className="inline-flex items-center gap-2 rounded-full border border-brand/20 bg-white px-4 py-1.5 text-sm font-semibold text-brand shadow-sm">
-          <CashIcon className="h-4 w-4" /> Monetization
+          <SparkIcon className="h-4 w-4" /> For creators
         </span>
         <h2 className="mt-5 font-display text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">
-          Get paid to create — and to watch
+          Build a channel with responsible creator tools
         </h2>
         <p className="mt-4 text-lg text-muted">
-          On Bideo your time is rewarded. Creators earn from their content and
-          viewers earn just for watching and engaging. Everyone wins.
+          Bideo is designed for creators who want to publish original videos,
+          build an audience, and follow clear platform standards. Monetization
+          features are planned for eligible creators in the future.
         </p>
       </div>
 
@@ -77,24 +77,24 @@ const EarnMoney = () => (
         <EarnCard
           tone="creator"
           icon={UploadIcon}
-          kicker="For creators"
-          title="Earn by uploading"
-          desc="Turn your videos and shorts into income. The more you create and grow, the more you earn."
+          kicker="Creator growth"
+          title="Publish original content"
+          desc="Create a channel, upload videos or shorts, and build your audience over time. Results depend on content quality, consistency, audience interest, and platform rules."
           perks={creatorPerks}
         />
         <EarnCard
           tone="viewer"
           icon={EyeIcon}
-          kicker="For viewers"
-          title="Earn by watching"
-          desc="Get rewarded for the time you already spend watching. Collect points and redeem perks."
-          perks={viewerPerks}
+          kicker="Platform safety"
+          title="Designed for trust"
+          desc="Bideo uses content rules, reporting tools, and moderation practices to support a safer experience for viewers, creators, advertisers, and partners."
+          perks={platformPerks}
         />
       </div>
 
       <p className="reveal mt-8 text-center text-sm text-muted">
-        💡 Monetization &amp; the secure payment gateway are rolling out soon —
-        start building your audience today so you're ready on day one.
+        Monetization is under development and is not guaranteed. Future access may depend on
+        eligibility, policy compliance, location, review status, and applicable program terms.
       </p>
     </div>
   </section>

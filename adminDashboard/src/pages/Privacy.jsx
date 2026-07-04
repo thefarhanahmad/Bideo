@@ -3,52 +3,60 @@ import InfoPage, { Section } from "../components/InfoPage";
 const Privacy = () => (
   <InfoPage
     title="Privacy Policy"
-    subtitle="How we collect, use and protect your information."
-    updated="June 12, 2026"
+    subtitle="How Bideo collects, uses, and protects information."
+    updated="July 4, 2026"
   >
-    <Section heading="1. Information We Collect">
+    <Section heading="1. Information we collect">
       <p>
-        We collect information you provide when you create an account (such as your name, phone
-        number or email), the content you upload, and usage data such as the videos you watch and
-        interact with.
+        We may collect account information such as name, phone number, email,
+        profile details, uploaded content, comments, likes, follows, reports,
+        device information, app activity, and approximate usage data needed to
+        operate and protect Bideo.
       </p>
     </Section>
-    <Section heading="2. How We Use Your Information">
+    <Section heading="2. How we use information">
       <p>
-        We use your information to operate and improve the Service, personalize your feed,
-        recommend content, keep the platform safe, and — where you opt in — power creator
-        monetization and viewer rewards.
+        We use information to provide the service, personalize feeds, process
+        uploads, support accounts, improve performance, detect abuse, enforce
+        policies, respond to reports, and comply with legal obligations.
       </p>
     </Section>
-    <Section heading="3. Media Storage">
+    <Section heading="3. Media and service providers">
       <p>
-        Uploaded videos and images are stored with our media partner (Cloudinary) and delivered via
-        a global CDN. Media is compressed to improve performance and reduce data usage.
+        Uploaded videos and images may be stored and delivered through service
+        providers such as cloud hosting, media delivery, analytics, security, and
+        infrastructure partners. These providers process information only as
+        needed to support Bideo.
       </p>
     </Section>
-    <Section heading="4. Sharing Your Information">
+    <Section heading="4. Advertising and analytics">
       <p>
-        We do not sell your personal information. We share data only with service providers that
-        help us run Bideo, or when required by law.
+        If ads or analytics are enabled, Bideo and its partners may process
+        limited device, usage, and interaction data to measure performance,
+        prevent fraud, and support advertiser-friendly experiences. We do not
+        sell personal information.
       </p>
     </Section>
-    <Section heading="5. Your Choices">
+    <Section heading="5. User-generated content">
       <p>
-        You can edit your profile, delete your content, and request deletion of your account at any
-        time. Some information may be retained as required for legal or security reasons.
+        Content you upload, profile details, comments, and public interactions
+        may be visible to other users depending on your settings and platform
+        features. Do not upload private information you do not want others to see.
       </p>
     </Section>
-    <Section heading="6. Security">
+    <Section heading="6. Your choices">
       <p>
-        We use industry-standard measures to protect your data, including encrypted authentication
-        tokens. No method of transmission is 100% secure, but we work hard to keep your data safe.
+        You may update your profile, delete your content where available, and
+        request account deletion. Some information may be retained when required
+        for security, fraud prevention, legal compliance, dispute handling, or
+        policy enforcement.
       </p>
     </Section>
     <Section heading="7. Contact">
       <p>
         For privacy questions, contact{" "}
-        <a className="font-medium text-brand hover:underline" href="mailto:support@bideo.com">
-          support@bideo.com
+        <a className="font-medium text-brand hover:underline" href="mailto:bideoapps@gmail.com">
+          bideoapps@gmail.com
         </a>
         .
       </p>

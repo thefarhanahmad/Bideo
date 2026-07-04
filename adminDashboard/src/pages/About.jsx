@@ -3,26 +3,36 @@ import InfoPage, { Section } from "../components/InfoPage";
 const About = () => (
   <InfoPage
     title="About Bideo"
-    subtitle="The mobile-first video platform built for India."
+    subtitle="A mobile-first video platform for viewers and creators."
   >
     <Section heading="Our mission">
       <p>
-        Bideo is a community-driven video sharing platform designed for the Indian audience. We
-        want every creator — no matter how big or small — to be able to share their passion,
-        knowledge and entertainment, and to be rewarded for it.
+        Bideo is a video sharing platform built for people who want to watch,
+        create, and discover original content from their phone. Our goal is to
+        provide a simple, reliable, and respectful place for creators and viewers.
       </p>
     </Section>
-    <Section heading="What makes us different">
+    <Section heading="What Bideo offers">
       <p>
-        We’re mobile-first, fast and clean. Watching is free and open — you only sign in when you
-        want to like, comment, subscribe or upload. And with creator monetization and viewer
-        rewards on the way, your time on Bideo is time well spent.
+        Users can watch videos and shorts, create channels, upload content,
+        follow creators, build playlists, and interact with content through
+        platform features such as likes, comments, and reports.
       </p>
     </Section>
-    <Section heading="Built for creators">
+    <Section heading="Creator growth">
       <p>
-        From long-form videos to vertical shorts and community posts, Bideo gives creators the
-        tools to grow an audience and turn their content into income.
+        Bideo provides tools for creators to publish original videos and build an
+        audience over time. We do not guarantee views, followers, income, rewards,
+        or monetization. Any future monetization features may be available only to
+        eligible creators under separate program terms.
+      </p>
+    </Section>
+    <Section heading="Safety and responsibility">
+      <p>
+        Bideo is a user-generated content platform. Users are responsible for the
+        content they upload, and content must follow our Community Guidelines,
+        copyright rules, and applicable laws. Reports and moderation tools help us
+        keep the platform safer for viewers, creators, advertisers, and partners.
       </p>
     </Section>
   </InfoPage>

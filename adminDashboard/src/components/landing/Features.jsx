@@ -10,33 +10,33 @@ import {
 const features = [
   {
     icon: PlayIcon,
-    title: "Watch anything",
-    desc: "Stream long-form videos in a smooth, optimized player with a clean, distraction-free view.",
+    title: "Watch videos",
+    desc: "Discover long-form videos in a smooth player designed for everyday mobile viewing.",
   },
   {
     icon: ShortsIcon,
     title: "Shorts feed",
-    desc: "Swipe through bite-sized vertical videos with auto-play, double-tap likes and instant sharing.",
+    desc: "Browse vertical videos with familiar interactions, quick discovery, and simple sharing tools.",
   },
   {
     icon: UploadIcon,
-    title: "Upload in seconds",
-    desc: "Publish videos and shorts with thumbnails, categories and public or private visibility.",
+    title: "Upload content",
+    desc: "Publish videos and shorts with thumbnails, categories, and visibility controls.",
   },
   {
     icon: UsersIcon,
     title: "Build your channel",
-    desc: "Grow followers, customize your channel and keep your audience coming back for more.",
+    desc: "Create a profile, publish consistently, and connect with viewers who follow your work.",
   },
   {
     icon: ListIcon,
-    title: "Playlists & history",
-    desc: "Save videos into playlists, like what you love and pick up right where you left off.",
+    title: "Playlists and history",
+    desc: "Save videos into playlists, like useful content, and pick up where you left off.",
   },
   {
     icon: ShieldIcon,
-    title: "Easy & secure login",
-    desc: "Sign in with Google or phone. Watch freely — login is only needed when you take action.",
+    title: "Account controls",
+    desc: "Sign in with Google or phone when you want to upload, comment, follow, or manage your profile.",
   },
 ];
 
@@ -51,7 +51,7 @@ const Features = () => (
           One app for watching and creating
         </h2>
         <p className="mt-4 text-lg text-muted">
-          Bideo packs a full creator toolkit into a fast, mobile-first experience.
+          Bideo combines viewing, publishing, discovery, and safety tools in one mobile-first app.
         </p>
       </div>
 

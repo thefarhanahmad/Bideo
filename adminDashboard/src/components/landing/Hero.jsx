@@ -14,20 +14,19 @@ const Hero = () => (
     <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-2 lg:gap-8 lg:px-8">
       <div className="text-center lg:text-left">
         <span className="inline-flex items-center gap-2 rounded-full border border-brand/30 bg-brand/8 px-4 py-1.5 text-sm font-semibold text-brand shadow-sm">
-          <SparkIcon className="h-4 w-4" /> Earn while you watch and create
+          <SparkIcon className="h-4 w-4" /> Mobile-first video sharing
         </span>
 
         <h1 className="mt-6 font-display text-4xl font-extrabold leading-[1.1] tracking-tight text-ink sm:text-5xl lg:text-6xl">
-          Watch, upload &amp; earn on{" "}
+          Watch, upload &amp; grow on{" "}
           <span className="bg-gradient-to-r from-brand-dark to-brand bg-clip-text text-transparent">
             Bideo
           </span>
         </h1>
 
         <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-muted lg:mx-0">
-          The mobile-first video platform for India. Watch videos and shorts,
-          earn rewards while you watch, or upload your own content to grow your
-          channel and income.
+          Bideo helps people discover videos, watch shorts, create channels, and
+          share original content in a clean, mobile-first experience.
         </p>
 
         <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row lg:justify-start">
@@ -42,15 +41,15 @@ const Hero = () => (
 
         <div className="mt-8 flex flex-col items-center gap-3 text-sm text-muted lg:flex-row lg:justify-start">
           <span>
-            <strong className="text-ink">Earn rewards</strong> while you watch
+            <strong className="text-ink">Watch</strong> videos and shorts
           </span>
           <span className="hidden h-4 w-px bg-line lg:inline-block" />
           <span>
-            <strong className="text-ink">Android</strong> APK ready
+            <strong className="text-ink">Android</strong> app available
           </span>
           <span className="hidden h-4 w-px bg-line lg:inline-block" />
           <span>
-            <strong className="text-ink">Upload</strong> your videos and earn
+            <strong className="text-ink">Create</strong> your own channel
           </span>
         </div>
       </div>

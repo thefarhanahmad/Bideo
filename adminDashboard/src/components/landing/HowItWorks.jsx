@@ -4,17 +4,17 @@ const steps = [
   {
     icon: DownloadIcon,
     title: "Download the app",
-    desc: "Grab the Bideo Android app and install it in seconds. No sign-up wall to get started.",
+    desc: "Install the Bideo Android app and start browsing. An account is only needed for interactive features.",
   },
   {
     icon: PlayIcon,
     title: "Watch & create",
-    desc: "Explore the home feed and shorts, then upload your own videos when you're ready.",
+    desc: "Explore the home feed and shorts, then publish original videos when you are ready.",
   },
   {
     icon: UsersIcon,
     title: "Grow your audience",
-    desc: "Build your channel, gain followers and engage with your community as you grow.",
+    desc: "Build your channel, gain followers over time, and keep your community experience respectful.",
   },
 ];
 
