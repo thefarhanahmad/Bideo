@@ -15,6 +15,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatViews } from '../../utils/formatDate';
 import { hapticLight } from '../../utils/haptics';
+import { showAppInterstitialAd } from '../../components/AppAds';
 
 const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
 
@@ -85,11 +86,25 @@ export default function ShortsScreen() {
         const bTime = new Date(b?.createdAt || 0).getTime();
         return bTime - aTime;
       });
-      setShorts(orderedShorts);
+      
+      const withAds: any[] = [];
+      let shortCount = 0;
+      for (let i = 0; i < orderedShorts.length; i++) {
+        withAds.push(orderedShorts[i]);
+        shortCount++;
+        if (shortCount === 3) {
+          withAds.push({
+            _id: `short_ad_${i}`,
+            isAd: true,
+          });
+          shortCount = 0;
+        }
+      }
+      setShorts(withAds);
 
       // Scroll to initial short if it exists
-      if (initialShortId && orderedShorts.length > 0) {
-        const index = orderedShorts.findIndex(s => s._id === initialShortId);
+      if (initialShortId && withAds.length > 0) {
+        const index = withAds.findIndex(s => s._id === initialShortId);
         if (index !== -1) {
           setTimeout(() => {
             flatListRef.current?.scrollToIndex({ index, animated: false });
@@ -137,7 +152,7 @@ export default function ShortsScreen() {
 
     const prevShorts = [...shorts];
     setShorts(prev => prev.map(s => {
-      if (s.owner._id === channelId) {
+      if (s.owner?._id === channelId) {
         return { ...s, isFollowing: !s.isFollowing };
       }
       return s;
@@ -223,6 +238,16 @@ export default function ShortsScreen() {
       showAlert('Report sent', 'Thanks for your feedback');
     } catch (err) {
       showAlert('Error', 'Failed to send report');
+    }
+  };
+
+  const handleAdComplete = (index: number) => {
+    const nextIndex = index + 1;
+    if (nextIndex < shorts.length) {
+      setActiveVideoIndex(nextIndex);
+      setTimeout(() => {
+        flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
+      }, 100);
     }
   };
 
@@ -361,26 +386,57 @@ export default function ShortsScreen() {
           offset: containerHeight * index,
           index,
         })}
-        renderItem={({ item, index }) => (
-          <ShortItem
-            item={item}
-            index={index}
-            activeVideoIndex={activeVideoIndex}
-            containerHeight={containerHeight}
-            isFocused={isFocused}
-            insets={insets}
-            user={user}
-            onLike={handleLike}
-            onCommentClick={handleCommentClick}
-            onShare={handleShare}
-            onMenuClick={handleMenuClick}
-            onFollow={handleFollow}
-          />
-        )}
+        renderItem={({ item, index }) => {
+          if (item.isAd) {
+            return (
+              <ShortAdItem
+                containerHeight={containerHeight}
+                insets={insets}
+                onComplete={() => handleAdComplete(index)}
+              />
+            );
+          }
+          return (
+            <ShortItem
+              item={item}
+              index={index}
+              activeVideoIndex={activeVideoIndex}
+              containerHeight={containerHeight}
+              isFocused={isFocused}
+              insets={insets}
+              user={user}
+              onLike={handleLike}
+              onCommentClick={handleCommentClick}
+              onShare={handleShare}
+              onMenuClick={handleMenuClick}
+              onFollow={handleFollow}
+            />
+          );
+        }}
       />
     </View>
   );
 }
+
+const ShortAdItem = ({ containerHeight, insets, onComplete }: any) => {
+  useEffect(() => {
+    const cleanup = showAppInterstitialAd(() => {
+      onComplete();
+    });
+    return () => {
+      if (cleanup) cleanup();
+    };
+  }, []);
+
+  return (
+    <View style={[styles.shortItem, { height: containerHeight, justifyContent: 'center', alignItems: 'center', backgroundColor: 'black' }]}>
+      <ActivityIndicator size="large" color={Colors.primary} />
+      <Text style={{ color: Colors.white, marginTop: 15, fontSize: 14, fontWeight: 'bold' }}>
+        Loading Sponsor Ad...
+      </Text>
+    </View>
+  );
+};
 
 const ShortItem = ({ item, index, activeVideoIndex, containerHeight, isFocused, insets, user, onLike, onCommentClick, onShare, onMenuClick, onFollow }: any) => {
   const router = useRouter();
@@ -724,4 +780,55 @@ const styles = StyleSheet.create({
   reportCancelText: { color: Colors.textGray, fontWeight: '600' },
   reportSubmitBtn: { backgroundColor: Colors.primary, borderRadius: 999, paddingHorizontal: 22, paddingVertical: 11 },
   reportSubmitText: { color: Colors.white, fontWeight: 'bold' },
+  adCard: {
+    backgroundColor: '#1E1E1E',
+    borderRadius: 16,
+    padding: 24,
+    width: WINDOW_WIDTH - 40,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#333333',
+  },
+  adBadge: {
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 4,
+    marginBottom: 16,
+  },
+  adBadgeText: {
+    color: '#000000',
+    fontWeight: 'bold',
+    fontSize: 11,
+    letterSpacing: 1,
+  },
+  adTitle: {
+    color: Colors.white,
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  adSubtitle: {
+    color: Colors.textGray,
+    fontSize: 13,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  adBannerWrapper: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    backgroundColor: 'transparent',
+  },
+  adFooter: {
+    color: Colors.textGray,
+    fontSize: 12,
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  adChevron: {
+    marginTop: 8,
+  },
 });
