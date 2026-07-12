@@ -8,7 +8,7 @@ echo "🚀 Starting deployment of Bideo (Option A: Docker Backend + Host Nginx).
 # 1. Pull latest code (if in git repo)
 if [ -d .git ]; then
     echo "📥 Pulling latest code from Git..."
-    git pull origin main || echo "⚠️ Git pull failed. Continuing with local files..."
+    git pull origin master || echo "⚠️ Git pull failed. Continuing with local files..."
 fi
 
 # 2. Build and start backend
