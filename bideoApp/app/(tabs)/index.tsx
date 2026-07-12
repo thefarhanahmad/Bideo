@@ -166,17 +166,14 @@ export default function HomeScreen() {
 
   const shortsItems = filteredVideos.filter(v => v.isShort);
 
-  const feedData: any[] = [];
+  const baseItems: any[] = [];
   if (selectedCategory === 'All') {
     // Top 2 items
-    feedData.push(...longVideosAndPosts.slice(0, 2));
-
-    // Insert Ad Banner
-    feedData.push({ _id: 'ad_banner_1', itemType: 'ad_banner' });
+    baseItems.push(...longVideosAndPosts.slice(0, 2));
 
     // Insert Shorts Shelf if we have shorts
     if (shortsItems.length > 0) {
-      feedData.push({
+      baseItems.push({
         _id: 'shorts_shelf',
         itemType: 'shorts_shelf',
         data: shortsItems.slice(0, 4)
@@ -184,11 +181,19 @@ export default function HomeScreen() {
     }
 
     // Remaining items
-    feedData.push(...longVideosAndPosts.slice(2));
+    baseItems.push(...longVideosAndPosts.slice(2));
   } else if (selectedCategory === 'Posts') {
-    feedData.push(...filteredPosts.map(p => ({ ...p, itemType: 'post' })));
+    baseItems.push(...filteredPosts.map(p => ({ ...p, itemType: 'post' })));
   } else {
-    feedData.push(...filteredVideos.filter(v => !v.isShort).map(v => ({ ...v, itemType: 'video' })));
+    baseItems.push(...filteredVideos.filter(v => !v.isShort).map(v => ({ ...v, itemType: 'video' })));
+  }
+
+  const feedData: any[] = [];
+  for (let i = 0; i < baseItems.length; i++) {
+    feedData.push(baseItems[i]);
+    if ((i + 1) % 5 === 0) {
+      feedData.push({ _id: `ad_banner_${i}`, itemType: 'ad_banner' });
+    }
   }
 
   const renderShortsShelf = (shorts: any[]) => (

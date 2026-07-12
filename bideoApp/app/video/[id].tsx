@@ -16,7 +16,7 @@ import AuthModal from '../../components/AuthModal';
 import PlaylistModal from '../../components/PlaylistModal';
 import { formatTimeAgo, formatViews } from '../../utils/formatDate';
 import { hapticLight } from '../../utils/haptics';
-import { AppAdBanner } from '../../components/AppAds';
+import { AppInterstitialAd } from '../../components/AppAds';
 
 const FALLBACK_IMAGE = 'https://via.placeholder.com/80x80.png?text=User';
 
@@ -39,6 +39,22 @@ export default function VideoScreen() {
   const [isLiked, setIsLiked] = useState(false);
   const [isDisliked, setIsDisliked] = useState(false);
 
+  // Ad states
+  const [showingAd, setShowingAd] = useState(false);
+  const [adCompleted, setAdCompleted] = useState(false);
+
+  const playMainVideo = useCallback(() => {
+    if (!video?.videoUrl) return;
+    setShowingAd(false);
+    setAdCompleted(true);
+    try {
+      player.replace(video.videoUrl);
+      player.play();
+    } catch (err) {
+      console.log('Main video load error:', err);
+    }
+  }, [video?.videoUrl, player]);
+
   useEffect(() => {
     if (id) {
       loadVideoData();
@@ -48,12 +64,15 @@ export default function VideoScreen() {
   // Load the source into the player once the video URL is available.
   useEffect(() => {
     if (!video?.videoUrl) return;
+    
+    // Pause player (in case it was playing a previous video)
     try {
-      player.replace(video.videoUrl);
-      player.play();
-    } catch (err) {
-      console.log('Video load error:', err);
-    }
+      player.pause();
+    } catch {}
+
+    // Reset ad state and show AdMob interstitial ad first
+    setAdCompleted(false);
+    setShowingAd(true);
   }, [video?.videoUrl, player]);
 
   useFocusEffect(
@@ -290,16 +309,25 @@ export default function VideoScreen() {
 
   return (
     <View style={styles.container}>
-      <VideoView
-        player={player}
-        style={styles.videoPlayer}
-        contentFit="contain"
-        nativeControls
-        allowsFullscreen
-        allowsPictureInPicture
-        onFullscreenEnter={handleFullscreenEnter}
-        onFullscreenExit={handleFullscreenExit}
-      />
+      <View style={styles.videoPlayerContainer}>
+        {showingAd ? (
+          <View style={styles.adPlayerPlaceholder}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+            <Text style={{ color: Colors.white, marginTop: 10, fontSize: 13, fontWeight: '600' }}>Loading Sponsor Ad...</Text>
+          </View>
+        ) : (
+          <VideoView
+            player={player}
+            style={styles.videoPlayer}
+            contentFit="contain"
+            nativeControls
+            allowsFullscreen
+            allowsPictureInPicture
+            onFullscreenEnter={handleFullscreenEnter}
+            onFullscreenExit={handleFullscreenExit}
+          />
+        )}
+      </View>
 
       <FlatList
         ListHeaderComponent={
@@ -308,8 +336,6 @@ export default function VideoScreen() {
             <Text style={styles.metadata}>
               {formatViews(video.views || 0)} views • {formatTimeAgo(video.createdAt)}
             </Text>
-
-            <AppAdBanner />
 
             <ScrollView
               horizontal
@@ -398,6 +424,10 @@ export default function VideoScreen() {
         onClose={() => setPlaylistModalVisible(false)}
         videoId={video._id}
       />
+      <AppInterstitialAd 
+        visible={showingAd} 
+        onClose={playMainVideo} 
+      />
     </View>
   );
 }
@@ -407,10 +437,73 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.white,
   },
-  videoPlayer: {
+  videoPlayerContainer: {
+    position: 'relative',
     width: '100%',
     height: 220,
     backgroundColor: 'black',
+  },
+  adPlayerPlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'black',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  videoPlayer: {
+    width: '100%',
+    height: '100%',
+  },
+  adOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'space-between',
+    padding: 10,
+    zIndex: 10,
+  },
+  adBadgeContainer: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    marginTop: 10,
+    marginLeft: 10,
+  },
+  adBadgeLabel: {
+    color: '#000000',
+    fontWeight: 'bold',
+    fontSize: 12,
+  },
+  adActionPanel: {
+    alignSelf: 'flex-end',
+    marginBottom: 10,
+    marginRight: 10,
+  },
+  skipAdButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 4,
+  },
+  skipAdText: {
+    color: Colors.white,
+    fontWeight: 'bold',
+    fontSize: 13,
+  },
+  skipCountdown: {
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 4,
+  },
+  skipCountdownText: {
+    color: Colors.white,
+    fontSize: 12,
+    fontWeight: '600',
   },
   centerContainer: {
     flex: 1,
