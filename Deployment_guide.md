@@ -181,7 +181,7 @@ cd ~/Bideo
 
 The `./deploy.sh` script will automatically:
 
-1. Pull the latest code from `origin main`.
+1. Pull the latest code from `origin master`.
 2. Rebuild and restart the backend container (`bideo-backend`).
 3. Build the frontend inside Docker using `VITE_API_URL=https://bideo.in/api`.
 4. Replace the live files in `/var/www/bideo` with the new build.
