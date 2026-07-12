@@ -16,7 +16,7 @@ import AuthModal from '../../components/AuthModal';
 import PlaylistModal from '../../components/PlaylistModal';
 import { formatTimeAgo, formatViews } from '../../utils/formatDate';
 import { hapticLight } from '../../utils/haptics';
-import { showAppInterstitialAd } from '../../components/AppAds';
+import { AppInterstitialAd } from '../../components/AppAds';
 
 const FALLBACK_IMAGE = 'https://via.placeholder.com/80x80.png?text=User';
 
@@ -73,12 +73,7 @@ export default function VideoScreen() {
     // Reset ad state and show AdMob interstitial ad first
     setAdCompleted(false);
     setShowingAd(true);
-
-    showAppInterstitialAd(() => {
-      // Callback: when ad is closed or fails to load, start playing the main video
-      playMainVideo();
-    });
-  }, [video?.videoUrl, player, playMainVideo]);
+  }, [video?.videoUrl, player]);
 
   useFocusEffect(
     useCallback(() => {
@@ -428,6 +423,10 @@ export default function VideoScreen() {
         visible={playlistModalVisible} 
         onClose={() => setPlaylistModalVisible(false)}
         videoId={video._id}
+      />
+      <AppInterstitialAd 
+        visible={showingAd} 
+        onClose={playMainVideo} 
       />
     </View>
   );

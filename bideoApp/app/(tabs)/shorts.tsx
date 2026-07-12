@@ -15,7 +15,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatViews } from '../../utils/formatDate';
 import { hapticLight } from '../../utils/haptics';
-import { showAppInterstitialAd } from '../../components/AppAds';
+import { AppInterstitialAd } from '../../components/AppAds';
 
 const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
 
@@ -392,6 +392,7 @@ export default function ShortsScreen() {
               <ShortAdItem
                 containerHeight={containerHeight}
                 insets={insets}
+                isActive={activeVideoIndex === index}
                 onComplete={() => handleAdComplete(index)}
               />
             );
@@ -418,22 +419,14 @@ export default function ShortsScreen() {
   );
 }
 
-const ShortAdItem = ({ containerHeight, insets, onComplete }: any) => {
-  useEffect(() => {
-    const cleanup = showAppInterstitialAd(() => {
-      onComplete();
-    });
-    return () => {
-      if (cleanup) cleanup();
-    };
-  }, []);
-
+const ShortAdItem = ({ containerHeight, insets, isActive, onComplete }: any) => {
   return (
     <View style={[styles.shortItem, { height: containerHeight, justifyContent: 'center', alignItems: 'center', backgroundColor: 'black' }]}>
       <ActivityIndicator size="large" color={Colors.primary} />
       <Text style={{ color: Colors.white, marginTop: 15, fontSize: 14, fontWeight: 'bold' }}>
         Loading Sponsor Ad...
       </Text>
+      <AppInterstitialAd visible={isActive} onClose={onComplete} />
     </View>
   );
 };
