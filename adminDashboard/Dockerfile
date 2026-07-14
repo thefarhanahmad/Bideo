@@ -13,7 +13,7 @@ RUN npm install
 COPY . .
 
 # Declare build arguments
-ARG VITE_API_URL=https://bideo.in/api
+ARG VITE_API_URL=https://bideo.in
 ARG VITE_APP_DOWNLOAD_URL
 
 # Set environment variables for build step

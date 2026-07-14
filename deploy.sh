@@ -8,7 +8,9 @@ echo "🚀 Starting deployment of Bideo (Option A: Docker Backend + Host Nginx).
 # 1. Pull latest code (if in git repo)
 if [ -d .git ]; then
     echo "📥 Pulling latest code from Git..."
-    git pull origin master || echo "⚠️ Git pull failed. Continuing with local files..."
+    git fetch origin
+    git checkout production
+    git pull origin production || echo "⚠️ Git pull failed. Continuing with local files..."
 fi
 
 # 2. Build and start backend
@@ -18,7 +20,7 @@ docker compose up -d backend --build
 # 3. Build frontend Docker image
 echo "⚛️ Building frontend Docker image..."
 docker build \
-  --build-arg VITE_API_URL=https://bideo.in/api \
+  --build-arg VITE_API_URL=https://bideo.in \
   -t bideo-frontend ./adminDashboard
 
 # 4. Clear old live files
