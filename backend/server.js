@@ -1,3 +1,11 @@
+if (!globalThis.crypto) {
+  try {
+    globalThis.crypto = require("crypto").webcrypto || require("crypto");
+  } catch (err) {
+    console.warn("Failed to polyfill globalThis.crypto:", err.message);
+  }
+}
+
 const app = require("./app");
 const connectDB = require("./config/db");
 const connectCloudinary = require("./config/cloudinary");
