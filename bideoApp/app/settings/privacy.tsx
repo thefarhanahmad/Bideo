@@ -4,41 +4,37 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Colors from '../../constants/Colors';
 
-export default function TermsScreen() {
+export default function PrivacyScreen() {
   const router = useRouter();
 
   const sections = [
     {
-      title: '1. Acceptance of terms',
-      content: 'By accessing or using Bideo, you agree to these Terms and Conditions and any policies referenced here, including our Community Guidelines, Privacy Policy, and Copyright Policy. If you do not agree, do not use Bideo.'
+      title: '1. Information we collect',
+      content: 'We may collect account information such as name, phone number, email, profile details, uploaded content, comments, likes, follows, reports, device information, app activity, and approximate usage data needed to operate and protect Bideo.'
     },
     {
-      title: '2. Accounts and eligibility',
-      content: 'You are responsible for your account and all activity under it. You must provide accurate information and keep your login credentials secure. Users must meet the minimum age required by applicable law to create an account.'
+      title: '2. How we use information',
+      content: 'We use information to provide the service, personalize feeds, process uploads, support accounts, improve performance, detect abuse, enforce policies, respond to reports, and comply with legal obligations.'
     },
     {
-      title: '3. User content',
-      content: 'You retain ownership of content you upload. By uploading content, you grant Bideo a worldwide, non-exclusive, royalty-free license to host, store, process, display, distribute, and promote that content for the purpose of operating and improving the service.\n\nYou are solely responsible for your content and must have all rights, permissions, and licenses needed to upload it.'
+      title: '3. Media and service providers',
+      content: 'Uploaded videos and images may be stored and delivered through service providers such as cloud hosting, media delivery, analytics, security, and infrastructure partners. These providers process information only as needed to support Bideo.'
     },
     {
-      title: '4. Prohibited content and conduct',
-      content: 'You may not upload or share content involving nudity or sexual content, graphic violence, hate speech, harassment, threats, scams, spam, impersonation, illegal activity, child safety violations, or copyrighted material you do not have permission to use.'
+      title: '4. Advertising and analytics',
+      content: 'If ads or analytics are enabled, Bideo and its partners may process limited device, usage, and interaction data to measure performance, prevent fraud, and support advertiser-friendly experiences. We do not sell personal information.'
     },
     {
-      title: '5. Moderation and enforcement',
-      content: 'We may review, restrict, remove, or reduce distribution of content that violates our policies or creates legal, safety, or advertiser-suitability risk. Repeat or severe violations may result in account suspension or termination.'
+      title: '5. User-generated content',
+      content: 'Content you upload, profile details, comments, and public interactions may be visible to other users depending on your settings and platform features. Do not upload private information you do not want others to see.'
     },
     {
-      title: '6. Monetization',
-      content: 'Bideo does not guarantee income, rewards, payouts, views, followers, or audience growth. Creator monetization features are planned for eligible creators in the future and may depend on eligibility, location, policy compliance, advertiser suitability, review status, and separate program terms.'
+      title: '6. Your choices',
+      content: 'You may update your profile, delete your content where available, and request account deletion. Some information may be retained when required for security, fraud prevention, legal compliance, dispute handling, or policy enforcement.'
     },
     {
-      title: '7. Service changes',
-      content: 'We may update, suspend, limit, or discontinue features at any time. We may also update these Terms. Continued use of Bideo after updates means you accept the revised terms.'
-    },
-    {
-      title: '8. Contact',
-      content: 'Questions about these terms can be sent to bideoapps@gmail.com.'
+      title: '7. Contact',
+      content: 'For privacy questions, contact bideoapps@gmail.com.'
     }
   ];
 
@@ -48,13 +44,13 @@ export default function TermsScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Terms & Conditions</Text>
+        <Text style={styles.headerTitle}>Privacy Policy</Text>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.topCard}>
-           <Ionicons name="document-text" size={50} color={Colors.primary} />
-           <Text style={styles.cardTitle}>Terms of Service</Text>
+           <Ionicons name="shield-checkmark" size={50} color={Colors.primary} />
+           <Text style={styles.cardTitle}>Privacy Policy</Text>
            <Text style={styles.lastUpdated}>Last updated: July 4, 2026</Text>
         </View>
         

@@ -5,6 +5,7 @@ const VideoView = require("../models/VideoView");
 const VideoReport = require("../models/VideoReport");
 const Notification = require("../models/Notification");
 const cloudinary = require("cloudinary").v2;
+const fs = require("fs");
 const {
   deleteFromCloudinary,
   optimizedVideoUrl,
@@ -109,8 +110,32 @@ const createNotification = async ({
 exports.searchVideos = async (req, res, next) => {
   try {
     const { q } = req.query;
-    if (!q) return res.status(200).json({ success: true, count: 0, data: [] });
+    if (!q) return res.status(200).json({ success: true, count: 0, data: { channels: [], videos: [] } });
 
+    // 1. Search channels (users with a channelName or matching name)
+    const channels = await User.find({
+      $or: [
+        { channelName: { $regex: q, $options: "i" } },
+        { name: { $regex: q, $options: "i" } },
+      ],
+    }).select("name avatar channelName followersCount about");
+
+    const channelsData = [];
+    for (let c of channels) {
+      const channelObj = c.toObject();
+      if (req.user) {
+        const isFollowing = await Follower.findOne({
+          follower: req.user.id,
+          channel: c.id,
+        });
+        channelObj.isFollowing = !!isFollowing;
+      } else {
+        channelObj.isFollowing = false;
+      }
+      channelsData.push(channelObj);
+    }
+
+    // 2. Search videos
     const videos = await Video.find({
       $or: [
         { title: { $regex: q, $options: "i" } },
@@ -124,9 +149,14 @@ exports.searchVideos = async (req, res, next) => {
       .sort("-createdAt");
 
     const results = await decorateVideos(videos, req);
-    res
-      .status(200)
-      .json({ success: true, count: results.length, data: results });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        channels: channelsData,
+        videos: results,
+      },
+    });
   } catch (err) {
     next(err);
   }
@@ -321,6 +351,7 @@ exports.toggleDislike = async (req, res, next) => {
 };
 
 exports.uploadVideo = async (req, res, next) => {
+  const tempFiles = [];
   try {
     if (!req.files || !req.files.video || !req.files.video[0]) {
       return res
@@ -328,12 +359,18 @@ exports.uploadVideo = async (req, res, next) => {
         .json({ success: false, message: "Please upload a video file" });
     }
 
+    tempFiles.push(req.files.video[0].path);
+    if (req.files.thumbnail && req.files.thumbnail[0]) {
+      tempFiles.push(req.files.thumbnail[0].path);
+    }
+
     const uploadType = req.body.uploadType === "short" ? "short" : "video";
-    const videoResult = await cloudinary.uploader.upload(
+    const videoResult = await cloudinary.uploader.upload_large(
       req.files.video[0].path,
       {
         resource_type: "video",
         folder: "bideo/videos",
+        chunk_size: 6000000, // 6MB chunks
       },
     );
 
@@ -389,10 +426,19 @@ exports.uploadVideo = async (req, res, next) => {
     res.status(201).json({ success: true, data: video });
   } catch (err) {
     next(err);
+  } finally {
+    for (const filePath of tempFiles) {
+      fs.unlink(filePath, (err) => {
+        if (err && err.code !== 'ENOENT') {
+          console.error(`Failed to delete temp file ${filePath}:`, err);
+        }
+      });
+    }
   }
 };
 
 exports.updateVideo = async (req, res, next) => {
+  const tempFiles = [];
   try {
     let video = await Video.findById(req.params.id);
     if (!video)
@@ -415,6 +461,7 @@ exports.updateVideo = async (req, res, next) => {
       updates.tags = normalizeTags(req.body.tags);
 
     if (req.files && req.files.thumbnail && req.files.thumbnail[0]) {
+      tempFiles.push(req.files.thumbnail[0].path);
       const thumbnailResult = await cloudinary.uploader.upload(
         req.files.thumbnail[0].path,
         imageUploadOptions("bideo/thumbnails"),
@@ -430,6 +477,14 @@ exports.updateVideo = async (req, res, next) => {
     res.status(200).json({ success: true, data: video });
   } catch (err) {
     next(err);
+  } finally {
+    for (const filePath of tempFiles) {
+      fs.unlink(filePath, (err) => {
+        if (err && err.code !== 'ENOENT') {
+          console.error(`Failed to delete temp file ${filePath}:`, err);
+        }
+      });
+    }
   }
 };
 

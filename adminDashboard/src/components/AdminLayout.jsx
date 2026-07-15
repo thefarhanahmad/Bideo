@@ -10,6 +10,7 @@ import {
   LogoutIcon,
   MenuIcon,
   CloseIcon,
+  TvIcon,
 } from "./Icons";
 
 const nav = [
@@ -18,6 +19,7 @@ const nav = [
   { to: "/admin/categories", label: "Categories", icon: TagIcon },
   { to: "/admin/videos", label: "Videos", icon: PlayIcon },
   { to: "/admin/reports", label: "Reports", icon: FlagIcon },
+  { to: "/admin/ads", label: "Ads", icon: TvIcon },
 ];
 
 const AdminLayout = () => {

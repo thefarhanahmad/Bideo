@@ -195,6 +195,7 @@ const CommentList: React.FC<CommentListProps> = ({ videoId, postId, onCommentAdd
           <TextInput
             style={styles.input}
             placeholder="Add a comment..."
+            placeholderTextColor={Colors.textGray}
             value={newComment}
             onChangeText={setNewComment}
             multiline
@@ -273,6 +274,7 @@ const CommentList: React.FC<CommentListProps> = ({ videoId, postId, onCommentAdd
                 <TextInput
                   style={styles.replyComposerInput}
                   placeholder="Edit your comment..."
+                  placeholderTextColor={Colors.textGray}
                   value={editText}
                   onChangeText={setEditText}
                   multiline
@@ -337,6 +339,7 @@ const CommentList: React.FC<CommentListProps> = ({ videoId, postId, onCommentAdd
                   ref={replyInputRef}
                   style={styles.replyComposerInput}
                   placeholder="Write a reply..."
+                  placeholderTextColor={Colors.textGray}
                   value={replyText}
                   onChangeText={setReplyText}
                   multiline

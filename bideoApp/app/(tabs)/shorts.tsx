@@ -218,7 +218,7 @@ export default function ShortsScreen() {
   const handleEdit = () => {
     if (!selectedShort) return;
     setMenuVisible(false);
-    router.push({ pathname: '/upload', params: { editId: selectedShort._id } });
+    router.push({ pathname: '/upload-video', params: { editId: selectedShort._id, type: 'short' } });
   };
 
   const handleReport = () => {

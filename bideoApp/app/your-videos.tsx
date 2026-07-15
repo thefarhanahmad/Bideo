@@ -98,7 +98,7 @@ export default function YourVideosScreen() {
   const handleEdit = () => {
     const id = selectedVideo?._id;
     setMenuVisible(false);
-    router.push({ pathname: '/upload', params: { editId: id }});
+    router.push({ pathname: '/upload-video', params: { editId: id }});
   };
 
   const openMenu = (video: any) => {

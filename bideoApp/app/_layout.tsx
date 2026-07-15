@@ -87,6 +87,9 @@ export default function RootLayout() {
             <Stack.Screen name="video/[id]" options={{ presentation: 'modal' }} />
             <Stack.Screen name="channel/[id]" />
             <Stack.Screen name="notifications" />
+            <Stack.Screen name="upload-video" />
+            <Stack.Screen name="upload-post" />
+            <Stack.Screen name="settings/privacy" />
           </Stack>
           <AlertHost />
         </GestureHandlerRootView>

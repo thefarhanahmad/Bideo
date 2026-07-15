@@ -156,6 +156,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onLoginSuccess 
                 <TextInput
                   style={styles.input}
                   placeholder="Full Name"
+                  placeholderTextColor={Colors.textGray}
                   value={name}
                   onChangeText={setName}
                   autoCorrect={false}
@@ -165,6 +166,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onLoginSuccess 
               <TextInput
                 style={styles.input}
                 placeholder="Phone Number"
+                placeholderTextColor={Colors.textGray}
                 value={phone}
                 onChangeText={(v) => setPhone(v.replace(/\D/g, '').slice(0, 10))}
                 keyboardType="phone-pad"
@@ -176,6 +178,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onLoginSuccess 
                 <TextInput
                   style={[styles.input, styles.passwordInput]}
                   placeholder="Password"
+                  placeholderTextColor={Colors.textGray}
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry={!showPassword}

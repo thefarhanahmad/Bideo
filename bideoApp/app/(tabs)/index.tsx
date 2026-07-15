@@ -309,6 +309,7 @@ export default function HomeScreen() {
             <TextInput
               style={styles.reportInput}
               placeholder="Tell us what is wrong"
+              placeholderTextColor={Colors.textGray}
               value={reportReason}
               onChangeText={setReportReason}
               multiline

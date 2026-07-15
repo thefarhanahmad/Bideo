@@ -88,7 +88,7 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, onMenuPress, onPlaylistPre
     if (onEditPress) {
       onEditPress(video);
     } else {
-      router.push({ pathname: '/upload', params: { editId: video._id } });
+      router.push({ pathname: '/upload-video', params: { editId: video._id } });
     }
   };
 

@@ -81,3 +81,6 @@ export const TrendingUpIcon = (p) => (
 export const SparkIcon = (p) => (
   <Svg {...p}><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" /></Svg>
 );
+export const TvIcon = (p) => (
+  <Svg {...p}><rect x="2" y="7" width="20" height="13" rx="2" ry="2" /><polyline points="17 2 12 7 7 2" /><line x1="12" y1="22" x2="12" y2="20" /><line x1="8" y1="22" x2="16" y2="22" /></Svg>
+);

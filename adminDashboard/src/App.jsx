@@ -17,6 +17,7 @@ import Users from './pages/Users';
 import Categories from './pages/Categories';
 import Videos from './pages/Videos';
 import Reports from './pages/Reports';
+import Ads from './pages/Ads';
 import './App.css';
 
 const isAuthed = () => !!localStorage.getItem('admin_token');
@@ -57,6 +58,7 @@ function App() {
           <Route path="categories" element={<Categories />} />
           <Route path="videos" element={<Videos />} />
           <Route path="reports" element={<Reports />} />
+          <Route path="ads" element={<Ads />} />
         </Route>
 
         {/* Fallback */}

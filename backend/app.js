@@ -22,6 +22,7 @@ const playlist = require("./routes/playlist");
 const notifications = require("./routes/notifications");
 const posts = require("./routes/posts");
 const channels = require("./routes/channels");
+const ads = require("./routes/ads");
 
 // Middlewares
 app.use(express.json());
@@ -65,6 +66,7 @@ app.use("/api/playlists", playlist);
 app.use("/api/notifications", notifications);
 app.use("/api/posts", posts);
 app.use("/api/channels", channels);
+app.use("/api/ads", ads);
 
 // Basic route
 app.get("/api/health", (req, res) => {

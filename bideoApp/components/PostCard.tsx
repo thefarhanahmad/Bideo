@@ -77,7 +77,7 @@ const PostCard = ({ post, onDelete }: PostCardProps) => {
 
   const handleEdit = () => {
     setMenuVisible(false);
-    router.push({ pathname: '/upload', params: { editPostId: post._id } });
+    router.push({ pathname: '/upload-post', params: { editPostId: post._id } });
   };
 
   const handleDelete = () => {

@@ -63,6 +63,12 @@ export default function SettingsScreen() {
       onPress: () => router.push('/settings/terms'),
       color: '#FF7F50',
     },
+    {
+      title: 'Privacy Policy',
+      icon: 'shield-checkmark-outline',
+      onPress: () => router.push('/settings/privacy'),
+      color: '#8A2BE2',
+    },
   ];
 
   return (
