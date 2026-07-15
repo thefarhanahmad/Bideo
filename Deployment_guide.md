@@ -152,6 +152,18 @@ sudo apt install -y nginx certbot python3-certbot-nginx
    CLOUDINARY_API_SECRET=your_api_secret
    ```
 
+3. Create/edit the frontend `.env` file on the VPS (necessary for the app download button):
+   ```bash
+   mkdir -p ~/Bideo/adminDashboard
+   nano ~/Bideo/adminDashboard/.env
+   ```
+4. Paste the production download URL (and optionally any custom API URL if needed):
+
+   ```env
+   # Public Android APK download link shown on the landing page
+   VITE_APP_DOWNLOAD_URL=https://expo.dev/accounts/farhan_01/projects/bideoApp/builds/51a16720-a2d0-4611-a40e-62795bc06fd8
+   ```
+
 ### Step 6: Initial Build and Deployment
 
 Make the deployment script executable and run it:

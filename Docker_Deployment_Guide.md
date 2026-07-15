@@ -41,8 +41,9 @@ We have provided two deployment options. Choose the one that best fits your VPS:
 
 ## 🚀 Step-by-Step Deployment: Option A (Recommended)
 
-### Step 1: Configure Backend Environment
-Create/edit `~/Bideo/backend/.env` on your VPS and configure your production environment variables (MongoDB URI, JWT secret, Cloudinary, etc.):
+### Step 1: Configure Environment Variables
+
+1. **Backend Environment**: Create/edit `~/Bideo/backend/.env` on your VPS and configure backend production environment variables (MongoDB URI, JWT, Cloudinary, etc.):
 
 ```env
 PORT=5000
@@ -51,6 +52,13 @@ MONGODB_URI=mongodb+srv://...
 JWT_SECRET=your_super_secret_key
 JWT_EXPIRE=30d
 CLIENT_URL=https://bideo.in
+```
+
+2. **Frontend Environment**: Create/edit `~/Bideo/adminDashboard/.env` on your VPS to configure the Android APK download link:
+
+```env
+# Public Android APK download link shown on the landing page
+VITE_APP_DOWNLOAD_URL=https://expo.dev/accounts/farhan_01/projects/bideoApp/builds/51a16720-a2d0-4611-a40e-62795bc06fd8
 ```
 
 ### Step 2: Run the Automation Script (Quickest)
