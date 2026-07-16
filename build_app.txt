@@ -1,3 +1,13 @@
 eas build:configure
 
 eas build --platform android --profile preview
+
+
+Bideo@#12345
+ssh root@200.97.169.18
+
+irfantechnical.in
+145.79.211.185
+
+
+https://expo.dev/accounts/farhan_01/projects/bideoApp/builds/50f75fb3-c108-496d-9178-8a647897e425
