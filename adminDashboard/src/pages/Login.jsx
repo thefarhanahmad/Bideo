@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { API_URL } from '../config';
 import Logo from '../components/Logo';
@@ -10,6 +10,12 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (localStorage.getItem('admin_token')) {
+      navigate('/admin', { replace: true });
+    }
+  }, [navigate]);
 
   const submit = async (e) => {
     e.preventDefault();

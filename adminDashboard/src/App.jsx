@@ -20,10 +20,9 @@ import Reports from './pages/Reports';
 import Ads from './pages/Ads';
 import './App.css';
 
-const isAuthed = () => !!localStorage.getItem('admin_token');
-
 const PrivateRoute = ({ children }) => {
-  return isAuthed() ? children : <Navigate to="/login" replace />;
+  const token = localStorage.getItem('admin_token');
+  return token ? children : <Navigate to="/login" replace />;
 };
 
 function App() {
@@ -46,10 +45,7 @@ function App() {
         <Route path="/refunds" element={<RefundPolicy />} />
 
         {/* Admin login */}
-        <Route
-          path="/login"
-          element={isAuthed() ? <Navigate to="/admin" replace /> : <Login />}
-        />
+        <Route path="/login" element={<Login />} />
 
         {/* Protected admin dashboard */}
         <Route path="/admin" element={<PrivateRoute><AdminLayout /></PrivateRoute>}>
