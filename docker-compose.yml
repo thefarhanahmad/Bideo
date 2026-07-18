@@ -14,8 +14,8 @@ services:
     env_file:
       - ./backend/.env
     volumes:
-      # Optional: mount upload directory if you save uploads locally
-      - backend-uploads:/app/public/uploads
+      # Mount local upload directory for host visibility and database persistence
+      - ./backend/uploads:/app/uploads
     networks:
       - bideo-network
 
@@ -43,9 +43,6 @@ services:
   #     - backend
   #   networks:
   #     - bideo-network
-
-volumes:
-  backend-uploads:
 
 networks:
   bideo-network:
