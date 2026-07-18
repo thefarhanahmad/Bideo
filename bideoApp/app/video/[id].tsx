@@ -43,12 +43,16 @@ export default function VideoScreen() {
   const [showingAd, setShowingAd] = useState(false);
   const [adCompleted, setAdCompleted] = useState(false);
 
-  const playMainVideo = useCallback(() => {
+  const playMainVideo = useCallback(async () => {
     if (!video?.videoUrl) return;
     setShowingAd(false);
     setAdCompleted(true);
     try {
-      player.replace(video.videoUrl);
+      if (typeof player.replaceAsync === 'function') {
+        await player.replaceAsync(video.videoUrl);
+      } else {
+        player.replace(video.videoUrl);
+      }
       player.play();
     } catch (err) {
       console.log('Main video load error:', err);
@@ -321,7 +325,7 @@ export default function VideoScreen() {
             style={styles.videoPlayer}
             contentFit="contain"
             nativeControls
-            allowsFullscreen
+            fullscreenOptions={{ allowsFullscreen: true }}
             allowsPictureInPicture
             onFullscreenEnter={handleFullscreenEnter}
             onFullscreenExit={handleFullscreenExit}

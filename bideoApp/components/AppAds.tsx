@@ -1,14 +1,37 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Platform, Modal, Text, TouchableOpacity, ActivityIndicator, Dimensions } from 'react-native';
+import { View, StyleSheet, Platform, Modal, Text, TouchableOpacity, ActivityIndicator, Dimensions, Linking, Image as RNImage } from 'react-native';
 import Constants from 'expo-constants';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import api from '../services/api';
+import Colors from '../constants/Colors';
+
+const resolveMediaUrl = (url: string) => {
+  if (!url) return '';
+  const apiBase = api.defaults.baseURL || '';
+  const serverBase = apiBase.replace('/api', '');
+
+  if (url.startsWith('/')) {
+    return `${serverBase}${url}`;
+  }
+
+  if (url.includes('localhost:5000') || url.includes('127.0.0.1:5000')) {
+    return url
+      .replace('http://localhost:5000', serverBase)
+      .replace('https://localhost:5000', serverBase)
+      .replace('http://127.0.0.1:5000', serverBase)
+      .replace('https://127.0.0.1:5000', serverBase);
+  }
+
+  return url;
+};
 
 // Configure AdMob IDs here. Replace with your actual IDs in production.
 export const ADMOB_IDS = {
-  BANNER: __DEV__ 
+  BANNER: __DEV__
     ? (Platform.OS === 'ios' ? 'ca-app-pub-3940256099942544/2934735716' : 'ca-app-pub-3940256099942544/6300978111')
     : (Constants.expoConfig?.extra?.ADMOB_BANNER_ID || process.env.EXPO_PUBLIC_ADMOB_BANNER_ID || 'your-production-banner-id'),
-    
+
   INTERSTITIAL: __DEV__
     ? (Platform.OS === 'ios' ? 'ca-app-pub-3940256099942544/4411468910' : 'ca-app-pub-3940256099942544/1033173712')
     : (Constants.expoConfig?.extra?.ADMOB_INTERSTITIAL_ID || process.env.EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID || 'your-production-interstitial-id'),
@@ -61,6 +84,8 @@ export const AppInterstitialAd: React.FC<AppInterstitialAdProps> = ({ visible, o
   const [canClose, setCanClose] = useState(false);
   const [showingRealAd, setShowingRealAd] = useState(false);
   const [realAdFailed, setRealAdFailed] = useState(false);
+  const [uploadedAd, setUploadedAd] = useState<any>(null);
+  const [adAspectRatio, setAdAspectRatio] = useState(16 / 9);
 
   useEffect(() => {
     if (!visible) return;
@@ -70,7 +95,33 @@ export const AppInterstitialAd: React.FC<AppInterstitialAdProps> = ({ visible, o
     setShowingRealAd(false);
     setRealAdFailed(false);
 
-    const isExpoGo = Constants.appOwnership === 'expo';
+    const fetchAd = async () => {
+      try {
+        const res = await api.get('/ads/active');
+        if (res.data.success && res.data.data) {
+          const ads = res.data.data;
+          const fullAd = ads.find((ad: any) => ad.type === 'full' && ad.activeStatus);
+          if (fullAd && fullAd.image) {
+            const resolvedUrl = resolveMediaUrl(fullAd.image);
+            RNImage.getSize(resolvedUrl, (w, h) => {
+              if (w && h) {
+                setAdAspectRatio(w / h);
+              }
+            }, (err) => {
+              console.log('Failed to fetch ad image size:', err);
+            });
+            setUploadedAd(fullAd);
+          } else {
+            setUploadedAd(null);
+          }
+        }
+      } catch (err) {
+        console.log('Failed to fetch active full ads:', err);
+      }
+    };
+    fetchAd();
+
+    const isExpoGo = Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
     if (isExpoGo) {
       setRealAdFailed(true);
       return;
@@ -79,7 +130,7 @@ export const AppInterstitialAd: React.FC<AppInterstitialAdProps> = ({ visible, o
     try {
       const { InterstitialAd, AdEventType } = require('react-native-google-mobile-ads');
       const adUnitId = ADMOB_IDS.INTERSTITIAL;
-      
+
       const interstitial = InterstitialAd.createForAdRequest(adUnitId, {
         requestNonPersonalizedAdsOnly: true,
       });
@@ -129,7 +180,7 @@ export const AppInterstitialAd: React.FC<AppInterstitialAdProps> = ({ visible, o
           unsubscribeLoaded();
           unsubscribeClosed();
           unsubscribeError();
-        } catch {}
+        } catch { }
       };
     } catch (err) {
       console.log('Error loading AdMob Interstitial:', err);
@@ -157,13 +208,19 @@ export const AppInterstitialAd: React.FC<AppInterstitialAdProps> = ({ visible, o
     };
   }, [visible, realAdFailed]);
 
+  const handleAdPress = () => {
+    if (uploadedAd && uploadedAd.link) {
+      Linking.openURL(uploadedAd.link).catch((err) => console.log('Failed to open ad link:', err));
+    }
+  };
+
   if (!visible) return null;
   if (showingRealAd) return null; // Real ad is presented on top by the native SDK
 
   return (
     <Modal visible={visible} transparent animationType="slide">
       <View style={adStyles.adModalContainer}>
-        <View style={adStyles.adModalContent}>
+        <View style={[adStyles.adModalContent, uploadedAd && adStyles.uploadedModalContent]}>
           {/* Header */}
           <View style={adStyles.adHeader}>
             <View style={adStyles.adBadge}>
@@ -181,18 +238,38 @@ export const AppInterstitialAd: React.FC<AppInterstitialAdProps> = ({ visible, o
           </View>
 
           {/* Ad Body */}
-          <View style={adStyles.adBody}>
-            <Ionicons name="gift-outline" size={70} color="#FFD700" style={adStyles.adIcon} />
-            <Text style={adStyles.adTitle}>Tube India Premium</Text>
-            <Text style={adStyles.adDescription}>
-              Enjoy background video playback, offline downloads, and an completely ad-free experience. Support Tube India today!
-            </Text>
-          </View>
+          {uploadedAd ? (
+            <TouchableOpacity
+              style={adStyles.uploadedBodyContainer}
+              onPress={handleAdPress}
+              activeOpacity={0.95}
+            >
+              <Image
+                source={{ uri: resolveMediaUrl(uploadedAd.image) }}
+                style={[adStyles.adFullImage, { aspectRatio: adAspectRatio }]}
+                contentFit="contain"
+              />
+              <Text style={adStyles.uploadedAdTitle} numberOfLines={1}>{uploadedAd.title}</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={adStyles.adBody}>
+              <Ionicons name="gift-outline" size={70} color="#FFD700" style={adStyles.adIcon} />
+              <Text style={adStyles.adTitle}>Tube India Premium</Text>
+              <Text style={adStyles.adDescription}>
+                Enjoy background video playback, offline downloads, and an completely ad-free experience. Support Tube India today!
+              </Text>
+            </View>
+          )}
 
           {/* Footer Call to Action */}
-          <TouchableOpacity style={adStyles.ctaButton} onPress={onClose}>
-            <Text style={adStyles.ctaText}>TRY 1 MONTH FREE</Text>
-          </TouchableOpacity>
+          {!uploadedAd && (
+            <TouchableOpacity
+              style={adStyles.ctaButton}
+              onPress={onClose}
+            >
+              <Text style={adStyles.ctaText}>TRY 1 MONTH FREE</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </Modal>
@@ -218,6 +295,18 @@ const adStyles = StyleSheet.create({
     padding: 24,
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  uploadedModalContent: {
+    height: 'auto',
+    paddingTop: 16,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
+  },
+  uploadedBodyContainer: {
+    width: '100%',
+    alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 0,
   },
   adHeader: {
     width: '100%',
@@ -260,15 +349,38 @@ const adStyles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 10,
   },
+  adBodyContainer: {
+    width: '100%',
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 10,
+  },
+  adFullImage: {
+    width: '100%',
+    maxHeight: 280,
+    borderRadius: 10,
+    marginBottom: 8,
+  },
   adIcon: {
     marginBottom: 16,
   },
   adTitle: {
     color: '#FFFFFF',
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: 'bold',
     textAlign: 'center',
     marginBottom: 10,
+  },
+  uploadedAdTitle: {
+    color: '#999999',
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 6,
+    marginBottom: 0,
   },
   adDescription: {
     color: '#B3B3B3',
@@ -287,6 +399,7 @@ const adStyles = StyleSheet.create({
     color: '#000000',
     fontWeight: 'bold',
     fontSize: 15,
+    letterSpacing: 0.5,
   },
 });
 
@@ -297,5 +410,72 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     backgroundColor: 'transparent',
     overflow: 'hidden',
+  },
+  bannerAdWrapper: {
+    width: '92%',
+    aspectRatio: 320 / 50,
+    backgroundColor: '#000000',
+    borderRadius: 8,
+    overflow: 'hidden',
+    alignSelf: 'center',
+    marginVertical: 10,
+    position: 'relative',
+  },
+  bannerAdImage: {
+    width: '100%',
+    height: '100%',
+  },
+  bannerAdLabel: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
+  },
+  bannerAdLabelText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: 'bold',
+  },
+  fallbackBanner: {
+    width: '92%',
+    backgroundColor: '#FFF4E5',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#FFE0B2',
+    alignSelf: 'center',
+    marginVertical: 10,
+  },
+  fallbackBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  fallbackBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  giftIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#FF8C00',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fallbackBannerTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#D35400',
+  },
+  fallbackBannerText: {
+    fontSize: 11,
+    color: '#E67E22',
+    marginTop: 2,
+    fontWeight: '500',
   },
 });
