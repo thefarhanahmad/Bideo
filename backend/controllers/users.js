@@ -3,6 +3,8 @@ const Video = require('../models/Video');
 const Post = require('../models/Post');
 const Follower = require('../models/Follower');
 const { deleteLocalFile } = require('../utils/localUpload');
+const VideoMonetizationReview = require('../models/VideoMonetizationReview');
+const MonetizationApplication = require('../models/MonetizationApplication');
 
 // @desc Create user
 // @route POST /api/users
@@ -244,6 +246,88 @@ exports.deleteUser = async (req, res, next) => {
 
     await user.deleteOne();
     res.status(200).json({ success: true, data: {} });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Get monetization onboarding status and checklist
+// @route   GET /api/users/monetization-status
+// @access  Private
+exports.getMonetizationStatus = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    // 1. Fetch only review statuses that exist (no auto-backfill for old videos)
+    const reviews = await VideoMonetizationReview.find({ user: userId }).populate('video', 'title thumbnail createdAt');
+    
+    // 2. Count passed videos
+    const passedVideosCount = reviews.filter(r => r.status === 'passed').length;
+    const step1Completed = passedVideosCount >= 3;
+
+    // 3. Fetch monetization application
+    const application = await MonetizationApplication.findOne({ user: userId });
+    const step2Completed = application ? application.status === 'approved' : false;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        passedVideosCount,
+        step1Completed,
+        step2Completed,
+        reviews,
+        application
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Submit verification details to apply for monetization
+// @route   POST /api/users/apply-monetization
+// @access  Private
+exports.applyMonetization = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { name, phone, adharNumber, upiId, bankDetails } = req.body;
+
+    // Validation: Require all fields
+    if (!name || !phone || !adharNumber || !upiId || !bankDetails || !bankDetails.bankName || !bankDetails.accountNumber || !bankDetails.ifscCode) {
+      return res.status(400).json({ success: false, message: 'Please fill all fields, including bank details' });
+    }
+
+    // Eligibility check: Check if they have at least 3 passed videos
+    const passedReviewsCount = await VideoMonetizationReview.countDocuments({ user: userId, status: 'passed' });
+    if (passedReviewsCount < 3) {
+      return res.status(400).json({ success: false, message: 'You must have at least 3 approved videos to apply for monetization' });
+    }
+
+    // Insert or update the application
+    let application = await MonetizationApplication.findOne({ user: userId });
+    if (application) {
+      application.name = name;
+      application.phone = phone;
+      application.adharNumber = adharNumber;
+      application.upiId = upiId;
+      application.bankDetails = bankDetails;
+      application.status = 'pending'; // Reset status to pending upon edit/re-submission
+      application.reviewMessage = ''; // Clear past rejection messages
+      application.updatedAt = Date.now();
+      await application.save();
+    } else {
+      application = await MonetizationApplication.create({
+        user: userId,
+        name,
+        phone,
+        adharNumber,
+        upiId,
+        bankDetails,
+        status: 'pending'
+      });
+    }
+
+    res.status(200).json({ success: true, data: application });
   } catch (err) {
     next(err);
   }

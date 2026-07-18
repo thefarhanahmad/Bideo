@@ -4,6 +4,7 @@ const Follower = require("../models/Follower");
 const VideoView = require("../models/VideoView");
 const VideoReport = require("../models/VideoReport");
 const Notification = require("../models/Notification");
+const VideoMonetizationReview = require("../models/VideoMonetizationReview");
 const fs = require("fs");
 const {
   saveLocalFile,
@@ -416,6 +417,13 @@ exports.uploadVideo = async (req, res, next) => {
       compressedVideoSize,
       originalThumbnailSize,
       compressedThumbnailSize,
+    });
+
+    // Auto-create pending monetization review
+    await VideoMonetizationReview.create({
+      video: video._id,
+      user: req.user.id,
+      status: "pending"
     });
 
     res.status(201).json({ success: true, data: video });

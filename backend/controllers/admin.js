@@ -2,6 +2,8 @@ const User = require('../models/User');
 const VideoReport = require('../models/VideoReport');
 const Video = require('../models/Video');
 const Category = require('../models/Category');
+const VideoMonetizationReview = require('../models/VideoMonetizationReview');
+const MonetizationApplication = require('../models/MonetizationApplication');
 
 // @desc    Aggregated stats for the admin dashboard overview
 // @route   GET /api/admin/stats
@@ -125,6 +127,98 @@ exports.updateVideoReport = async (req, res, next) => {
     const report = await VideoReport.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: true });
     if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
     res.status(200).json({ success: true, data: report });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Get all pending video reviews for monetization eligibility (grouped userwise)
+// @route   GET /api/admin/videos/pending-reviews
+// @access  Private/Admin
+exports.getPendingVideoReviews = async (req, res, next) => {
+  try {
+    const reviews = await VideoMonetizationReview.find({ status: 'pending' })
+      .populate('video', 'title thumbnail videoUrl views duration isShort createdAt')
+      .populate('user', 'name channelName avatar email phone')
+      .sort('-createdAt');
+
+    // Group reviews by user ID
+    const userGroupsMap = {};
+    for (const r of reviews) {
+      if (!r.user) continue;
+      const userId = r.user._id.toString();
+      if (!userGroupsMap[userId]) {
+        userGroupsMap[userId] = {
+          user: r.user,
+          reviews: []
+        };
+      }
+      userGroupsMap[userId].reviews.push(r);
+    }
+
+    const groupedData = Object.values(userGroupsMap);
+    res.status(200).json({ success: true, count: groupedData.length, data: groupedData });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Review a video's monetization status (pass or fail)
+// @route   PUT /api/admin/videos/:id/review
+// @access  Private/Admin
+exports.reviewVideoMonetization = async (req, res, next) => {
+  try {
+    const { status, reviewMessage } = req.body;
+    if (!status || !['passed', 'failed'].includes(status)) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid status: passed or failed' });
+    }
+
+    const review = await VideoMonetizationReview.findByIdAndUpdate(
+      req.params.id,
+      { status, reviewMessage: reviewMessage || '', updatedAt: Date.now() },
+      { new: true, runValidators: true }
+    );
+
+    if (!review) return res.status(404).json({ success: false, message: 'Review not found' });
+    res.status(200).json({ success: true, data: review });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Get all monetization applications (pending / applied)
+// @route   GET /api/admin/monetization-applications
+// @access  Private/Admin
+exports.getMonetizationApplications = async (req, res, next) => {
+  try {
+    const status = req.query.status || 'pending';
+    const applications = await MonetizationApplication.find({ status })
+      .populate('user', 'name channelName avatar email phone')
+      .sort('-createdAt');
+    res.status(200).json({ success: true, count: applications.length, data: applications });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Review a user's monetization application (approve or reject)
+// @route   PUT /api/admin/users/:userId/review-monetization
+// @access  Private/Admin
+exports.reviewMonetizationApplication = async (req, res, next) => {
+  try {
+    const { status, reviewMessage } = req.body;
+    if (!status || !['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid status: approved or rejected' });
+    }
+
+    const application = await MonetizationApplication.findOneAndUpdate(
+      { user: req.params.userId },
+      { status, reviewMessage: reviewMessage || '', updatedAt: Date.now() },
+      { new: true, runValidators: true }
+    );
+
+    if (!application) return res.status(404).json({ success: false, message: 'Application not found for this user' });
+    res.status(200).json({ success: true, data: application });
   } catch (err) {
     next(err);
   }

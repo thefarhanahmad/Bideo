@@ -12,6 +12,8 @@ const {
   getSearchHistory,
   clearSearchHistory,
   getChannelProfile,
+  getMonetizationStatus,
+  applyMonetization,
 } = require('../controllers/users');
 const { protect, authorize, softProtect } = require('../middlewares/auth');
 
@@ -27,6 +29,8 @@ router.get('/liked-videos', getLikedVideos);
 router.post('/search-history', addSearchHistory);
 router.get('/search-history', getSearchHistory);
 router.delete('/search-history', clearSearchHistory);
+router.get('/monetization/status', getMonetizationStatus);
+router.post('/monetization/apply', applyMonetization);
 
 // Admin only routes
 router.use(authorize('admin'));

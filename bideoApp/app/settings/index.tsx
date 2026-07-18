@@ -1,5 +1,5 @@
 import { showAlert } from '../../components/AppAlert';
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -8,11 +8,30 @@ import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import { logout } from '../../redux/slices/authSlice';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { setAuthToken } from '../../services/api';
+import api, { setAuthToken } from '../../services/api';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const dispatch = useDispatch();
+
+  const [monetizationInfo, setMonetizationInfo] = useState<any>(null);
+  const [loadingMonetization, setLoadingMonetization] = useState(true);
+
+  useEffect(() => {
+    const fetchMonetization = async () => {
+      try {
+        const res = await api.get('/users/monetization/status');
+        if (res.data.success) {
+          setMonetizationInfo(res.data.data);
+        }
+      } catch (err) {
+        console.log('Failed to fetch monetization status on settings');
+      } finally {
+        setLoadingMonetization(false);
+      }
+    };
+    fetchMonetization();
+  }, []);
 
   const handleLogout = () => {
     showAlert(
@@ -83,22 +102,41 @@ export default function SettingsScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.earningsLabel}>Your Earnings</Text>
-                <Text style={styles.earningsAmount}>₹0.00</Text>
+                <Text style={[styles.earningsAmount, !monetizationInfo?.step2Completed && { fontSize: 18, marginTop: 4 }]}>
+                  {monetizationInfo?.step2Completed ? '₹0.00' : 'Ineligible'}
+                </Text>
               </View>
               <View style={styles.earningsBadge}>
-                <Text style={styles.earningsBadgeText}>Coming soon</Text>
+                <Text style={styles.earningsBadgeText}>
+                  {loadingMonetization ? 'Loading...' : 
+                   monetizationInfo?.step2Completed ? 'Monetized' :
+                   monetizationInfo?.application?.status === 'pending' ? 'Pending Review' :
+                   monetizationInfo?.application?.status === 'rejected' ? 'Action Required' :
+                   'Task Pending'}
+                </Text>
               </View>
             </View>
             <Text style={styles.earningsNote}>
-              Monetization is on the way! We're building a secure payment gateway so you can
-              earn from your videos. This feature will be available in a few days.
+              {loadingMonetization ? 'Loading monetization information...' :
+               monetizationInfo?.step2Completed 
+                 ? "Congratulations, your account is monetized! Click below to view your balance and payment statements."
+                 : monetizationInfo?.application?.status === 'pending'
+                 ? "Your monetization details are under verification. Manually audited by Bideo Administrators."
+                 : monetizationInfo?.application?.status === 'rejected'
+                 ? `Application rejected: ${monetizationInfo.application.reviewMessage || 'Check details.'} Click below to correct and resubmit.`
+                 : monetizationInfo?.step1Completed
+                 ? "Step 1 complete! You have uploaded 3 original passed videos. Click below to submit your verification details."
+                 : `Monetization eligibility milestone: Upload at least 3 original videos. Status: ${monetizationInfo?.passedVideosCount || 0}/3 passed.`}
             </Text>
             <TouchableOpacity
               style={styles.earningsBtn}
               activeOpacity={0.85}
               onPress={() => router.push('/earnings')}
             >
-              <Text style={styles.earningsBtnText}>View earnings</Text>
+              <Text style={styles.earningsBtnText}>
+                {monetizationInfo?.step2Completed ? 'View earnings' : 
+                 monetizationInfo?.step1Completed ? 'Apply Now' : 'Check Eligibility'}
+              </Text>
               <Ionicons name="arrow-forward" size={16} color={Colors.primary} />
             </TouchableOpacity>
           </View>
@@ -221,13 +259,13 @@ const styles = StyleSheet.create({
   },
   earningsBadgeText: {
     color: Colors.white,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
   },
   earningsNote: {
     color: 'rgba(255,255,255,0.92)',
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: 12,
+    lineHeight: 17,
     marginTop: 14,
   },
   earningsBtn: {
