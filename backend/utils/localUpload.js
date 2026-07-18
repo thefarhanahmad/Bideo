@@ -45,7 +45,7 @@ const saveLocalFile = (req, file, type) => {
   // Build the public URL
   const protocol = req.protocol;
   const host = req.get('host');
-  const fileUrl = `${protocol}://${host}/uploads/${folderName}/${filename}`;
+  const fileUrl = `${protocol}://${host}/api/uploads/${folderName}/${filename}`;
 
   return {
     url: fileUrl,

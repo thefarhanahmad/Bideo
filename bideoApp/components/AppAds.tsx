@@ -254,9 +254,9 @@ export const AppInterstitialAd: React.FC<AppInterstitialAdProps> = ({ visible, o
           ) : (
             <View style={adStyles.adBody}>
               <Ionicons name="gift-outline" size={70} color="#FFD700" style={adStyles.adIcon} />
-              <Text style={adStyles.adTitle}>Tube India Premium</Text>
+              <Text style={adStyles.adTitle}>Bideo Premium</Text>
               <Text style={adStyles.adDescription}>
-                Enjoy background video playback, offline downloads, and an completely ad-free experience. Support Tube India today!
+                Enjoy background video playback, offline downloads, and an completely ad-free experience. Support Bideo today!
               </Text>
             </View>
           )}

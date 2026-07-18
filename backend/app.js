@@ -11,6 +11,7 @@ const path = require("path");
 dotenv.config();
 
 const app = express();
+app.set('trust proxy', true);
 
 // Route files
 const auth = require("./routes/auth");
@@ -31,6 +32,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.use("/api/uploads", express.static(path.join(__dirname, "uploads")));
 
 const allowedOrigins = [
   "http://localhost:5173",

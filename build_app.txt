@@ -6,6 +6,10 @@ eas build --platform android --profile preview
 Bideo@#12345
 ssh root@200.97.169.18
 
+cd ~/Bideo
+chmod +x deploy.sh
+./deploy.sh
+
 $env:REACT_NATIVE_PACKAGER_HOSTNAME="10.119.238.90"
 npx expo start -c
 
