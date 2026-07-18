@@ -325,7 +325,7 @@ export default function VideoScreen() {
             style={styles.videoPlayer}
             contentFit="contain"
             nativeControls
-            fullscreenOptions={{ allowsFullscreen: true }}
+            fullscreenOptions={{ enable: true }}
             allowsPictureInPicture
             onFullscreenEnter={handleFullscreenEnter}
             onFullscreenExit={handleFullscreenExit}
