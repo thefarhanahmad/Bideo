@@ -9,6 +9,7 @@ import api from '../services/api';
 import { showAlert } from '../components/AppAlert';
 import { hapticSelection } from '../utils/haptics';
 import * as VideoThumbnails from 'expo-video-thumbnails';
+import { Video, Image as ImageCompressor } from 'react-native-compressor';
 
 const FALLBACK_THUMBNAIL = 'https://via.placeholder.com/640x360.png?text=Tube+India';
 
@@ -140,6 +141,24 @@ export default function UploadVideoScreen() {
     setUploading(true);
     setUploadProgress(0);
     try {
+      let finalVideoUri = video.uri;
+
+      // Compress video silently
+      try {
+        const compressedUri = await Video.compress(
+          video.uri,
+          {
+            compressionMethod: 'auto',
+          }
+        );
+        if (compressedUri) {
+          finalVideoUri = compressedUri;
+          console.log('Video compressed successfully:', finalVideoUri);
+        }
+      } catch (compressErr) {
+        console.warn('Video compression failed, uploading raw video:', compressErr);
+      }
+
       const formData = new FormData();
       formData.append('uploadType', uploadType);
       if (title.trim()) formData.append('title', title.trim());
@@ -149,8 +168,6 @@ export default function UploadVideoScreen() {
       formData.append('visibility', visibility);
 
       if (video.duration !== undefined && video.duration !== null) {
-        // Normalize duration (expo-image-picker duration can sometimes be in milliseconds, but usually seconds).
-        // Let's divide by 1000 if it is a large number (e.g. > 10000 for a short video, which means it is in milliseconds).
         const durationSec = video.duration > 10000 ? video.duration / 1000 : video.duration;
         formData.append('duration', String(durationSec));
       }
@@ -163,13 +180,27 @@ export default function UploadVideoScreen() {
 
       // @ts-ignore
       formData.append('video', {
-        uri: video.uri,
+        uri: finalVideoUri,
         type: 'video/mp4',
         name: 'video.mp4',
       });
 
       let finalThumbnailUri = thumbnail?.uri;
-      if (!finalThumbnailUri && video.uri) {
+      if (finalThumbnailUri) {
+        // Compress custom thumbnail
+        try {
+          const compressedThumb = await ImageCompressor.compress(finalThumbnailUri, {
+            compressionMethod: 'auto',
+          });
+          if (compressedThumb) {
+            finalThumbnailUri = compressedThumb;
+            console.log('Thumbnail compressed successfully:', finalThumbnailUri);
+          }
+        } catch (thumbCompressErr) {
+          console.warn('Thumbnail compression failed:', thumbCompressErr);
+        }
+      } else if (video.uri) {
+        // Generate automatic thumbnail from the video
         try {
           const thumbResult = await VideoThumbnails.getThumbnailAsync(video.uri, {
             time: 1000,
@@ -214,6 +245,18 @@ export default function UploadVideoScreen() {
     setUploadProgress(0);
     try {
       if (thumbnailChanged && thumbnail) {
+        let finalThumbnailUri = thumbnail.uri;
+        try {
+          const compressed = await ImageCompressor.compress(finalThumbnailUri, {
+            compressionMethod: 'auto',
+          });
+          if (compressed) {
+            finalThumbnailUri = compressed;
+          }
+        } catch (err) {
+          console.warn('Thumbnail compression failed during update:', err);
+        }
+
         const formData = new FormData();
         formData.append('title', title);
         formData.append('description', description);
@@ -222,7 +265,7 @@ export default function UploadVideoScreen() {
         formData.append('visibility', visibility);
         // @ts-ignore
         formData.append('thumbnail', {
-          uri: thumbnail.uri,
+          uri: finalThumbnailUri,
           type: 'image/jpeg',
           name: 'thumbnail.jpg',
         });

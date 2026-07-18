@@ -27,6 +27,14 @@ const postSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  originalImageSize: {
+    type: Number,
+    default: 0,
+  },
+  compressedImageSize: {
+    type: Number,
+    default: 0,
+  },
   createdAt: {
     type: Date,
     default: Date.now,

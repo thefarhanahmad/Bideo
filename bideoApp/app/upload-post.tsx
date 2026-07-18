@@ -7,6 +7,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import Colors from '../constants/Colors';
 import api from '../services/api';
 import { showAlert } from '../components/AppAlert';
+import { Image as ImageCompressor } from 'react-native-compressor';
 
 export default function UploadPostScreen() {
   const router = useRouter();
@@ -72,12 +73,27 @@ export default function UploadPostScreen() {
     setUploading(true);
     setUploadProgress(0);
     try {
+      let finalImgUri = postImage?.uri;
+      if (postImage) {
+        try {
+          const compressed = await ImageCompressor.compress(postImage.uri, {
+            compressionMethod: 'auto',
+          });
+          if (compressed) {
+            finalImgUri = compressed;
+            console.log('Post image compressed:', finalImgUri);
+          }
+        } catch (compressErr) {
+          console.warn('Post image compression failed:', compressErr);
+        }
+      }
+
       const formData = new FormData();
       formData.append('text', postText);
       formData.append('visibility', visibility);
-      if (postImage) {
+      if (postImage && finalImgUri) {
         // @ts-ignore
-        formData.append('image', { uri: postImage.uri, type: 'image/jpeg', name: 'post.jpg' });
+        formData.append('image', { uri: finalImgUri, type: 'image/jpeg', name: 'post.jpg' });
       }
       await api.post('/posts', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -99,11 +115,24 @@ export default function UploadPostScreen() {
     setUploadProgress(0);
     try {
       if (postImageChanged && postImage) {
+        let finalImgUri = postImage.uri;
+        try {
+          const compressed = await ImageCompressor.compress(postImage.uri, {
+            compressionMethod: 'auto',
+          });
+          if (compressed) {
+            finalImgUri = compressed;
+            console.log('Updated post image compressed:', finalImgUri);
+          }
+        } catch (compressErr) {
+          console.warn('Updated post image compression failed:', compressErr);
+        }
+
         const formData = new FormData();
         formData.append('text', postText);
         formData.append('visibility', visibility);
         // @ts-ignore
-        formData.append('image', { uri: postImage.uri, type: 'image/jpeg', name: 'post.jpg' });
+        formData.append('image', { uri: finalImgUri, type: 'image/jpeg', name: 'post.jpg' });
         await api.put(`/posts/${editPostId}`, formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
           onUploadProgress: (event) => {

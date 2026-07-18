@@ -66,6 +66,22 @@ const videoSchema = new mongoose.Schema({
     type: Number,
     default: null,
   },
+  originalVideoSize: {
+    type: Number,
+    default: 0,
+  },
+  compressedVideoSize: {
+    type: Number,
+    default: 0,
+  },
+  originalThumbnailSize: {
+    type: Number,
+    default: 0,
+  },
+  compressedThumbnailSize: {
+    type: Number,
+    default: 0,
+  },
   createdAt: {
     type: Date,
     default: Date.now,

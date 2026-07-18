@@ -12,6 +12,7 @@ import { hapticLight, hapticSelection } from '../utils/haptics';
 import api from '../services/api';
 import { RootState } from '../redux/store';
 import { loginSuccess } from '../redux/slices/authSlice';
+import { Image as ImageCompressor } from 'react-native-compressor';
 
 const getAvatarUri = (avatar?: string) => {
   if (!avatar) return null;
@@ -107,10 +108,25 @@ export default function EditChannelScreen() {
       const isLocalAvatar = avatar?.startsWith('file://') || avatar?.startsWith('content://');
       const isRemoteAvatar = avatar?.startsWith('http://') || avatar?.startsWith('https://');
 
-      if (isLocalAvatar) {
+      let finalAvatarUri = avatar;
+      if (isLocalAvatar && avatar) {
+        try {
+          const compressed = await ImageCompressor.compress(avatar, {
+            compressionMethod: 'auto',
+          });
+          if (compressed) {
+            finalAvatarUri = compressed;
+            console.log('Avatar compressed:', finalAvatarUri);
+          }
+        } catch (err) {
+          console.warn('Avatar compression failed:', err);
+        }
+      }
+
+      if (isLocalAvatar && finalAvatarUri) {
         // @ts-ignore
         formData.append('avatar', {
-          uri: avatar,
+          uri: finalAvatarUri,
           type: 'image/jpeg',
           name: 'avatar.jpg',
         });
@@ -121,10 +137,25 @@ export default function EditChannelScreen() {
       const isLocalCover = coverImage?.startsWith('file://') || coverImage?.startsWith('content://');
       const isRemoteCover = coverImage?.startsWith('http://') || coverImage?.startsWith('https://');
 
-      if (isLocalCover) {
+      let finalCoverUri = coverImage;
+      if (isLocalCover && coverImage) {
+        try {
+          const compressed = await ImageCompressor.compress(coverImage, {
+            compressionMethod: 'auto',
+          });
+          if (compressed) {
+            finalCoverUri = compressed;
+            console.log('Cover image compressed:', finalCoverUri);
+          }
+        } catch (err) {
+          console.warn('Cover image compression failed:', err);
+        }
+      }
+
+      if (isLocalCover && finalCoverUri) {
         // @ts-ignore
         formData.append('coverImage', {
-          uri: coverImage,
+          uri: finalCoverUri,
           type: 'image/jpeg',
           name: 'cover.jpg',
         });

@@ -58,7 +58,8 @@
       ],
       "expo-web-browser",
       "expo-video",
-      "expo-font"
+      "expo-font",
+      "react-native-compressor"
     ],
     "experiments": {
       "reactCompiler": false
