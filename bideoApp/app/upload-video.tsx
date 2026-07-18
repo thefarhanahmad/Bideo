@@ -251,7 +251,19 @@ export default function UploadVideoScreen() {
       showAlert('Success', 'Video uploaded successfully!');
       router.replace('/');
     } catch (err: any) {
-      showAlert('Upload Failed', err.response?.data?.message || 'Something went wrong');
+      console.error('[upload-video.tsx] handleUpload error:', err);
+      if (err.response?.data) {
+        console.error('[upload-video.tsx] handleUpload error response:', err.response.data);
+      }
+      const serverMessage = err.response?.data?.message;
+      const validationErrors = err.response?.data?.errors;
+      let displayMsg = 'Something went wrong';
+      if (serverMessage) {
+        displayMsg = serverMessage;
+      } else if (validationErrors && Array.isArray(validationErrors)) {
+        displayMsg = validationErrors.map((e: any) => e.msg).join('\n');
+      }
+      showAlert('Upload Failed', displayMsg);
     } finally {
       setUploading(false);
     }
@@ -307,7 +319,19 @@ export default function UploadVideoScreen() {
       showAlert('Success', 'Video updated successfully!');
       router.replace('/');
     } catch (err: any) {
-      showAlert('Update Failed', err.response?.data?.message || 'Something went wrong');
+      console.error('[upload-video.tsx] handleUpdate error:', err);
+      if (err.response?.data) {
+        console.error('[upload-video.tsx] handleUpdate error response:', err.response.data);
+      }
+      const serverMessage = err.response?.data?.message;
+      const validationErrors = err.response?.data?.errors;
+      let displayMsg = 'Something went wrong';
+      if (serverMessage) {
+        displayMsg = serverMessage;
+      } else if (validationErrors && Array.isArray(validationErrors)) {
+        displayMsg = validationErrors.map((e: any) => e.msg).join('\n');
+      }
+      showAlert('Update Failed', displayMsg);
     } finally {
       setUploading(false);
     }

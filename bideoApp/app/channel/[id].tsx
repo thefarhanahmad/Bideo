@@ -1,6 +1,6 @@
 import { showAlert } from '../../components/AppAlert';
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, ScrollView, Dimensions, Share } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, ScrollView, Dimensions, Share, Modal, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -31,6 +31,8 @@ export default function ChannelScreen() {
   const [sort, setSort] = useState<'latest' | 'popular' | 'oldest'>('latest');
   const [error, setError] = useState<string | null>(null);
   const [authModalVisible, setAuthModalVisible] = useState(false);
+  const [selectedVideo, setSelectedVideo] = useState<any>(null);
+  const [menuVisible, setMenuVisible] = useState(false);
 
   useEffect(() => {
     loadChannel(filter, sort);
@@ -103,6 +105,55 @@ export default function ChannelScreen() {
     }
   };
 
+  const openMenu = (video: any) => {
+    setSelectedVideo(video);
+    setMenuVisible(true);
+  };
+
+  const handleEdit = () => {
+    const videoId = selectedVideo?._id;
+    setMenuVisible(false);
+    router.push({ pathname: '/upload-video', params: { editId: videoId }});
+  };
+
+  const handleShareVideo = async () => {
+    if (!selectedVideo) return;
+    setMenuVisible(false);
+    try {
+      await Share.share({
+        message: `Check out this video on Bideo: ${selectedVideo.title}\n${selectedVideo.videoUrl || ''}`,
+      });
+    } catch (err) {
+      console.error('Share failed', err);
+    }
+  };
+
+  const handleDeleteVideo = async () => {
+    const videoId = selectedVideo?._id;
+    setMenuVisible(false);
+    
+    showAlert(
+      'Delete Video',
+      'Are you sure you want to delete this video?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.delete(`/videos/${videoId}`);
+              setVideos(videos.filter(v => v._id !== videoId));
+              showAlert('Success', 'Video deleted');
+            } catch (err) {
+              showAlert('Error', 'Failed to delete video');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
@@ -127,7 +178,14 @@ export default function ChannelScreen() {
           <Text style={styles.videoMeta}>
             {item.views} views • {formatTimeAgo(item.createdAt)}
           </Text>
-          <TouchableOpacity style={styles.menuDots} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <TouchableOpacity 
+            style={styles.menuDots} 
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            onPress={(e) => {
+              e.stopPropagation();
+              openMenu(item);
+            }}
+          >
             <Ionicons name="ellipsis-vertical" size={16} color={Colors.textGray} />
           </TouchableOpacity>
         </View>
@@ -148,6 +206,15 @@ export default function ChannelScreen() {
             <Ionicons name="play-outline" size={10} color={Colors.white} />
             <Text style={styles.shortViewsText}>{formatViews(item.views || 0)}</Text>
           </View>
+          <TouchableOpacity 
+            style={styles.gridMenuDots} 
+            onPress={(e) => {
+              e.stopPropagation();
+              openMenu(item);
+            }}
+          >
+            <Ionicons name="ellipsis-vertical" size={14} color={Colors.white} />
+          </TouchableOpacity>
         </View>
         <Text style={styles.shortGridTitle} numberOfLines={2}>{item.title}</Text>
       </TouchableOpacity>
@@ -198,7 +265,12 @@ export default function ChannelScreen() {
         keyExtractor={(item) => item._id}
         columnWrapperStyle={filter === 'shorts' ? styles.shortsRow : null}
         renderItem={({ item }) => {
-          if (item.itemType === 'post') return <PostCard post={item} />;
+          if (item.itemType === 'post') return (
+            <PostCard 
+              post={item} 
+              onDelete={(postId) => setPosts(prev => prev.filter(p => p._id !== postId))} 
+            />
+          );
           if (filter === 'shorts') return renderShortGridItem(item);
           return renderHorizontalVideoCard(item);
         }}
@@ -313,6 +385,44 @@ export default function ChannelScreen() {
           filter === 'shorts' ? styles.shortsListPadding : null
         ]}
       />
+
+      {/* Action Menu Modal for Videos/Shorts */}
+      <Modal
+        visible={menuVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMenuVisible(false)}
+      >
+        <Pressable 
+          style={styles.modalOverlay} 
+          onPress={() => setMenuVisible(false)}
+        >
+          <View style={styles.menuContent}>
+            {isOwner && (
+              <TouchableOpacity style={styles.menuItem} onPress={handleEdit}>
+                <Ionicons name="pencil-outline" size={24} color={Colors.text} />
+                <Text style={styles.menuText}>Edit Video</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity style={styles.menuItem} onPress={handleShareVideo}>
+              <Ionicons name="share-social-outline" size={24} color={Colors.text} />
+              <Text style={styles.menuText}>Share Video</Text>
+            </TouchableOpacity>
+
+            {isOwner && (
+              <TouchableOpacity style={[styles.menuItem, styles.deleteItem]} onPress={handleDeleteVideo}>
+                <Ionicons name="trash-outline" size={24} color={Colors.primary} />
+                <Text style={[styles.menuText, { color: Colors.primary }]}>Delete Video</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity style={styles.cancelItem} onPress={() => setMenuVisible(false)}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -655,5 +765,49 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontWeight: '700',
     fontSize: 15,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  menuContent: {
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  menuText: {
+    fontSize: 16,
+    marginLeft: 15,
+    color: Colors.text,
+  },
+  deleteItem: {
+    borderBottomWidth: 0,
+  },
+  cancelItem: {
+    marginTop: 10,
+    paddingVertical: 15,
+    alignItems: 'center',
+    backgroundColor: Colors.background,
+    borderRadius: 10,
+  },
+  cancelText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: Colors.textGray,
+  },
+  gridMenuDots: {
+    position: 'absolute',
+    top: 4,
+    right: 0,
+    padding: 6,
   },
 });

@@ -187,6 +187,7 @@ export default function EditChannelScreen() {
         router.back();
       }
     } catch (err: any) {
+      console.error('[edit-channel.tsx] handleSave error:', err);
       showAlert('Error', 'Failed to update channel. Please check your network and try again.');
     } finally {
       setLoading(false);

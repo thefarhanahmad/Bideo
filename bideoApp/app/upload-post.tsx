@@ -113,7 +113,19 @@ export default function UploadPostScreen() {
       showAlert('Success', 'Post published successfully!');
       router.replace('/');
     } catch (err: any) {
-      showAlert('Post Failed', err.response?.data?.message || 'Something went wrong');
+      console.error('[upload-post.tsx] handlePostUpload error:', err);
+      if (err.response?.data) {
+        console.error('[upload-post.tsx] handlePostUpload error response:', err.response.data);
+      }
+      const serverMessage = err.response?.data?.message;
+      const validationErrors = err.response?.data?.errors;
+      let displayMsg = 'Something went wrong';
+      if (serverMessage) {
+        displayMsg = serverMessage;
+      } else if (validationErrors && Array.isArray(validationErrors)) {
+        displayMsg = validationErrors.map((e: any) => e.msg).join('\n');
+      }
+      showAlert('Post Failed', displayMsg);
     } finally {
       setUploading(false);
     }
@@ -163,7 +175,19 @@ export default function UploadPostScreen() {
       showAlert('Success', 'Post updated successfully!');
       router.replace('/');
     } catch (err: any) {
-      showAlert('Update Failed', err.response?.data?.message || 'Something went wrong');
+      console.error('[upload-post.tsx] handlePostUpdate error:', err);
+      if (err.response?.data) {
+        console.error('[upload-post.tsx] handlePostUpdate error response:', err.response.data);
+      }
+      const serverMessage = err.response?.data?.message;
+      const validationErrors = err.response?.data?.errors;
+      let displayMsg = 'Something went wrong';
+      if (serverMessage) {
+        displayMsg = serverMessage;
+      } else if (validationErrors && Array.isArray(validationErrors)) {
+        displayMsg = validationErrors.map((e: any) => e.msg).join('\n');
+      }
+      showAlert('Update Failed', displayMsg);
     } finally {
       setUploading(false);
     }
