@@ -38,17 +38,17 @@ export default function UploadScreen() {
           </View>
           <Text style={styles.loginTitle}>Upload Content</Text>
           <Text style={styles.loginSubtitle}>Login to share your videos, shorts and community posts with the world.</Text>
-          
-          <TouchableOpacity 
-            style={styles.mainLoginBtn} 
+
+          <TouchableOpacity
+            style={styles.mainLoginBtn}
             onPress={() => setAuthModalVisible(true)}
             activeOpacity={0.8}
           >
             <Text style={styles.mainLoginBtnText}>Sign In / Sign Up</Text>
           </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.secondaryBtn} 
+
+          <TouchableOpacity
+            style={styles.secondaryBtn}
             onPress={() => router.replace('/')}
           >
             <Text style={styles.secondaryBtnText}>Maybe Later</Text>
@@ -65,8 +65,8 @@ export default function UploadScreen() {
         <Ionicons name="megaphone-outline" size={80} color={Colors.primary} />
         <Text style={styles.promptTitle}>Channel Required</Text>
         <Text style={styles.promptText}>You need to create a channel name before you can upload videos.</Text>
-        <TouchableOpacity 
-          style={styles.actionBtn} 
+        <TouchableOpacity
+          style={styles.actionBtn}
           onPress={() => router.push('/edit-channel')}
         >
           <Text style={styles.actionBtnText}>Create Channel</Text>
@@ -88,12 +88,12 @@ export default function UploadScreen() {
           { key: 'short', label: 'Short', icon: 'flash', desc: 'Vertical', route: '/upload-video?type=short' },
           { key: 'post', label: 'Post', icon: 'document-text', desc: 'Text & image', route: '/upload-post' },
         ].map((item: any) => (
-          <TouchableOpacity 
-            key={item.key} 
-            style={styles.typeCard} 
-            activeOpacity={0.85} 
-            onPress={() => { 
-              hapticSelection(); 
+          <TouchableOpacity
+            key={item.key}
+            style={styles.typeCard}
+            activeOpacity={0.85}
+            onPress={() => {
+              hapticSelection();
               router.push(item.route);
             }}
           >
@@ -135,14 +135,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
   },
   content: {
-    padding: 20,
+    padding: 15,
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     marginBottom: 6,
-    paddingTop: 40,
   },
   headerTitle: {
     fontSize: 24,
@@ -284,8 +283,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   instructionsSection: {
-    marginTop: 40,
-    paddingTop: 30,
+    marginTop: 20,
+    paddingTop: 20,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
   },

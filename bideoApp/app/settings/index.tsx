@@ -40,12 +40,6 @@ export default function SettingsScreen() {
 
   const settingsItems = [
     {
-      title: 'Earnings',
-      icon: 'wallet-outline',
-      onPress: () => router.push('/earnings'),
-      color: Colors.primary,
-    },
-    {
       title: 'About',
       icon: 'information-circle-outline',
       onPress: () => router.push('/settings/about'),
