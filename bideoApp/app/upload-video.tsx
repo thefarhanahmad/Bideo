@@ -9,7 +9,7 @@ import api from '../services/api';
 import { showAlert } from '../components/AppAlert';
 import { hapticSelection } from '../utils/haptics';
 import * as VideoThumbnails from 'expo-video-thumbnails';
-import { Video, Image as ImageCompressor } from 'react-native-compressor';
+import Constants from 'expo-constants';
 
 const FALLBACK_THUMBNAIL = 'https://via.placeholder.com/640x360.png?text=Tube+India';
 
@@ -79,7 +79,7 @@ export default function UploadVideoScreen() {
 
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+        mediaTypes: ['videos'],
         allowsEditing: true,
         quality: 0.8,
       });
@@ -112,7 +112,7 @@ export default function UploadVideoScreen() {
 
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: uploadType === 'short' ? [9, 16] : [16, 9],
         quality: 0.7,
@@ -143,20 +143,26 @@ export default function UploadVideoScreen() {
     try {
       let finalVideoUri = video.uri;
 
-      // Compress video silently
-      try {
-        const compressedUri = await Video.compress(
-          video.uri,
-          {
-            compressionMethod: 'auto',
+      // Compress video silently (skip if in Expo Go)
+      const isExpoGo = Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
+      if (!isExpoGo) {
+        try {
+          const { Video } = require('react-native-compressor');
+          const compressedUri = await Video.compress(
+            video.uri,
+            {
+              compressionMethod: 'auto',
+            }
+          );
+          if (compressedUri) {
+            finalVideoUri = compressedUri;
+            console.log('Video compressed successfully:', finalVideoUri);
           }
-        );
-        if (compressedUri) {
-          finalVideoUri = compressedUri;
-          console.log('Video compressed successfully:', finalVideoUri);
+        } catch (compressErr) {
+          console.warn('Video compression failed, uploading raw video:', compressErr);
         }
-      } catch (compressErr) {
-        console.warn('Video compression failed, uploading raw video:', compressErr);
+      } else {
+        console.log('Expo Go detected: skipping video compression');
       }
 
       const formData = new FormData();
@@ -193,17 +199,22 @@ export default function UploadVideoScreen() {
 
       let finalThumbnailUri = thumbnail?.uri;
       if (finalThumbnailUri) {
-        // Compress custom thumbnail
-        try {
-          const compressedThumb = await ImageCompressor.compress(finalThumbnailUri, {
-            compressionMethod: 'auto',
-          });
-          if (compressedThumb) {
-            finalThumbnailUri = compressedThumb;
-            console.log('Thumbnail compressed successfully:', finalThumbnailUri);
+        // Compress custom thumbnail (skip if in Expo Go)
+        if (!isExpoGo) {
+          try {
+            const { Image: ImageCompressor } = require('react-native-compressor');
+            const compressedThumb = await ImageCompressor.compress(finalThumbnailUri, {
+              compressionMethod: 'auto',
+            });
+            if (compressedThumb) {
+              finalThumbnailUri = compressedThumb;
+              console.log('Thumbnail compressed successfully:', finalThumbnailUri);
+            }
+          } catch (thumbCompressErr) {
+            console.warn('Thumbnail compression failed:', thumbCompressErr);
           }
-        } catch (thumbCompressErr) {
-          console.warn('Thumbnail compression failed:', thumbCompressErr);
+        } else {
+          console.log('Expo Go detected: skipping thumbnail compression');
         }
       } else if (video.uri) {
         // Generate automatic thumbnail from the video
@@ -252,15 +263,19 @@ export default function UploadVideoScreen() {
     try {
       if (thumbnailChanged && thumbnail) {
         let finalThumbnailUri = thumbnail.uri;
-        try {
-          const compressed = await ImageCompressor.compress(finalThumbnailUri, {
-            compressionMethod: 'auto',
-          });
-          if (compressed) {
-            finalThumbnailUri = compressed;
+        const isExpoGo = Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
+        if (!isExpoGo) {
+          try {
+            const { Image: ImageCompressor } = require('react-native-compressor');
+            const compressed = await ImageCompressor.compress(finalThumbnailUri, {
+              compressionMethod: 'auto',
+            });
+            if (compressed) {
+              finalThumbnailUri = compressed;
+            }
+          } catch (err) {
+            console.warn('Thumbnail compression failed during update:', err);
           }
-        } catch (err) {
-          console.warn('Thumbnail compression failed during update:', err);
         }
 
         const formData = new FormData();

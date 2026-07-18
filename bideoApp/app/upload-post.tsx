@@ -7,7 +7,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import Colors from '../constants/Colors';
 import api from '../services/api';
 import { showAlert } from '../components/AppAlert';
-import { Image as ImageCompressor } from 'react-native-compressor';
+import Constants from 'expo-constants';
 
 export default function UploadPostScreen() {
   const router = useRouter();
@@ -52,7 +52,7 @@ export default function UploadPostScreen() {
 
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         quality: 0.7,
       });
@@ -75,16 +75,22 @@ export default function UploadPostScreen() {
     try {
       let finalImgUri = postImage?.uri;
       if (postImage) {
-        try {
-          const compressed = await ImageCompressor.compress(postImage.uri, {
-            compressionMethod: 'auto',
-          });
-          if (compressed) {
-            finalImgUri = compressed;
-            console.log('Post image compressed:', finalImgUri);
+        const isExpoGo = Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
+        if (!isExpoGo) {
+          try {
+            const { Image: ImageCompressor } = require('react-native-compressor');
+            const compressed = await ImageCompressor.compress(postImage.uri, {
+              compressionMethod: 'auto',
+            });
+            if (compressed) {
+              finalImgUri = compressed;
+              console.log('Post image compressed:', finalImgUri);
+            }
+          } catch (compressErr) {
+            console.warn('Post image compression failed:', compressErr);
           }
-        } catch (compressErr) {
-          console.warn('Post image compression failed:', compressErr);
+        } else {
+          console.log('Expo Go detected: skipping post image compression');
         }
       }
 
@@ -119,16 +125,22 @@ export default function UploadPostScreen() {
     try {
       if (postImageChanged && postImage) {
         let finalImgUri = postImage.uri;
-        try {
-          const compressed = await ImageCompressor.compress(postImage.uri, {
-            compressionMethod: 'auto',
-          });
-          if (compressed) {
-            finalImgUri = compressed;
-            console.log('Updated post image compressed:', finalImgUri);
+        const isExpoGo = Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
+        if (!isExpoGo) {
+          try {
+            const { Image: ImageCompressor } = require('react-native-compressor');
+            const compressed = await ImageCompressor.compress(postImage.uri, {
+              compressionMethod: 'auto',
+            });
+            if (compressed) {
+              finalImgUri = compressed;
+              console.log('Updated post image compressed:', finalImgUri);
+            }
+          } catch (compressErr) {
+            console.warn('Updated post image compression failed:', compressErr);
           }
-        } catch (compressErr) {
-          console.warn('Updated post image compression failed:', compressErr);
+        } else {
+          console.log('Expo Go detected: skipping updated post image compression');
         }
 
         const formData = new FormData();

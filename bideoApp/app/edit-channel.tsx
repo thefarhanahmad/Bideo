@@ -12,7 +12,7 @@ import { hapticLight, hapticSelection } from '../utils/haptics';
 import api from '../services/api';
 import { RootState } from '../redux/store';
 import { loginSuccess } from '../redux/slices/authSlice';
-import { Image as ImageCompressor } from 'react-native-compressor';
+import Constants from 'expo-constants';
 
 const getAvatarUri = (avatar?: string) => {
   if (!avatar) return null;
@@ -53,7 +53,7 @@ export default function EditChannelScreen() {
 
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.7,
@@ -77,7 +77,7 @@ export default function EditChannelScreen() {
 
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [16, 5], 
         quality: 0.8,
@@ -110,16 +110,22 @@ export default function EditChannelScreen() {
 
       let finalAvatarUri = avatar;
       if (isLocalAvatar && avatar) {
-        try {
-          const compressed = await ImageCompressor.compress(avatar, {
-            compressionMethod: 'auto',
-          });
-          if (compressed) {
-            finalAvatarUri = compressed;
-            console.log('Avatar compressed:', finalAvatarUri);
+        const isExpoGo = Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
+        if (!isExpoGo) {
+          try {
+            const { Image: ImageCompressor } = require('react-native-compressor');
+            const compressed = await ImageCompressor.compress(avatar, {
+              compressionMethod: 'auto',
+            });
+            if (compressed) {
+              finalAvatarUri = compressed;
+              console.log('Avatar compressed:', finalAvatarUri);
+            }
+          } catch (err) {
+            console.warn('Avatar compression failed:', err);
           }
-        } catch (err) {
-          console.warn('Avatar compression failed:', err);
+        } else {
+          console.log('Expo Go detected: skipping avatar compression');
         }
       }
 
@@ -139,16 +145,22 @@ export default function EditChannelScreen() {
 
       let finalCoverUri = coverImage;
       if (isLocalCover && coverImage) {
-        try {
-          const compressed = await ImageCompressor.compress(coverImage, {
-            compressionMethod: 'auto',
-          });
-          if (compressed) {
-            finalCoverUri = compressed;
-            console.log('Cover image compressed:', finalCoverUri);
+        const isExpoGo = Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
+        if (!isExpoGo) {
+          try {
+            const { Image: ImageCompressor } = require('react-native-compressor');
+            const compressed = await ImageCompressor.compress(coverImage, {
+              compressionMethod: 'auto',
+            });
+            if (compressed) {
+              finalCoverUri = compressed;
+              console.log('Cover image compressed:', finalCoverUri);
+            }
+          } catch (err) {
+            console.warn('Cover image compression failed:', err);
           }
-        } catch (err) {
-          console.warn('Cover image compression failed:', err);
+        } else {
+          console.log('Expo Go detected: skipping cover image compression');
         }
       }
 
