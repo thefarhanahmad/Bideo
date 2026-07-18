@@ -91,6 +91,9 @@ export default function UploadPostScreen() {
       const formData = new FormData();
       formData.append('text', postText);
       formData.append('visibility', visibility);
+      if (postImage && postImage.fileSize) {
+        formData.append('originalImageSize', String(postImage.fileSize));
+      }
       if (postImage && finalImgUri) {
         // @ts-ignore
         formData.append('image', { uri: finalImgUri, type: 'image/jpeg', name: 'post.jpg' });
@@ -131,6 +134,9 @@ export default function UploadPostScreen() {
         const formData = new FormData();
         formData.append('text', postText);
         formData.append('visibility', visibility);
+        if (postImage && postImage.fileSize) {
+          formData.append('originalImageSize', String(postImage.fileSize));
+        }
         // @ts-ignore
         formData.append('image', { uri: finalImgUri, type: 'image/jpeg', name: 'post.jpg' });
         await api.put(`/posts/${editPostId}`, formData, {

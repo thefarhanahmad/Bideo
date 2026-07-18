@@ -38,6 +38,20 @@ const Ads = () => {
     fetchAds();
   }, []);
 
+  const formatSize = (bytes) => {
+    if (!bytes) return "0 B";
+    const k = 1024;
+    const sizes = ["B", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+  };
+
+  const getCompressionText = (orig, comp) => {
+    if (!orig || !comp) return null;
+    const pct = Math.round((1 - comp / orig) * 100);
+    return `${formatSize(orig)} → ${formatSize(comp)} (${pct}% saved)`;
+  };
+
   const handleCreate = async (formData) => {
     try {
       const token = localStorage.getItem('admin_token');
@@ -171,6 +185,12 @@ const Ads = () => {
                       <td className="p-4">
                         <div className="font-semibold text-ink">{ad.title}</div>
                         <div className="text-xs text-muted mt-0.5">Created on {new Date(ad.createdAt).toLocaleDateString()}</div>
+                        {ad.originalImageSize > 0 && (
+                          <div className="text-[11px] font-semibold text-emerald-600 mt-1 flex items-center gap-1 whitespace-nowrap">
+                            <span>🖼️ Size:</span>
+                            <span>{getCompressionText(ad.originalImageSize, ad.compressedImageSize)}</span>
+                          </div>
+                        )}
                       </td>
                       <td className="p-4">
                         <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${

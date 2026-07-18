@@ -24,6 +24,14 @@ const adSchema = new mongoose.Schema({
     trim: true,
     default: '',
   },
+  originalImageSize: {
+    type: Number,
+    default: 0,
+  },
+  compressedImageSize: {
+    type: Number,
+    default: 0,
+  },
   createdAt: {
     type: Date,
     default: Date.now,

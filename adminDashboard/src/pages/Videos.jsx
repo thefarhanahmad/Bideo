@@ -142,6 +142,20 @@ const Videos = () => {
     }).format(new Date(date));
   };
 
+  const formatSize = (bytes) => {
+    if (!bytes) return "0 B";
+    const k = 1024;
+    const sizes = ["B", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+  };
+
+  const getCompressionText = (orig, comp) => {
+    if (!orig || !comp) return null;
+    const pct = Math.round((1 - comp / orig) * 100);
+    return `${formatSize(orig)} → ${formatSize(comp)} (${pct}% saved)`;
+  };
+
   return (
     <div>
       <div className="mb-5 flex items-center justify-between">
@@ -180,6 +194,18 @@ const Videos = () => {
                     <div className="min-w-0 max-w-xs">
                       <div className="truncate font-semibold text-ink">{v.title}</div>
                       <div className="truncate text-xs text-muted">{v.description ? v.description.slice(0, 80) + (v.description.length>80? '...':'') : ''}</div>
+                      {v.originalVideoSize > 0 && (
+                        <div className="text-[11px] font-semibold text-emerald-600 mt-1 flex items-center gap-1 whitespace-nowrap">
+                          <span>📹 Video:</span>
+                          <span>{getCompressionText(v.originalVideoSize, v.compressedVideoSize)}</span>
+                        </div>
+                      )}
+                      {v.originalThumbnailSize > 0 && (
+                        <div className="text-[11px] font-semibold text-indigo-500 mt-0.5 flex items-center gap-1 whitespace-nowrap">
+                          <span>🖼️ Thumb:</span>
+                          <span>{getCompressionText(v.originalThumbnailSize, v.compressedThumbnailSize)}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </td>

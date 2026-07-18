@@ -383,8 +383,17 @@ exports.uploadVideo = async (req, res, next) => {
       });
     }
 
+    const originalVideoSize = Number(req.body.originalVideoSize || 0);
+    const compressedVideoSize = req.files.video[0].size || 0;
+
+    let originalThumbnailSize = 0;
+    let compressedThumbnailSize = 0;
+
     let thumbnail = FALLBACK_THUMBNAIL;
     if (req.files.thumbnail && req.files.thumbnail[0]) {
+      originalThumbnailSize = Number(req.body.originalThumbnailSize || 0);
+      compressedThumbnailSize = req.files.thumbnail[0].size || 0;
+
       const thumbnailResult = await saveLocalFile(req, req.files.thumbnail[0], "image");
       thumbnail = thumbnailResult.url;
       const thumbIdx = tempFiles.indexOf(req.files.thumbnail[0].path);
@@ -403,6 +412,10 @@ exports.uploadVideo = async (req, res, next) => {
       aspectRatio,
       owner: req.user.id,
       visibility: req.body.visibility || "public",
+      originalVideoSize,
+      compressedVideoSize,
+      originalThumbnailSize,
+      compressedThumbnailSize,
     });
 
     res.status(201).json({ success: true, data: video });
@@ -446,6 +459,8 @@ exports.updateVideo = async (req, res, next) => {
       tempFiles.push(req.files.thumbnail[0].path);
       const thumbnailResult = await saveLocalFile(req, req.files.thumbnail[0], "image");
       updates.thumbnail = thumbnailResult.url;
+      updates.originalThumbnailSize = Number(req.body.originalThumbnailSize || 0);
+      updates.compressedThumbnailSize = req.files.thumbnail[0].size || 0;
       const thumbIdx = tempFiles.indexOf(req.files.thumbnail[0].path);
       if (thumbIdx !== -1) tempFiles.splice(thumbIdx, 1);
 

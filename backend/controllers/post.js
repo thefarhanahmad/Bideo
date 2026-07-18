@@ -19,11 +19,16 @@ exports.createPost = async (req, res, next) => {
     if (!text && !imageUrl) {
       return res.status(400).json({ success: false, message: 'Post text or image is required' });
     }
+    const originalImageSize = Number(req.body.originalImageSize || 0);
+    const compressedImageSize = req.file ? req.file.size : 0;
+
     const post = await Post.create({
       owner: req.user.id,
       text,
       imageUrl,
       visibility: req.body.visibility || 'public',
+      originalImageSize,
+      compressedImageSize,
     });
     res.status(201).json({ success: true, data: post });
   } catch (err) {
@@ -43,12 +48,17 @@ exports.updatePost = async (req, res, next) => {
     let imageUrl = post.imageUrl;
 
     if (req.file) {
+      post.originalImageSize = Number(req.body.originalImageSize || 0);
+      post.compressedImageSize = req.file.size || 0;
+
       const result = await saveLocalFile(req, req.file, 'image');
       imageUrl = result.url;
       if (post.imageUrl) await deleteLocalFile(post.imageUrl);
     } else if (req.body.removeImage === 'true') {
       if (post.imageUrl) await deleteLocalFile(post.imageUrl);
       imageUrl = '';
+      post.originalImageSize = 0;
+      post.compressedImageSize = 0;
     }
 
     if (!text && !imageUrl) {

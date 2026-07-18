@@ -40,12 +40,17 @@ exports.createAd = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Please upload an ad image' });
     }
 
+    const originalImageSize = Number(req.body.originalImageSize || 0);
+    const compressedImageSize = req.file ? req.file.size : 0;
+
     const ad = await Ad.create({
       title,
       image: imageUrl,
       type: type || 'banner',
       activeStatus: activeStatus === 'true' || activeStatus === true,
       link: link || '',
+      originalImageSize,
+      compressedImageSize,
     });
 
     res.status(201).json({ success: true, data: ad });
@@ -72,6 +77,10 @@ exports.updateAd = async (req, res, next) => {
       if (ad.image) {
         await deleteLocalFile(ad.image);
       }
+      
+      ad.originalImageSize = Number(req.body.originalImageSize || 0);
+      ad.compressedImageSize = req.file.size || 0;
+
       const result = await saveLocalFile(req, req.file, 'image');
       imageUrl = result.url;
     }

@@ -177,6 +177,12 @@ export default function UploadVideoScreen() {
       if (video.height) {
         formData.append('height', String(video.height));
       }
+      if (video.fileSize) {
+        formData.append('originalVideoSize', String(video.fileSize));
+      }
+      if (thumbnail && thumbnail.fileSize) {
+        formData.append('originalThumbnailSize', String(thumbnail.fileSize));
+      }
 
       // @ts-ignore
       formData.append('video', {
@@ -263,6 +269,9 @@ export default function UploadVideoScreen() {
         formData.append('category', category);
         formData.append('tags', tags);
         formData.append('visibility', visibility);
+        if (thumbnail && thumbnail.fileSize) {
+          formData.append('originalThumbnailSize', String(thumbnail.fileSize));
+        }
         // @ts-ignore
         formData.append('thumbnail', {
           uri: finalThumbnailUri,
