@@ -4,13 +4,11 @@ const Follower = require("../models/Follower");
 const VideoView = require("../models/VideoView");
 const VideoReport = require("../models/VideoReport");
 const Notification = require("../models/Notification");
-const cloudinary = require("cloudinary").v2;
 const fs = require("fs");
 const {
-  deleteFromCloudinary,
-  optimizedVideoUrl,
-  imageUploadOptions,
-} = require("../utils/cloudinary");
+  saveLocalFile,
+  deleteLocalFile,
+} = require("../utils/localUpload");
 
 const FALLBACK_THUMBNAIL =
   "https://via.placeholder.com/640x360.png?text=Tube+India";
@@ -365,48 +363,32 @@ exports.uploadVideo = async (req, res, next) => {
     }
 
     const uploadType = req.body.uploadType === "short" ? "short" : "video";
-    const videoResult = await cloudinary.uploader.upload_large(
-      req.files.video[0].path,
-      {
-        resource_type: "video",
-        folder: "bideo/videos",
-        chunk_size: 6000000, // 6MB chunks
-      },
-    );
+    
+    // Save video locally
+    const videoResult = await saveLocalFile(req, req.files.video[0], "video");
+    const videoIdx = tempFiles.indexOf(req.files.video[0].path);
+    if (videoIdx !== -1) tempFiles.splice(videoIdx, 1);
 
-    const width = Number(videoResult.width || 0);
-    const height = Number(videoResult.height || 0);
+    // Read details passed from frontend or default to 0
+    const width = Number(req.body.width || 0);
+    const height = Number(req.body.height || 0);
     const aspectRatio = width && height ? width / height : null;
+    const duration = Number(req.body.duration || 0);
+
     if (uploadType === "short" && !isNineBySixteen(aspectRatio)) {
-      await deleteFromCloudinary(videoResult.secure_url, "video");
+      await deleteLocalFile(videoResult.url);
       return res.status(400).json({
         success: false,
         message: "Shorts must be portrait 9:16 videos",
       });
     }
 
-    // Compressed delivery URL (Cloudinary transcodes on first request and caches).
-    const optimizedVideo = optimizedVideoUrl(videoResult.public_id);
-
     let thumbnail = FALLBACK_THUMBNAIL;
     if (req.files.thumbnail && req.files.thumbnail[0]) {
-      const thumbnailResult = await cloudinary.uploader.upload(
-        req.files.thumbnail[0].path,
-        imageUploadOptions("bideo/thumbnails"),
-      );
-      thumbnail = thumbnailResult.secure_url;
-    } else {
-      thumbnail = cloudinary.url(`${videoResult.public_id}.jpg`, {
-        resource_type: "video",
-        start_offset: 1,
-        width: 640,
-        height: 360,
-        crop: "fill",
-        quality: "auto",
-        secure: true,
-      });
-
-      console.log("Generated Thumbnail URL:", thumbnail);
+      const thumbnailResult = await saveLocalFile(req, req.files.thumbnail[0], "image");
+      thumbnail = thumbnailResult.url;
+      const thumbIdx = tempFiles.indexOf(req.files.thumbnail[0].path);
+      if (thumbIdx !== -1) tempFiles.splice(thumbIdx, 1);
     }
 
     const video = await Video.create({
@@ -414,9 +396,9 @@ exports.uploadVideo = async (req, res, next) => {
       description: req.body.description || "",
       category: req.body.category || undefined,
       tags: normalizeTags(req.body.tags),
-      videoUrl: optimizedVideo || videoResult.secure_url,
-      thumbnail: thumbnail || FALLBACK_THUMBNAIL,
-      duration: videoResult.duration || 0,
+      videoUrl: videoResult.url,
+      thumbnail: thumbnail,
+      duration: duration,
       isShort: uploadType === "short",
       aspectRatio,
       owner: req.user.id,
@@ -462,12 +444,12 @@ exports.updateVideo = async (req, res, next) => {
 
     if (req.files && req.files.thumbnail && req.files.thumbnail[0]) {
       tempFiles.push(req.files.thumbnail[0].path);
-      const thumbnailResult = await cloudinary.uploader.upload(
-        req.files.thumbnail[0].path,
-        imageUploadOptions("bideo/thumbnails"),
-      );
-      updates.thumbnail = thumbnailResult.secure_url;
-      if (video.thumbnail) await deleteFromCloudinary(video.thumbnail, "image");
+      const thumbnailResult = await saveLocalFile(req, req.files.thumbnail[0], "image");
+      updates.thumbnail = thumbnailResult.url;
+      const thumbIdx = tempFiles.indexOf(req.files.thumbnail[0].path);
+      if (thumbIdx !== -1) tempFiles.splice(thumbIdx, 1);
+
+      if (video.thumbnail) await deleteLocalFile(video.thumbnail);
     }
 
     video = await Video.findByIdAndUpdate(req.params.id, updates, {
@@ -531,8 +513,8 @@ exports.deleteVideo = async (req, res, next) => {
       });
     }
 
-    if (video.videoUrl) await deleteFromCloudinary(video.videoUrl, "video");
-    if (video.thumbnail) await deleteFromCloudinary(video.thumbnail, "image");
+    if (video.videoUrl) await deleteLocalFile(video.videoUrl);
+    if (video.thumbnail) await deleteLocalFile(video.thumbnail);
 
     await video.deleteOne();
     res.status(200).json({ success: true, data: {} });

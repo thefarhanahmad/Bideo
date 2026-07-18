@@ -2,7 +2,7 @@ const User = require('../models/User');
 const Video = require('../models/Video');
 const Post = require('../models/Post');
 const Follower = require('../models/Follower');
-const { deleteFromCloudinary } = require('../utils/cloudinary');
+const { deleteLocalFile } = require('../utils/localUpload');
 
 // @desc Create user
 // @route POST /api/users
@@ -234,9 +234,12 @@ exports.deleteUser = async (req, res, next) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-    // Delete avatar from Cloudinary
+    // Delete avatar and cover image from local storage
     if (user.avatar) {
-      await deleteFromCloudinary(user.avatar, 'image');
+      deleteLocalFile(user.avatar);
+    }
+    if (user.coverImage) {
+      deleteLocalFile(user.coverImage);
     }
 
     await user.deleteOne();

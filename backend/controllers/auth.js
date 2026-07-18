@@ -99,8 +99,7 @@ exports.googleLogin = async (req, res, next) => {
   }
 };
 
-const cloudinary = require('cloudinary').v2;
-const { imageUploadOptions } = require('../utils/cloudinary');
+const { saveLocalFile, deleteLocalFile } = require('../utils/localUpload');
 
 // @desc    Update current user channel
 // @route   PUT /api/auth/channel
@@ -111,14 +110,25 @@ exports.updateChannel = async (req, res, next) => {
     let avatar = req.body.avatar ? normalizeAvatar(req.body.avatar) : undefined;
     let coverImage = req.body.coverImage;
 
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
     if (req.files) {
       if (req.files.avatar && req.files.avatar[0]) {
-        const result = await cloudinary.uploader.upload(req.files.avatar[0].path, imageUploadOptions('bideo/avatars'));
-        avatar = result.secure_url;
+        const result = await saveLocalFile(req, req.files.avatar[0], 'image');
+        avatar = result.url;
+        if (user.avatar) {
+          deleteLocalFile(user.avatar);
+        }
       }
       if (req.files.coverImage && req.files.coverImage[0]) {
-        const result = await cloudinary.uploader.upload(req.files.coverImage[0].path, imageUploadOptions('bideo/covers'));
-        coverImage = result.secure_url;
+        const result = await saveLocalFile(req, req.files.coverImage[0], 'image');
+        coverImage = result.url;
+        if (user.coverImage) {
+          deleteLocalFile(user.coverImage);
+        }
       }
     }
 
@@ -126,7 +136,7 @@ exports.updateChannel = async (req, res, next) => {
     if (avatar !== undefined) updateData.avatar = avatar;
     if (coverImage !== undefined) updateData.coverImage = coverImage;
 
-    const user = await User.findByIdAndUpdate(
+    const updatedUser = await User.findByIdAndUpdate(
       req.user.id,
       updateData,
       { new: true, runValidators: true }
@@ -134,7 +144,7 @@ exports.updateChannel = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      data: user,
+      data: updatedUser,
     });
   } catch (err) {
     next(err);

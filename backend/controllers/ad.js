@@ -1,6 +1,5 @@
 const Ad = require('../models/Ad');
-const cloudinary = require('cloudinary').v2;
-const { deleteFromCloudinary, imageUploadOptions } = require('../utils/cloudinary');
+const { saveLocalFile, deleteLocalFile } = require('../utils/localUpload');
 
 // @desc    Get all ads (admin only)
 // @route   GET /api/ads
@@ -35,8 +34,8 @@ exports.createAd = async (req, res, next) => {
     let imageUrl = '';
 
     if (req.file) {
-      const result = await cloudinary.uploader.upload(req.file.path, imageUploadOptions('bideo/ads'));
-      imageUrl = result.secure_url;
+      const result = await saveLocalFile(req, req.file, 'image');
+      imageUrl = result.url;
     } else {
       return res.status(400).json({ success: false, message: 'Please upload an ad image' });
     }
@@ -71,10 +70,10 @@ exports.updateAd = async (req, res, next) => {
     if (req.file) {
       // Delete old image
       if (ad.image) {
-        await deleteFromCloudinary(ad.image, 'image');
+        await deleteLocalFile(ad.image);
       }
-      const result = await cloudinary.uploader.upload(req.file.path, imageUploadOptions('bideo/ads'));
-      imageUrl = result.secure_url;
+      const result = await saveLocalFile(req, req.file, 'image');
+      imageUrl = result.url;
     }
 
     ad.title = title || ad.title;
@@ -106,7 +105,7 @@ exports.deleteAd = async (req, res, next) => {
     }
 
     if (ad.image) {
-      await deleteFromCloudinary(ad.image, 'image');
+      await deleteLocalFile(ad.image);
     }
 
     await ad.deleteOne();

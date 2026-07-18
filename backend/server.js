@@ -8,13 +8,9 @@ if (!globalThis.crypto) {
 
 const app = require("./app");
 const connectDB = require("./config/db");
-const connectCloudinary = require("./config/cloudinary");
 
 // Connect to database
 connectDB();
-
-// Connect to Cloudinary
-connectCloudinary();
 
 const PORT = process.env.PORT || 5000;
 

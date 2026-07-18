@@ -147,6 +147,19 @@ export default function UploadVideoScreen() {
       if (tags.trim()) formData.append('tags', tags.trim());
       formData.append('visibility', visibility);
 
+      if (video.duration !== undefined && video.duration !== null) {
+        // Normalize duration (expo-image-picker duration can sometimes be in milliseconds, but usually seconds).
+        // Let's divide by 1000 if it is a large number (e.g. > 10000 for a short video, which means it is in milliseconds).
+        const durationSec = video.duration > 10000 ? video.duration / 1000 : video.duration;
+        formData.append('duration', String(durationSec));
+      }
+      if (video.width) {
+        formData.append('width', String(video.width));
+      }
+      if (video.height) {
+        formData.append('height', String(video.height));
+      }
+
       // @ts-ignore
       formData.append('video', {
         uri: video.uri,

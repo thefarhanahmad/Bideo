@@ -5,6 +5,8 @@ const helmet = require("helmet");
 const morgan = require("morgan");
 const dotenv = require("dotenv");
 
+const path = require("path");
+
 // Load env vars
 dotenv.config();
 
@@ -28,6 +30,8 @@ const ads = require("./routes/ads");
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
 const allowedOrigins = [
   "http://localhost:5173",
   "http://192.168.3.107:5173",
@@ -48,7 +52,9 @@ app.use(
     credentials: true,
   }),
 );
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
 
 if (process.env.NODE_ENV === "development") {
   app.use(morgan("dev"));

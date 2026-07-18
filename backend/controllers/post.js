@@ -1,8 +1,7 @@
 const Post = require('../models/Post');
 const Follower = require('../models/Follower');
 const Notification = require('../models/Notification');
-const cloudinary = require('cloudinary').v2;
-const { deleteFromCloudinary, imageUploadOptions } = require('../utils/cloudinary');
+const { saveLocalFile, deleteLocalFile } = require('../utils/localUpload');
 
 const createNotification = async ({ recipient, actor, type, video, post, comment, message }) => {
   if (!recipient || !actor || recipient.toString() === actor.toString()) return;
@@ -14,8 +13,8 @@ exports.createPost = async (req, res, next) => {
     const text = (req.body.text || '').trim();
     let imageUrl = req.body.imageUrl;
     if (req.file) {
-      const result = await cloudinary.uploader.upload(req.file.path, imageUploadOptions('bideo/posts'));
-      imageUrl = result.secure_url;
+      const result = await saveLocalFile(req, req.file, 'image');
+      imageUrl = result.url;
     }
     if (!text && !imageUrl) {
       return res.status(400).json({ success: false, message: 'Post text or image is required' });
@@ -44,11 +43,11 @@ exports.updatePost = async (req, res, next) => {
     let imageUrl = post.imageUrl;
 
     if (req.file) {
-      const result = await cloudinary.uploader.upload(req.file.path, imageUploadOptions('bideo/posts'));
-      imageUrl = result.secure_url;
-      if (post.imageUrl) await deleteFromCloudinary(post.imageUrl, 'image');
+      const result = await saveLocalFile(req, req.file, 'image');
+      imageUrl = result.url;
+      if (post.imageUrl) await deleteLocalFile(post.imageUrl);
     } else if (req.body.removeImage === 'true') {
-      if (post.imageUrl) await deleteFromCloudinary(post.imageUrl, 'image');
+      if (post.imageUrl) await deleteLocalFile(post.imageUrl);
       imageUrl = '';
     }
 
@@ -137,7 +136,7 @@ exports.deletePost = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Not authorized to delete this post' });
     }
 
-    if (post.imageUrl) await deleteFromCloudinary(post.imageUrl, 'image');
+    if (post.imageUrl) await deleteLocalFile(post.imageUrl);
     await post.deleteOne();
 
     res.status(200).json({ success: true, data: {} });

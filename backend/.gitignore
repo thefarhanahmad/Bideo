@@ -67,3 +67,6 @@ coverage/
 *.bak
 *.tmp
 *.temp
+
+# Local uploads
+uploads/
