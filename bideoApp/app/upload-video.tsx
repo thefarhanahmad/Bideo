@@ -8,6 +8,7 @@ import Colors from '../constants/Colors';
 import api from '../services/api';
 import { showAlert } from '../components/AppAlert';
 import { hapticSelection } from '../utils/haptics';
+import * as VideoThumbnails from 'expo-video-thumbnails';
 
 const FALLBACK_THUMBNAIL = 'https://via.placeholder.com/640x360.png?text=Tube+India';
 
@@ -167,10 +168,24 @@ export default function UploadVideoScreen() {
         name: 'video.mp4',
       });
 
-      if (thumbnail) {
+      let finalThumbnailUri = thumbnail?.uri;
+      if (!finalThumbnailUri && video.uri) {
+        try {
+          const thumbResult = await VideoThumbnails.getThumbnailAsync(video.uri, {
+            time: 1000,
+          });
+          if (thumbResult && thumbResult.uri) {
+            finalThumbnailUri = thumbResult.uri;
+          }
+        } catch (thumbErr) {
+          console.warn('Error generating automatic thumbnail:', thumbErr);
+        }
+      }
+
+      if (finalThumbnailUri) {
         // @ts-ignore
         formData.append('thumbnail', {
-          uri: thumbnail.uri,
+          uri: finalThumbnailUri,
           type: 'image/jpeg',
           name: 'thumbnail.jpg',
         });
