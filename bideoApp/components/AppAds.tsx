@@ -69,6 +69,8 @@ export const AppAdBanner: React.FC<AppAdBannerProps> = ({ size }: AppAdBannerPro
   }
 };
 
+let globalAdIndex = 0;
+
 interface AppInterstitialAdProps {
   visible: boolean;
   onClose: () => void;
@@ -98,25 +100,35 @@ export const AppInterstitialAd: React.FC<AppInterstitialAdProps> = ({ visible, o
     const fetchAd = async () => {
       try {
         const res = await api.get('/ads/active');
-        if (res.data.success && res.data.data) {
-          const ads = res.data.data;
-          const fullAd = ads.find((ad: any) => ad.type === 'full' && ad.activeStatus);
-          if (fullAd && fullAd.image) {
-            const resolvedUrl = resolveMediaUrl(fullAd.image);
-            RNImage.getSize(resolvedUrl, (w, h) => {
-              if (w && h) {
-                setAdAspectRatio(w / h);
-              }
-            }, (err) => {
-              console.log('Failed to fetch ad image size:', err);
-            });
-            setUploadedAd(fullAd);
+        if (res.data.success && Array.isArray(res.data.data) && res.data.data.length > 0) {
+          const activeAds = res.data.data.filter((ad: any) => ad && ad.activeStatus !== false);
+          if (activeAds.length > 0) {
+            let fullAds = activeAds.filter((ad: any) => ad.type === 'full');
+            const pool = fullAds.length > 0 ? fullAds : activeAds;
+            const selectedAd = pool[globalAdIndex % pool.length];
+            globalAdIndex = (globalAdIndex + 1) % pool.length;
+
+            if (selectedAd && selectedAd.image) {
+              const resolvedUrl = resolveMediaUrl(selectedAd.image);
+              RNImage.getSize(resolvedUrl, (w, h) => {
+                if (w && h) {
+                  setAdAspectRatio(w / h);
+                }
+              }, (err) => {
+                console.log('Failed to fetch ad image size:', err);
+              });
+              setUploadedAd(selectedAd);
+            } else {
+              setUploadedAd(null);
+            }
           } else {
             setUploadedAd(null);
           }
+        } else {
+          setUploadedAd(null);
         }
       } catch (err) {
-        console.log('Failed to fetch active full ads:', err);
+        console.log('Failed to fetch active ads:', err);
       }
     };
     fetchAd();
@@ -208,9 +220,22 @@ export const AppInterstitialAd: React.FC<AppInterstitialAdProps> = ({ visible, o
     };
   }, [visible, realAdFailed]);
 
-  const handleAdPress = () => {
-    if (uploadedAd && uploadedAd.link) {
-      Linking.openURL(uploadedAd.link).catch((err) => console.log('Failed to open ad link:', err));
+  const handleAdPress = async () => {
+    if (!uploadedAd || !uploadedAd.link) return;
+    let url = uploadedAd.link.trim();
+    if (!url) return;
+    if (!/^https?:\/\//i.test(url) && !/^[a-zA-Z]+:\/\//i.test(url)) {
+      url = `https://${url}`;
+    }
+    try {
+      const canOpen = await Linking.canOpenURL(url);
+      if (canOpen) {
+        await Linking.openURL(url);
+      } else {
+        await Linking.openURL(url);
+      }
+    } catch (err) {
+      console.log('Failed to open ad link:', url, err);
     }
   };
 
@@ -242,7 +267,7 @@ export const AppInterstitialAd: React.FC<AppInterstitialAdProps> = ({ visible, o
             <TouchableOpacity
               style={adStyles.uploadedBodyContainer}
               onPress={handleAdPress}
-              activeOpacity={0.95}
+              activeOpacity={0.85}
             >
               <Image
                 source={{ uri: resolveMediaUrl(uploadedAd.image) }}
@@ -250,6 +275,15 @@ export const AppInterstitialAd: React.FC<AppInterstitialAdProps> = ({ visible, o
                 contentFit="contain"
               />
               <Text style={adStyles.uploadedAdTitle} numberOfLines={1}>{uploadedAd.title}</Text>
+              {!!uploadedAd.link && (
+                <TouchableOpacity
+                  style={[adStyles.ctaButton, { marginTop: 12 }]}
+                  onPress={handleAdPress}
+                  activeOpacity={0.8}
+                >
+                  <Text style={adStyles.ctaText}>VISIT SPONSOR SITE</Text>
+                </TouchableOpacity>
+              )}
             </TouchableOpacity>
           ) : (
             <View style={adStyles.adBody}>

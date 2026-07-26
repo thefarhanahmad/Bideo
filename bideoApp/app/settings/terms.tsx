@@ -38,7 +38,7 @@ export default function TermsScreen() {
     },
     {
       title: '8. Contact',
-      content: 'Questions about these terms can be sent to bideoapps@gmail.com.'
+      content: 'Questions about these terms can be sent to bideoApps@gmail.com.'
     }
   ];
 

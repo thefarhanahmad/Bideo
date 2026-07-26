@@ -13,11 +13,19 @@ import api, { setAuthToken } from '../../services/api';
 export default function SettingsScreen() {
   const router = useRouter();
   const dispatch = useDispatch();
+  const { isAuthenticated, loading: authLoading } = useSelector((state: RootState) => state.auth);
 
   const [monetizationInfo, setMonetizationInfo] = useState<any>(null);
   const [loadingMonetization, setLoadingMonetization] = useState(true);
 
   useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.replace('/(tabs)/library');
+    }
+  }, [isAuthenticated, authLoading]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
     const fetchMonetization = async () => {
       try {
         const res = await api.get('/users/monetization/status');
@@ -31,7 +39,7 @@ export default function SettingsScreen() {
       }
     };
     fetchMonetization();
-  }, []);
+  }, [isAuthenticated]);
 
   const handleLogout = () => {
     showAlert(

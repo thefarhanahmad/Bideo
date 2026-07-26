@@ -56,11 +56,13 @@ export default function LibraryScreen() {
 
   useEffect(() => {
     navigation.setOptions({
-      headerRight: () => (
-        <TouchableOpacity style={{ marginRight: 15 }} onPress={() => router.push('/settings')}>
-          <Ionicons name="settings-outline" size={24} color={Colors.primary} />
-        </TouchableOpacity>
-      ),
+      headerRight: isAuthenticated
+        ? () => (
+            <TouchableOpacity style={{ marginRight: 15 }} onPress={() => router.push('/settings')}>
+              <Ionicons name="settings-outline" size={24} color={Colors.primary} />
+            </TouchableOpacity>
+          )
+        : () => null,
     });
   }, [navigation, isAuthenticated]);
 

@@ -34,7 +34,7 @@ export default function PrivacyScreen() {
     },
     {
       title: '7. Contact',
-      content: 'For privacy questions, contact bideoapps@gmail.com.'
+      content: 'For privacy questions, contact bideoApps@gmail.com.'
     }
   ];
 
