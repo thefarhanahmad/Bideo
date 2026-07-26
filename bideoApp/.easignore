@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Local Expo & Metro build caches
+.expo/
+dist/
+web-build/
+
+# Android native build output & intermediate compiled C++/Gradle files
+android/app/build/
+android/.gradle/
+android/build/
+android/app/.cxx/
+
+# iOS native build output
+ios/build/
+
+# Output app packages
+*.apk
+*.aab
+*.tar.gz
+*.zip
+
+# Local environment & backup files
+.env.local
+.env.*.local
+app.json.bak
+
+# Miscellaneous
+.kotlin/
+*.tsbuildinfo
+.DS_Store
+*.pem
