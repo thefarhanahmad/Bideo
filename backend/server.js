@@ -8,9 +8,13 @@ if (!globalThis.crypto) {
 
 const app = require("./app");
 const connectDB = require("./config/db");
+const { initDeletionScheduler } = require("./utils/deletionScheduler");
 
 // Connect to database
 connectDB();
+
+// Initialize deletion scheduler cron/timer
+initDeletionScheduler();
 
 const PORT = process.env.PORT || 5000;
 

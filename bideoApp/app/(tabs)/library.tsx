@@ -45,13 +45,17 @@ export default function LibraryScreen() {
     useCallback(() => {
       if (!authLoading) {
         if (isAuthenticated) {
+          if (user?.deletionScheduled) {
+            router.replace('/account-recovery');
+            return;
+          }
           loadAllData();
           setAuthModalVisible(false);
         } else {
           setAuthModalVisible(true);
         }
       }
-    }, [isAuthenticated, authLoading])
+    }, [isAuthenticated, authLoading, user])
   );
 
   useEffect(() => {

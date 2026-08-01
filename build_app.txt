@@ -10,7 +10,7 @@ cd ~/Bideo
 chmod +x deploy.sh
 ./deploy.sh
 
-$env:REACT_NATIVE_PACKAGER_HOSTNAME="10.119.238.90"
+$env:REACT_NATIVE_PACKAGER_HOSTNAME="192.168.3.108"
 npx expo start -c
 
 

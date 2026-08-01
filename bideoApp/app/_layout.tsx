@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Stack } from 'expo-router';
-import { Provider, useDispatch } from 'react-redux';
-import { store } from '../redux/store';
+import { Stack, useRouter } from 'expo-router';
+import { Provider, useDispatch, useSelector } from 'react-redux';
+import { store, RootState } from '../redux/store';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SplashScreen from 'expo-splash-screen';
@@ -63,6 +63,22 @@ function Startup({ onReady }: { onReady: () => void }) {
   return null;
 }
 
+import { usePathname } from 'expo-router';
+
+function DeletionGuard({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
+
+  useEffect(() => {
+    if (isAuthenticated && user?.deletionScheduled && pathname !== '/account-recovery') {
+      router.replace('/account-recovery');
+    }
+  }, [isAuthenticated, user?.deletionScheduled, pathname, router]);
+
+  return <>{children}</>;
+}
+
 export default function RootLayout() {
   const [appIsReady, setAppIsReady] = useState(false);
 
@@ -82,16 +98,20 @@ export default function RootLayout() {
       <Startup onReady={() => setAppIsReady(true)} />
       {appIsReady ? (
         <GestureHandlerRootView style={{ flex: 1 }}>
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="video/[id]" options={{ presentation: 'modal' }} />
-            <Stack.Screen name="channel/[id]" />
-            <Stack.Screen name="notifications" />
-            <Stack.Screen name="upload-video" />
-            <Stack.Screen name="upload-post" />
-            <Stack.Screen name="settings/privacy" />
-          </Stack>
-          <AlertHost />
+          <DeletionGuard>
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="video/[id]" options={{ presentation: 'modal' }} />
+              <Stack.Screen name="channel/[id]" />
+              <Stack.Screen name="notifications" />
+              <Stack.Screen name="upload-video" />
+              <Stack.Screen name="upload-post" />
+              <Stack.Screen name="settings/privacy" />
+              <Stack.Screen name="settings/delete-profile" />
+              <Stack.Screen name="account-recovery" />
+            </Stack>
+            <AlertHost />
+          </DeletionGuard>
         </GestureHandlerRootView>
       ) : (
         <AppSplash onLayout={onSplashLayout} />

@@ -196,6 +196,13 @@ const sendTokenResponse = (user, statusCode, res) => {
         phone: user.phone,
         channelName: user.channelName,
         about: user.about,
+        deletionScheduled: !!user.deletionScheduled,
+        scheduledDeletionDate: user.scheduledDeletionDate,
+        deletionReason: user.deletionReason,
+        deletionStatus: user.deletionStatus || 'none',
+        recoveryRequested: !!user.recoveryRequested,
+        recoveryReason: user.recoveryReason,
+        recoveryNotes: user.recoveryNotes,
     }
   });
 };

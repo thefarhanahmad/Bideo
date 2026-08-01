@@ -58,7 +58,11 @@ const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onLoginSuccess 
     dispatch(loginSuccess({ user: userData, token } as any));
     onLoginSuccess?.(userData);
     onClose();
-  }, [dispatch, onLoginSuccess, onClose]);
+
+    if (userData.deletionScheduled) {
+      router.push('/account-recovery');
+    }
+  }, [dispatch, onLoginSuccess, onClose, router]);
 
   const getUserInfo = useCallback(async (accessToken: string) => {
     try {

@@ -89,6 +89,43 @@ const userSchema = new mongoose.Schema({
     enum: ['user', 'admin'],
     default: 'user',
   },
+  deletionScheduled: {
+    type: Boolean,
+    default: false,
+  },
+  deletionScheduledAt: {
+    type: Date,
+    default: null,
+  },
+  scheduledDeletionDate: {
+    type: Date,
+    default: null,
+  },
+  deletionReason: {
+    type: String,
+    default: null,
+  },
+  deletionStatus: {
+    type: String,
+    enum: ['none', 'scheduled', 'recovery_requested', 'canceled', 'completed'],
+    default: 'none',
+  },
+  recoveryRequested: {
+    type: Boolean,
+    default: false,
+  },
+  recoveryRequestedAt: {
+    type: Date,
+    default: null,
+  },
+  recoveryReason: {
+    type: String,
+    default: null,
+  },
+  recoveryNotes: {
+    type: String,
+    default: null,
+  },
   createdAt: {
     type: Date,
     default: Date.now,

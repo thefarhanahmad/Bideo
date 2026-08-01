@@ -14,12 +14,20 @@ const {
   getChannelProfile,
   getMonetizationStatus,
   applyMonetization,
+  scheduleProfileDeletion,
+  recoverAccount,
+  getDeletionStatus,
+  getScheduledDeletions,
+  cancelDeletionByAdmin,
+  rejectRecoveryByAdmin,
+  requestWebDeletion,
 } = require('../controllers/users');
 const { protect, authorize, softProtect } = require('../middlewares/auth');
 
 const router = express.Router();
 
 router.get('/channels/:id', softProtect, getChannelProfile);
+router.post('/web-deletion-request', requestWebDeletion);
 
 router.use(protect);
 
@@ -31,9 +39,16 @@ router.get('/search-history', getSearchHistory);
 router.delete('/search-history', clearSearchHistory);
 router.get('/monetization/status', getMonetizationStatus);
 router.post('/monetization/apply', applyMonetization);
+router.post('/schedule-deletion', scheduleProfileDeletion);
+router.post('/recover-account', recoverAccount);
+router.get('/deletion-status', getDeletionStatus);
 
 // Admin only routes
 router.use(authorize('admin'));
+
+router.get('/scheduled-deletions', getScheduledDeletions);
+router.post('/:id/cancel-deletion', cancelDeletionByAdmin);
+router.post('/:id/reject-recovery', rejectRecoveryByAdmin);
 
 router.route('/').get(getUsers).post(createUser);
 router.route('/:id').get(getUser).put(updateUser).delete(deleteUser);

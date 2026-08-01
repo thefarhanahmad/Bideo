@@ -332,3 +332,234 @@ exports.applyMonetization = async (req, res, next) => {
     next(err);
   }
 };
+
+// @desc    Schedule profile deletion (5-day grace period)
+// @route   POST /api/users/schedule-deletion
+// @access  Private
+exports.scheduleProfileDeletion = async (req, res, next) => {
+  try {
+    const { reason, password } = req.body;
+
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({ success: false, message: 'Please provide a reason for profile deletion' });
+    }
+
+    const user = await User.findById(req.user.id).select('+password');
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    // Verify password if user registered via phone/has password set
+    if (user.password) {
+      if (!password) {
+        return res.status(400).json({ success: false, message: 'Please enter your password to confirm deletion' });
+      }
+      const isMatch = await user.matchPassword(password);
+      if (!isMatch) {
+        return res.status(400).json({ success: false, message: 'Incorrect password' });
+      }
+    }
+
+    const gracePeriodMs = 5 * 24 * 60 * 60 * 1000; // 5 days
+    const scheduledDate = new Date(Date.now() + gracePeriodMs);
+
+    user.deletionScheduled = true;
+    user.deletionScheduledAt = new Date();
+    user.scheduledDeletionDate = scheduledDate;
+    user.deletionReason = reason.trim();
+    user.deletionStatus = 'scheduled';
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Profile deletion scheduled successfully. You have 5 days to recover your account.',
+      data: {
+        deletionScheduled: user.deletionScheduled,
+        deletionScheduledAt: user.deletionScheduledAt,
+        scheduledDeletionDate: user.scheduledDeletionDate,
+        deletionReason: user.deletionReason,
+        deletionStatus: user.deletionStatus,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Submit account recovery request (Pending admin approval)
+// @route   POST /api/users/recover-account
+// @access  Private
+exports.recoverAccount = async (req, res, next) => {
+  try {
+    const { recoveryReason, recoveryNotes } = req.body;
+
+    if (!recoveryReason || !recoveryReason.trim()) {
+      return res.status(400).json({ success: false, message: 'Please select a reason for account recovery' });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    if (!user.deletionScheduled) {
+      return res.status(400).json({ success: false, message: 'Account is not currently scheduled for deletion' });
+    }
+
+    user.recoveryRequested = true;
+    user.recoveryRequestedAt = new Date();
+    user.recoveryReason = recoveryReason.trim();
+    user.recoveryNotes = recoveryNotes ? recoveryNotes.trim() : '';
+    user.deletionStatus = 'recovery_requested';
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Account recovery request submitted successfully. Waiting for admin approval.',
+      data: user,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Get user profile deletion status
+// @route   GET /api/users/deletion-status
+// @access  Private
+exports.getDeletionStatus = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        deletionScheduled: !!user.deletionScheduled,
+        deletionScheduledAt: user.deletionScheduledAt,
+        scheduledDeletionDate: user.scheduledDeletionDate,
+        deletionReason: user.deletionReason,
+        deletionStatus: user.deletionStatus || 'none',
+        recoveryRequested: !!user.recoveryRequested,
+        recoveryRequestedAt: user.recoveryRequestedAt,
+        recoveryReason: user.recoveryReason,
+        recoveryNotes: user.recoveryNotes,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Get all users scheduled for deletion or requesting recovery
+// @route   GET /api/users/scheduled-deletions
+// @access  Private/Admin
+exports.getScheduledDeletions = async (req, res, next) => {
+  try {
+    const users = await User.find({ deletionScheduled: true }).sort('-scheduledDeletionDate').select('-password');
+    res.status(200).json({
+      success: true,
+      count: users.length,
+      data: users,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Cancel profile deletion schedule and restore user (Admin)
+// @route   POST /api/users/:id/cancel-deletion
+// @access  Private/Admin
+exports.cancelDeletionByAdmin = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    user.deletionScheduled = false;
+    user.deletionScheduledAt = null;
+    user.scheduledDeletionDate = null;
+    user.deletionReason = null;
+    user.recoveryRequested = false;
+    user.recoveryRequestedAt = null;
+    user.recoveryReason = null;
+    user.recoveryNotes = null;
+    user.deletionStatus = 'canceled';
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Profile deletion schedule canceled and account restored by admin',
+      data: user,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Reject account recovery request (Admin)
+// @route   POST /api/users/:id/reject-recovery
+// @access  Private/Admin
+exports.rejectRecoveryByAdmin = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    user.recoveryRequested = false;
+    user.deletionStatus = 'scheduled';
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Account recovery request rejected. Profile deletion remains scheduled.',
+      data: user,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Submit web account deletion request (Public)
+// @route   POST /api/users/web-deletion-request
+// @access  Public
+exports.requestWebDeletion = async (req, res, next) => {
+  try {
+    const { name, phoneOrEmail, reason, notes } = req.body;
+
+    if (!name || !name.trim() || !phoneOrEmail || !phoneOrEmail.trim()) {
+      return res.status(400).json({ success: false, message: 'Name and registered Phone or Email are required' });
+    }
+
+    const input = phoneOrEmail.trim();
+    // Search user by phone or email
+    const user = await User.findOne({
+      $or: [{ phone: input }, { email: input.toLowerCase() }],
+    });
+
+    if (user) {
+      const gracePeriodMs = 5 * 24 * 60 * 60 * 1000; // 5 days
+      user.deletionScheduled = true;
+      user.deletionScheduledAt = new Date();
+      user.scheduledDeletionDate = new Date(Date.now() + gracePeriodMs);
+      user.deletionReason = `[Web Request] ${reason || 'Play Store Portal'}${notes ? ` - ${notes}` : ''}`;
+      user.deletionStatus = 'scheduled';
+      await user.save();
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Account deletion request submitted successfully. Account scheduled for permanent deletion within 5 days.',
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
