@@ -29,6 +29,7 @@ const cols = [
       { label: "Moderation", to: "/moderation" },
       { label: "Cookies", to: "/cookies" },
       { label: "Account Deletion", to: "/account-deletion" },
+      { label: "Child Safety Standards", to: "/child-safety" },
       { label: "Refunds", to: "/refunds" },
     ],
   },

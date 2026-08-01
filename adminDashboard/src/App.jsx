@@ -10,6 +10,7 @@ import CopyrightPolicy from './pages/CopyrightPolicy';
 import ModerationPolicy from './pages/ModerationPolicy';
 import CookiePolicy from './pages/CookiePolicy';
 import AccountDeletion from './pages/AccountDeletion';
+import ChildSafety from './pages/ChildSafety';
 import RefundPolicy from './pages/RefundPolicy';
 import AdminLayout from './components/AdminLayout';
 import DashboardHome from './pages/DashboardHome';
@@ -43,6 +44,7 @@ function App() {
         <Route path="/moderation" element={<ModerationPolicy />} />
         <Route path="/cookies" element={<CookiePolicy />} />
         <Route path="/account-deletion" element={<AccountDeletion />} />
+        <Route path="/child-safety" element={<ChildSafety />} />
         <Route path="/refunds" element={<RefundPolicy />} />
 
         {/* Admin login */}
