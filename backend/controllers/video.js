@@ -231,13 +231,17 @@ exports.recordView = async (req, res, next) => {
         user: userId || undefined,
         deviceId: userId ? undefined : String(deviceId),
       });
-      video.views += 1;
-      await video.save();
     } catch (err) {
-      if (err.code !== 11000) throw err;
+      if (err.code !== 11000) console.warn("VideoView logging warning:", err.message);
     }
 
-    res.status(200).json({ success: true, views: video.views });
+    const updatedVideo = await Video.findByIdAndUpdate(
+      video._id,
+      { $inc: { views: 1 } },
+      { new: true }
+    );
+
+    res.status(200).json({ success: true, views: updatedVideo ? updatedVideo.views : (video.views + 1) });
   } catch (err) {
     next(err);
   }

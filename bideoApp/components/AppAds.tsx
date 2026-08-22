@@ -287,10 +287,10 @@ export const AppInterstitialAd: React.FC<AppInterstitialAdProps> = ({ visible, o
             </TouchableOpacity>
           ) : (
             <View style={adStyles.adBody}>
-              <Ionicons name="gift-outline" size={70} color="#FFD700" style={adStyles.adIcon} />
-              <Text style={adStyles.adTitle}>Bideo Premium</Text>
+              <Ionicons name="play-circle-outline" size={70} color="#FFD700" style={adStyles.adIcon} />
+              <Text style={adStyles.adTitle}>Enjoying Bideo?</Text>
               <Text style={adStyles.adDescription}>
-                Enjoy background video playback, offline downloads, and an completely ad-free experience. Support Bideo today!
+                Discover trending videos, shorts, and connect with your favorite creators anytime.
               </Text>
             </View>
           )}
@@ -301,7 +301,7 @@ export const AppInterstitialAd: React.FC<AppInterstitialAdProps> = ({ visible, o
               style={adStyles.ctaButton}
               onPress={onClose}
             >
-              <Text style={adStyles.ctaText}>TRY 1 MONTH FREE</Text>
+              <Text style={adStyles.ctaText}>CONTINUE WATCHING</Text>
             </TouchableOpacity>
           )}
         </View>

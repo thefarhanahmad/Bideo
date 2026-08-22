@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, FlatList, Share } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -19,6 +19,7 @@ import { hapticLight } from '../../utils/haptics';
 import { AppInterstitialAd } from '../../components/AppAds';
 
 const FALLBACK_IMAGE = 'https://via.placeholder.com/80x80.png?text=User';
+const REQUIRED_WATCH_TIME = 10; // 10 seconds minimum watch time to count a view
 
 export default function VideoScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -43,6 +44,10 @@ export default function VideoScreen() {
   const [showingAd, setShowingAd] = useState(false);
   const [adCompleted, setAdCompleted] = useState(false);
 
+  // View tracking states
+  const viewRecordedRef = useRef(false);
+  const watchTimeRef = useRef(0);
+
   const playMainVideo = useCallback(async () => {
     if (!video?.videoUrl) return;
     setShowingAd(false);
@@ -61,6 +66,8 @@ export default function VideoScreen() {
 
   useEffect(() => {
     if (id) {
+      viewRecordedRef.current = false;
+      watchTimeRef.current = 0;
       loadVideoData();
     }
   }, [id]);
@@ -79,14 +86,59 @@ export default function VideoScreen() {
     setShowingAd(true);
   }, [video?.videoUrl, player]);
 
+  // Track active watch time (10 seconds required before recording a view)
+  useEffect(() => {
+    if (!video?._id) return;
+
+    const interval = setInterval(() => {
+      try {
+        if (player && player.playing && !showingAd) {
+          // If user restarted/replayed video from start after previous view was recorded, allow a new view
+          if (viewRecordedRef.current && player.currentTime < 1 && watchTimeRef.current >= REQUIRED_WATCH_TIME) {
+            viewRecordedRef.current = false;
+            watchTimeRef.current = 0;
+          }
+
+          if (!viewRecordedRef.current) {
+            watchTimeRef.current += 1;
+
+            const duration = player.duration || video.duration || 0;
+            const targetTime = (duration > 0 && duration < REQUIRED_WATCH_TIME)
+              ? Math.max(duration - 1, 1)
+              : REQUIRED_WATCH_TIME;
+
+            if (watchTimeRef.current >= targetTime) {
+              viewRecordedRef.current = true;
+              videoService.recordView(video._id)
+                .then((res) => {
+                  if (res?.views) {
+                    setVideo((prev: any) => prev ? { ...prev, views: res.views } : prev);
+                  }
+                })
+                .catch(() => {});
+            }
+          }
+        }
+      } catch {}
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [video?._id, player, showingAd]);
+
   useFocusEffect(
     useCallback(() => {
+      // Whenever the screen gains focus (e.g., reopened from home), reset tracking state
+      viewRecordedRef.current = false;
+      watchTimeRef.current = 0;
+      if (id) {
+        loadVideoData();
+      }
       return () => {
         try {
           player.pause();
         } catch {}
       };
-    }, [player])
+    }, [id, player])
   );
 
   const loadVideoData = async () => {
@@ -111,11 +163,6 @@ export default function VideoScreen() {
       // Add to History
       if (isAuthenticated && videoData?._id) {
         api.post('/users/history', { videoId: videoData._id }).catch(() => {});
-      }
-      if (videoData?._id) {
-        videoService.recordView(videoData._id)
-          .then((res) => setVideo((prev: any) => prev ? { ...prev, views: res.views } : prev))
-          .catch(() => {});
       }
     } catch (err) {
       console.error('Failed to load video data', err);

@@ -46,9 +46,13 @@ function Startup({ onReady }: { onReady: () => void }) {
           const user = res.data && res.data.data ? res.data.data : res.data;
           dispatch(loginSuccess({ user, token } as any));
         }
-      } catch (err) {
+      } catch (err: any) {
+        await AsyncStorage.removeItem('token');
+        setAuthToken(null);
         dispatch(loginFailure('Session expired'));
-        console.warn('Auth bootstrap failed', err);
+        if (err?.response?.status !== 401) {
+          console.warn('Auth bootstrap error:', err?.message || err);
+        }
       } finally {
         // Ensure splash shows for at least 2 seconds
         const elapsedTime = Date.now() - startTime;

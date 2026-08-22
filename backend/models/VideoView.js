@@ -20,13 +20,14 @@ const videoViewSchema = new mongoose.Schema({
   },
 });
 
-videoViewSchema.index(
-  { video: 1, user: 1 },
-  { unique: true, partialFilterExpression: { user: { $exists: true } } },
-);
-videoViewSchema.index(
-  { video: 1, deviceId: 1 },
-  { unique: true, partialFilterExpression: { deviceId: { $exists: true, $type: 'string' } } },
-);
+videoViewSchema.index({ video: 1, createdAt: -1 });
+videoViewSchema.index({ user: 1 });
+videoViewSchema.index({ deviceId: 1 });
 
-module.exports = mongoose.model('VideoView', videoViewSchema);
+const VideoView = mongoose.model('VideoView', videoViewSchema);
+
+// Safely attempt dropping old unique indexes if they exist in MongoDB
+VideoView.collection.dropIndex('video_1_user_1').catch(() => {});
+VideoView.collection.dropIndex('video_1_deviceId_1').catch(() => {});
+
+module.exports = VideoView;

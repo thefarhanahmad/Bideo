@@ -305,7 +305,7 @@ export default function ChannelScreen() {
                   {channel?.channelName || channel?.name || 'Channel'}
                 </Text>
                 <Text style={styles.handle}>@{channel?.name || 'user'}</Text>
-                <Text style={styles.subscribers}>{channel?.followersCount || 0} subscribers</Text>
+                <Text style={styles.subscribers}>{channel?.followersCount || 0} followers</Text>
                 
                 {!!channel?.about && (
                   <TouchableOpacity activeOpacity={0.7} style={styles.aboutContainer} onPress={() => showAlert('About', channel.about)}>
@@ -328,7 +328,7 @@ export default function ChannelScreen() {
                     onPress={handleFollow}
                   >
                     <Text style={[styles.followBtnText, channel?.isFollowing && styles.followedBtnText]}>
-                      {channel?.isFollowing ? 'Following' : 'Subscribe'}
+                      {channel?.isFollowing ? 'Following' : 'Follow'}
                     </Text>
                   </TouchableOpacity>
                 )}

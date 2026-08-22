@@ -64,6 +64,15 @@ const SAMPLE_VIDEOS = [
   }
 ];
 
+const shuffleArray = <T,>(array: T[]): T[] => {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+};
+
 export default function HomeScreen() {
   const dispatch = useDispatch();
   const router = useRouter();
@@ -90,7 +99,7 @@ export default function HomeScreen() {
   const loadVideos = async () => {
     try {
       dispatch(fetchVideosStart());
-      const data = await videoService.getVideos({ sort: 'latest' });
+      const data = await videoService.getVideos();
       // data: array of videos
       console.log('Fetched videos from API ✅');
       if (data && data.length > 0) {
@@ -99,20 +108,17 @@ export default function HomeScreen() {
           ...v,
           category: v.category && (v.category.name || v.category),
         }));
-        const ordered = [...normalized].sort((a: any, b: any) => {
-          const aTime = new Date(a?.createdAt || 0).getTime();
-          const bTime = new Date(b?.createdAt || 0).getTime();
-          return bTime - aTime;
-        });
-        dispatch(fetchVideosSuccess(ordered));
+        // Randomize homepage feed for a fresh experience on every visit
+        const randomized = shuffleArray(normalized);
+        dispatch(fetchVideosSuccess(randomized));
       } else {
         // Fallback to sample data if API returns empty
-        dispatch(fetchVideosSuccess(SAMPLE_VIDEOS));
+        dispatch(fetchVideosSuccess(shuffleArray(SAMPLE_VIDEOS)));
       }
     } catch (err: any) {
       // Fallback to sample data on error
       console.error('Error fetching videos:', err);
-      dispatch(fetchVideosSuccess(SAMPLE_VIDEOS));
+      dispatch(fetchVideosSuccess(shuffleArray(SAMPLE_VIDEOS)));
       console.log('Using sample data due to API error');
     }
   };
@@ -161,8 +167,11 @@ export default function HomeScreen() {
     ? posts
     : [];
 
-  const longVideosAndPosts = [...filteredVideos.filter(v => !v.isShort).map((item: any) => ({ ...item, itemType: 'video' })), ...filteredPosts.map((item: any) => ({ ...item, itemType: 'post' }))]
-    .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+  const longVideos = filteredVideos.filter(v => !v.isShort).map((item: any) => ({ ...item, itemType: 'video' }));
+  const postItems = filteredPosts.map((item: any) => ({ ...item, itemType: 'post' }));
+  const longVideosAndPosts = selectedCategory === 'All'
+    ? [...longVideos, ...postItems]
+    : [...longVideos, ...postItems].sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
 
   const shortsItems = filteredVideos.filter(v => v.isShort);
 

@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useIsFocused } from '@react-navigation/native';
 import Colors from '../../constants/Colors';
-import api from '../../services/api';
+import api, { videoService } from '../../services/api';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import AuthModal from '../../components/AuthModal';
@@ -16,6 +16,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatViews } from '../../utils/formatDate';
 import { hapticLight } from '../../utils/haptics';
 import { AppInterstitialAd } from '../../components/AppAds';
+
+const shuffleArray = <T,>(array: T[]): T[] => {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+};
 
 const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
 
@@ -60,7 +69,7 @@ export default function ShortsScreen() {
   const loadShorts = async () => {
     setLoading(true);
     try {
-      const data = await api.get('/videos', { params: { type: 'short', sort: 'latest' } });
+      const data = await api.get('/videos', { params: { type: 'short' } });
       const onlyShorts = (data.data.data || [])
         .filter((v: any) => v.isShort === true) // Extra check
         .map((v: any) => ({
@@ -81,16 +90,22 @@ export default function ShortsScreen() {
           createdAt: v.createdAt,
         }));
       
-      const orderedShorts = [...onlyShorts].sort((a: any, b: any) => {
-        const aTime = new Date(a?.createdAt || 0).getTime();
-        const bTime = new Date(b?.createdAt || 0).getTime();
-        return bTime - aTime;
-      });
+      // Randomize shorts for a fresh discover feed on every app visit
+      let randomizedShorts: any[] = shuffleArray(onlyShorts);
+
+      // If opened with a specific initial short ID, move it to the top
+      if (initialShortId) {
+        const targetIndex = randomizedShorts.findIndex((s: any) => s._id === initialShortId);
+        if (targetIndex > 0) {
+          const [targetShort] = randomizedShorts.splice(targetIndex, 1);
+          randomizedShorts.unshift(targetShort);
+        }
+      }
       
       const withAds: any[] = [];
       let shortCount = 0;
-      for (let i = 0; i < orderedShorts.length; i++) {
-        withAds.push(orderedShorts[i]);
+      for (let i = 0; i < randomizedShorts.length; i++) {
+        withAds.push(randomizedShorts[i]);
         shortCount++;
         if (shortCount === 3) {
           withAds.push({
@@ -441,13 +456,18 @@ const ShortItem = ({ item, index, activeVideoIndex, containerHeight, isFocused, 
   const [iconName, setIconName] = useState<'play' | 'pause'>('play');
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.7)).current;
-
   const isActive = isFocused && activeVideoIndex === index;
 
-  // Reset the manual pause state whenever this short leaves the viewport.
+  const SHORT_WATCH_THRESHOLD = 10; // 10 seconds minimum watch time to count a view
+  const viewRecordedRef = useRef(false);
+  const watchTimeRef = useRef(0);
+
+  // Reset the manual pause state and view tracking whenever this short leaves the viewport.
   useEffect(() => {
     if (!isActive) {
       setIsPaused(false);
+      viewRecordedRef.current = false;
+      watchTimeRef.current = 0;
     }
   }, [isActive]);
 
@@ -461,6 +481,39 @@ const ShortItem = ({ item, index, activeVideoIndex, containerHeight, isFocused, 
       }
     } catch {}
   }, [isActive, isPaused, player]);
+
+  // Track active watch time (10 seconds required before recording a view)
+  useEffect(() => {
+    if (!isActive || !item?._id) return;
+
+    const interval = setInterval(() => {
+      try {
+        if (player && player.playing && !isPaused) {
+          // If the short looped back to start after a view was recorded, allow a new view session
+          if (viewRecordedRef.current && player.currentTime < 1 && watchTimeRef.current >= SHORT_WATCH_THRESHOLD) {
+            viewRecordedRef.current = false;
+            watchTimeRef.current = 0;
+          }
+
+          if (!viewRecordedRef.current) {
+            watchTimeRef.current += 1;
+
+            const duration = player.duration || item.duration || 0;
+            const targetTime = (duration > 0 && duration < SHORT_WATCH_THRESHOLD)
+              ? Math.max(duration - 0.5, 1)
+              : SHORT_WATCH_THRESHOLD;
+
+            if (watchTimeRef.current >= targetTime) {
+              viewRecordedRef.current = true;
+              videoService.recordView(item._id).catch(() => {});
+            }
+          }
+        }
+      } catch {}
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isActive, isPaused, item?._id, player]);
 
   const togglePlayPause = () => {
     const newPausedState = !isPaused;

@@ -63,7 +63,7 @@ function ChannelSearchResultCard({ channel }: { channel: any }) {
           </Text>
         )}
         <Text style={styles.channelCardSubscribers}>
-          {followersCount} subscriber{followersCount !== 1 ? 's' : ''}
+          {followersCount} follower{followersCount !== 1 ? 's' : ''}
         </Text>
         {channel.about ? (
           <Text style={styles.channelCardAbout} numberOfLines={1}>
@@ -77,7 +77,7 @@ function ChannelSearchResultCard({ channel }: { channel: any }) {
         activeOpacity={0.8}
       >
         <Text style={[styles.followBtnText, following && styles.followingBtnText]}>
-          {following ? 'Following' : 'Subscribe'}
+          {following ? 'Following' : 'Follow'}
         </Text>
       </TouchableOpacity>
       <AuthModal visible={authModalVisible} onClose={() => setAuthModalVisible(false)} />
