@@ -1,7 +1,14 @@
-eas build:configure
+  ### 1. Build a Local Release APK (For Testing on Physical Device)
 
-eas build --platform android --profile preview
+  Open your terminal or PowerShell and run:
 
+    cd D:\Bideo\bideoApp\android
+    .\gradlew assembleRelease
+
+  │ Where to find the built APK:
+  │ D:\Bideo\bideoApp\android\app\build\outputs\apk\release\app-release.apk
+
+  #Production
 
 Bideo@#12345
 ssh root@200.97.169.18
@@ -10,9 +17,19 @@ cd ~/Bideo
 chmod +x deploy.sh
 ./deploy.sh
 
+#Run with Expo
+
 $env:REACT_NATIVE_PACKAGER_HOSTNAME="192.168.3.108"
 npx expo start -c
 
+  ### 3. When You Are Ready to Publish (Build Google Play AAB Bundle)
 
+  Once you finish testing and are ready to upload to Google Play Console:
 
-https://expo.dev/accounts/farhan_01/projects/bideoApp/builds/50f75fb3-c108-496d-9178-8a647897e425
+    cd D:\Bideo\bideoApp\android
+    .\gradlew bundleRelease
+
+  │ Where to find the Google Play .aab file:
+  │ D:\Bideo\bideoApp\android\app\build\outputs\bundle\release\app-release.aab
+
+  Upload this .aab file to Google Play Console → Production.

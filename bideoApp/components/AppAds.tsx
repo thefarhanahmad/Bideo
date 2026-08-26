@@ -30,11 +30,11 @@ const resolveMediaUrl = (url: string) => {
 export const ADMOB_IDS = {
   BANNER: __DEV__
     ? (Platform.OS === 'ios' ? 'ca-app-pub-3940256099942544/2934735716' : 'ca-app-pub-3940256099942544/6300978111')
-    : (Constants.expoConfig?.extra?.ADMOB_BANNER_ID || process.env.EXPO_PUBLIC_ADMOB_BANNER_ID || 'your-production-banner-id'),
+    : (Constants.expoConfig?.extra?.ADMOB_BANNER_ID || process.env.EXPO_PUBLIC_ADMOB_BANNER_ID || 'ca-app-pub-6331792031097303/7103600940'),
 
   INTERSTITIAL: __DEV__
     ? (Platform.OS === 'ios' ? 'ca-app-pub-3940256099942544/4411468910' : 'ca-app-pub-3940256099942544/1033173712')
-    : (Constants.expoConfig?.extra?.ADMOB_INTERSTITIAL_ID || process.env.EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID || 'your-production-interstitial-id'),
+    : (Constants.expoConfig?.extra?.ADMOB_INTERSTITIAL_ID || process.env.EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID || 'ca-app-pub-6331792031097303/8580334145'),
 };
 
 interface AppAdBannerProps {
@@ -163,11 +163,13 @@ export const AppInterstitialAd: React.FC<AppInterstitialAdProps> = ({ visible, o
       };
 
       const unsubscribeLoaded = interstitial.addAdEventListener(AdEventType.LOADED, () => {
-        triggerSuccess();
-        interstitial.show().catch((err: any) => {
-          console.log('Failed to show interstitial:', err);
-          triggerFallback();
-        });
+        if (!hasResponded) {
+          triggerSuccess();
+          interstitial.show().catch((err: any) => {
+            console.log('Failed to show interstitial:', err);
+            triggerFallback();
+          });
+        }
       });
 
       const unsubscribeClosed = interstitial.addAdEventListener(AdEventType.CLOSED, () => {
@@ -181,10 +183,10 @@ export const AppInterstitialAd: React.FC<AppInterstitialAdProps> = ({ visible, o
 
       interstitial.load();
 
-      // 4-second safety timeout for loading the real ad. Fallback to mock ad if it takes too long.
+      // 7-second safety timeout for loading the real ad. Fallback to sponsor/mock ad if network is slow.
       const loadTimeout = setTimeout(() => {
         triggerFallback();
-      }, 4000);
+      }, 7000);
 
       return () => {
         clearTimeout(loadTimeout);
