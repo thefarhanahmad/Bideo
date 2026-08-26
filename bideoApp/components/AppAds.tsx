@@ -96,6 +96,7 @@ export const AppInterstitialAd: React.FC<AppInterstitialAdProps> = ({ visible, o
   const [realAdFailed, setRealAdFailed] = useState(false);
   const [uploadedAd, setUploadedAd] = useState<any>(null);
   const [adAspectRatio, setAdAspectRatio] = useState(16 / 9);
+  const [manualAdFetched, setManualAdFetched] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
@@ -104,6 +105,8 @@ export const AppInterstitialAd: React.FC<AppInterstitialAdProps> = ({ visible, o
     setCanClose(false);
     setShowingRealAd(false);
     setRealAdFailed(false);
+    setManualAdFetched(false);
+    setUploadedAd(null);
 
     const fetchAd = async () => {
       try {
@@ -137,6 +140,8 @@ export const AppInterstitialAd: React.FC<AppInterstitialAdProps> = ({ visible, o
         }
       } catch (err) {
         console.log('Failed to fetch active ads:', err);
+      } finally {
+        setManualAdFetched(true);
       }
     };
     fetchAd();
@@ -191,10 +196,10 @@ export const AppInterstitialAd: React.FC<AppInterstitialAdProps> = ({ visible, o
 
       interstitial.load();
 
-      // 7-second safety timeout for loading the real ad. Fallback to sponsor/mock ad if network is slow.
+      // 6-second safety timeout for loading the real ad. Fallback to manual ad if network is slow.
       const loadTimeout = setTimeout(() => {
         triggerFallback();
-      }, 7000);
+      }, 6000);
 
       return () => {
         clearTimeout(loadTimeout);
@@ -210,9 +215,17 @@ export const AppInterstitialAd: React.FC<AppInterstitialAdProps> = ({ visible, o
     }
   }, [visible]);
 
-  // Simulated ad countdown timer
+  // When AdMob fails and manual ad fetch is complete:
+  // If there's no manual ad uploaded from backend, proceed to video immediately!
   useEffect(() => {
-    if (!visible || !realAdFailed) return;
+    if (visible && realAdFailed && manualAdFetched && !uploadedAd) {
+      onClose();
+    }
+  }, [visible, realAdFailed, manualAdFetched, uploadedAd]);
+
+  // Simulated ad countdown timer (only runs when showing a manual uploaded ad)
+  useEffect(() => {
+    if (!visible || !realAdFailed || !uploadedAd) return;
 
     const interval = setInterval(() => {
       setAdTimeRemaining((prev) => {
@@ -228,7 +241,7 @@ export const AppInterstitialAd: React.FC<AppInterstitialAdProps> = ({ visible, o
     return () => {
       clearInterval(interval);
     };
-  }, [visible, realAdFailed]);
+  }, [visible, realAdFailed, uploadedAd]);
 
   const handleAdPress = async () => {
     if (!uploadedAd || !uploadedAd.link) return;
@@ -249,13 +262,15 @@ export const AppInterstitialAd: React.FC<AppInterstitialAdProps> = ({ visible, o
     }
   };
 
-  if (!visible) return null;
-  if (showingRealAd) return null; // Real ad is presented on top by the native SDK
+  // Do NOT render fallback modal while AdMob is attempting to load or if no manual ad exists
+  if (!visible || showingRealAd || !realAdFailed || !uploadedAd) {
+    return null;
+  }
 
   return (
-    <Modal visible={visible} transparent animationType="slide">
+    <Modal visible={true} transparent animationType="slide">
       <View style={adStyles.adModalContainer}>
-        <View style={[adStyles.adModalContent, uploadedAd && adStyles.uploadedModalContent]}>
+        <View style={[adStyles.adModalContent, adStyles.uploadedModalContent]}>
           {/* Header */}
           <View style={adStyles.adHeader}>
             <View style={adStyles.adBadge}>
@@ -273,47 +288,27 @@ export const AppInterstitialAd: React.FC<AppInterstitialAdProps> = ({ visible, o
           </View>
 
           {/* Ad Body */}
-          {uploadedAd ? (
-            <TouchableOpacity
-              style={adStyles.uploadedBodyContainer}
-              onPress={handleAdPress}
-              activeOpacity={0.85}
-            >
-              <Image
-                source={{ uri: resolveMediaUrl(uploadedAd.image) }}
-                style={[adStyles.adFullImage, { aspectRatio: adAspectRatio }]}
-                contentFit="contain"
-              />
-              <Text style={adStyles.uploadedAdTitle} numberOfLines={1}>{uploadedAd.title}</Text>
-              {!!uploadedAd.link && (
-                <TouchableOpacity
-                  style={[adStyles.ctaButton, { marginTop: 12 }]}
-                  onPress={handleAdPress}
-                  activeOpacity={0.8}
-                >
-                  <Text style={adStyles.ctaText}>VISIT SPONSOR SITE</Text>
-                </TouchableOpacity>
-              )}
-            </TouchableOpacity>
-          ) : (
-            <View style={adStyles.adBody}>
-              <Ionicons name="play-circle-outline" size={70} color="#FFD700" style={adStyles.adIcon} />
-              <Text style={adStyles.adTitle}>Enjoying Bideo?</Text>
-              <Text style={adStyles.adDescription}>
-                Discover trending videos, shorts, and connect with your favorite creators anytime.
-              </Text>
-            </View>
-          )}
-
-          {/* Footer Call to Action */}
-          {!uploadedAd && (
-            <TouchableOpacity
-              style={adStyles.ctaButton}
-              onPress={onClose}
-            >
-              <Text style={adStyles.ctaText}>CONTINUE WATCHING</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={adStyles.uploadedBodyContainer}
+            onPress={handleAdPress}
+            activeOpacity={0.85}
+          >
+            <Image
+              source={{ uri: resolveMediaUrl(uploadedAd.image) }}
+              style={[adStyles.adFullImage, { aspectRatio: adAspectRatio }]}
+              contentFit="contain"
+            />
+            <Text style={adStyles.uploadedAdTitle} numberOfLines={1}>{uploadedAd.title}</Text>
+            {!!uploadedAd.link && (
+              <TouchableOpacity
+                style={[adStyles.ctaButton, { marginTop: 12 }]}
+                onPress={handleAdPress}
+                activeOpacity={0.8}
+              >
+                <Text style={adStyles.ctaText}>VISIT SPONSOR SITE</Text>
+              </TouchableOpacity>
+            )}
+          </TouchableOpacity>
         </View>
       </View>
     </Modal>
