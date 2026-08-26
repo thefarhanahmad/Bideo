@@ -107,7 +107,7 @@ export default function ShortsScreen() {
       for (let i = 0; i < randomizedShorts.length; i++) {
         withAds.push(randomizedShorts[i]);
         shortCount++;
-        if (shortCount === 3) {
+        if (shortCount === 5) {
           withAds.push({
             _id: `short_ad_${i}`,
             isAd: true,
