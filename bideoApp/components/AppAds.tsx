@@ -26,15 +26,23 @@ const resolveMediaUrl = (url: string) => {
   return url;
 };
 
-// Configure AdMob IDs here. Replace with your actual IDs in production.
-export const ADMOB_IDS = {
-  BANNER: __DEV__
-    ? (Platform.OS === 'ios' ? 'ca-app-pub-3940256099942544/2934735716' : 'ca-app-pub-3940256099942544/6300978111')
-    : (Constants.expoConfig?.extra?.ADMOB_BANNER_ID || process.env.EXPO_PUBLIC_ADMOB_BANNER_ID || 'ca-app-pub-6331792031097303/7103600940'),
+const TEST_BANNER_ID = Platform.OS === 'ios' ? 'ca-app-pub-3940256099942544/2934735716' : 'ca-app-pub-3940256099942544/6300978111';
+const TEST_INTERSTITIAL_ID = Platform.OS === 'ios' ? 'ca-app-pub-3940256099942544/4411468910' : 'ca-app-pub-3940256099942544/1033173712';
 
-  INTERSTITIAL: __DEV__
-    ? (Platform.OS === 'ios' ? 'ca-app-pub-3940256099942544/4411468910' : 'ca-app-pub-3940256099942544/1033173712')
-    : (Constants.expoConfig?.extra?.ADMOB_INTERSTITIAL_ID || process.env.EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID || 'ca-app-pub-6331792031097303/8580334145'),
+const REAL_BANNER_ID = 'ca-app-pub-6331792031097303/7103600940';
+const REAL_INTERSTITIAL_ID = 'ca-app-pub-6331792031097303/8580334145';
+
+// Use test ads in development OR when EXPO_PUBLIC_USE_TEST_ADS is explicitly true (local test APK builds)
+const isTestingAds = __DEV__ || process.env.EXPO_PUBLIC_USE_TEST_ADS === 'true';
+
+export const ADMOB_IDS = {
+  BANNER: isTestingAds
+    ? TEST_BANNER_ID
+    : (Constants.expoConfig?.extra?.ADMOB_BANNER_ID || process.env.EXPO_PUBLIC_ADMOB_BANNER_ID || REAL_BANNER_ID),
+
+  INTERSTITIAL: isTestingAds
+    ? TEST_INTERSTITIAL_ID
+    : (Constants.expoConfig?.extra?.ADMOB_INTERSTITIAL_ID || process.env.EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID || REAL_INTERSTITIAL_ID),
 };
 
 interface AppAdBannerProps {
