@@ -21,6 +21,8 @@ const fmtExact = (n) => {
   return num.toLocaleString('en-IN');
 };
 
+const fmt = fmtExact;
+
 const DashboardHome = () => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -70,11 +72,43 @@ const DashboardHome = () => {
     );
   }
 
+  if (!stats) {
+    return (
+      <div className="rounded-2xl border border-line bg-white p-8 text-center text-muted">
+        No stats available.
+      </div>
+    );
+  }
+
   const cards = [
-    { icon: UsersIcon, label: 'Total Users', value: fmtExact(stats.users.total), hint: `${fmtExact(stats.users.admins)} admins · ${fmtExact(stats.users.monetized || 0)} monetized`, tone: 'brand' },
-    { icon: PlayIcon, label: 'Videos', value: fmtExact(stats.videos.total), hint: `${fmtExact(stats.videos.longVideos || 0)} long · ${fmtExact(stats.videos.shorts || 0)} shorts`, tone: 'blue' },
-    { icon: EyeIcon, label: 'Total Views', value: fmtExact(stats.totalViews), hint: `${fmtExact(Math.round(stats.avgViewsPerVideo || 0))} avg / video`, tone: 'violet' },
-    { icon: TagIcon, label: 'Categories', value: fmtExact(stats.categories.total), hint: 'content categories', tone: 'green' },
+    {
+      icon: UsersIcon,
+      label: 'Total Users',
+      value: fmtExact(stats.users?.total),
+      hint: `${fmtExact(stats.users?.admins || 0)} admins · ${fmtExact(stats.users?.monetized || 0)} monetized`,
+      tone: 'brand',
+    },
+    {
+      icon: PlayIcon,
+      label: 'Videos',
+      value: fmtExact(stats.videos?.total),
+      hint: `${fmtExact(stats.videos?.longVideos || 0)} long · ${fmtExact(stats.videos?.shorts || 0)} shorts`,
+      tone: 'blue',
+    },
+    {
+      icon: EyeIcon,
+      label: 'Total Views',
+      value: fmtExact(stats.totalViews),
+      hint: `${fmtExact(Math.round(stats.avgViewsPerVideo || 0))} avg / video`,
+      tone: 'violet',
+    },
+    {
+      icon: TagIcon,
+      label: 'Categories',
+      value: fmtExact(stats.categories?.total),
+      hint: 'content categories',
+      tone: 'green',
+    },
   ];
 
   return (
@@ -85,7 +119,7 @@ const DashboardHome = () => {
           <h2 className="font-display text-xl sm:text-2xl font-extrabold text-ink truncate">Overview & Analytics</h2>
           <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-muted">A live snapshot of user growth, video publishing, and audience reach.</p>
         </div>
-        {stats.reports.open > 0 && (
+        {(stats.reports?.open || 0) > 0 && (
           <Link
             to="/admin/reports"
             className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-red-600 transition-colors hover:bg-red-100 shrink-0"
