@@ -566,7 +566,7 @@ const Users = () => {
 
       {/* Add User Modal */}
       {showAdd && (
-        <Modal title="Add User" onClose={() => setShowAdd(false)}>
+        <Modal title="Add User" maxWidth="max-w-3xl" onClose={() => setShowAdd(false)}>
           <UserForm onSubmit={handleCreate} onCancel={() => setShowAdd(false)} />
         </Modal>
       )}
@@ -575,6 +575,7 @@ const Users = () => {
       {showEdit && editUser && (
         <Modal
           title="Edit User"
+          maxWidth="max-w-3xl"
           onClose={() => {
             setShowEdit(false);
             setEditUser(null);
@@ -607,7 +608,7 @@ const Users = () => {
 };
 
 const inputClass =
-  "mt-1.5 w-full rounded-lg border border-line p-2.5 outline-none transition-colors focus:border-brand focus:ring-2 focus:ring-brand/20 text-sm";
+  "mt-1.5 w-full rounded-xl border border-line bg-white p-2.5 outline-none transition-colors focus:border-brand focus:ring-2 focus:ring-brand/20 text-xs sm:text-sm font-semibold text-ink";
 
 const UserForm = ({ initial = {}, onSubmit, onCancel }) => {
   const [name, setName] = useState(initial.name || "");
@@ -663,176 +664,166 @@ const UserForm = ({ initial = {}, onSubmit, onCancel }) => {
   };
 
   return (
-    <form onSubmit={submit} className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-ink">Name</label>
-          <input
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Full name"
-            className={inputClass}
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-ink">Role</label>
-          <select value={role} onChange={(e) => setRole(e.target.value)} className={inputClass}>
-            <option value="user">User</option>
-            <option value="admin">Admin</option>
-          </select>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-ink">Phone Number</label>
-          <input
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="e.g. 9876543210"
-            className={inputClass}
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-ink">Email</label>
-          <input
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="name@example.com"
-            className={inputClass}
-          />
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-xs font-bold uppercase tracking-wider text-ink">Channel Name</label>
-        <input
-          value={channelName}
-          onChange={(e) => setChannelName(e.target.value)}
-          placeholder="Channel handle / name"
-          className={inputClass}
-        />
-      </div>
-
-      {/* Set / Reset Password Section */}
-      <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-3.5 space-y-2.5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 font-bold text-xs text-amber-950">
-            <span>🔑</span>
-            <span>Set / Reset User Password</span>
-          </div>
-          <span className="text-[10px] font-semibold text-amber-800 bg-amber-100/90 px-2 py-0.5 rounded-md">
-            Leave blank to keep unchanged
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
+    <form onSubmit={submit} className="flex flex-col max-h-[78vh]">
+      {/* Scrollable Form Body */}
+      <div className="flex-1 overflow-y-auto pr-1 space-y-3.5 custom-scrollbar">
+        {/* Row 1: 3 Columns (Name, Phone, Email) */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-ink">
+              Full Name <span className="text-red-500">*</span>
+            </label>
             <input
-              type={showPassword ? "text" : "password"}
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Enter new password (min 6 characters)"
-              className="w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-xs font-bold text-ink focus:border-amber-500 focus:ring-2 focus:ring-amber-200 outline-none pr-12"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Full name"
+              className={inputClass}
             />
-            {newPassword.length > 0 && (
+          </div>
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-ink">
+              Phone Number
+            </label>
+            <input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="e.g. 9876543210"
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-ink">
+              Email Address
+            </label>
+            <input
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="name@example.com"
+              className={inputClass}
+            />
+          </div>
+        </div>
+
+        {/* Row 2: 3 Columns (Channel Name, Role, Password Reset) */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start">
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-ink">
+              Channel Handle / Name
+            </label>
+            <input
+              value={channelName}
+              onChange={(e) => setChannelName(e.target.value)}
+              placeholder="@channel_name"
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-ink">
+              Account Role
+            </label>
+            <select value={role} onChange={(e) => setRole(e.target.value)} className={inputClass}>
+              <option value="user">User (Standard)</option>
+              <option value="admin">Admin (Full Control)</option>
+            </select>
+          </div>
+          <div>
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold uppercase tracking-wider text-amber-950">
+                🔑 New Password
+              </label>
               <button
                 type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-[11px] font-bold text-amber-800 hover:text-amber-950"
+                onClick={handleGeneratePassword}
+                className="text-[10px] font-bold text-amber-800 hover:text-amber-950 underline"
               >
-                {showPassword ? "Hide" : "Show"}
+                🎲 Auto-Gen
               </button>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={handleGeneratePassword}
-            className="rounded-xl bg-white border border-amber-300 px-3 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100 transition-colors shrink-0 shadow-xs"
-            title="Generate a random 6-character password"
-          >
-            🎲 Auto-Generate
-          </button>
-        </div>
-
-        {newPassword ? (
-          <p className="text-[11px] font-semibold text-amber-900 leading-tight">
-            ⚠️ Saving will immediately update this user's password to <span className="font-bold font-mono bg-white px-1.5 py-0.5 rounded border border-amber-300 text-ink">"{newPassword}"</span>. Share this with the user so they can log in.
-          </p>
-        ) : (
-          <p className="text-[11px] text-amber-800/80 leading-tight">
-            If a user forgot their password, type a new password above (or click Auto-Generate) and click Save Changes.
-          </p>
-        )}
-      </div>
-
-      {/* Wallet Management Section */}
-      <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 font-bold text-sm text-emerald-900">
-            <span>💰</span>
-            <span>Creator Wallet & Earnings</span>
-          </div>
-          <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-md">
-            Live Sync
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-semibold text-emerald-900">
-              Current Available Balance (₹)
-            </label>
-            <div className="relative mt-1">
-              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-sm font-bold text-emerald-700 pointer-events-none">
-                ₹
-              </span>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={walletBalance}
-                onChange={(e) => setWalletBalance(e.target.value)}
-                placeholder="0.00"
-                className="w-full rounded-xl border border-emerald-200 bg-white pl-7 pr-3 py-2 text-sm font-bold text-ink focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none"
-              />
             </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-emerald-900">
-              Lifetime Total Earnings (₹)
-            </label>
-            <div className="relative mt-1">
-              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-sm font-bold text-emerald-700 pointer-events-none">
-                ₹
-              </span>
+            <div className="relative mt-1.5">
               <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={totalEarnings}
-                onChange={(e) => setTotalEarnings(e.target.value)}
-                placeholder="0.00"
-                className="w-full rounded-xl border border-emerald-200 bg-white pl-7 pr-3 py-2 text-sm font-bold text-ink focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none"
+                type={showPassword ? "text" : "password"}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Leave empty if unchanged"
+                className="w-full rounded-xl border border-amber-300 bg-amber-50/40 p-2.5 text-xs sm:text-sm font-semibold text-ink focus:border-amber-500 focus:ring-2 focus:ring-amber-200 outline-none pr-12"
               />
+              {newPassword.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-[10px] font-bold text-amber-800 hover:text-amber-950"
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Quick Assign Buttons */}
-        <div>
-          <span className="block text-[11px] font-semibold text-emerald-800 mb-1.5">
-            Quick Assign Funds:
-          </span>
-          <div className="flex flex-wrap gap-1.5">
+        {/* Row 3: Wallet Management Section */}
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-3.5 space-y-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 font-bold text-xs text-emerald-950">
+              <span>💰</span>
+              <span>Creator Wallet & Lifetime Earnings</span>
+            </div>
+            <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-100/90 px-2 py-0.5 rounded-md">
+              Instant App Balance Sync
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-emerald-900">
+                Available Wallet Balance (₹)
+              </label>
+              <div className="relative mt-1">
+                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-xs font-bold text-emerald-700 pointer-events-none">
+                  ₹
+                </span>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={walletBalance}
+                  onChange={(e) => setWalletBalance(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full rounded-xl border border-emerald-200 bg-white pl-6 pr-3 py-2 text-xs sm:text-sm font-bold text-ink focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-emerald-900">
+                Lifetime Total Earnings (₹)
+              </label>
+              <div className="relative mt-1">
+                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-xs font-bold text-emerald-700 pointer-events-none">
+                  ₹
+                </span>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={totalEarnings}
+                  onChange={(e) => setTotalEarnings(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full rounded-xl border border-emerald-200 bg-white pl-6 pr-3 py-2 text-xs sm:text-sm font-bold text-ink focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Assign Buttons */}
+          <div className="pt-1 flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] font-bold text-emerald-900 mr-1">Quick Add:</span>
             {[50, 100, 250, 500, 1000].map((val) => (
               <button
                 type="button"
                 key={val}
                 onClick={() => handleAddAmount(val)}
-                className="rounded-lg bg-white border border-emerald-200 px-2.5 py-1 text-xs font-bold text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300 transition-colors shadow-xs"
+                className="rounded-lg bg-white border border-emerald-300 px-2.5 py-1 text-xs font-bold text-emerald-800 hover:bg-emerald-100 hover:border-emerald-400 transition-colors shadow-xs"
               >
                 + ₹{val}
               </button>
@@ -846,23 +837,20 @@ const UserForm = ({ initial = {}, onSubmit, onCancel }) => {
             </button>
           </div>
         </div>
-
-        <p className="text-[11px] text-emerald-800/80 leading-tight">
-          Admin changes to wallet balance update the creator's in-app balance and withdrawal eligibility immediately.
-        </p>
       </div>
 
-      <div className="mt-6 flex justify-end gap-2 pt-2 border-t border-line">
+      {/* Sticky Bottom Action Buttons */}
+      <div className="mt-4 flex items-center justify-end gap-2 pt-3 border-t border-line shrink-0">
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-full bg-surface px-5 py-2 text-sm font-semibold text-ink hover:bg-line transition-colors"
+          className="rounded-full bg-surface px-5 py-2 text-xs sm:text-sm font-semibold text-ink hover:bg-line transition-colors"
         >
           Cancel
         </button>
         <button
           type="submit"
-          className="rounded-full bg-brand px-6 py-2 text-sm font-semibold text-white shadow-brand hover:bg-brand-dark transition-all hover:-translate-y-0.5"
+          className="rounded-full bg-brand px-6 py-2 text-xs sm:text-sm font-semibold text-white shadow-brand hover:bg-brand-dark transition-all hover:-translate-y-0.5"
         >
           Save Changes
         </button>
