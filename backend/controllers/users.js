@@ -1,3 +1,4 @@
+const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const Video = require('../models/Video');
 const Post = require('../models/Post');
@@ -170,6 +171,17 @@ exports.updateUser = async (req, res, next) => {
         return res.status(400).json({ success: false, message: 'Total earnings must be a valid non-negative number' });
       }
       update.totalEarnings = earningsNum;
+    }
+
+    // Hash password if admin is resetting/setting a new password for the user
+    if (update.password && typeof update.password === 'string' && update.password.trim().length > 0) {
+      if (update.password.trim().length < 6) {
+        return res.status(400).json({ success: false, message: 'Password must be at least 6 characters long' });
+      }
+      const salt = await bcrypt.genSalt(10);
+      update.password = await bcrypt.hash(update.password.trim(), salt);
+    } else {
+      delete update.password;
     }
 
     const user = await User.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: true }).select('-__v');
