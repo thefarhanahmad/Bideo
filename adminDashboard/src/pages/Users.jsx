@@ -234,22 +234,42 @@ const Users = () => {
     });
   };
 
-  const handleToggleVerify = async (user) => {
-    try {
-      const token = localStorage.getItem("admin_token");
-      const res = await fetch(`${API_URL}/api/users/${user._id}/verify`, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        credentials: "include",
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to update verified badge");
-      await fetchUsers();
-    } catch (err) {
-      alert(err.message);
-    }
+  const promptToggleVerify = (u) => {
+    const isGranting = !u.isVerified;
+    setConfirmDialog({
+      title: isGranting ? "Grant Verified Creator Badge" : "Remove Verified Badge",
+      message: isGranting
+        ? `Are you sure you want to grant the official blue Verified Creator badge to "${u.name || "this user"}" (@${u.channelName || u.name || "user"})? This will display the blue checkmark badge next to their profile, channel, videos, shorts, and comments across the app.`
+        : `Are you sure you want to remove the Verified Creator badge from "${u.name || "this user"}"? The blue checkmark badge will be removed from all their content and profile across the app.`,
+      confirmText: isGranting ? "Grant Verification" : "Remove Badge",
+      confirmClass: isGranting
+        ? "bg-blue-600 hover:bg-blue-700 text-white"
+        : "bg-red-600 hover:bg-red-700 text-white",
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          const token = localStorage.getItem("admin_token");
+          const res = await fetch(`${API_URL}/api/users/${u._id}/verify`, {
+            method: "PUT",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            credentials: "include",
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.message || "Failed to update verified badge");
+          await fetchUsers();
+        } catch (err) {
+          setConfirmDialog({
+            title: "Error",
+            message: err.message,
+            confirmText: "OK",
+            confirmClass: "bg-brand hover:bg-brand-dark text-white",
+            onConfirm: () => setConfirmDialog(null),
+          });
+        }
+      },
+    });
   };
 
   const calculateDaysRemaining = (scheduledDateStr) => {
@@ -367,6 +387,7 @@ const Users = () => {
                   <th className="p-4 font-semibold">Channel</th>
                   <th className="p-4 font-semibold">Wallet & Earnings</th>
                   <th className="p-4 font-semibold">Status / Role</th>
+                  <th className="p-4 font-semibold text-center">Verified Badge</th>
                   <th className="p-4 font-semibold">Joined / Schedule</th>
                   <th className="p-4 text-right font-semibold">Actions</th>
                 </tr>
@@ -413,21 +434,7 @@ const Users = () => {
                           </span>
 
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-bold text-ink text-sm truncate">{u.name || "Unnamed"}</span>
-                              <button
-                                type="button"
-                                onClick={() => handleToggleVerify(u)}
-                                title={u.isVerified ? "Verified Creator — click to remove badge" : "Click to grant Verified Badge"}
-                                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold transition-all shadow-xs ${
-                                  u.isVerified
-                                    ? "bg-blue-600 text-white hover:bg-blue-700"
-                                    : "bg-surface text-muted border border-line hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200"
-                                }`}
-                              >
-                                <span>{u.isVerified ? "✓ Verified" : "+ Verify"}</span>
-                              </button>
-                            </div>
+                            <div className="font-bold text-ink text-sm truncate">{u.name || "Unnamed"}</div>
                             {u.deletionReason && (
                               <div className="mt-1 text-xs text-red-600 font-normal">
                                 Reason: "{u.deletionReason}"
@@ -507,6 +514,31 @@ const Users = () => {
                             </span>
                           ) : null}
                         </div>
+                      </td>
+
+                      {/* Verified Badge Toggle Column */}
+                      <td className="p-4 text-center whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => promptToggleVerify(u)}
+                          title={
+                            u.isVerified
+                              ? "Verified Creator — click to remove badge"
+                              : "Click to grant Verified Creator Badge"
+                          }
+                          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold transition-all shadow-xs cursor-pointer ${
+                            u.isVerified
+                              ? "bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 hover:border-blue-300"
+                              : "bg-surface text-muted border border-line hover:bg-surface/90 hover:text-ink"
+                          }`}
+                        >
+                          <span
+                            className={`h-2 w-2 rounded-full ${
+                              u.isVerified ? "bg-blue-600 animate-pulse" : "bg-muted/40"
+                            }`}
+                          />
+                          <span>{u.isVerified ? "✓ Verified" : "Unverified"}</span>
+                        </button>
                       </td>
 
                       {/* Dates */}
