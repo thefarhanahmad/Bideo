@@ -443,3 +443,90 @@ exports.processWithdrawal = async (req, res, next) => {
     next(err);
   }
 };
+
+// @desc    Boost views (100-300) and likes (~7% ratio) for videos, with ₹0.10 wallet reward for monetized creators
+// @route   POST /api/admin/videos/boost-engagement
+// @access  Private/Admin
+exports.boostVideoEngagement = async (req, res, next) => {
+  try {
+    const { videoId } = req.body;
+    const filter = videoId ? { _id: videoId } : {};
+
+    const [videos, users, monetizedApps] = await Promise.all([
+      Video.find(filter),
+      User.find().select('_id'),
+      MonetizationApplication.find({ status: 'approved' }).select('user'),
+    ]);
+
+    if (!videos.length) {
+      return res.status(404).json({ success: false, message: 'No videos found to boost' });
+    }
+
+    const monetizedUserSet = new Set(monetizedApps.map((a) => a.user.toString()));
+    const userIds = users.map((u) => u._id);
+    let totalViewsAdded = 0;
+    let totalLikesAdded = 0;
+    let totalEarningsCredited = 0;
+    let monetizedVideosCount = 0;
+
+    for (const video of videos) {
+      // 1. Random views between 100 and 300
+      const addedViews = Math.floor(Math.random() * (300 - 100 + 1)) + 100;
+
+      // 2. 100:7 ratio -> ~7% (between 6.2% and 7.8% natural jitter)
+      const ratio = 0.07 + (Math.random() * 0.016 - 0.008);
+      const targetLikesCount = Math.max(1, Math.round(addedViews * ratio));
+
+      // 3. Populate likes with unique ObjectIds
+      const existingLikesSet = new Set((video.likes || []).map((id) => id.toString()));
+      let likesAddedThisVideo = 0;
+
+      const shuffledUserIds = [...userIds].sort(() => 0.5 - Math.random());
+      for (const uid of shuffledUserIds) {
+        if (likesAddedThisVideo >= targetLikesCount) break;
+        if (!existingLikesSet.has(uid.toString())) {
+          video.likes.push(uid);
+          existingLikesSet.add(uid.toString());
+          likesAddedThisVideo += 1;
+        }
+      }
+
+      const mongoose = require('mongoose');
+      while (likesAddedThisVideo < targetLikesCount) {
+        const syntheticId = new mongoose.Types.ObjectId();
+        video.likes.push(syntheticId);
+        likesAddedThisVideo += 1;
+      }
+
+      video.views = (video.views || 0) + addedViews;
+      await video.save({ validateBeforeSave: false });
+
+      totalViewsAdded += addedViews;
+      totalLikesAdded += likesAddedThisVideo;
+
+      // 4. Credit ₹0.10 to monetized creator's wallet
+      if (video.owner && monetizedUserSet.has(video.owner.toString())) {
+        await User.findByIdAndUpdate(video.owner, {
+          $inc: { walletBalance: 0.10, totalEarnings: 0.10 },
+        });
+        totalEarningsCredited += 0.10;
+        monetizedVideosCount += 1;
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Successfully boosted ${videos.length} video(s)!`,
+      data: {
+        videosCount: videos.length,
+        totalViewsAdded,
+        totalLikesAdded,
+        monetizedVideosCount,
+        totalEarningsCredited: Number(totalEarningsCredited.toFixed(2)),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+

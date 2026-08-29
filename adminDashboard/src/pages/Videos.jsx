@@ -168,6 +168,49 @@ const Videos = () => {
     }
   };
 
+  const [boosting, setBoosting] = useState(false);
+
+  const handleBoost = async (videoId = null) => {
+    const isAll = !videoId;
+    const confirmMsg = isAll
+      ? `Are you sure you want to boost engagement across ALL ${videos.length} videos?\n\n• Views: +100 to +300 random views\n• Likes: matching ~7% (100:7 ratio)\n• Monetized Creators: +₹0.10 credited directly to their wallet!`
+      : `Boost engagement on this video?\n\n• Views: +100 to +300 random views\n• Likes: matching ~7% (100:7 ratio)\n• If Monetized: +₹0.10 credited directly to creator's wallet!`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    setBoosting(true);
+    try {
+      const token = localStorage.getItem("admin_token");
+      const res = await fetch(API + "/api/admin/videos/boost-engagement", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(videoId ? { videoId } : {}),
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to boost engagement");
+
+      let alertText =
+        `🎉 ${data.message}\n\n` +
+        `👁️ Total Views Added: +${Number(data.data?.totalViewsAdded || 0).toLocaleString("en-IN")}\n` +
+        `❤️ Total Likes Added: +${Number(data.data?.totalLikesAdded || 0).toLocaleString("en-IN")}`;
+
+      if (data.data?.totalEarningsCredited > 0) {
+        alertText += `\n💰 Creator Wallet Credits: +₹${data.data.totalEarningsCredited.toFixed(2)} (${data.data.monetizedVideosCount} monetized video(s) rewarded with ₹0.10 each)`;
+      }
+
+      alert(alertText);
+      await fetchVideos();
+    } catch (err) {
+      alert("Error: " + err.message);
+    } finally {
+      setBoosting(false);
+    }
+  };
+
   const handleDelete = async (id) => {
     try {
       const token = localStorage.getItem("admin_token");
@@ -310,12 +353,22 @@ const Videos = () => {
         totalCount={videos.length}
         filteredCount={filteredVideos.length}
         actions={
-          <button
-            onClick={() => setShowAdd(true)}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-brand transition-all hover:-translate-y-0.5 hover:bg-brand-dark"
-          >
-            <span>+ Upload Video</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleBoost()}
+              disabled={boosting || videos.length === 0}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 px-3.5 py-2 text-xs sm:text-sm font-semibold text-white shadow-xs transition-all hover:-translate-y-0.5 hover:bg-purple-700 disabled:opacity-50"
+              title="Add +100 to +300 random views and matching ~7% likes to all uploaded videos"
+            >
+              <span>⚡ {boosting ? "Boosting..." : "Boost All (100-300 Views)"}</span>
+            </button>
+            <button
+              onClick={() => setShowAdd(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-brand transition-all hover:-translate-y-0.5 hover:bg-brand-dark"
+            >
+              <span>+ Upload Video</span>
+            </button>
+          </div>
         }
       />
 
@@ -335,7 +388,7 @@ const Videos = () => {
                   <th className="p-4 font-semibold">Owner & Channel</th>
                   <th className="p-4 font-semibold">Duration</th>
                   <th className="p-4 font-semibold">Category</th>
-                  <th className="p-4 font-semibold">Views</th>
+                  <th className="p-4 font-semibold">Views / Likes</th>
                   <th className="p-4 font-semibold">Visibility</th>
                   <th className="p-4 font-semibold">Created</th>
                   <th className="p-4 text-right font-semibold">Actions</th>
@@ -403,7 +456,14 @@ const Videos = () => {
                       {formatDuration(v.duration)}
                     </td>
                     <td className="p-4 text-muted text-xs">{v.category?.name || v.category || "-"}</td>
-                    <td className="p-4 text-ink font-semibold text-xs">{Number(v.views || 0).toLocaleString("en-IN")}</td>
+                    <td className="p-4 whitespace-nowrap">
+                      <div className="text-ink font-bold text-xs">
+                        👁️ {Number(v.views || 0).toLocaleString("en-IN")}
+                      </div>
+                      <div className="text-muted text-[11px] mt-0.5">
+                        ❤️ {Array.isArray(v.likes) ? v.likes.length : 0} likes
+                      </div>
+                    </td>
                     <td className="p-4">
                       <span
                         className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold capitalize ${visibilityBadge(
@@ -416,6 +476,14 @@ const Videos = () => {
                     <td className="p-4 text-muted whitespace-nowrap text-xs">{formatCreatedDate(v.createdAt)}</td>
                     <td className="p-4">
                       <div className="flex justify-end gap-1.5 whitespace-nowrap">
+                        <button
+                          onClick={() => handleBoost(v._id)}
+                          disabled={boosting}
+                          className="rounded-lg bg-purple-50 border border-purple-200 px-2.5 py-1 text-xs font-semibold text-purple-700 hover:bg-purple-100 transition-colors"
+                          title="Add +100 to +300 random views & 7% likes to this video"
+                        >
+                          ⚡ Boost
+                        </button>
                         <button
                           onClick={() => handleUpdate(v._id, { isPinned: !v.isPinned })}
                           className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${

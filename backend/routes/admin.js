@@ -10,6 +10,7 @@ const {
   reviewMonetizationApplication,
   getWithdrawals,
   processWithdrawal,
+  boostVideoEngagement,
 } = require('../controllers/admin');
 const { protect, authorize } = require('../middlewares/auth');
 
@@ -24,6 +25,9 @@ router.use(authorize('admin'));
 router.get('/stats', getStats);
 router.get('/reports/videos', getVideoReports);
 router.put('/reports/videos/:id', updateVideoReport);
+
+// Engagement Boost
+router.post('/videos/boost-engagement', boostVideoEngagement);
 
 // Monetization Audits
 router.get('/videos/pending-reviews', getPendingVideoReviews);
