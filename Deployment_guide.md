@@ -87,7 +87,7 @@ sudo apt install -y nginx certbot python3-certbot-nginx
        ssl_certificate /etc/letsencrypt/live/bideo.in/fullchain.pem;
        ssl_certificate_key /etc/letsencrypt/live/bideo.in/privkey.pem;
 
-       client_max_body_size 100M; # Essential for video uploads
+       client_max_body_size 500M; # Essential for video uploads up to 500MB
 
        # Serve static React frontend files
        location / {
@@ -104,6 +104,12 @@ sudo apt install -y nginx certbot python3-certbot-nginx
            proxy_set_header Connection 'upgrade';
            proxy_set_header Host $host;
            proxy_cache_bypass $http_upgrade;
+           
+           # Extended timeouts for large 500MB uploads
+           proxy_connect_timeout 600s;
+           proxy_send_timeout 600s;
+           proxy_read_timeout 600s;
+
            proxy_set_header X-Real-IP $remote_addr;
            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
            proxy_set_header X-Forwarded-Proto $scheme;
