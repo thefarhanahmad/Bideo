@@ -129,7 +129,49 @@ exports.getUser = async (req, res, next) => {
 // @access Private/Admin
 exports.updateUser = async (req, res, next) => {
   try {
-    const update = req.body;
+    const update = { ...req.body };
+
+    // Clean up unique/sparse string fields so empty strings don't trigger E11000 duplicate key error
+    if (update.email !== undefined) {
+      if (typeof update.email === 'string' && update.email.trim()) {
+        update.email = update.email.trim();
+      } else {
+        delete update.email;
+      }
+    }
+
+    if (update.phone !== undefined) {
+      if (typeof update.phone === 'string' && update.phone.trim()) {
+        update.phone = update.phone.trim();
+      } else {
+        delete update.phone;
+      }
+    }
+
+    if (update.channelName !== undefined) {
+      if (typeof update.channelName === 'string' && update.channelName.trim()) {
+        update.channelName = update.channelName.trim();
+      } else {
+        delete update.channelName;
+      }
+    }
+
+    if (update.walletBalance !== undefined) {
+      const balanceNum = Number(update.walletBalance);
+      if (isNaN(balanceNum) || balanceNum < 0) {
+        return res.status(400).json({ success: false, message: 'Wallet balance must be a valid non-negative number' });
+      }
+      update.walletBalance = balanceNum;
+    }
+
+    if (update.totalEarnings !== undefined) {
+      const earningsNum = Number(update.totalEarnings);
+      if (isNaN(earningsNum) || earningsNum < 0) {
+        return res.status(400).json({ success: false, message: 'Total earnings must be a valid non-negative number' });
+      }
+      update.totalEarnings = earningsNum;
+    }
+
     const user = await User.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: true }).select('-__v');
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     res.status(200).json({ success: true, data: user });

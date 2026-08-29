@@ -612,55 +612,194 @@ const inputClass =
 const UserForm = ({ initial = {}, onSubmit, onCancel }) => {
   const [name, setName] = useState(initial.name || "");
   const [email, setEmail] = useState(initial.email || "");
+  const [phone, setPhone] = useState(initial.phone || "");
   const [channelName, setChannelName] = useState(initial.channelName || "");
   const [role, setRole] = useState(initial.role || "user");
+  const [walletBalance, setWalletBalance] = useState(
+    initial.walletBalance !== undefined ? String(initial.walletBalance) : "0"
+  );
+  const [totalEarnings, setTotalEarnings] = useState(
+    initial.totalEarnings !== undefined ? String(initial.totalEarnings) : "0"
+  );
+
+  const handleAddAmount = (addValue) => {
+    const current = parseFloat(walletBalance) || 0;
+    const newBal = Math.max(0, current + addValue);
+    setWalletBalance(newBal.toFixed(2).replace(/\.00$/, ""));
+
+    // Also update lifetime earnings if adding money
+    if (addValue > 0) {
+      const currentEarn = parseFloat(totalEarnings) || 0;
+      setTotalEarnings((currentEarn + addValue).toFixed(2).replace(/\.00$/, ""));
+    }
+  };
 
   const submit = (e) => {
     e.preventDefault();
-    onSubmit({ name, email, channelName, role });
+    const payload = {
+      name: name.trim(),
+      role,
+      walletBalance: Math.max(0, parseFloat(walletBalance) || 0),
+      totalEarnings: Math.max(0, parseFloat(totalEarnings) || 0),
+    };
+    if (email.trim()) payload.email = email.trim();
+    if (phone.trim()) payload.phone = phone.trim();
+    if (channelName.trim()) payload.channelName = channelName.trim();
+
+    onSubmit(payload);
   };
 
   return (
-    <form onSubmit={submit}>
-      <label className="block text-sm font-medium text-ink">Name</label>
-      <input
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="Full name"
-        className={inputClass}
-      />
-      <label className="mt-4 block text-sm font-medium text-ink">Email</label>
-      <input
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        placeholder="name@example.com"
-        className={inputClass}
-      />
-      <label className="mt-4 block text-sm font-medium text-ink">Channel Name</label>
-      <input
-        value={channelName}
-        onChange={(e) => setChannelName(e.target.value)}
-        placeholder="Channel name"
-        className={inputClass}
-      />
-      <label className="mt-4 block text-sm font-medium text-ink">Role</label>
-      <select value={role} onChange={(e) => setRole(e.target.value)} className={inputClass}>
-        <option value="user">User</option>
-        <option value="admin">Admin</option>
-      </select>
-      <div className="mt-6 flex justify-end gap-2">
+    <form onSubmit={submit} className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-wider text-ink">Name</label>
+          <input
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Full name"
+            className={inputClass}
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-wider text-ink">Role</label>
+          <select value={role} onChange={(e) => setRole(e.target.value)} className={inputClass}>
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-wider text-ink">Phone Number</label>
+          <input
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="e.g. +919876543210"
+            className={inputClass}
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-wider text-ink">Email</label>
+          <input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="name@example.com"
+            className={inputClass}
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-xs font-bold uppercase tracking-wider text-ink">Channel Name</label>
+        <input
+          value={channelName}
+          onChange={(e) => setChannelName(e.target.value)}
+          placeholder="Channel handle / name"
+          className={inputClass}
+        />
+      </div>
+
+      {/* Wallet Management Section */}
+      <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 font-bold text-sm text-emerald-900">
+            <span>💰</span>
+            <span>Creator Wallet & Earnings</span>
+          </div>
+          <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-md">
+            Live Sync
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-emerald-900">
+              Current Available Balance (₹)
+            </label>
+            <div className="relative mt-1">
+              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-sm font-bold text-emerald-700 pointer-events-none">
+                ₹
+              </span>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={walletBalance}
+                onChange={(e) => setWalletBalance(e.target.value)}
+                placeholder="0.00"
+                className="w-full rounded-xl border border-emerald-200 bg-white pl-7 pr-3 py-2 text-sm font-bold text-ink focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-emerald-900">
+              Lifetime Total Earnings (₹)
+            </label>
+            <div className="relative mt-1">
+              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-sm font-bold text-emerald-700 pointer-events-none">
+                ₹
+              </span>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={totalEarnings}
+                onChange={(e) => setTotalEarnings(e.target.value)}
+                placeholder="0.00"
+                className="w-full rounded-xl border border-emerald-200 bg-white pl-7 pr-3 py-2 text-sm font-bold text-ink focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Assign Buttons */}
+        <div>
+          <span className="block text-[11px] font-semibold text-emerald-800 mb-1.5">
+            Quick Assign Funds:
+          </span>
+          <div className="flex flex-wrap gap-1.5">
+            {[50, 100, 250, 500, 1000].map((val) => (
+              <button
+                type="button"
+                key={val}
+                onClick={() => handleAddAmount(val)}
+                className="rounded-lg bg-white border border-emerald-200 px-2.5 py-1 text-xs font-bold text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300 transition-colors shadow-xs"
+              >
+                + ₹{val}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setWalletBalance("0")}
+              className="rounded-lg bg-red-50 border border-red-200 px-2 py-1 text-xs font-bold text-red-600 hover:bg-red-100 transition-colors ml-auto"
+            >
+              Reset to ₹0
+            </button>
+          </div>
+        </div>
+
+        <p className="text-[11px] text-emerald-800/80 leading-tight">
+          Admin changes to wallet balance update the creator's in-app balance and withdrawal eligibility immediately.
+        </p>
+      </div>
+
+      <div className="mt-6 flex justify-end gap-2 pt-2 border-t border-line">
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-full bg-surface px-4 py-2 text-sm font-semibold text-ink hover:bg-line"
+          className="rounded-full bg-surface px-5 py-2 text-sm font-semibold text-ink hover:bg-line transition-colors"
         >
           Cancel
         </button>
         <button
           type="submit"
-          className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white shadow-brand hover:bg-brand-dark"
+          className="rounded-full bg-brand px-6 py-2 text-sm font-semibold text-white shadow-brand hover:bg-brand-dark transition-all hover:-translate-y-0.5"
         >
-          Save
+          Save Changes
         </button>
       </div>
     </form>
