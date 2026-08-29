@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '../../constants/Colors';
 import { RootState } from '../../redux/store';
 import api, { videoService } from '../../services/api';
@@ -24,6 +25,7 @@ const REQUIRED_WATCH_TIME = 3; // 3 seconds minimum watch time to count a view
 export default function VideoScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
   // expo-video player (replaces the deprecated expo-av <Video>). Source is loaded
   // via player.replace() once the video data arrives.
@@ -458,7 +460,7 @@ export default function VideoScreen() {
         data={recommendedVideos}
         keyExtractor={(item) => item._id}
         renderItem={({ item }) => <VideoCard video={item} />}
-        contentContainerStyle={styles.listContainer}
+        contentContainerStyle={[styles.listContainer, { paddingBottom: Math.max(insets.bottom, 20) + 30 }]}
         showsVerticalScrollIndicator={false}
       />
 
@@ -491,7 +493,7 @@ const styles = StyleSheet.create({
   videoPlayerContainer: {
     position: 'relative',
     width: '100%',
-    height: 220,
+    aspectRatio: 16 / 9,
     backgroundColor: 'black',
   },
   adPlayerPlaceholder: {
