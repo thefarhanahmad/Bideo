@@ -4,6 +4,8 @@ const videoValidationRules = () => [
   body('title').optional().isLength({ max: 200 }),
   body('description').optional().isLength({ max: 2000 }),
   body('category').optional().isString(),
+  body('owner').optional().isString(),
+  body('isPinned').optional(),
 ];
 
 

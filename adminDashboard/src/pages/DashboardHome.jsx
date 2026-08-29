@@ -4,6 +4,12 @@ import { API_URL } from '../config';
 import StatCard from '../components/StatCard';
 import { UsersIcon, PlayIcon, TagIcon, FlagIcon, EyeIcon, ArrowRightIcon } from '../components/Icons';
 
+const resolveMediaUrl = (url) => {
+  if (!url) return "https://via.placeholder.com/640x360.png?text=No+Thumbnail";
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  return `${API_URL}${url.startsWith("/") ? "" : "/"}${url}`;
+};
+
 const fmt = (n) => {
   const num = Number(n) || 0;
   if (num >= 1_000_000) return (num / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
@@ -107,10 +113,10 @@ const DashboardHome = () => {
             {stats.recentVideos.map((v) => (
               <div key={v._id} className="flex items-center gap-3">
                 <img
-                  src={v.thumbnail}
+                  src={resolveMediaUrl(v.thumbnail)}
                   alt=""
-                  className="h-12 w-20 shrink-0 rounded-lg bg-surface object-cover"
-                  onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
+                  className="h-12 w-20 shrink-0 rounded-lg bg-surface object-cover border border-line"
+                  onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/640x360.png?text=Thumbnail'; }}
                 />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-ink">{v.title || 'Untitled'}</p>

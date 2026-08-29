@@ -458,7 +458,7 @@ const ShortItem = ({ item, index, activeVideoIndex, containerHeight, isFocused, 
   const scaleAnim = useRef(new Animated.Value(0.7)).current;
   const isActive = isFocused && activeVideoIndex === index;
 
-  const SHORT_WATCH_THRESHOLD = 10; // 10 seconds minimum watch time to count a view
+  const SHORT_WATCH_THRESHOLD = 3; // 3 seconds minimum watch time to count a view
   const viewRecordedRef = useRef(false);
   const watchTimeRef = useRef(0);
 
@@ -482,7 +482,7 @@ const ShortItem = ({ item, index, activeVideoIndex, containerHeight, isFocused, 
     } catch {}
   }, [isActive, isPaused, player]);
 
-  // Track active watch time (10 seconds required before recording a view)
+  // Track active watch time (3 seconds required before recording a view)
   useEffect(() => {
     if (!isActive || !item?._id) return;
 

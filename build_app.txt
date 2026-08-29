@@ -19,7 +19,7 @@ chmod +x deploy.sh
 
 #Run with Expo
 
-$env:REACT_NATIVE_PACKAGER_HOSTNAME="192.168.3.108"
+npx.cmd expo start --tunnel -c
 npx expo start -c
 
   ### 3. When You Are Ready to Publish (Build Google Play AAB Bundle)

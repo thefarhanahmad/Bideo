@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // for standalone builds it is injected per-profile via eas.json. The fallback is the
 // hosted backend so an installed APK is never left pointing at an unreachable LAN IP.
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://bideo.in/api';
+console.log('🔗 [Bideo API] Connecting to:', API_URL);
 
 const api = axios.create({
   baseURL: API_URL,
@@ -22,14 +23,51 @@ export const setAuthToken = (token?: string | null) => {
   }
 };
 
+export const resolveMediaUrl = (url?: string | null): string => {
+  if (!url) return '';
+  const apiBase = api.defaults.baseURL || API_URL || '';
+  const serverBase = apiBase.replace(/\/api\/?$/, '');
+
+  if (url.startsWith('/')) {
+    return `${serverBase}${url}`;
+  }
+
+  if (url.includes('localhost:5000') || url.includes('127.0.0.1:5000')) {
+    return url
+      .replace('http://localhost:5000', serverBase)
+      .replace('https://localhost:5000', serverBase)
+      .replace('http://127.0.0.1:5000', serverBase)
+      .replace('https://127.0.0.1:5000', serverBase);
+  }
+
+  return url;
+};
+
+export const normalizeVideo = (video: any) => {
+  if (!video) return video;
+  return {
+    ...video,
+    thumbnail: resolveMediaUrl(video.thumbnail),
+    videoUrl: resolveMediaUrl(video.videoUrl),
+    owner: video.owner ? {
+      ...video.owner,
+      avatar: resolveMediaUrl(video.owner.avatar),
+    } : video.owner,
+  };
+};
+
 export const videoService = {
-  getVideos: async (params?: any) => {
+  getVideos: async (params?: any): Promise<any[]> => {
     const response = await api.get('/videos', { params });
     // normalize to return the array of videos directly
-    return response.data && response.data.data ? response.data.data : [];
+    const list = response.data && response.data.data ? response.data.data : [];
+    return Array.isArray(list) ? list.map(normalizeVideo) : [];
   },
-  getVideo: async (id: string) => {
+  getVideo: async (id: string): Promise<any> => {
     const response = await api.get(`/videos/${id}`);
+    if (response.data && response.data.data) {
+      response.data.data = normalizeVideo(response.data.data);
+    }
     return response.data;
   },
   recordView: async (id: string) => {

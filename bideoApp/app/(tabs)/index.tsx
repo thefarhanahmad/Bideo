@@ -103,13 +103,16 @@ export default function HomeScreen() {
       // data: array of videos
       console.log('Fetched videos from API ✅');
       if (data && data.length > 0) {
-        // normalize category to name if populated
+        // normalize category and isPinned flag
         const normalized = data.map((v: any) => ({
           ...v,
           category: v.category && (v.category.name || v.category),
+          isPinned: v.isPinned === true || v.isPinned === 'true',
         }));
-        // Randomize homepage feed for a fresh experience on every visit
-        const randomized = shuffleArray(normalized);
+        // Pinned videos stay on top, regular videos are randomized
+        const pinned = normalized.filter((v: any) => v.isPinned);
+        const regular = normalized.filter((v: any) => !v.isPinned);
+        const randomized = [...pinned, ...shuffleArray(regular)];
         dispatch(fetchVideosSuccess(randomized));
       } else {
         // Fallback to sample data if API returns empty
@@ -167,11 +170,20 @@ export default function HomeScreen() {
     ? posts
     : [];
 
-  const longVideos = filteredVideos.filter(v => !v.isShort).map((item: any) => ({ ...item, itemType: 'video' }));
+  // Pinned videos are always placed on top of the longVideos feed
+  const pinnedVideos = filteredVideos
+    .filter((v: any) => v.isPinned === true || v.isPinned === 'true')
+    .map((item: any) => ({ ...item, itemType: 'video' }));
+
+  const regularLong = filteredVideos
+    .filter((v: any) => !v.isPinned && v.isPinned !== 'true' && !v.isShort)
+    .map((item: any) => ({ ...item, itemType: 'video' }));
+
   const postItems = filteredPosts.map((item: any) => ({ ...item, itemType: 'post' }));
+
   const longVideosAndPosts = selectedCategory === 'All'
-    ? [...longVideos, ...postItems]
-    : [...longVideos, ...postItems].sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    ? [...pinnedVideos, ...regularLong, ...postItems]
+    : [...pinnedVideos, ...[...regularLong, ...postItems].sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())];
 
   const shortsItems = filteredVideos.filter(v => v.isShort);
 

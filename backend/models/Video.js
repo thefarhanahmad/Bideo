@@ -62,6 +62,10 @@ const videoSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  isPinned: {
+    type: Boolean,
+    default: false,
+  },
   aspectRatio: {
     type: Number,
     default: null,

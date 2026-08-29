@@ -186,15 +186,16 @@ exports.reviewVideoMonetization = async (req, res, next) => {
   }
 };
 
-// @desc    Get all monetization applications (pending / applied)
+// @desc    Get all monetization applications (pending / approved / rejected)
 // @route   GET /api/admin/monetization-applications
 // @access  Private/Admin
 exports.getMonetizationApplications = async (req, res, next) => {
   try {
     const status = req.query.status || 'pending';
-    const applications = await MonetizationApplication.find({ status })
-      .populate('user', 'name channelName avatar email phone')
-      .sort('-createdAt');
+    const query = status === 'all' ? {} : { status };
+    const applications = await MonetizationApplication.find(query)
+      .populate('user', 'name channelName avatar email phone followersCount createdAt')
+      .sort(status === 'approved' ? '-updatedAt' : '-createdAt');
     res.status(200).json({ success: true, count: applications.length, data: applications });
   } catch (err) {
     next(err);

@@ -3,6 +3,44 @@ import Modal from "../components/Modal";
 import ConfirmModal from "../components/ConfirmModal";
 import { API_URL } from "../config";
 
+const resolveMediaUrl = (url) => {
+  if (!url) return "https://via.placeholder.com/640x360.png?text=No+Thumbnail";
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  return `${API_URL}${url.startsWith("/") ? "" : "/"}${url}`;
+};
+
+const formatDuration = (seconds) => {
+  let totalSecs = Math.round(Number(seconds) || 0);
+  if (totalSecs > 1000) {
+    totalSecs = Math.round(totalSecs / 1000);
+  }
+  const mins = Math.floor(totalSecs / 60);
+  const secs = Math.floor(totalSecs % 60);
+  return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
+};
+
+const getVideoMetadata = (file) => {
+  return new Promise((resolve) => {
+    if (!file) return resolve({ duration: 0, width: 0, height: 0 });
+    const v = document.createElement("video");
+    v.preload = "metadata";
+    const objectUrl = URL.createObjectURL(file);
+    v.src = objectUrl;
+    v.onloadedmetadata = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve({
+        duration: Math.round(v.duration || 0),
+        width: v.videoWidth || 0,
+        height: v.videoHeight || 0,
+      });
+    };
+    v.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve({ duration: 0, width: 0, height: 0 });
+    };
+  });
+};
+
 const Videos = () => {
   const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -15,6 +53,7 @@ const Videos = () => {
   const [deleteVideo, setDeleteVideo] = useState(null);
 
   const [categories, setCategories] = useState([]);
+  const [users, setUsers] = useState([]);
 
   const API = API_URL;
 
@@ -22,15 +61,15 @@ const Videos = () => {
     setLoading(true);
     setError(null);
     try {
-      const token = localStorage.getItem('admin_token');
-      const res = await fetch(API + "/api/videos?sort=latest", { 
+      const token = localStorage.getItem("admin_token");
+      const res = await fetch(API + "/api/videos?sort=latest", {
         headers: {
-          'Authorization': `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
-        credentials: "include" 
+        credentials: "include",
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed");
+      if (!res.ok) throw new Error(data.message || "Failed to fetch videos");
       setVideos(data.data || []);
     } catch (err) {
       setError(err.message);
@@ -40,10 +79,10 @@ const Videos = () => {
 
   const fetchCategories = async () => {
     try {
-      const token = localStorage.getItem('admin_token');
+      const token = localStorage.getItem("admin_token");
       const res = await fetch(API + "/api/categories", {
         headers: {
-          'Authorization': `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
         credentials: "include",
       });
@@ -54,61 +93,88 @@ const Videos = () => {
     }
   };
 
+  const fetchUsers = async () => {
+    try {
+      const token = localStorage.getItem("admin_token");
+      const res = await fetch(API + "/api/users", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (res.ok) setUsers(data.data || []);
+    } catch (e) {
+      /* ignore */
+    }
+  };
+
   useEffect(() => {
     fetchVideos();
     fetchCategories();
+    fetchUsers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleUpload = async (formData) => {
-    try {
-      const token = localStorage.getItem('admin_token');
-      const res = await fetch(API + "/api/videos/upload", {
-        method: "POST",
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        body: formData,
-        credentials: "include",
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Upload failed");
-      setShowAdd(false);
-      fetchVideos();
-    } catch (err) {
-      alert(err.message);
-    }
+    const token = localStorage.getItem("admin_token");
+    const res = await fetch(API + "/api/videos/upload", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+      credentials: "include",
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || "Upload failed");
+    setShowAdd(false);
+    await fetchVideos();
   };
 
   const handleUpdate = async (id, payload) => {
     try {
-      const token = localStorage.getItem('admin_token');
+      const token = localStorage.getItem("admin_token");
+      const isFormData = payload instanceof FormData;
+
+      // Optimistically update local state if toggling pin
+      if (!isFormData && payload.isPinned !== undefined) {
+        setVideos((prev) =>
+          prev.map((v) => (v._id === id ? { ...v, isPinned: payload.isPinned } : v))
+        );
+      }
+
+      const headers = {
+        Authorization: `Bearer ${token}`,
+      };
+      if (!isFormData) {
+        headers["Content-Type"] = "application/json";
+      }
+
       const res = await fetch(API + "/api/videos/" + id, {
         method: "PUT",
-        headers: { 
-          "Content-Type": "application/json",
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(payload),
+        headers,
+        body: isFormData ? payload : JSON.stringify(payload),
         credentials: "include",
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Update failed");
       setShowEdit(false);
       setEditVideo(null);
-      fetchVideos();
+      await fetchVideos();
     } catch (err) {
-      alert(err.message);
+      alert("Update failed: " + err.message);
+      await fetchVideos();
     }
   };
 
   const handleDelete = async (id) => {
     try {
-      const token = localStorage.getItem('admin_token');
+      const token = localStorage.getItem("admin_token");
       const res = await fetch(API + "/api/videos/" + id, {
         method: "DELETE",
         headers: {
-          'Authorization': `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
         credentials: "include",
       });
@@ -116,7 +182,7 @@ const Videos = () => {
       if (!res.ok) throw new Error(data.message || "Delete failed");
       setShowDelete(false);
       setDeleteVideo(null);
-      fetchVideos();
+      await fetchVideos();
     } catch (err) {
       alert(err.message);
     }
@@ -163,193 +229,669 @@ const Videos = () => {
           <h2 className="font-display text-2xl font-extrabold text-ink">Videos</h2>
           <p className="mt-1 text-sm text-muted">{videos.length} videos on the platform</p>
         </div>
-        <button onClick={() => setShowAdd(true)} className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white shadow-brand transition-all hover:-translate-y-0.5 hover:bg-brand-dark">+ Upload Video</button>
+        <button
+          onClick={() => setShowAdd(true)}
+          className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white shadow-brand transition-all hover:-translate-y-0.5 hover:bg-brand-dark"
+        >
+          + Upload Video
+        </button>
       </div>
 
       {loading ? (
-        <div className="rounded-2xl border border-line bg-white p-8 text-center text-muted shadow-card">Loading videos...</div>
+        <div className="rounded-2xl border border-line bg-white p-8 text-center text-muted shadow-card">
+          Loading videos...
+        </div>
       ) : error ? (
         <div className="rounded-2xl border border-red-100 bg-red-50 p-6 text-red-700">{error}</div>
       ) : (
-      <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-card">
-        <div className="overflow-x-auto">
-        <table className="w-full min-w-[900px] text-sm">
-          <thead>
-            <tr className="border-b border-line bg-surface/60 text-left text-xs uppercase tracking-wider text-muted">
-              <th className="p-4 font-semibold">Video</th>
-              <th className="p-4 font-semibold">Owner</th>
-              <th className="p-4 font-semibold">Category</th>
-              <th className="p-4 font-semibold">Views</th>
-              <th className="p-4 font-semibold">Visibility</th>
-              <th className="p-4 font-semibold">Created</th>
-              <th className="p-4 text-right font-semibold">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {videos.map((v) => (
-              <tr key={v._id} className="border-t border-line align-middle hover:bg-surface/50">
-                <td className="p-4">
-                  <div className="flex items-center gap-3">
-                    <img src={v.thumbnail} alt="thumb" className="h-14 w-24 shrink-0 rounded-lg bg-surface object-cover" onError={(e)=>{e.currentTarget.style.visibility='hidden';}} />
-                    <div className="min-w-0 max-w-xs">
-                      <div className="truncate font-semibold text-ink">{v.title}</div>
-                      <div className="truncate text-xs text-muted">{v.description ? v.description.slice(0, 80) + (v.description.length>80? '...':'') : ''}</div>
-                      {v.originalVideoSize > 0 && (
-                        <div className="text-[11px] font-semibold text-emerald-600 mt-1 flex items-center gap-1 whitespace-nowrap">
-                          <span>📹 Video:</span>
-                          <span>{getCompressionText(v.originalVideoSize, v.compressedVideoSize)}</span>
+        <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-card">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[960px] text-sm">
+              <thead>
+                <tr className="border-b border-line bg-surface/60 text-left text-xs uppercase tracking-wider text-muted">
+                  <th className="p-4 font-semibold">Video</th>
+                  <th className="p-4 font-semibold">Owner</th>
+                  <th className="p-4 font-semibold">Duration</th>
+                  <th className="p-4 font-semibold">Category</th>
+                  <th className="p-4 font-semibold">Views</th>
+                  <th className="p-4 font-semibold">Visibility</th>
+                  <th className="p-4 font-semibold">Created</th>
+                  <th className="p-4 text-right font-semibold">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {videos.map((v) => (
+                  <tr key={v._id} className="border-t border-line align-middle hover:bg-surface/50">
+                    <td className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="relative shrink-0 w-24 h-14 bg-surface rounded-lg overflow-hidden border border-line">
+                          <img
+                            src={resolveMediaUrl(v.thumbnail)}
+                            alt="thumb"
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.currentTarget.src = "https://via.placeholder.com/640x360.png?text=Thumbnail";
+                            }}
+                          />
+                          <span className="absolute bottom-1 right-1 bg-black/75 text-white text-[9px] px-1 rounded font-semibold">
+                            {formatDuration(v.duration)}
+                          </span>
                         </div>
-                      )}
-                      {v.originalThumbnailSize > 0 && (
-                        <div className="text-[11px] font-semibold text-indigo-500 mt-0.5 flex items-center gap-1 whitespace-nowrap">
-                          <span>🖼️ Thumb:</span>
-                          <span>{getCompressionText(v.originalThumbnailSize, v.compressedThumbnailSize)}</span>
+                        <div className="min-w-0 max-w-xs">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="truncate font-semibold text-ink">{v.title}</span>
+                            {v.isPinned && (
+                              <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
+                                📌 Pinned
+                              </span>
+                            )}
+                          </div>
+                          <div className="truncate text-xs text-muted">
+                            {v.description
+                              ? v.description.slice(0, 80) + (v.description.length > 80 ? "..." : "")
+                              : ""}
+                          </div>
+                          {v.originalVideoSize > 0 && (
+                            <div className="text-[11px] font-semibold text-emerald-600 mt-1 flex items-center gap-1 whitespace-nowrap">
+                              <span>📹 Video:</span>
+                              <span>{getCompressionText(v.originalVideoSize, v.compressedVideoSize)}</span>
+                            </div>
+                          )}
+                          {v.originalThumbnailSize > 0 && (
+                            <div className="text-[11px] font-semibold text-indigo-500 mt-0.5 flex items-center gap-1 whitespace-nowrap">
+                              <span>🖼️ Thumb:</span>
+                              <span>{getCompressionText(v.originalThumbnailSize, v.compressedThumbnailSize)}</span>
+                            </div>
+                          )}
                         </div>
+                      </div>
+                    </td>
+                    <td className="p-4 text-muted">
+                      <div className="font-semibold text-ink">{v.owner?.name || "Unknown"}</div>
+                      {v.owner?.channelName && (
+                        <div className="text-xs text-brand">@{v.owner.channelName}</div>
                       )}
-                    </div>
-                  </div>
-                </td>
-                <td className="p-4 text-muted">{v.owner?.name || 'Unknown'}</td>
-                <td className="p-4 text-muted">{v.category?.name || v.category || '-'}</td>
-                <td className="p-4 text-muted">{v.views || 0}</td>
-                <td className="p-4">
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${visibilityBadge(v.visibility || 'public')}`}>{v.visibility || 'public'}</span>
-                </td>
-                <td className="p-4 text-muted whitespace-nowrap">{formatCreatedDate(v.createdAt)}</td>
-                <td className="p-4">
-                  <div className="flex justify-end gap-2">
-                    <button onClick={() => { setEditVideo(v); setShowEdit(true); }} className="rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-200">Edit</button>
-                    <button onClick={() => { setDeleteVideo(v); setShowDelete(true); }} className="rounded-lg bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-200">Delete</button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {videos.length === 0 && (
-              <tr><td colSpan="7" className="p-8 text-center text-muted">No videos found.</td></tr>
-            )}
-          </tbody>
-        </table>
+                    </td>
+                    <td className="p-4 font-semibold text-ink whitespace-nowrap">
+                      {formatDuration(v.duration)}
+                    </td>
+                    <td className="p-4 text-muted">{v.category?.name || v.category || "-"}</td>
+                    <td className="p-4 text-muted">{v.views || 0}</td>
+                    <td className="p-4">
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${visibilityBadge(
+                          v.visibility || "public"
+                        )}`}
+                      >
+                        {v.visibility || "public"}
+                      </span>
+                    </td>
+                    <td className="p-4 text-muted whitespace-nowrap">{formatCreatedDate(v.createdAt)}</td>
+                    <td className="p-4">
+                      <div className="flex justify-end gap-2 whitespace-nowrap">
+                        <button
+                          onClick={() => handleUpdate(v._id, { isPinned: !v.isPinned })}
+                          className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+                            v.isPinned
+                              ? "bg-amber-100 text-amber-800 hover:bg-amber-200 border border-amber-300"
+                              : "bg-surface border border-line text-muted hover:text-ink hover:bg-line"
+                          }`}
+                          title={v.isPinned ? "Unpin video from top of home feed" : "Pin video to top of home feed"}
+                        >
+                          {v.isPinned ? "📌 Pinned" : "📌 Pin"}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditVideo(v);
+                            setShowEdit(true);
+                          }}
+                          className="rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-200"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => {
+                            setDeleteVideo(v);
+                            setShowDelete(true);
+                          }}
+                          className="rounded-lg bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-200"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {videos.length === 0 && (
+                  <tr>
+                    <td colSpan="8" className="p-8 text-center text-muted">
+                      No videos found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
       )}
 
       {showAdd && (
-        <Modal title="Upload Video" onClose={() => setShowAdd(false)}>
-          <UploadForm categories={categories} onSubmit={handleUpload} onCancel={() => setShowAdd(false)} />
+        <Modal title="Upload Video" maxWidth="max-w-lg" onClose={() => setShowAdd(false)}>
+          <UploadForm
+            categories={categories}
+            users={users}
+            onSubmit={handleUpload}
+            onCancel={() => setShowAdd(false)}
+          />
         </Modal>
       )}
 
       {showEdit && editVideo && (
-        <Modal title="Edit Video" onClose={() => { setShowEdit(false); setEditVideo(null); }}>
-          <EditForm initial={editVideo} categories={categories} onSubmit={(payload) => handleUpdate(editVideo._id, payload)} onCancel={() => { setShowEdit(false); setEditVideo(null); }} />
+        <Modal
+          title="Edit Video"
+          maxWidth="max-w-lg"
+          onClose={() => {
+            setShowEdit(false);
+            setEditVideo(null);
+          }}
+        >
+          <EditForm
+            initial={editVideo}
+            categories={categories}
+            users={users}
+            onSubmit={(payload) => handleUpdate(editVideo._id, payload)}
+            onCancel={() => {
+              setShowEdit(false);
+              setEditVideo(null);
+            }}
+          />
         </Modal>
       )}
 
       {showDelete && deleteVideo && (
-        <ConfirmModal title="Confirm delete" message={`Delete video ${deleteVideo.title}?`} onConfirm={() => handleDelete(deleteVideo._id)} onCancel={() => { setShowDelete(false); setDeleteVideo(null); }} />
+        <ConfirmModal
+          title="Confirm delete"
+          message={`Delete video "${deleteVideo.title}"?`}
+          onConfirm={() => handleDelete(deleteVideo._id)}
+          onCancel={() => {
+            setShowDelete(false);
+            setDeleteVideo(null);
+          }}
+        />
       )}
     </div>
   );
 };
 
-const inputClass = "mt-1.5 w-full rounded-lg border border-line p-2.5 outline-none transition-colors focus:border-brand focus:ring-2 focus:ring-brand/20";
+const inputClass =
+  "mt-1.5 w-full rounded-lg border border-line p-2.5 outline-none transition-colors focus:border-brand focus:ring-2 focus:ring-brand/20 text-sm";
 
-const UploadForm = ({ categories = [], onSubmit, onCancel }) => {
+const UploadForm = ({ categories = [], users = [], onSubmit, onCancel }) => {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
+  const [owner, setOwner] = useState("");
   const [visibility, setVisibility] = useState("public");
+  const [isPinned, setIsPinned] = useState(false);
   const [videoFile, setVideoFile] = useState(null);
+  const [videoDuration, setVideoDuration] = useState(0);
+  const [videoWidth, setVideoWidth] = useState(0);
+  const [videoHeight, setVideoHeight] = useState(0);
   const [thumbnailFile, setThumbnailFile] = useState(null);
+  const [thumbnailPreview, setThumbnailPreview] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
 
-  const submit = (e) => {
+  const handleVideoChange = async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setVideoFile(file);
+      setUploadError("");
+      const meta = await getVideoMetadata(file);
+      setVideoDuration(meta.duration);
+      setVideoWidth(meta.width);
+      setVideoHeight(meta.height);
+    }
+  };
+
+  const handleThumbnailChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setThumbnailFile(file);
+      setThumbnailPreview(URL.createObjectURL(file));
+    }
+  };
+
+  const submit = async (e) => {
     e.preventDefault();
-    if (!videoFile || !thumbnailFile)
-      return alert("Please select video and thumbnail");
-    const fd = new FormData();
-    fd.append("video", videoFile);
-    fd.append("thumbnail", thumbnailFile);
-    fd.append("title", title);
-    fd.append("description", description);
-    fd.append("category", category);
-    fd.append("visibility", visibility);
-    onSubmit(fd);
+    if (!videoFile) return alert("Please select a video file");
+    if (!thumbnailFile) return alert("Please select a thumbnail image");
+
+    setUploading(true);
+    setUploadError("");
+
+    try {
+      let finalDuration = videoDuration;
+      let finalWidth = videoWidth;
+      let finalHeight = videoHeight;
+
+      // Extract metadata internally if not already captured
+      if (!finalDuration) {
+        const meta = await getVideoMetadata(videoFile);
+        finalDuration = meta.duration;
+        finalWidth = meta.width;
+        finalHeight = meta.height;
+      }
+
+      const fd = new FormData();
+      fd.append("video", videoFile);
+      fd.append("thumbnail", thumbnailFile);
+      fd.append("title", title);
+      fd.append("description", description);
+      fd.append("category", category);
+      fd.append("visibility", visibility);
+      fd.append("isPinned", isPinned);
+      fd.append("duration", Number(finalDuration) || 0);
+      if (finalWidth && finalHeight) {
+        fd.append("width", finalWidth);
+        fd.append("height", finalHeight);
+      }
+      if (owner) {
+        fd.append("owner", owner);
+      }
+
+      await onSubmit(fd);
+    } catch (err) {
+      setUploadError(err.message || "Failed to upload video");
+      setUploading(false);
+    }
   };
 
   return (
-    <form onSubmit={submit}>
-      <label className="block text-sm font-medium text-ink">Title</label>
-      <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Video title" className={inputClass} />
+    <form onSubmit={submit} className="space-y-4">
+      {uploadError && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-600">
+          ⚠️ {uploadError}
+        </div>
+      )}
 
-      <label className="mt-4 block text-sm font-medium text-ink">Description</label>
-      <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What is this video about?" className={inputClass} rows={3} />
+      <div>
+        <label className="block text-sm font-medium text-ink">Title</label>
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Video title"
+          className={inputClass}
+          required
+          disabled={uploading}
+        />
+      </div>
 
-      <label className="mt-4 block text-sm font-medium text-ink">Category</label>
-      <select value={category} onChange={(e) => setCategory(e.target.value)} className={inputClass}>
-        <option value="">Select</option>
-        {categories.map((c) => (
-          <option key={c._id} value={c._id}>{c.name}</option>
-        ))}
-      </select>
+      <div>
+        <label className="block text-sm font-medium text-ink">Description</label>
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="What is this video about?"
+          className={inputClass}
+          rows={3}
+          disabled={uploading}
+        />
+      </div>
 
-      <label className="mt-4 block text-sm font-medium text-ink">Video File</label>
-      <input type="file" accept="video/*" onChange={(e) => setVideoFile(e.target.files[0])} className="mt-1.5 w-full text-sm text-muted file:mr-3 file:rounded-full file:border-0 file:bg-brand-50 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-brand" />
+      {/* Target Channel / Creator Selector */}
+      <div>
+        <div className="flex justify-between items-center">
+          <label className="block text-sm font-medium text-ink">Target Channel / Creator</label>
+          <span className="text-[11px] text-muted">{users.length} channels available</span>
+        </div>
+        <select
+          value={owner}
+          onChange={(e) => setOwner(e.target.value)}
+          className={inputClass}
+          disabled={uploading}
+        >
+          <option value="">Default (Admin Account)</option>
+          {users.map((u) => (
+            <option key={u._id} value={u._id}>
+              {u.name} {u.channelName ? `(@${u.channelName})` : ""} {u.phone ? `• ${u.phone}` : u.email ? `• ${u.email}` : ""}
+            </option>
+          ))}
+        </select>
+        <p className="mt-1 text-[11px] text-muted">
+          Select which channel profile this video will appear under.
+        </p>
+      </div>
 
-      <label className="mt-4 block text-sm font-medium text-ink">Thumbnail</label>
-      <input type="file" accept="image/*" onChange={(e) => setThumbnailFile(e.target.files[0])} className="mt-1.5 w-full text-sm text-muted file:mr-3 file:rounded-full file:border-0 file:bg-brand-50 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-brand" />
+      {/* Pinned Video Toggle for Admin */}
+      <div
+        onClick={() => !uploading && setIsPinned(!isPinned)}
+        className="flex items-start gap-3 p-3 rounded-xl border border-line bg-surface/40 hover:bg-surface/70 transition-colors cursor-pointer"
+      >
+        <input
+          type="checkbox"
+          id="pinVideoUpload"
+          checked={isPinned}
+          onChange={(e) => setIsPinned(e.target.checked)}
+          onClick={(e) => e.stopPropagation()}
+          disabled={uploading}
+          className="mt-0.5 h-4 w-4 rounded border-line text-brand focus:ring-brand cursor-pointer"
+        />
+        <label htmlFor="pinVideoUpload" className="text-sm font-medium text-ink cursor-pointer flex-1">
+          📌 Pin to Top of Home Feed
+          <span className="block text-[11px] text-muted font-normal mt-0.5">
+            This video will stay permanently locked on top of the home screen and won't shuffle on refresh.
+          </span>
+        </label>
+      </div>
 
-      <label className="mt-4 block text-sm font-medium text-ink">Visibility</label>
-      <select value={visibility} onChange={(e) => setVisibility(e.target.value)} className={inputClass}>
-        <option value="public">Public</option>
-        <option value="unlisted">Unlisted</option>
-        <option value="private">Private</option>
-      </select>
+      <div>
+        <label className="block text-sm font-medium text-ink">Category</label>
+        <select
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          className={inputClass}
+          disabled={uploading}
+        >
+          <option value="">Select Category</option>
+          {categories.map((c) => (
+            <option key={c._id} value={c._id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      </div>
 
-      <div className="mt-6 flex justify-end gap-2">
-        <button type="button" onClick={onCancel} className="rounded-full bg-surface px-4 py-2 text-sm font-semibold text-ink hover:bg-line">Cancel</button>
-        <button type="submit" className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white shadow-brand hover:bg-brand-dark">Upload</button>
+      <div>
+        <label className="block text-sm font-medium text-ink">Video File</label>
+        <input
+          type="file"
+          accept="video/*"
+          onChange={handleVideoChange}
+          className="mt-1.5 w-full text-sm text-muted file:mr-3 file:rounded-full file:border-0 file:bg-brand-50 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-brand"
+          required
+          disabled={uploading}
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-ink">Thumbnail Image</label>
+        <input
+          type="file"
+          accept="image/*"
+          onChange={handleThumbnailChange}
+          className="mt-1.5 w-full text-sm text-muted file:mr-3 file:rounded-full file:border-0 file:bg-brand-50 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-brand"
+          required
+          disabled={uploading}
+        />
+        {thumbnailPreview && (
+          <div className="mt-2.5 flex items-center gap-3 p-2 rounded-xl border border-line bg-surface/30">
+            <img
+              src={thumbnailPreview}
+              alt="preview"
+              className="h-14 w-24 rounded-lg object-cover border border-line"
+            />
+            <span className="text-xs text-muted font-medium">Selected Thumbnail Preview</span>
+          </div>
+        )}
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-ink">Visibility</label>
+        <select
+          value={visibility}
+          onChange={(e) => setVisibility(e.target.value)}
+          className={inputClass}
+          disabled={uploading}
+        >
+          <option value="public">Public</option>
+          <option value="unlisted">Unlisted</option>
+          <option value="private">Private</option>
+        </select>
+      </div>
+
+      <div className="mt-6 flex items-center justify-end gap-2 pt-2 border-t border-line">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={uploading}
+          className="rounded-full bg-surface px-4 py-2 text-sm font-semibold text-ink hover:bg-line disabled:opacity-50"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={uploading}
+          className="rounded-full bg-brand px-6 py-2 text-sm font-semibold text-white shadow-brand hover:bg-brand-dark disabled:opacity-75 flex items-center gap-2"
+        >
+          {uploading ? (
+            <>
+              <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span>Uploading Video...</span>
+            </>
+          ) : (
+            "Upload Video"
+          )}
+        </button>
       </div>
     </form>
   );
 };
 
-const EditForm = ({ initial = {}, categories = [], onSubmit, onCancel }) => {
+const EditForm = ({ initial = {}, categories = [], users = [], onSubmit, onCancel }) => {
   const [title, setTitle] = useState(initial.title || "");
   const [description, setDescription] = useState(initial.description || "");
-  const [category, setCategory] = useState(initial.category || "");
+  const [category, setCategory] = useState(initial.category?._id || initial.category || "");
+  const [owner, setOwner] = useState(initial.owner?._id || initial.owner || "");
   const [visibility, setVisibility] = useState(initial.visibility || "public");
+  const [isPinned, setIsPinned] = useState(Boolean(initial.isPinned));
+  const [thumbnailFile, setThumbnailFile] = useState(null);
+  const [thumbnailPreview, setThumbnailPreview] = useState(
+    initial.thumbnail ? resolveMediaUrl(initial.thumbnail) : ""
+  );
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
-  const submit = (e) => {
+  const handleThumbnailChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setThumbnailFile(file);
+      setThumbnailPreview(URL.createObjectURL(file));
+    }
+  };
+
+  const submit = async (e) => {
     e.preventDefault();
-    onSubmit({ title, description, category, visibility });
+    setSaving(true);
+    setSaveError("");
+
+    try {
+      if (thumbnailFile) {
+        const fd = new FormData();
+        fd.append("thumbnail", thumbnailFile);
+        fd.append("title", title);
+        fd.append("description", description);
+        fd.append("category", category);
+        fd.append("visibility", visibility);
+        fd.append("isPinned", isPinned);
+        if (owner) fd.append("owner", owner);
+        await onSubmit(fd);
+      } else {
+        await onSubmit({
+          title,
+          description,
+          category,
+          visibility,
+          owner,
+          isPinned,
+        });
+      }
+    } catch (err) {
+      setSaveError(err.message || "Failed to update video");
+      setSaving(false);
+    }
   };
 
   return (
-    <form onSubmit={submit}>
-      <label className="block text-sm font-medium text-ink">Title</label>
-      <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Video title" className={inputClass} />
+    <form onSubmit={submit} className="space-y-4">
+      {saveError && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-600">
+          ⚠️ {saveError}
+        </div>
+      )}
 
-      <label className="mt-4 block text-sm font-medium text-ink">Description</label>
-      <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What is this video about?" className={inputClass} rows={3} />
+      <div>
+        <label className="block text-sm font-medium text-ink">Title</label>
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Video title"
+          className={inputClass}
+          required
+          disabled={saving}
+        />
+      </div>
 
-      <label className="mt-4 block text-sm font-medium text-ink">Category</label>
-      <select value={category} onChange={(e) => setCategory(e.target.value)} className={inputClass}>
-        <option value="">Select</option>
-        {categories.map((c) => (
-          <option key={c._id} value={c._id}>{c.name}</option>
-        ))}
-      </select>
+      <div>
+        <label className="block text-sm font-medium text-ink">Description</label>
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="What is this video about?"
+          className={inputClass}
+          rows={3}
+          disabled={saving}
+        />
+      </div>
 
-      <label className="mt-4 block text-sm font-medium text-ink">Visibility</label>
-      <select value={visibility} onChange={(e) => setVisibility(e.target.value)} className={inputClass}>
-        <option value="public">Public</option>
-        <option value="unlisted">Unlisted</option>
-        <option value="private">Private</option>
-      </select>
+      {/* Target Channel / Creator Selector on Edit */}
+      <div>
+        <label className="block text-sm font-medium text-ink">Channel / Creator</label>
+        <select
+          value={owner}
+          onChange={(e) => setOwner(e.target.value)}
+          className={inputClass}
+          disabled={saving}
+        >
+          <option value="">Default (Admin Account)</option>
+          {users.map((u) => (
+            <option key={u._id} value={u._id}>
+              {u.name} {u.channelName ? `(@${u.channelName})` : ""} {u.phone ? `• ${u.phone}` : u.email ? `• ${u.email}` : ""}
+            </option>
+          ))}
+        </select>
+      </div>
 
-      <div className="mt-6 flex justify-end gap-2">
-        <button type="button" onClick={onCancel} className="rounded-full bg-surface px-4 py-2 text-sm font-semibold text-ink hover:bg-line">Cancel</button>
-        <button type="submit" className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white shadow-brand hover:bg-brand-dark">Save</button>
+      {/* Thumbnail edit / preview */}
+      <div>
+        <label className="block text-sm font-medium text-ink">Thumbnail Image</label>
+        {thumbnailPreview && (
+          <div className="my-2 flex items-center gap-3 p-2 rounded-xl border border-line bg-surface/30">
+            <img
+              src={thumbnailPreview}
+              alt="thumb preview"
+              className="h-14 w-24 rounded-lg object-cover border border-line"
+              onError={(e) => {
+                e.currentTarget.src = "https://via.placeholder.com/640x360.png?text=Thumbnail";
+              }}
+            />
+            <span className="text-xs text-muted font-medium">
+              {thumbnailFile ? "New Thumbnail (Pending Save)" : "Current Thumbnail"}
+            </span>
+          </div>
+        )}
+        <input
+          type="file"
+          accept="image/*"
+          onChange={handleThumbnailChange}
+          disabled={saving}
+          className="mt-1.5 w-full text-sm text-muted file:mr-3 file:rounded-full file:border-0 file:bg-brand-50 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-brand"
+        />
+        <p className="mt-1 text-[11px] text-muted">Leave empty if you don't want to change the current thumbnail.</p>
+      </div>
+
+      {/* Pinned Video Toggle on Edit */}
+      <div
+        onClick={() => !saving && setIsPinned(!isPinned)}
+        className="flex items-start gap-3 p-3 rounded-xl border border-line bg-surface/40 hover:bg-surface/70 transition-colors cursor-pointer"
+      >
+        <input
+          type="checkbox"
+          id="pinVideoEdit"
+          checked={isPinned}
+          onChange={(e) => setIsPinned(e.target.checked)}
+          onClick={(e) => e.stopPropagation()}
+          disabled={saving}
+          className="mt-0.5 h-4 w-4 rounded border-line text-brand focus:ring-brand cursor-pointer"
+        />
+        <label htmlFor="pinVideoEdit" className="text-sm font-medium text-ink cursor-pointer flex-1">
+          📌 Pin to Top of Home Feed
+          <span className="block text-[11px] text-muted font-normal mt-0.5">
+            This video will stay permanently locked on top of the home screen and won't shuffle on refresh.
+          </span>
+        </label>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-ink">Category</label>
+        <select
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          className={inputClass}
+          disabled={saving}
+        >
+          <option value="">Select Category</option>
+          {categories.map((c) => (
+            <option key={c._id} value={c._id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-ink">Visibility</label>
+        <select
+          value={visibility}
+          onChange={(e) => setVisibility(e.target.value)}
+          className={inputClass}
+          disabled={saving}
+        >
+          <option value="public">Public</option>
+          <option value="unlisted">Unlisted</option>
+          <option value="private">Private</option>
+        </select>
+      </div>
+
+      <div className="mt-6 flex items-center justify-end gap-2 pt-2 border-t border-line">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={saving}
+          className="rounded-full bg-surface px-4 py-2 text-sm font-semibold text-ink hover:bg-line disabled:opacity-50"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={saving}
+          className="rounded-full bg-brand px-6 py-2 text-sm font-semibold text-white shadow-brand hover:bg-brand-dark disabled:opacity-75 flex items-center gap-2"
+        >
+          {saving ? (
+            <>
+              <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span>Saving...</span>
+            </>
+          ) : (
+            "Save Changes"
+          )}
+        </button>
       </div>
     </form>
   );

@@ -60,12 +60,47 @@ const getVideoQuery = (req, onlyPublic = false) => {
 };
 
 const getSort = (sort) => {
-  if (sort === "popular") return { views: -1, createdAt: -1 };
-  return { createdAt: -1 };
+  if (sort === "popular") return { isPinned: -1, views: -1, createdAt: -1 };
+  return { isPinned: -1, createdAt: -1 };
+};
+
+const formatMediaUrl = (url, req) => {
+  if (!url) return url;
+  if (url.startsWith('https://') && !url.includes('localhost') && !url.includes('127.0.0.1')) {
+    return url;
+  }
+
+  let serverBase = process.env.BASE_URL;
+  if (!serverBase && req) {
+    const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+    const host = req.headers['x-forwarded-host'] || req.get('host') || 'localhost:5000';
+    serverBase = `${proto}://${host}`;
+  }
+  if (!serverBase) return url;
+  serverBase = serverBase.replace(/\/$/, '');
+
+  if (url.startsWith('/')) {
+    return `${serverBase}${url}`;
+  }
+
+  if (url.includes('localhost:5000') || url.includes('127.0.0.1:5000')) {
+    return url
+      .replace(/https?:\/\/localhost:5000/, serverBase)
+      .replace(/https?:\/\/127\.0\.0\.1:5000/, serverBase);
+  }
+
+  return url;
 };
 
 const decorateVideos = async (videos, req) => {
-  let results = videos.map((v) => v.toObject());
+  let results = videos.map((v) => {
+    const obj = typeof v.toObject === 'function' ? v.toObject() : { ...v };
+    if (obj.thumbnail) obj.thumbnail = formatMediaUrl(obj.thumbnail, req);
+    if (obj.videoUrl) obj.videoUrl = formatMediaUrl(obj.videoUrl, req);
+    if (obj.owner && obj.owner.avatar) obj.owner.avatar = formatMediaUrl(obj.owner.avatar, req);
+    return obj;
+  });
+
   if (!req.user) return results;
 
   const user = await User.findById(req.user.id);
@@ -80,7 +115,7 @@ const decorateVideos = async (videos, req) => {
     isFollowing:
       user && user.followingChannels && v.owner
         ? user.followingChannels.some(
-            (id) => id.toString() === v.owner._id.toString(),
+            (id) => id.toString() === (v.owner._id ? v.owner._id.toString() : v.owner.toString()),
           )
         : false,
   }));
@@ -378,7 +413,10 @@ exports.uploadVideo = async (req, res, next) => {
     const width = Number(req.body.width || 0);
     const height = Number(req.body.height || 0);
     const aspectRatio = width && height ? width / height : null;
-    const duration = Number(req.body.duration || 0);
+    let duration = Number(req.body.duration || 0);
+    if (duration > 1000) {
+      duration = Math.round(duration / 1000);
+    }
 
     if (uploadType === "short" && !isNineBySixteen(aspectRatio)) {
       await deleteLocalFile(videoResult.url);
@@ -405,6 +443,19 @@ exports.uploadVideo = async (req, res, next) => {
       if (thumbIdx !== -1) tempFiles.splice(thumbIdx, 1);
     }
 
+    let targetOwnerId = req.user.id;
+    if (req.user.role === "admin" && req.body.owner) {
+      const targetUser = await User.findById(req.body.owner);
+      if (targetUser) {
+        targetOwnerId = targetUser._id;
+      }
+    }
+
+    let isPinned = false;
+    if (req.user.role === "admin" && (req.body.isPinned === "true" || req.body.isPinned === true)) {
+      isPinned = true;
+    }
+
     const video = await Video.create({
       title: req.body.title || formatDefaultTitle(),
       description: req.body.description || "",
@@ -414,8 +465,9 @@ exports.uploadVideo = async (req, res, next) => {
       thumbnail: thumbnail,
       duration: duration,
       isShort: uploadType === "short",
+      isPinned,
       aspectRatio,
-      owner: req.user.id,
+      owner: targetOwnerId,
       visibility: req.body.visibility || "public",
       originalVideoSize,
       compressedVideoSize,
@@ -426,7 +478,7 @@ exports.uploadVideo = async (req, res, next) => {
     // Auto-create pending monetization review
     await VideoMonetizationReview.create({
       video: video._id,
-      user: req.user.id,
+      user: targetOwnerId,
       status: "pending"
     });
 
@@ -452,7 +504,10 @@ exports.updateVideo = async (req, res, next) => {
       return res
         .status(404)
         .json({ success: false, message: "Video not found" });
-    if (video.owner.toString() !== req.user.id && req.user.role !== "admin") {
+    const isOwner = video.owner && video.owner.toString() === req.user.id.toString();
+    const isAdmin = req.user && (req.user.role === "admin" || req.user.isAdmin === true);
+
+    if (!isOwner && !isAdmin) {
       return res.status(401).json({
         success: false,
         message: "Not authorized to update this video",
@@ -466,6 +521,23 @@ exports.updateVideo = async (req, res, next) => {
     });
     if (req.body.tags !== undefined)
       updates.tags = normalizeTags(req.body.tags);
+
+    if (isAdmin && req.body.owner) {
+      const targetUser = await User.findById(req.body.owner);
+      if (targetUser) {
+        updates.owner = targetUser._id;
+      }
+    }
+
+    if (isAdmin && req.body.isPinned !== undefined) {
+      updates.isPinned = req.body.isPinned === "true" || req.body.isPinned === true;
+    }
+
+    if (req.body.duration !== undefined && req.body.duration !== null) {
+      let dur = Number(req.body.duration);
+      if (dur > 1000) dur = Math.round(dur / 1000);
+      updates.duration = dur;
+    }
 
     if (req.files && req.files.thumbnail && req.files.thumbnail[0]) {
       tempFiles.push(req.files.thumbnail[0].path);

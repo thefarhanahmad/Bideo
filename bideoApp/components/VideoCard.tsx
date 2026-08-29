@@ -9,7 +9,7 @@ import Colors from '../constants/Colors';
 import { useRouter } from 'expo-router';
 import { formatTimeAgo, formatViews } from '../utils/formatDate';
 import { hapticSelection } from '../utils/haptics';
-import api from '../services/api';
+import api, { resolveMediaUrl } from '../services/api';
 import { useSelector } from 'react-redux';
 import { RootState } from '../redux/store';
 
@@ -53,8 +53,13 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, onMenuPress, onPlaylistPre
   const isOwner = user?._id === video.owner?._id;
 
   const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
+    let totalSecs = Math.round(Number(seconds) || 0);
+    // If stored as milliseconds (e.g. 7625 for 7.6s), convert to seconds
+    if (totalSecs > 1000) {
+      totalSecs = Math.round(totalSecs / 1000);
+    }
+    const mins = Math.floor(totalSecs / 60);
+    const secs = Math.floor(totalSecs % 60);
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
@@ -132,7 +137,7 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, onMenuPress, onPlaylistPre
     >
       <View style={styles.thumbnailContainer}>
         <Image
-          source={{ uri: video?.thumbnail || FALLBACK_IMAGE }}
+          source={{ uri: resolveMediaUrl(video?.thumbnail) || FALLBACK_IMAGE }}
           style={styles.thumbnail}
           contentFit="cover"
           transition={250}
@@ -149,7 +154,7 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, onMenuPress, onPlaylistPre
 
       <View style={styles.detailsContainer}>
         <TouchableOpacity onPress={() => video?.owner?._id && router.push(`/channel/${video.owner._id}`)}>
-          <Image source={{ uri: video?.owner?.avatar || FALLBACK_AVATAR }} style={styles.avatar} contentFit="cover" transition={200} />
+          <Image source={{ uri: resolveMediaUrl(video?.owner?.avatar) || FALLBACK_AVATAR }} style={styles.avatar} contentFit="cover" transition={200} />
         </TouchableOpacity>
         <View style={styles.textContainer}>
           <Text style={styles.title} numberOfLines={2}>

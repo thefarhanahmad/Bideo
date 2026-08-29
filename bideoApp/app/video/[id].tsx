@@ -19,7 +19,7 @@ import { hapticLight } from '../../utils/haptics';
 import { AppInterstitialAd } from '../../components/AppAds';
 
 const FALLBACK_IMAGE = 'https://via.placeholder.com/80x80.png?text=User';
-const REQUIRED_WATCH_TIME = 10; // 10 seconds minimum watch time to count a view
+const REQUIRED_WATCH_TIME = 3; // 3 seconds minimum watch time to count a view
 
 export default function VideoScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -86,7 +86,7 @@ export default function VideoScreen() {
     setShowingAd(true);
   }, [video?.videoUrl, player]);
 
-  // Track active watch time (10 seconds required before recording a view)
+  // Track active watch time (3 seconds required before recording a view)
   useEffect(() => {
     if (!video?._id) return;
 
@@ -149,7 +149,7 @@ export default function VideoScreen() {
         videoService.getVideos(),
       ]);
       const videoData = videoRes?.data || videoRes;
-      const allVideos = Array.isArray(allVideosRes) ? allVideosRes : (allVideosRes?.data || []);
+      const allVideos: any[] = Array.isArray(allVideosRes) ? allVideosRes : ((allVideosRes as any)?.data || []);
 
       setVideo(videoData || null);
       setRecommendedVideos((allVideos || []).filter((v: any) => v?._id !== id));
