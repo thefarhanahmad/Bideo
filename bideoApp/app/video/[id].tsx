@@ -14,6 +14,7 @@ import VideoCard from '../../components/VideoCard';
 import CommentList from '../../components/CommentList';
 import AuthModal from '../../components/AuthModal';
 import PlaylistModal from '../../components/PlaylistModal';
+import VerifiedBadge from '../../components/VerifiedBadge';
 import { formatTimeAgo, formatViews } from '../../utils/formatDate';
 import { hapticLight } from '../../utils/haptics';
 import { AppInterstitialAd } from '../../components/AppAds';
@@ -417,7 +418,10 @@ export default function VideoScreen() {
               >
                 <Image source={{ uri: video?.owner?.avatar || FALLBACK_IMAGE }} style={styles.avatar} contentFit="cover" transition={200} />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.channelName} numberOfLines={1}>{video?.owner?.channelName || video?.owner?.name || 'Unknown channel'}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={styles.channelName} numberOfLines={1}>{video?.owner?.channelName || video?.owner?.name || 'Unknown channel'}</Text>
+                    {Boolean(video?.owner?.isVerified) && <VerifiedBadge size={14} style={{ marginLeft: 3 }} />}
+                  </View>
                   <Text style={styles.followerCount}>{formatViews(video?.owner?.followersCount || 0)} followers</Text>
                 </View>
               </TouchableOpacity>

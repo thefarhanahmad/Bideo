@@ -11,6 +11,7 @@ import { RootState } from '../../redux/store';
 import api from '../../services/api';
 import AuthModal from '../../components/AuthModal';
 import { EmptyState } from '../../components/ListStates';
+import VerifiedBadge from '../../components/VerifiedBadge';
 const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
 
 export default function FollowingsScreen() {
@@ -105,7 +106,10 @@ export default function FollowingsScreen() {
               onPress={() => item.channel?._id && router.push(`/channel/${item.channel._id}`)}
             >
               <Image source={{ uri: item.channel?.avatar || FALLBACK_AVATAR }} style={styles.channelAvatar} contentFit="cover" transition={200} />
-              <Text style={styles.channelName} numberOfLines={1}>{item.channel.channelName || item.channel.name}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', maxWidth: 64 }}>
+                <Text style={styles.channelName} numberOfLines={1}>{item.channel?.channelName || item.channel?.name}</Text>
+                {Boolean(item.channel?.isVerified) && <VerifiedBadge size={11} style={{ marginLeft: 2 }} />}
+              </View>
             </TouchableOpacity>
           ))}
           {followings.length === 0 && !loading && (

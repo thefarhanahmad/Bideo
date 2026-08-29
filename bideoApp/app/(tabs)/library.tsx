@@ -6,6 +6,7 @@ import Colors from '../../constants/Colors';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../../redux/store';
 import AuthModal from '../../components/AuthModal';
+import VerifiedBadge from '../../components/VerifiedBadge';
 import api, { setAuthToken } from '../../services/api';
 import { useRouter, useNavigation, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -192,7 +193,10 @@ export default function LibraryScreen() {
             </View>
           )}
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>{user?.name}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+              <Text style={styles.profileName}>{user?.name}</Text>
+              {Boolean(user?.isVerified) && <VerifiedBadge size={16} style={{ marginLeft: 4 }} />}
+            </View>
             <Text style={styles.profileEmail}>{user?.email || user?.phone}</Text>
             <Text style={styles.channelName}>{user?.channelName || 'No channel name'}</Text>
           </View>

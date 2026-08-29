@@ -234,6 +234,24 @@ const Users = () => {
     });
   };
 
+  const handleToggleVerify = async (user) => {
+    try {
+      const token = localStorage.getItem("admin_token");
+      const res = await fetch(`${API_URL}/api/users/${user._id}/verify`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to update verified badge");
+      await fetchUsers();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
   const calculateDaysRemaining = (scheduledDateStr) => {
     if (!scheduledDateStr) return "Pending";
     const diff = new Date(scheduledDateStr).getTime() - Date.now();
@@ -395,7 +413,21 @@ const Users = () => {
                           </span>
 
                           <div className="min-w-0 flex-1">
-                            <div className="font-bold text-ink text-sm truncate">{u.name || "Unnamed"}</div>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-ink text-sm truncate">{u.name || "Unnamed"}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleVerify(u)}
+                                title={u.isVerified ? "Verified Creator — click to remove badge" : "Click to grant Verified Badge"}
+                                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold transition-all shadow-xs ${
+                                  u.isVerified
+                                    ? "bg-blue-600 text-white hover:bg-blue-700"
+                                    : "bg-surface text-muted border border-line hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200"
+                                }`}
+                              >
+                                <span>{u.isVerified ? "✓ Verified" : "+ Verify"}</span>
+                              </button>
+                            </div>
                             {u.deletionReason && (
                               <div className="mt-1 text-xs text-red-600 font-normal">
                                 Reason: "{u.deletionReason}"
@@ -616,6 +648,7 @@ const UserForm = ({ initial = {}, onSubmit, onCancel }) => {
   const [phone, setPhone] = useState(initial.phone || "");
   const [channelName, setChannelName] = useState(initial.channelName || "");
   const [role, setRole] = useState(initial.role || "user");
+  const [isVerified, setIsVerified] = useState(Boolean(initial.isVerified));
   const [walletBalance, setWalletBalance] = useState(
     initial.walletBalance !== undefined ? String(initial.walletBalance) : "0"
   );
@@ -652,6 +685,7 @@ const UserForm = ({ initial = {}, onSubmit, onCancel }) => {
     const payload = {
       name: name.trim(),
       role,
+      isVerified,
       walletBalance: Math.max(0, parseFloat(walletBalance) || 0),
       totalEarnings: Math.max(0, parseFloat(totalEarnings) || 0),
     };
@@ -759,6 +793,42 @@ const UserForm = ({ initial = {}, onSubmit, onCancel }) => {
               )}
             </div>
           </div>
+        </div>
+
+        {/* Verified Badge Checkbox */}
+        <div
+          onClick={() => setIsVerified(!isVerified)}
+          className={`flex items-center justify-between p-3 rounded-2xl border transition-all cursor-pointer ${
+            isVerified
+              ? "bg-blue-50/80 border-blue-300 shadow-xs"
+              : "bg-surface/50 border-line hover:bg-surface"
+          }`}
+        >
+          <div className="flex items-center gap-2.5">
+            <input
+              type="checkbox"
+              id="isVerifiedCheckbox"
+              checked={isVerified}
+              onChange={(e) => setIsVerified(e.target.checked)}
+              onClick={(e) => e.stopPropagation()}
+              className="h-4 w-4 rounded border-blue-400 text-blue-600 focus:ring-blue-500 cursor-pointer"
+            />
+            <label htmlFor="isVerifiedCheckbox" className="text-xs font-bold text-ink cursor-pointer">
+              🛡️ Verified Creator Badge (Instagram Blue Checkmark)
+              <span className="block text-[11px] font-normal text-muted mt-0.5">
+                Displays the official blue verified badge next to their name and channel across the app.
+              </span>
+            </label>
+          </div>
+          <span
+            className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold shrink-0 ${
+              isVerified
+                ? "bg-blue-600 text-white"
+                : "bg-surface text-muted border border-line"
+            }`}
+          >
+            {isVerified ? "✓ Verified" : "Not Verified"}
+          </span>
         </div>
 
         {/* Row 3: Wallet Management Section */}

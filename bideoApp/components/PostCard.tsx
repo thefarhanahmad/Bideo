@@ -13,6 +13,7 @@ import { useSelector } from 'react-redux';
 import { RootState } from '../redux/store';
 import api from '../services/api';
 import AuthModal from './AuthModal';
+import VerifiedBadge from './VerifiedBadge';
 
 const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
 
@@ -114,7 +115,10 @@ const PostCard = ({ post, onDelete }: PostCardProps) => {
         <TouchableOpacity style={styles.headerInfo} onPress={() => owner._id && router.push(`/channel/${owner._id}`)}>
           <Image source={{ uri: owner.avatar || FALLBACK_AVATAR }} style={styles.avatar} contentFit="cover" transition={200} />
           <View style={styles.headerText}>
-            <Text style={styles.ownerName}>{owner.channelName || owner.name || 'User'}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+              <Text style={styles.ownerName}>{owner.channelName || owner.name || 'User'}</Text>
+              {Boolean(owner.isVerified) && <VerifiedBadge size={13} style={{ marginLeft: 3 }} />}
+            </View>
             <Text style={styles.time}>{formatTimeAgo(post.createdAt)}</Text>
           </View>
         </TouchableOpacity>

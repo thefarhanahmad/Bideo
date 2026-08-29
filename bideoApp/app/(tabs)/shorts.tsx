@@ -11,6 +11,7 @@ import { useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import AuthModal from '../../components/AuthModal';
 import CommentList from '../../components/CommentList';
+import VerifiedBadge from '../../components/VerifiedBadge';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatViews } from '../../utils/formatDate';
@@ -80,7 +81,8 @@ export default function ShortsScreen() {
             _id: v.owner?._id,
             name: v.owner?.name || 'Unknown', 
             channelName: v.owner?.channelName,
-            avatar: v.owner?.avatar || '' 
+            avatar: v.owner?.avatar || '',
+            isVerified: Boolean(v.owner?.isVerified),
           },
           title: v.title,
           likes: v.likes || [],
@@ -594,9 +596,18 @@ const ShortItem = ({ item, index, activeVideoIndex, containerHeight, isFocused, 
         </View>
 
         <View style={styles.bottomDetails}>
-          <TouchableOpacity style={styles.ownerRow} onPress={() => item.owner?._id && router.push(`/channel/${item.owner._id}`)}>
-            <Image source={{ uri: item.owner?.avatar || FALLBACK_AVATAR }} style={styles.ownerAvatar} />
-            <Text style={styles.ownerName} numberOfLines={1}>@{item.owner.channelName || item.owner.name}</Text>
+          <View style={styles.ownerRow}>
+            <TouchableOpacity 
+              style={styles.ownerProfileBtn} 
+              onPress={() => item.owner?._id && router.push(`/channel/${item.owner._id}`)}
+              activeOpacity={0.8}
+            >
+              <Image source={{ uri: item.owner?.avatar || FALLBACK_AVATAR }} style={styles.ownerAvatar} />
+              <View style={styles.ownerNameContainer}>
+                <Text style={styles.ownerName} numberOfLines={1}>@{item.owner.channelName || item.owner.name}</Text>
+                {Boolean(item.owner?.isVerified) && <VerifiedBadge size={14} style={styles.verifiedBadge} />}
+              </View>
+            </TouchableOpacity>
             {item.owner._id !== user?._id && (
               <TouchableOpacity 
                 style={[styles.followBtn, item.isFollowing && styles.followedBtn]} 
@@ -607,7 +618,7 @@ const ShortItem = ({ item, index, activeVideoIndex, containerHeight, isFocused, 
                 </Text>
               </TouchableOpacity>
             )}
-          </TouchableOpacity>
+          </View>
           <Text style={styles.shortTitle} numberOfLines={2}>{item.title}</Text>
         </View>
       </View>
@@ -682,6 +693,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
+  ownerProfileBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
+  },
   ownerAvatar: {
     width: 36,
     height: 36,
@@ -689,12 +705,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.white,
   },
+  ownerNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 10,
+    flexShrink: 1,
+  },
   ownerName: {
     color: Colors.white,
     fontWeight: 'bold',
-    marginLeft: 10,
     fontSize: 14,
-    flex: 1,
+    flexShrink: 1,
+  },
+  verifiedBadge: {
+    marginLeft: 4,
   },
   followBtn: {
     backgroundColor: Colors.primary,

@@ -179,7 +179,7 @@ exports.searchVideos = async (req, res, next) => {
       ],
       visibility: "public",
     })
-      .populate("owner", "name avatar channelName followersCount")
+      .populate("owner", "name avatar channelName followersCount isVerified")
       .populate("category", "name")
       .sort("-createdAt");
 
@@ -200,7 +200,7 @@ exports.searchVideos = async (req, res, next) => {
 exports.getVideos = async (req, res, next) => {
   try {
     const videos = await Video.find(getVideoQuery(req))
-      .populate("owner", "name avatar channelName followersCount")
+      .populate("owner", "name avatar channelName followersCount isVerified")
       .populate("category", "name")
       .sort(getSort(req.query.sort));
 
@@ -216,7 +216,7 @@ exports.getVideos = async (req, res, next) => {
 exports.getVideo = async (req, res, next) => {
   try {
     const video = await Video.findById(req.params.id)
-      .populate("owner", "name avatar channelName followersCount")
+      .populate("owner", "name avatar channelName followersCount isVerified")
       .populate("category", "name");
 
     if (!video)
@@ -311,7 +311,7 @@ exports.getFollowedVideos = async (req, res, next) => {
     );
 
     const videos = await Video.find(query)
-      .populate("owner", "name avatar channelName followersCount")
+      .populate("owner", "name avatar channelName followersCount isVerified")
       .populate("category", "name")
       .sort("-createdAt");
 
@@ -328,7 +328,7 @@ exports.getMyVideos = async (req, res, next) => {
   try {
     const query = applyVideoTypeFilter({ owner: req.user.id }, req.query.type);
     const videos = await Video.find(query)
-      .populate("owner", "name avatar channelName")
+      .populate("owner", "name avatar channelName isVerified")
       .populate("category", "name")
       .sort("-createdAt");
     res.status(200).json({ success: true, count: videos.length, data: videos });

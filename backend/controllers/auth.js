@@ -196,6 +196,7 @@ const sendTokenResponse = (user, statusCode, res) => {
         phone: user.phone,
         channelName: user.channelName,
         about: user.about,
+        isVerified: !!user.isVerified,
         deletionScheduled: !!user.deletionScheduled,
         scheduledDeletionDate: user.scheduledDeletionDate,
         deletionReason: user.deletionReason,

@@ -20,8 +20,8 @@ exports.getComments = async (req, res, next) => {
     else query.video = req.params.videoId; // fallback for old route
 
     const comments = await Comment.find(query)
-      .populate('user', 'name avatar channelName')
-      .populate('replies.user', 'name avatar channelName')
+      .populate('user', 'name avatar channelName isVerified')
+      .populate('replies.user', 'name avatar channelName isVerified')
       .sort('-createdAt');
 
     res.status(200).json({
@@ -60,7 +60,7 @@ exports.addComment = async (req, res, next) => {
     }
 
     const comment = await Comment.create(req.body);
-    await comment.populate('user', 'name avatar channelName');
+    await comment.populate('user', 'name avatar channelName isVerified');
 
     parent.commentsCount += 1;
     await parent.save();
@@ -128,7 +128,7 @@ exports.addReply = async (req, res, next) => {
 
     comment.replies.push({ user: req.user.id, text });
     await comment.save();
-    await comment.populate('replies.user', 'name avatar channelName');
+    await comment.populate('replies.user', 'name avatar channelName isVerified');
     const reply = comment.replies[comment.replies.length - 1];
 
     await createNotification({
@@ -247,7 +247,7 @@ exports.updateComment = async (req, res, next) => {
     comment = await Comment.findByIdAndUpdate(req.params.id, { text: req.body.text }, {
       new: true,
       runValidators: true
-    }).populate('user', 'name avatar channelName');
+    }).populate('user', 'name avatar channelName isVerified');
 
     res.status(200).json({
       success: true,

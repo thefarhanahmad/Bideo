@@ -65,7 +65,7 @@ exports.follow = async (req, res, next) => {
 // @access  Private
 exports.getFollowings = async (req, res, next) => {
   try {
-    const followings = await Follower.find({ follower: req.user.id }).populate('channel', 'name avatar followersCount channelName');
+    const followings = await Follower.find({ follower: req.user.id }).populate('channel', 'name avatar followersCount channelName isVerified');
 
     res.status(200).json({
       success: true,

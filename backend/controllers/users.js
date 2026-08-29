@@ -46,7 +46,7 @@ exports.updateChannel = async (req, res, next) => {
 
 exports.getChannelProfile = async (req, res, next) => {
   try {
-    const channelObj = await User.findById(req.params.id).select('name avatar coverImage channelName about followersCount createdAt');
+    const channelObj = await User.findById(req.params.id).select('name avatar coverImage channelName about followersCount isVerified createdAt');
     if (!channelObj) return res.status(404).json({ success: false, message: 'Channel not found' });
 
     const channel = channelObj.toObject();
@@ -79,7 +79,7 @@ exports.getChannelProfile = async (req, res, next) => {
 
     if (filter === 'posts') {
       posts = await Post.find(postQuery)
-        .populate('owner', 'name avatar channelName')
+        .populate('owner', 'name avatar channelName isVerified')
         .sort(sortQuery);
     } else {
       if (filter === 'shorts') {
@@ -89,7 +89,7 @@ exports.getChannelProfile = async (req, res, next) => {
       }
 
       videos = await Video.find(videoQuery)
-        .populate('owner', 'name avatar channelName followersCount')
+        .populate('owner', 'name avatar channelName followersCount isVerified')
         .populate('category', 'name')
         .sort(sortQuery);
     }
@@ -173,6 +173,10 @@ exports.updateUser = async (req, res, next) => {
       update.totalEarnings = earningsNum;
     }
 
+    if (update.isVerified !== undefined) {
+      update.isVerified = Boolean(update.isVerified);
+    }
+
     // Hash password if admin is resetting/setting a new password for the user
     if (update.password && typeof update.password === 'string' && update.password.trim().length > 0) {
       if (update.password.trim().length < 6) {
@@ -187,6 +191,27 @@ exports.updateUser = async (req, res, next) => {
     const user = await User.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: true }).select('-__v');
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     res.status(200).json({ success: true, data: user });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Toggle user verification badge
+// @route   PUT /api/users/:id/verify
+// @access  Private/Admin
+exports.toggleVerifyUser = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    user.isVerified = !user.isVerified;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: user.isVerified ? 'Verification badge granted' : 'Verification badge removed',
+      data: user,
+    });
   } catch (err) {
     next(err);
   }

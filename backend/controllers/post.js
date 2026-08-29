@@ -80,7 +80,7 @@ exports.getPosts = async (req, res, next) => {
   try {
     const query = { visibility: 'public' };
     if (req.query.owner) query.owner = req.query.owner;
-    const posts = await Post.find(query).populate('owner', 'name avatar channelName').sort('-createdAt');
+    const posts = await Post.find(query).populate('owner', 'name avatar channelName isVerified').sort('-createdAt');
     res.status(200).json({ success: true, count: posts.length, data: posts });
   } catch (err) {
     next(err);
@@ -89,7 +89,7 @@ exports.getPosts = async (req, res, next) => {
 
 exports.getPost = async (req, res, next) => {
   try {
-    const post = await Post.findById(req.params.id).populate('owner', 'name avatar channelName');
+    const post = await Post.findById(req.params.id).populate('owner', 'name avatar channelName isVerified');
     if (!post) return res.status(404).json({ success: false, message: 'Post not found' });
     res.status(200).json({ success: true, data: post });
   } catch (err) {
@@ -102,7 +102,7 @@ exports.getFollowedPosts = async (req, res, next) => {
     const followings = await Follower.find({ follower: req.user.id });
     const channelIds = followings.map((f) => f.channel);
     const posts = await Post.find({ owner: { $in: channelIds }, visibility: 'public' })
-      .populate('owner', 'name avatar channelName')
+      .populate('owner', 'name avatar channelName isVerified')
       .sort('-createdAt');
 
     res.status(200).json({ success: true, count: posts.length, data: posts });

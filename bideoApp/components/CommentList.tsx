@@ -10,6 +10,7 @@ import api from '../services/api';
 import { useSelector } from 'react-redux';
 import { RootState } from '../redux/store';
 import { formatTimeAgo } from '../utils/formatDate';
+import VerifiedBadge from './VerifiedBadge';
 
 const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
 
@@ -401,10 +402,11 @@ const CommentItem = ({ item, userId, onOpenChannel, onLike, onReply, onLikeReply
       </TouchableOpacity>
       <View style={styles.commentContent}>
         <View style={styles.commentHeader}>
-          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
             <Text style={styles.username} onPress={() => item.user?._id && onOpenChannel(item.user._id)}>
               {item.user?.channelName || item.user?.name || 'User'}
             </Text>
+            {Boolean(item.user?.isVerified) && <VerifiedBadge size={12} style={{ marginLeft: 2 }} />}
             <Text style={styles.time}> - {formatTimeAgo(item.createdAt)}</Text>
           </View>
           {isOwner && (
@@ -430,6 +432,7 @@ const CommentItem = ({ item, userId, onOpenChannel, onLike, onReply, onLikeReply
             <View key={reply._id || reply.createdAt} style={styles.replyItem}>
               <View style={styles.replyHeader}>
                 <Text style={styles.username}>{reply.user?.channelName || reply.user?.name || 'User'}</Text>
+                {Boolean(reply.user?.isVerified) && <VerifiedBadge size={11} style={{ marginLeft: 2 }} />}
                 <Text style={styles.time}> - {formatTimeAgo(reply.createdAt)}</Text>
               </View>
               <Text style={styles.commentText}>{reply.text}</Text>

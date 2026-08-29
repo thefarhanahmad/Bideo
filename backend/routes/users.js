@@ -23,6 +23,7 @@ const {
   cancelDeletionByAdmin,
   rejectRecoveryByAdmin,
   requestWebDeletion,
+  toggleVerifyUser,
 } = require('../controllers/users');
 const { protect, authorize, softProtect } = require('../middlewares/auth');
 
@@ -53,6 +54,7 @@ router.use(authorize('admin'));
 router.get('/scheduled-deletions', getScheduledDeletions);
 router.post('/:id/cancel-deletion', cancelDeletionByAdmin);
 router.post('/:id/reject-recovery', rejectRecoveryByAdmin);
+router.put('/:id/verify', toggleVerifyUser);
 
 router.route('/').get(getUsers).post(createUser);
 router.route('/:id').get(getUser).put(updateUser).delete(deleteUser);

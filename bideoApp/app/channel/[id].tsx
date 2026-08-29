@@ -11,6 +11,7 @@ import PostCard from '../../components/PostCard';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import AuthModal from '../../components/AuthModal';
+import VerifiedBadge from '../../components/VerifiedBadge';
 import { formatTimeAgo, formatViews } from '../../utils/formatDate';
 import { hapticLight } from '../../utils/haptics';
 
@@ -301,9 +302,14 @@ export default function ChannelScreen() {
               </View>
               
               <View style={styles.identityContainer}>
-                <Text style={styles.name} numberOfLines={1}>
-                  {channel?.channelName || channel?.name || 'Channel'}
-                </Text>
+                <View style={styles.nameRow}>
+                  <Text style={styles.name} numberOfLines={1}>
+                    {channel?.channelName || channel?.name || 'Channel'}
+                  </Text>
+                  {Boolean(channel?.isVerified || (isOwner && user?.isVerified)) && (
+                    <VerifiedBadge size={17} style={{ marginLeft: 5 }} />
+                  )}
+                </View>
                 <Text style={styles.handle}>@{channel?.name || 'user'}</Text>
                 <Text style={styles.subscribers}>{channel?.followersCount || 0} followers</Text>
                 
@@ -482,6 +488,11 @@ const styles = StyleSheet.create({
   },
   identityContainer: {
     width: '100%',
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
   },
   name: { 
     fontSize: 20,

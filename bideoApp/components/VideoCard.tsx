@@ -12,6 +12,7 @@ import { hapticSelection } from '../utils/haptics';
 import api, { resolveMediaUrl } from '../services/api';
 import { useSelector } from 'react-redux';
 import { RootState } from '../redux/store';
+import VerifiedBadge from './VerifiedBadge';
 
 const FALLBACK_IMAGE = 'https://via.placeholder.com/640x360?text=No+Image';
 const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
@@ -28,6 +29,7 @@ interface VideoCardProps {
       name: string;
       channelName?: string;
       avatar: string;
+      isVerified?: boolean;
     };
     duration: number;
     videoUrl?: string;
@@ -160,13 +162,19 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, onMenuPress, onPlaylistPre
           <Text style={styles.title} numberOfLines={2}>
             {video?.title || 'Untitled'}
           </Text>
-          <Text
-            style={styles.metadata}
-            numberOfLines={1}
-            onPress={() => video?.owner?._id && router.push(`/channel/${video.owner._id}`)}
-          >
-            {(video?.owner?.channelName || video?.owner?.name || 'Unknown')} • {formatViews(video?.views || 0)} views • {formatTimeAgo(video?.createdAt)}
-          </Text>
+          <View style={styles.channelRow}>
+            <Text
+              style={styles.metadataChannel}
+              numberOfLines={1}
+              onPress={() => video?.owner?._id && router.push(`/channel/${video.owner._id}`)}
+            >
+              {video?.owner?.channelName || video?.owner?.name || 'Unknown'}
+            </Text>
+            {Boolean(video?.owner?.isVerified) && <VerifiedBadge size={13} style={styles.verifiedIcon} />}
+            <Text style={styles.metadataStats} numberOfLines={1}>
+              {' • '}{formatViews(video?.views || 0)} views • {formatTimeAgo(video?.createdAt)}
+            </Text>
+          </View>
         </View>
         <TouchableOpacity style={styles.menuButton} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={(e) => {
           e.stopPropagation();
@@ -303,6 +311,25 @@ const styles = StyleSheet.create({
   metadata: {
     fontSize: 12,
     color: Colors.textGray,
+  },
+  channelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'nowrap',
+  },
+  metadataChannel: {
+    fontSize: 12,
+    color: Colors.textGray,
+    fontWeight: '500',
+    flexShrink: 1,
+  },
+  metadataStats: {
+    fontSize: 12,
+    color: Colors.textGray,
+    flexShrink: 0,
+  },
+  verifiedIcon: {
+    marginHorizontal: 3,
   },
   menuButton: {
     paddingLeft: 8,
