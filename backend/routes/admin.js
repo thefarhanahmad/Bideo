@@ -7,7 +7,9 @@ const {
   getPendingVideoReviews,
   reviewVideoMonetization,
   getMonetizationApplications,
-  reviewMonetizationApplication
+  reviewMonetizationApplication,
+  getWithdrawals,
+  processWithdrawal,
 } = require('../controllers/admin');
 const { protect, authorize } = require('../middlewares/auth');
 
@@ -28,5 +30,9 @@ router.get('/videos/pending-reviews', getPendingVideoReviews);
 router.put('/videos/:id/review', reviewVideoMonetization);
 router.get('/monetization-applications', getMonetizationApplications);
 router.put('/users/:userId/review-monetization', reviewMonetizationApplication);
+
+// Creator Withdrawals / Payouts
+router.get('/withdrawals', getWithdrawals);
+router.put('/withdrawals/:id', processWithdrawal);
 
 module.exports = router;

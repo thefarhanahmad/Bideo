@@ -74,6 +74,7 @@ const Monetization = () => {
 
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const formatDate = (date) => {
@@ -106,10 +107,11 @@ const Monetization = () => {
         body: JSON.stringify({ status: "approved" })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to approve");
+      if (!res.ok) throw new Error(data.message || "Approval failed");
+
       setShowApproveApp(false);
       setSelectedApp(null);
-      fetchData();
+      await fetchData();
     } catch (err) {
       alert(err.message);
     }
@@ -117,7 +119,6 @@ const Monetization = () => {
 
   const handleRejectAppSubmit = async (e) => {
     e.preventDefault();
-    if (!rejectReason.trim()) return alert("Please provide a reason for rejection");
     try {
       const token = localStorage.getItem("admin_token");
       const res = await fetch(API + `/api/admin/users/${selectedApp.user._id}/review-monetization`, {
@@ -126,14 +127,18 @@ const Monetization = () => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ status: "rejected", reviewMessage: rejectReason })
+        body: JSON.stringify({
+          status: "rejected",
+          reviewMessage: rejectReason
+        })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to reject");
+      if (!res.ok) throw new Error(data.message || "Rejection failed");
+
       setShowRejectApp(false);
       setSelectedApp(null);
       setRejectReason("");
-      fetchData();
+      await fetchData();
     } catch (err) {
       alert(err.message);
     }
@@ -151,10 +156,11 @@ const Monetization = () => {
         body: JSON.stringify({ status: "passed" })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to pass video");
+      if (!res.ok) throw new Error(data.message || "Video audit approval failed");
+
       setShowPassVideo(false);
       setSelectedVideoReview(null);
-      fetchData();
+      await fetchData();
     } catch (err) {
       alert(err.message);
     }
@@ -162,7 +168,6 @@ const Monetization = () => {
 
   const handleRejectVideoSubmit = async (e) => {
     e.preventDefault();
-    if (!videoRejectReason.trim()) return alert("Please provide a reason for failing review");
     try {
       const token = localStorage.getItem("admin_token");
       const res = await fetch(API + `/api/admin/videos/${selectedVideoReview._id}/review`, {
@@ -171,31 +176,36 @@ const Monetization = () => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ status: "failed", reviewMessage: videoRejectReason })
+        body: JSON.stringify({
+          status: "failed",
+          reviewMessage: videoRejectReason
+        })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to reject video");
+      if (!res.ok) throw new Error(data.message || "Video audit failure failed");
+
       setShowRejectVideo(false);
       setSelectedVideoReview(null);
       setVideoRejectReason("");
-      fetchData();
+      await fetchData();
     } catch (err) {
       alert(err.message);
     }
   };
 
-  const filteredMonetizedUsers = monetizedUsers.filter((item) => {
+  const filteredMonetizedUsers = monetizedUsers.filter((u) => {
     if (!monetizedSearch.trim()) return true;
     const q = monetizedSearch.toLowerCase();
-    const name = (item.name || item.user?.name || "").toLowerCase();
-    const channel = (item.user?.channelName || "").toLowerCase();
-    const email = (item.user?.email || "").toLowerCase();
-    const phone = (item.phone || item.user?.phone || "").toLowerCase();
-    const upi = (item.upiId || "").toLowerCase();
-    const adhar = (item.adharNumber || "").toLowerCase();
-    const bank = (item.bankDetails?.bankName || "").toLowerCase();
-    const acc = (item.bankDetails?.accountNumber || "").toLowerCase();
-    const ifsc = (item.bankDetails?.ifscCode || "").toLowerCase();
+    const name = (u.name || "").toLowerCase();
+    const channel = (u.user?.channelName || "").toLowerCase();
+    const email = (u.user?.email || "").toLowerCase();
+    const phone = (u.phone || u.user?.phone || "").toLowerCase();
+    const upi = (u.upiId || "").toLowerCase();
+    const adhar = (u.adharNumber || "").toLowerCase();
+    const bank = (u.bankDetails?.bankName || "").toLowerCase();
+    const acc = (u.bankDetails?.accountNumber || "").toLowerCase();
+    const ifsc = (u.bankDetails?.ifscCode || "").toLowerCase();
+
     return (
       name.includes(q) ||
       channel.includes(q) ||
@@ -217,7 +227,7 @@ const Monetization = () => {
           <p className="mt-1 text-sm text-muted">Review creator onboarding applications, video approvals, and monetized users.</p>
         </div>
         
-        {/* All Tabs in Single Row */}
+        {/* 3 Main Tabs in Single Row */}
         <div className="flex flex-nowrap overflow-x-auto rounded-xl bg-surface p-1 border border-line gap-1 shrink-0">
           <button
             onClick={() => setActiveTab("videos")}
@@ -225,7 +235,7 @@ const Monetization = () => {
               activeTab === "videos" ? "bg-white text-brand shadow-sm" : "text-muted hover:text-ink"
             }`}
           >
-            Video Verification Audits ({loading ? "..." : videoReviews.reduce((sum, g) => sum + g.reviews.length, 0)})
+            Video Audits ({loading ? "..." : videoReviews.reduce((sum, g) => sum + g.reviews.length, 0)})
           </button>
           <button
             onClick={() => setActiveTab("applications")}
@@ -233,7 +243,7 @@ const Monetization = () => {
               activeTab === "applications" ? "bg-white text-brand shadow-sm" : "text-muted hover:text-ink"
             }`}
           >
-            Monetization Applications ({loading ? "..." : applications.length})
+            Monetization Apps ({loading ? "..." : applications.length})
           </button>
           <button
             onClick={() => setActiveTab("monetized")}
@@ -399,21 +409,21 @@ const Monetization = () => {
                           <div>{app.phone}</div>
                           <div className="text-xs">{app.user?.email}</div>
                         </td>
-                        <td className="p-4 font-mono font-semibold text-ink">{app.adharNumber}</td>
-                        <td className="p-4 font-semibold text-brand">{app.upiId}</td>
-                        <td className="p-4 text-muted">
+                        <td className="p-4 font-mono text-ink whitespace-nowrap">{app.adharNumber}</td>
+                        <td className="p-4 font-mono text-brand whitespace-nowrap">{app.upiId}</td>
+                        <td className="p-4 text-xs text-muted">
                           <div className="font-semibold text-ink">{app.bankDetails?.bankName}</div>
-                          <div className="text-xs">Acc: {app.bankDetails?.accountNumber}</div>
-                          <div className="text-xs font-mono">IFSC: {app.bankDetails?.ifscCode}</div>
+                          <div>A/C: {app.bankDetails?.accountNumber}</div>
+                          <div>IFSC: {app.bankDetails?.ifscCode}</div>
                         </td>
-                        <td className="p-4">
+                        <td className="p-4 text-right">
                           <div className="flex justify-end gap-2 whitespace-nowrap">
                             <button
                               onClick={() => {
                                 setSelectedApp(app);
                                 setShowApproveApp(true);
                               }}
-                              className="rounded-lg bg-emerald-100 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-200"
+                              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors"
                             >
                               Approve
                             </button>
@@ -422,7 +432,7 @@ const Monetization = () => {
                                 setSelectedApp(app);
                                 setShowRejectApp(true);
                               }}
-                              className="rounded-lg bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-200"
+                              className="rounded-lg bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-200 transition-colors"
                             >
                               Reject
                             </button>
@@ -433,7 +443,7 @@ const Monetization = () => {
                     {applications.length === 0 && (
                       <tr>
                         <td colSpan="6" className="p-8 text-center text-muted">
-                          No pending applications.
+                          No pending monetization applications.
                         </td>
                       </tr>
                     )}
@@ -445,29 +455,18 @@ const Monetization = () => {
 
           {activeTab === "monetized" && (
             <div className="space-y-4">
-              {/* Search and Summary Bar */}
-              <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between rounded-2xl border border-line bg-white p-4 shadow-card">
-                <div className="relative flex-1 max-w-md">
-                  <input
-                    type="text"
-                    value={monetizedSearch}
-                    onChange={(e) => setMonetizedSearch(e.target.value)}
-                    placeholder="Search by creator, channel, phone, UPI, Aadhaar..."
-                    className="w-full rounded-xl border border-line bg-surface/40 px-4 py-2.5 text-xs focus:border-brand focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand"
-                  />
-                  {monetizedSearch && (
-                    <button
-                      onClick={() => setMonetizedSearch("")}
-                      className="absolute right-3 top-2.5 text-xs text-muted hover:text-ink"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-                <div className="text-xs text-muted flex items-center gap-2">
-                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-500"></span>
-                  <span><strong>{filteredMonetizedUsers.length}</strong> monetized creators</span>
-                </div>
+              {/* Search filter bar */}
+              <div className="flex items-center gap-3">
+                <input
+                  type="text"
+                  value={monetizedSearch}
+                  onChange={(e) => setMonetizedSearch(e.target.value)}
+                  placeholder="Search monetized creators by name, phone, channel, UPI, Aadhaar, Bank..."
+                  className="w-full max-w-md rounded-xl border border-line bg-white px-4 py-2 text-sm text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand shadow-sm"
+                />
+                <span className="text-xs text-muted font-medium">
+                  Showing {filteredMonetizedUsers.length} of {monetizedUsers.length} monetized creators
+                </span>
               </div>
 
               {/* Monetized Creators Table */}
@@ -479,19 +478,19 @@ const Monetization = () => {
                         <th className="p-4 font-semibold">Creator</th>
                         <th className="p-4 font-semibold">Contact</th>
                         <th className="p-4 font-semibold">Aadhaar Card</th>
-                        <th className="p-4 font-semibold">Payout / UPI ID</th>
+                        <th className="p-4 font-semibold">UPI ID</th>
                         <th className="p-4 font-semibold">Bank details</th>
-                        <th className="p-4 font-semibold">Monetized Date</th>
-                        <th className="p-4 text-right font-semibold">Action</th>
+                        <th className="p-4 font-semibold">Approved Date</th>
+                        <th className="p-4 text-right font-semibold">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredMonetizedUsers.map((item) => (
-                        <tr key={item._id} className="border-t border-line align-top hover:bg-surface/50 transition-colors">
+                      {filteredMonetizedUsers.map((app) => (
+                        <tr key={app._id} className="border-t border-line align-top hover:bg-surface/50">
                           <td className="p-4">
                             <div className="flex items-center gap-3">
                               <img
-                                src={item.user?.avatar}
+                                src={app.user?.avatar}
                                 alt="avatar"
                                 className="h-10 w-10 shrink-0 rounded-full bg-surface object-cover border border-line"
                                 onError={(e) => {
@@ -500,43 +499,34 @@ const Monetization = () => {
                               />
                               <div>
                                 <div className="font-semibold text-ink flex items-center gap-1.5">
-                                  {item.name || item.user?.name}
-                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                                    Active
+                                  <span>{app.name}</span>
+                                  <span className="inline-block rounded-full bg-emerald-100 p-0.5 text-[10px] text-emerald-700" title="Monetized Creator">
+                                    ✓
                                   </span>
                                 </div>
-                                <div className="text-xs text-brand font-medium">@{item.user?.channelName || item.user?.name || "no-channel"}</div>
-                                {item.user?.followersCount !== undefined && (
-                                  <div className="text-[11px] text-muted">{item.user.followersCount} followers</div>
-                                )}
+                                <div className="text-xs text-muted">@{app.user?.channelName || app.user?.name}</div>
                               </div>
                             </div>
                           </td>
                           <td className="p-4 text-muted whitespace-nowrap">
-                            <div className="font-medium text-ink">{item.phone}</div>
-                            <div className="text-xs">{item.user?.email || "No email"}</div>
+                            <div>{app.phone}</div>
+                            <div className="text-xs">{app.user?.email}</div>
                           </td>
-                          <td className="p-4 font-mono font-semibold text-ink whitespace-nowrap">
-                            {item.adharNumber}
+                          <td className="p-4 font-mono text-ink whitespace-nowrap">{app.adharNumber}</td>
+                          <td className="p-4 font-mono text-brand whitespace-nowrap">{app.upiId}</td>
+                          <td className="p-4 text-xs text-muted">
+                            <div className="font-semibold text-ink">{app.bankDetails?.bankName}</div>
+                            <div>A/C: {app.bankDetails?.accountNumber}</div>
+                            <div>IFSC: {app.bankDetails?.ifscCode}</div>
                           </td>
-                          <td className="p-4 font-semibold text-brand whitespace-nowrap">
-                            {item.upiId}
-                          </td>
-                          <td className="p-4 text-muted">
-                            <div className="font-semibold text-ink">{item.bankDetails?.bankName || "-"}</div>
-                            <div className="text-xs font-mono">Acc: {item.bankDetails?.accountNumber || "-"}</div>
-                            <div className="text-xs font-mono">IFSC: {item.bankDetails?.ifscCode || "-"}</div>
-                          </td>
-                          <td className="p-4 text-xs text-muted whitespace-nowrap">
-                            <div>{formatDate(item.updatedAt || item.createdAt)}</div>
-                          </td>
+                          <td className="p-4 text-muted whitespace-nowrap">{formatDate(app.updatedAt || app.createdAt)}</td>
                           <td className="p-4 text-right">
                             <button
                               onClick={() => {
-                                setSelectedMonetizedUser(item);
+                                setSelectedMonetizedUser(app);
                                 setShowMonetizedDetailsModal(true);
                               }}
-                              className="rounded-lg bg-brand-50 border border-brand/20 px-3.5 py-1.5 text-xs font-bold text-brand hover:bg-brand hover:text-white transition-colors"
+                              className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink hover:bg-surface hover:border-brand transition-colors"
                             >
                               View Details
                             </button>
@@ -546,7 +536,7 @@ const Monetization = () => {
                       {filteredMonetizedUsers.length === 0 && (
                         <tr>
                           <td colSpan="7" className="p-8 text-center text-muted">
-                            {monetizedSearch ? "No monetized creators matched your search query." : "No monetized creators found."}
+                            No monetized creators found.
                           </td>
                         </tr>
                       )}
@@ -563,140 +553,99 @@ const Monetization = () => {
       {showMonetizedDetailsModal && selectedMonetizedUser && (
         <Modal
           title="Monetized Creator Details"
-          maxWidth="max-w-2xl"
+          maxWidth="max-w-xl"
           onClose={() => {
             setShowMonetizedDetailsModal(false);
             setSelectedMonetizedUser(null);
           }}
         >
-          <div className="space-y-6">
-            {/* Creator Header Card */}
-            <div className="flex items-center gap-4 p-4 rounded-2xl bg-surface/60 border border-line">
+          <div className="space-y-4">
+            <div className="flex items-center gap-4 rounded-xl border border-line bg-surface/40 p-4">
               <img
                 src={selectedMonetizedUser.user?.avatar}
                 alt="avatar"
-                className="h-16 w-16 rounded-full bg-white object-cover border border-line shadow-sm shrink-0"
+                className="h-16 w-16 rounded-full bg-white object-cover border-2 border-brand/20 shadow-sm"
                 onError={(e) => {
                   e.currentTarget.src = "https://via.placeholder.com/80x80.png?text=User";
                 }}
               />
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-display font-bold text-ink text-lg truncate">
-                    {selectedMonetizedUser.name || selectedMonetizedUser.user?.name}
-                  </h3>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                    Active Monetized
+                <div className="flex items-center gap-2">
+                  <h3 className="font-display font-bold text-ink text-lg truncate">{selectedMonetizedUser.name}</h3>
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
+                    Monetized
                   </span>
                 </div>
-                <p className="text-sm text-brand font-medium">
-                  @{selectedMonetizedUser.user?.channelName || "no-channel"}
+                <p className="text-xs text-brand font-semibold">@{selectedMonetizedUser.user?.channelName || "no-channel"}</p>
+                <p className="text-xs text-muted mt-0.5">
+                  Followers: {selectedMonetizedUser.user?.followersCount || 0} • Joined: {new Date(selectedMonetizedUser.user?.createdAt || selectedMonetizedUser.createdAt).toLocaleDateString("en-IN")}
                 </p>
-                <div className="text-xs text-muted mt-1 flex flex-wrap gap-x-4 gap-y-1">
-                  <span>Email: <strong>{selectedMonetizedUser.user?.email || "N/A"}</strong></span>
-                  <span>Phone: <strong>{selectedMonetizedUser.phone || selectedMonetizedUser.user?.phone || "N/A"}</strong></span>
-                  <span>Followers: <strong>{selectedMonetizedUser.user?.followersCount || 0}</strong></span>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-line bg-white p-4 space-y-3">
+              <div className="flex items-center justify-between border-b border-line pb-2">
+                <span className="text-xs font-semibold text-muted uppercase">Phone Number</span>
+                <span className="text-sm font-semibold text-ink">{selectedMonetizedUser.phone || "-"}</span>
+              </div>
+              <div className="flex items-center justify-between border-b border-line pb-2">
+                <span className="text-xs font-semibold text-muted uppercase">Email Address</span>
+                <span className="text-sm font-semibold text-ink">{selectedMonetizedUser.user?.email || "-"}</span>
+              </div>
+              <div className="flex items-center justify-between border-b border-line pb-2">
+                <span className="text-xs font-semibold text-muted uppercase">Aadhaar Card UID</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-sm font-bold text-ink">{selectedMonetizedUser.adharNumber || "-"}</span>
+                  <button
+                    onClick={() => handleCopy(selectedMonetizedUser.adharNumber, "modal-adhar")}
+                    className="rounded bg-surface px-2 py-1 text-[11px] font-semibold text-brand hover:bg-brand/10 transition-colors"
+                  >
+                    {copiedField === "modal-adhar" ? "Copied!" : "Copy"}
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center justify-between border-b border-line pb-2">
+                <span className="text-xs font-semibold text-muted uppercase">UPI ID</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-sm font-bold text-brand">{selectedMonetizedUser.upiId || "-"}</span>
+                  <button
+                    onClick={() => handleCopy(selectedMonetizedUser.upiId, "modal-upi")}
+                    className="rounded bg-surface px-2 py-1 text-[11px] font-semibold text-brand hover:bg-brand/10 transition-colors"
+                  >
+                    {copiedField === "modal-upi" ? "Copied!" : "Copy"}
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center justify-between border-b border-line pb-2">
+                <span className="text-xs font-semibold text-muted uppercase">Bank Name</span>
+                <span className="text-sm font-semibold text-ink">{selectedMonetizedUser.bankDetails?.bankName || "-"}</span>
+              </div>
+              <div className="flex items-center justify-between border-b border-line pb-2">
+                <span className="text-xs font-semibold text-muted uppercase">Bank Account No.</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-sm font-bold text-ink">{selectedMonetizedUser.bankDetails?.accountNumber || "-"}</span>
+                  <button
+                    onClick={() => handleCopy(selectedMonetizedUser.bankDetails?.accountNumber, "modal-acc")}
+                    className="rounded bg-surface px-2 py-1 text-[11px] font-semibold text-brand hover:bg-brand/10 transition-colors"
+                  >
+                    {copiedField === "modal-acc" ? "Copied!" : "Copy"}
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-muted uppercase">IFSC Code</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-sm font-bold text-ink">{selectedMonetizedUser.bankDetails?.ifscCode || "-"}</span>
+                  <button
+                    onClick={() => handleCopy(selectedMonetizedUser.bankDetails?.ifscCode, "modal-ifsc")}
+                    className="rounded bg-surface px-2 py-1 text-[11px] font-semibold text-brand hover:bg-brand/10 transition-colors"
+                  >
+                    {copiedField === "modal-ifsc" ? "Copied!" : "Copy"}
+                  </button>
                 </div>
               </div>
             </div>
 
-            {/* 2-Column Information Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Identity & KYC Verification */}
-              <div className="p-4 rounded-xl border border-line bg-white space-y-3">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-muted flex items-center gap-1.5">
-                  Identity & KYC Details
-                </h4>
-                <div>
-                  <span className="text-xs text-muted block">Legal Name (as on Aadhaar)</span>
-                  <span className="text-sm font-semibold text-ink">{selectedMonetizedUser.name}</span>
-                </div>
-                <div>
-                  <span className="text-xs text-muted block">Registered Phone</span>
-                  <span className="text-sm font-semibold text-ink">{selectedMonetizedUser.phone}</span>
-                </div>
-                <div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-muted block">Aadhaar Number</span>
-                    <button
-                      type="button"
-                      onClick={() => handleCopy(selectedMonetizedUser.adharNumber, 'aadhaar')}
-                      className="text-[11px] font-semibold text-brand hover:underline"
-                    >
-                      {copiedField === 'aadhaar' ? 'Copied!' : 'Copy'}
-                    </button>
-                  </div>
-                  <span className="text-sm font-mono font-bold text-ink tracking-wider">
-                    {selectedMonetizedUser.adharNumber}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-xs text-muted block">Approval Date</span>
-                  <span className="text-xs font-medium text-ink">
-                    {formatDate(selectedMonetizedUser.updatedAt || selectedMonetizedUser.createdAt)}
-                  </span>
-                </div>
-              </div>
-
-              {/* Payout & Banking Details */}
-              <div className="p-4 rounded-xl border border-line bg-white space-y-3">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-muted flex items-center gap-1.5">
-                  Payout & Bank Details
-                </h4>
-                <div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-muted block">UPI ID for Payouts</span>
-                    <button
-                      type="button"
-                      onClick={() => handleCopy(selectedMonetizedUser.upiId, 'upi')}
-                      className="text-[11px] font-semibold text-brand hover:underline"
-                    >
-                      {copiedField === 'upi' ? 'Copied!' : 'Copy'}
-                    </button>
-                  </div>
-                  <span className="text-sm font-semibold text-brand">{selectedMonetizedUser.upiId}</span>
-                </div>
-                <div>
-                  <span className="text-xs text-muted block">Bank Name</span>
-                  <span className="text-sm font-semibold text-ink">
-                    {selectedMonetizedUser.bankDetails?.bankName || 'N/A'}
-                  </span>
-                </div>
-                <div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-muted block">Account Number</span>
-                    <button
-                      type="button"
-                      onClick={() => handleCopy(selectedMonetizedUser.bankDetails?.accountNumber, 'acc')}
-                      className="text-[11px] font-semibold text-brand hover:underline"
-                    >
-                      {copiedField === 'acc' ? 'Copied!' : 'Copy'}
-                    </button>
-                  </div>
-                  <span className="text-sm font-mono font-semibold text-ink">
-                    {selectedMonetizedUser.bankDetails?.accountNumber || 'N/A'}
-                  </span>
-                </div>
-                <div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-muted block">IFSC Code</span>
-                    <button
-                      type="button"
-                      onClick={() => handleCopy(selectedMonetizedUser.bankDetails?.ifscCode, 'ifsc')}
-                      className="text-[11px] font-semibold text-brand hover:underline"
-                    >
-                      {copiedField === 'ifsc' ? 'Copied!' : 'Copy'}
-                    </button>
-                  </div>
-                  <span className="text-sm font-mono font-semibold text-ink">
-                    {selectedMonetizedUser.bankDetails?.ifscCode || 'N/A'}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Footer Action */}
             <div className="flex justify-end pt-3 border-t border-line">
               <button
                 type="button"

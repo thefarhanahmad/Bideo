@@ -89,6 +89,16 @@ const userSchema = new mongoose.Schema({
     enum: ['user', 'admin'],
     default: 'user',
   },
+  walletBalance: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
+  totalEarnings: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
   deletionScheduled: {
     type: Boolean,
     default: false,

@@ -235,23 +235,22 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, onMenuPress, onPlaylistPre
 
 const styles = StyleSheet.create({
   container: {
-    marginHorizontal: 12,
-    marginBottom: 16,
+    marginHorizontal: 0,
+    marginBottom: 5,
     backgroundColor: Colors.white,
-    borderRadius: 18,
+    borderRadius: 0,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 3,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
   },
   thumbnailContainer: {
     position: 'relative',
+    width: '100%',
+    aspectRatio: 16 / 9,
   },
   thumbnail: {
     width: '100%',
-    height: 220,
+    height: '100%',
     backgroundColor: '#E5E7EB',
   },
   thumbGradient: {
@@ -259,16 +258,16 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: 60,
+    height: 50,
   },
   durationBadge: {
     position: 'absolute',
     bottom: 8,
     right: 8,
-    backgroundColor: 'rgba(0,0,0,0.8)',
+    backgroundColor: 'rgba(0,0,0,0.82)',
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 6,
+    borderRadius: 4,
   },
   durationText: {
     color: Colors.white,
@@ -277,8 +276,10 @@ const styles = StyleSheet.create({
   },
   detailsContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
+    alignItems: 'flex-start',
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 12,
   },
   avatar: {
     width: 40,

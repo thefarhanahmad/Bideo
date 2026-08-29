@@ -277,6 +277,7 @@ const Users = () => {
                   <th className="p-4 font-semibold">Name & Details</th>
                   <th className="p-4 font-semibold">Phone / Email</th>
                   <th className="p-4 font-semibold">Channel</th>
+                  <th className="p-4 font-semibold">Wallet & Earnings</th>
                   <th className="p-4 font-semibold">Status / Role</th>
                   <th className="p-4 font-semibold">Joined / Deletion Date</th>
                   <th className="p-4 text-right font-semibold">Actions</th>
@@ -308,6 +309,19 @@ const Users = () => {
                       </td>
                       <td className="p-4 text-muted">{u.phone || u.email || '-'}</td>
                       <td className="p-4 text-muted">{u.channelName || '-'}</td>
+                      <td className="p-4 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-ink text-sm">
+                            ₹{Number(u.walletBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </span>
+                          <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
+                            Balance
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-muted mt-0.5">
+                          Lifetime: ₹{Number(u.totalEarnings || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </div>
+                      </td>
                       <td className="p-4">
                         <div className="flex flex-col gap-1 items-start">
                           <span

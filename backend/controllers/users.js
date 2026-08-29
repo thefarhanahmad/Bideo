@@ -5,6 +5,7 @@ const Follower = require('../models/Follower');
 const { deleteLocalFile } = require('../utils/localUpload');
 const VideoMonetizationReview = require('../models/VideoMonetizationReview');
 const MonetizationApplication = require('../models/MonetizationApplication');
+const WithdrawalRequest = require('../models/WithdrawalRequest');
 
 // @desc Create user
 // @route POST /api/users
@@ -258,7 +259,7 @@ exports.getMonetizationStatus = async (req, res, next) => {
   try {
     const userId = req.user.id;
 
-    // 1. Fetch only review statuses that exist (no auto-backfill for old videos)
+    // 1. Fetch only review statuses that exist
     const reviews = await VideoMonetizationReview.find({ user: userId }).populate('video', 'title thumbnail createdAt');
     
     // 2. Count passed videos
@@ -269,6 +270,14 @@ exports.getMonetizationStatus = async (req, res, next) => {
     const application = await MonetizationApplication.findOne({ user: userId });
     const step2Completed = application ? application.status === 'approved' : false;
 
+    // 4. Fetch user document and calculate total views
+    const userDoc = await User.findById(userId);
+    const userVideos = await Video.find({ owner: userId });
+    const totalViews = userVideos.reduce((acc, v) => acc + (v.views || 0), 0);
+
+    const walletBalance = userDoc?.walletBalance || 0;
+    const totalEarnings = userDoc?.totalEarnings || 0;
+
     res.status(200).json({
       success: true,
       data: {
@@ -276,8 +285,109 @@ exports.getMonetizationStatus = async (req, res, next) => {
         step1Completed,
         step2Completed,
         reviews,
-        application
+        application,
+        walletBalance: Math.round((walletBalance || 0) * 100) / 100,
+        totalEarnings: Math.round((totalEarnings || 0) * 100) / 100,
+        totalViews,
+        ratePerThousandViews: 30,
+        ratePerView: 0.03,
+        minWithdrawal: 1000,
       }
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Request a payout / earnings withdrawal
+// @route   POST /api/users/withdraw
+// @access  Private
+exports.requestWithdrawal = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { amount, payoutMethod, payoutDetails } = req.body;
+
+    const withdrawAmount = Number(amount);
+    if (!withdrawAmount || isNaN(withdrawAmount) || withdrawAmount < 1000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Minimum withdrawal amount is ₹1,000',
+      });
+    }
+
+    if (!payoutMethod || !['upi', 'bank'].includes(payoutMethod)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please choose a valid payout method (UPI or Bank)',
+      });
+    }
+
+    const application = await MonetizationApplication.findOne({ user: userId, status: 'approved' });
+    if (!application) {
+      return res.status(403).json({
+        success: false,
+        message: 'Monetization approval is required to withdraw earnings',
+      });
+    }
+
+    const user = await User.findById(userId);
+    if (!user || (user.walletBalance || 0) < withdrawAmount) {
+      return res.status(400).json({
+        success: false,
+        message: `Insufficient wallet balance. Available: ₹${(user?.walletBalance || 0).toFixed(2)}`,
+      });
+    }
+
+    // Prepare details with fallback to approved application details
+    const finalPayoutDetails = {
+      upiId: payoutMethod === 'upi' ? (payoutDetails?.upiId || application.upiId) : null,
+      bankName: payoutMethod === 'bank' ? (payoutDetails?.bankName || application.bankDetails?.bankName) : null,
+      accountNumber: payoutMethod === 'bank' ? (payoutDetails?.accountNumber || application.bankDetails?.accountNumber) : null,
+      ifscCode: payoutMethod === 'bank' ? (payoutDetails?.ifscCode || application.bankDetails?.ifscCode) : null,
+      holderName: application.name || user.name,
+    };
+
+    if (payoutMethod === 'upi' && !finalPayoutDetails.upiId) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid UPI ID' });
+    }
+    if (payoutMethod === 'bank' && (!finalPayoutDetails.accountNumber || !finalPayoutDetails.ifscCode)) {
+      return res.status(400).json({ success: false, message: 'Please provide valid Bank Account & IFSC code' });
+    }
+
+    // Deduct balance and create withdrawal request
+    user.walletBalance = Math.max(0, (user.walletBalance || 0) - withdrawAmount);
+    await user.save();
+
+    const withdrawal = await WithdrawalRequest.create({
+      user: userId,
+      amount: withdrawAmount,
+      payoutMethod,
+      payoutDetails: finalPayoutDetails,
+      status: 'pending',
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Withdrawal request submitted successfully! Funds will be transferred within 24-48 hours.',
+      data: withdrawal,
+      walletBalance: user.walletBalance,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Get user's withdrawal history
+// @route   GET /api/users/withdrawals
+// @access  Private
+exports.getWithdrawalHistory = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const withdrawals = await WithdrawalRequest.find({ user: userId }).sort('-createdAt');
+    res.status(200).json({
+      success: true,
+      count: withdrawals.length,
+      data: withdrawals,
     });
   } catch (err) {
     next(err);

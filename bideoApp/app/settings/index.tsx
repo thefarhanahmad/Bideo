@@ -1,8 +1,9 @@
 import { showAlert } from '../../components/AppAlert';
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import Constants from 'expo-constants';
 import Colors from '../../constants/Colors';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
@@ -71,6 +72,12 @@ export default function SettingsScreen() {
 
   const settingsItems = [
     {
+      title: 'Channel Analytics',
+      icon: 'stats-chart-outline',
+      onPress: () => router.push('/analytics'),
+      color: '#8E24AA',
+    },
+    {
       title: 'About',
       icon: 'information-circle-outline',
       onPress: () => router.push('/settings/about'),
@@ -115,7 +122,7 @@ export default function SettingsScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.earningsLabel}>Your Earnings</Text>
                 <Text style={[styles.earningsAmount, !monetizationInfo?.step2Completed && { fontSize: 18, marginTop: 4 }]}>
-                  {monetizationInfo?.step2Completed ? '₹0.00' : 'Ineligible'}
+                  {monetizationInfo?.step2Completed ? `₹${(monetizationInfo?.walletBalance || 0).toFixed(2)}` : 'Ineligible'}
                 </Text>
               </View>
               <View style={styles.earningsBadge}>
@@ -203,8 +210,10 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.footer}>
-          <Text style={styles.versionText}>Bideo for Android</Text>
-          <Text style={styles.versionNumber}>Version 1.0.0</Text>
+          <Text style={styles.versionText}>Bideo for {Platform.OS === 'ios' ? 'iOS' : 'Android'}</Text>
+          <Text style={styles.versionNumber}>
+            Version {Constants.expoConfig?.version || Constants.manifest2?.extra?.expoClient?.version || '1.0.2'}
+          </Text>
         </View>
       </ScrollView>
     </View>

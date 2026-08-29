@@ -5,6 +5,7 @@ const VideoView = require("../models/VideoView");
 const VideoReport = require("../models/VideoReport");
 const Notification = require("../models/Notification");
 const VideoMonetizationReview = require("../models/VideoMonetizationReview");
+const MonetizationApplication = require("../models/MonetizationApplication");
 const fs = require("fs");
 const {
   saveLocalFile,
@@ -275,6 +276,24 @@ exports.recordView = async (req, res, next) => {
       { $inc: { views: 1 } },
       { new: true }
     );
+
+    // Real-time earnings: credit ₹0.03 per view (₹30 per 1,000 views) ONLY when a real viewer (not the creator) watches
+    const isSelfView = userId && video.owner && userId.toString() === video.owner.toString();
+    if (video.owner && !isSelfView) {
+      try {
+        const isMonetized = await MonetizationApplication.exists({
+          user: video.owner,
+          status: "approved",
+        });
+        if (isMonetized) {
+          await User.findByIdAndUpdate(video.owner, {
+            $inc: { walletBalance: 0.03, totalEarnings: 0.03 },
+          });
+        }
+      } catch (earnErr) {
+        console.error("Failed to credit view earnings:", earnErr);
+      }
+    }
 
     res.status(200).json({ success: true, views: updatedVideo ? updatedVideo.views : (video.views + 1) });
   } catch (err) {

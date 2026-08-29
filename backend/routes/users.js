@@ -14,6 +14,8 @@ const {
   getChannelProfile,
   getMonetizationStatus,
   applyMonetization,
+  requestWithdrawal,
+  getWithdrawalHistory,
   scheduleProfileDeletion,
   recoverAccount,
   getDeletionStatus,
@@ -39,6 +41,8 @@ router.get('/search-history', getSearchHistory);
 router.delete('/search-history', clearSearchHistory);
 router.get('/monetization/status', getMonetizationStatus);
 router.post('/monetization/apply', applyMonetization);
+router.post('/withdraw', requestWithdrawal);
+router.get('/withdrawals', getWithdrawalHistory);
 router.post('/schedule-deletion', scheduleProfileDeletion);
 router.post('/recover-account', recoverAccount);
 router.get('/deletion-status', getDeletionStatus);

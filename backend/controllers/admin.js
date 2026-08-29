@@ -4,6 +4,7 @@ const Video = require('../models/Video');
 const Category = require('../models/Category');
 const VideoMonetizationReview = require('../models/VideoMonetizationReview');
 const MonetizationApplication = require('../models/MonetizationApplication');
+const WithdrawalRequest = require('../models/WithdrawalRequest');
 
 // @desc    Aggregated stats for the admin dashboard overview
 // @route   GET /api/admin/stats
@@ -220,6 +221,67 @@ exports.reviewMonetizationApplication = async (req, res, next) => {
 
     if (!application) return res.status(404).json({ success: false, message: 'Application not found for this user' });
     res.status(200).json({ success: true, data: application });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Get all creator withdrawal requests
+// @route   GET /api/admin/withdrawals
+// @access  Private/Admin
+exports.getWithdrawals = async (req, res, next) => {
+  try {
+    const status = req.query.status || 'all';
+    const query = status === 'all' ? {} : { status };
+    const withdrawals = await WithdrawalRequest.find(query)
+      .populate('user', 'name channelName avatar email phone walletBalance')
+      .sort('-createdAt');
+    res.status(200).json({ success: true, count: withdrawals.length, data: withdrawals });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Process a withdrawal request (approve with transactionId, or reject with refund)
+// @route   PUT /api/admin/withdrawals/:id
+// @access  Private/Admin
+exports.processWithdrawal = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { action, transactionId, adminNote } = req.body;
+
+    const withdrawal = await WithdrawalRequest.findById(id).populate('user');
+    if (!withdrawal) {
+      return res.status(404).json({ success: false, message: 'Withdrawal request not found' });
+    }
+
+    if (withdrawal.status !== 'pending') {
+      return res.status(400).json({ success: false, message: `Request is already ${withdrawal.status}` });
+    }
+
+    if (action === 'approve') {
+      withdrawal.status = 'approved';
+      withdrawal.transactionId = transactionId || 'PAID-' + Date.now();
+      withdrawal.adminNote = adminNote || 'Payment transferred successfully';
+      withdrawal.processedAt = Date.now();
+      await withdrawal.save();
+    } else if (action === 'reject') {
+      withdrawal.status = 'rejected';
+      withdrawal.adminNote = adminNote || 'Withdrawal rejected by admin';
+      withdrawal.processedAt = Date.now();
+      await withdrawal.save();
+
+      // Refund the amount back to user's wallet
+      if (withdrawal.user) {
+        await User.findByIdAndUpdate(withdrawal.user._id, {
+          $inc: { walletBalance: withdrawal.amount },
+        });
+      }
+    } else {
+      return res.status(400).json({ success: false, message: 'Invalid action. Must be approve or reject' });
+    }
+
+    res.status(200).json({ success: true, message: `Withdrawal ${action}d successfully`, data: withdrawal });
   } catch (err) {
     next(err);
   }

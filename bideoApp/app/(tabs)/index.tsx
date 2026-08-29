@@ -369,7 +369,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   listContainer: {
-    paddingBottom: 20,
+    paddingTop: 4,
+    paddingBottom: 4,
   },
   centerContainer: {
     flex: 1,
@@ -419,16 +420,13 @@ const styles = StyleSheet.create({
   submitReportText: { color: Colors.white, fontWeight: 'bold' },
   // Shorts Shelf Styles
   shortsShelf: {
-    paddingVertical: 16,
+    paddingVertical: 14,
     backgroundColor: Colors.white,
-    marginBottom: 16,
-    marginHorizontal: 12,
-    borderRadius: 18,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 3,
+    marginBottom: 5,
+    marginHorizontal: 0,
+    borderRadius: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
   },
   shelfHeader: {
     flexDirection: 'row',
