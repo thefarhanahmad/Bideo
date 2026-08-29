@@ -16,11 +16,9 @@ const resolveMediaUrl = (url) => {
   return `${API_URL}${url.startsWith("/") ? "" : "/"}${url}`;
 };
 
-const fmt = (n) => {
+const fmtExact = (n) => {
   const num = Number(n) || 0;
-  if (num >= 1_000_000) return (num / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
-  if (num >= 1_000) return (num / 1_000).toFixed(1).replace(/\.0$/, '') + 'K';
-  return num.toString();
+  return num.toLocaleString('en-IN');
 };
 
 const DashboardHome = () => {
@@ -73,10 +71,10 @@ const DashboardHome = () => {
   }
 
   const cards = [
-    { icon: UsersIcon, label: 'Total Users', value: fmt(stats.users.total), hint: `${stats.users.admins} admins · ${stats.users.monetized || 0} monetized`, tone: 'brand' },
-    { icon: PlayIcon, label: 'Videos', value: fmt(stats.videos.total), hint: `${stats.videos.longVideos || 0} long · ${stats.videos.shorts || 0} shorts`, tone: 'blue' },
-    { icon: EyeIcon, label: 'Total Views', value: fmt(stats.totalViews), hint: `${fmt(stats.avgViewsPerVideo || 0)} avg / video`, tone: 'violet' },
-    { icon: TagIcon, label: 'Categories', value: fmt(stats.categories.total), hint: 'content categories', tone: 'green' },
+    { icon: UsersIcon, label: 'Total Users', value: fmtExact(stats.users.total), hint: `${fmtExact(stats.users.admins)} admins · ${fmtExact(stats.users.monetized || 0)} monetized`, tone: 'brand' },
+    { icon: PlayIcon, label: 'Videos', value: fmtExact(stats.videos.total), hint: `${fmtExact(stats.videos.longVideos || 0)} long · ${fmtExact(stats.videos.shorts || 0)} shorts`, tone: 'blue' },
+    { icon: EyeIcon, label: 'Total Views', value: fmtExact(stats.totalViews), hint: `${fmtExact(Math.round(stats.avgViewsPerVideo || 0))} avg / video`, tone: 'violet' },
+    { icon: TagIcon, label: 'Categories', value: fmtExact(stats.categories.total), hint: 'content categories', tone: 'green' },
   ];
 
   return (
