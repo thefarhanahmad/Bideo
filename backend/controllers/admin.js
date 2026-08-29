@@ -449,7 +449,20 @@ exports.processWithdrawal = async (req, res, next) => {
 // @access  Private/Admin
 exports.boostVideoEngagement = async (req, res, next) => {
   try {
-    const { videoId } = req.body;
+    const {
+      videoId,
+      minViews = 100,
+      maxViews = 300,
+      likeRatio = 7,
+      rewardAmount = 0.10,
+      rewardMode = 'once_per_creator', // 'once_per_creator', 'per_video', 'none'
+    } = req.body;
+
+    const parsedMinViews = Math.max(1, parseInt(minViews) || 100);
+    const parsedMaxViews = Math.max(parsedMinViews, parseInt(maxViews) || 300);
+    const parsedLikeRatio = Math.max(1, Math.min(100, parseFloat(likeRatio) || 7));
+    const parsedReward = Math.max(0, parseFloat(rewardAmount) || 0);
+
     const filter = videoId ? { _id: videoId } : {};
 
     const [videos, users, monetizedApps] = await Promise.all([
@@ -464,17 +477,21 @@ exports.boostVideoEngagement = async (req, res, next) => {
 
     const monetizedUserSet = new Set(monetizedApps.map((a) => a.user.toString()));
     const userIds = users.map((u) => u._id);
+    const creditedCreatorsSet = new Set();
+
     let totalViewsAdded = 0;
     let totalLikesAdded = 0;
     let totalEarningsCredited = 0;
-    let monetizedVideosCount = 0;
+    let monetizedCreatorsRewarded = 0;
 
     for (const video of videos) {
-      // 1. Random views between 100 and 300
-      const addedViews = Math.floor(Math.random() * (300 - 100 + 1)) + 100;
+      // 1. Random views between minViews and maxViews
+      const addedViews =
+        Math.floor(Math.random() * (parsedMaxViews - parsedMinViews + 1)) + parsedMinViews;
 
-      // 2. 100:7 ratio -> ~7% (between 6.2% and 7.8% natural jitter)
-      const ratio = 0.07 + (Math.random() * 0.016 - 0.008);
+      // 2. Custom like ratio (default ~7%, with subtle ±0.8% natural jitter)
+      const baseRatio = parsedLikeRatio / 100;
+      const ratio = baseRatio + (Math.random() * 0.016 - 0.008);
       const targetLikesCount = Math.max(1, Math.round(addedViews * ratio));
 
       // 3. Populate likes with unique ObjectIds
@@ -504,13 +521,25 @@ exports.boostVideoEngagement = async (req, res, next) => {
       totalViewsAdded += addedViews;
       totalLikesAdded += likesAddedThisVideo;
 
-      // 4. Credit ₹0.10 to monetized creator's wallet
-      if (video.owner && monetizedUserSet.has(video.owner.toString())) {
-        await User.findByIdAndUpdate(video.owner, {
-          $inc: { walletBalance: 0.10, totalEarnings: 0.10 },
-        });
-        totalEarningsCredited += 0.10;
-        monetizedVideosCount += 1;
+      // 4. Credit wallet reward to monetized creator
+      if (video.owner && monetizedUserSet.has(video.owner.toString()) && parsedReward > 0) {
+        const ownerIdStr = video.owner.toString();
+        if (rewardMode === 'once_per_creator') {
+          if (!creditedCreatorsSet.has(ownerIdStr)) {
+            creditedCreatorsSet.add(ownerIdStr);
+            await User.findByIdAndUpdate(video.owner, {
+              $inc: { walletBalance: parsedReward, totalEarnings: parsedReward },
+            });
+            totalEarningsCredited += parsedReward;
+            monetizedCreatorsRewarded += 1;
+          }
+        } else if (rewardMode === 'per_video') {
+          await User.findByIdAndUpdate(video.owner, {
+            $inc: { walletBalance: parsedReward, totalEarnings: parsedReward },
+          });
+          totalEarningsCredited += parsedReward;
+          monetizedCreatorsRewarded += 1;
+        }
       }
     }
 
@@ -521,7 +550,7 @@ exports.boostVideoEngagement = async (req, res, next) => {
         videosCount: videos.length,
         totalViewsAdded,
         totalLikesAdded,
-        monetizedVideosCount,
+        monetizedCreatorsRewarded,
         totalEarningsCredited: Number(totalEarningsCredited.toFixed(2)),
       },
     });

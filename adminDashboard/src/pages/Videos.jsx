@@ -168,47 +168,12 @@ const Videos = () => {
     }
   };
 
-  const [boosting, setBoosting] = useState(false);
+  const [showBoostModal, setShowBoostModal] = useState(false);
+  const [boostTarget, setBoostTarget] = useState(null);
 
-  const handleBoost = async (videoId = null) => {
-    const isAll = !videoId;
-    const confirmMsg = isAll
-      ? `Are you sure you want to boost engagement across ALL ${videos.length} videos?\n\n• Views: +100 to +300 random views\n• Likes: matching ~7% (100:7 ratio)\n• Monetized Creators: +₹0.10 credited directly to their wallet!`
-      : `Boost engagement on this video?\n\n• Views: +100 to +300 random views\n• Likes: matching ~7% (100:7 ratio)\n• If Monetized: +₹0.10 credited directly to creator's wallet!`;
-
-    if (!window.confirm(confirmMsg)) return;
-
-    setBoosting(true);
-    try {
-      const token = localStorage.getItem("admin_token");
-      const res = await fetch(API + "/api/admin/videos/boost-engagement", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(videoId ? { videoId } : {}),
-        credentials: "include",
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to boost engagement");
-
-      let alertText =
-        `🎉 ${data.message}\n\n` +
-        `👁️ Total Views Added: +${Number(data.data?.totalViewsAdded || 0).toLocaleString("en-IN")}\n` +
-        `❤️ Total Likes Added: +${Number(data.data?.totalLikesAdded || 0).toLocaleString("en-IN")}`;
-
-      if (data.data?.totalEarningsCredited > 0) {
-        alertText += `\n💰 Creator Wallet Credits: +₹${data.data.totalEarningsCredited.toFixed(2)} (${data.data.monetizedVideosCount} monetized video(s) rewarded with ₹0.10 each)`;
-      }
-
-      alert(alertText);
-      await fetchVideos();
-    } catch (err) {
-      alert("Error: " + err.message);
-    } finally {
-      setBoosting(false);
-    }
+  const openBoostModal = (video = null) => {
+    setBoostTarget(video);
+    setShowBoostModal(true);
   };
 
   const handleDelete = async (id) => {
@@ -355,12 +320,12 @@ const Videos = () => {
         actions={
           <div className="flex items-center gap-2">
             <button
-              onClick={() => handleBoost()}
-              disabled={boosting || videos.length === 0}
+              onClick={() => openBoostModal(null)}
+              disabled={videos.length === 0}
               className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 px-3.5 py-2 text-xs sm:text-sm font-semibold text-white shadow-xs transition-all hover:-translate-y-0.5 hover:bg-purple-700 disabled:opacity-50"
               title="Add +100 to +300 random views and matching ~7% likes to all uploaded videos"
             >
-              <span>⚡ {boosting ? "Boosting..." : "Boost All (100-300 Views)"}</span>
+              <span>⚡ Boost All (100-300 Views)</span>
             </button>
             <button
               onClick={() => setShowAdd(true)}
@@ -477,8 +442,7 @@ const Videos = () => {
                     <td className="p-4">
                       <div className="flex justify-end gap-1.5 whitespace-nowrap">
                         <button
-                          onClick={() => handleBoost(v._id)}
-                          disabled={boosting}
+                          onClick={() => openBoostModal(v)}
                           className="rounded-lg bg-purple-50 border border-purple-200 px-2.5 py-1 text-xs font-semibold text-purple-700 hover:bg-purple-100 transition-colors"
                           title="Add +100 to +300 random views & 7% likes to this video"
                         >
@@ -538,6 +502,23 @@ const Videos = () => {
             onPageSizeChange={setLimit}
           />
         </div>
+      )}
+
+      {showBoostModal && (
+        <Modal
+          title="⚡ Boost Video Engagement"
+          maxWidth="max-w-lg"
+          onClose={() => setShowBoostModal(false)}
+        >
+          <BoostModalForm
+            target={boostTarget}
+            totalVideosCount={videos.length}
+            onSuccess={() => {
+              fetchVideos();
+            }}
+            onClose={() => setShowBoostModal(false)}
+          />
+        </Modal>
       )}
 
       {showAdd && (
@@ -1055,6 +1036,327 @@ const EditForm = ({ initial = {}, categories = [], users = [], onSubmit, onCance
             </>
           ) : (
             "Save Changes"
+          )}
+        </button>
+      </div>
+    </form>
+  );
+};
+
+const BoostModalForm = ({ target, totalVideosCount, onSuccess, onClose }) => {
+  const [minViews, setMinViews] = useState("100");
+  const [maxViews, setMaxViews] = useState("300");
+  const [likeRatio, setLikeRatio] = useState("7");
+  const [rewardMode, setRewardMode] = useState("once_per_creator");
+  const [rewardAmount, setRewardAmount] = useState("0.10");
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState(null);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+
+    try {
+      const token = localStorage.getItem("admin_token");
+      const res = await fetch(API_URL + "/api/admin/videos/boost-engagement", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          videoId: target ? target._id : undefined,
+          minViews: parseInt(minViews) || 100,
+          maxViews: parseInt(maxViews) || 300,
+          likeRatio: parseFloat(likeRatio) || 7,
+          rewardMode,
+          rewardAmount: parseFloat(rewardAmount) || 0.1,
+        }),
+        credentials: "include",
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Boost failed");
+
+      setResult(data.data);
+      if (onSuccess) onSuccess();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (result) {
+    return (
+      <div className="space-y-4 text-center py-2">
+        <div className="mx-auto w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-3xl">
+          🎉
+        </div>
+        <div>
+          <h3 className="text-lg font-extrabold text-ink">Engagement Boost Complete!</h3>
+          <p className="text-xs text-muted mt-0.5">
+            {target
+              ? `Video "${target.title}" successfully updated`
+              : `All ${result.videosCount} videos successfully updated`}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 pt-2">
+          <div className="p-3 rounded-xl bg-purple-50/80 border border-purple-200 text-left">
+            <div className="text-[11px] font-semibold text-purple-700">Views Added</div>
+            <div className="text-lg font-black text-purple-900 mt-0.5">
+              +{Number(result.totalViewsAdded || 0).toLocaleString("en-IN")}
+            </div>
+          </div>
+          <div className="p-3 rounded-xl bg-rose-50/80 border border-rose-200 text-left">
+            <div className="text-[11px] font-semibold text-rose-700">Likes Added</div>
+            <div className="text-lg font-black text-rose-900 mt-0.5">
+              +{Number(result.totalLikesAdded || 0).toLocaleString("en-IN")}
+            </div>
+          </div>
+        </div>
+
+        {result.totalEarningsCredited > 0 ? (
+          <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-left flex items-center justify-between">
+            <div>
+              <div className="text-xs font-bold text-emerald-900">Monetized Creator Rewards</div>
+              <div className="text-[11px] text-emerald-700 mt-0.5">
+                {result.monetizedCreatorsRewarded} creator(s) rewarded ({rewardMode === "once_per_creator" ? "Fixed ₹0.10 each" : "per video"})
+              </div>
+            </div>
+            <div className="text-base font-black text-emerald-900">
+              +₹{result.totalEarningsCredited.toFixed(2)}
+            </div>
+          </div>
+        ) : (
+          <div className="text-[11px] text-muted bg-surface p-2.5 rounded-lg border border-line">
+            No wallet funds were credited (visual engagement only).
+          </div>
+        )}
+
+        <div className="pt-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full rounded-xl bg-brand py-2.5 text-sm font-bold text-white shadow-brand hover:bg-brand-dark transition-all"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Scope banner */}
+      <div className="rounded-xl border border-purple-200 bg-purple-50/60 p-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-lg">⚡</span>
+          <div className="min-w-0">
+            <div className="text-xs font-bold text-purple-900">
+              {target ? "Boost Single Video" : "Boost All Uploaded Videos"}
+            </div>
+            <div className="text-[11px] text-purple-700 truncate max-w-[260px]">
+              {target ? `"${target.title}"` : `${totalVideosCount} total videos`}
+            </div>
+          </div>
+        </div>
+        <span className="rounded-md bg-purple-200/80 px-2 py-0.5 text-[10px] font-bold text-purple-900 uppercase shrink-0">
+          {target ? "1 Video" : "Bulk"}
+        </span>
+      </div>
+
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+          {error}
+        </div>
+      )}
+
+      {/* Views range config */}
+      <div>
+        <label className="block text-xs font-bold uppercase tracking-wider text-ink mb-1.5">
+          Random Views per Video
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <span className="text-[11px] text-muted font-medium">Min Views:</span>
+            <input
+              type="number"
+              min="1"
+              required
+              value={minViews}
+              onChange={(e) => setMinViews(e.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <span className="text-[11px] text-muted font-medium">Max Views:</span>
+            <input
+              type="number"
+              min="1"
+              required
+              value={maxViews}
+              onChange={(e) => setMaxViews(e.target.value)}
+              className={inputClass}
+            />
+          </div>
+        </div>
+        <div className="flex gap-1.5 mt-2">
+          {[
+            { label: "100 - 300", min: 100, max: 300 },
+            { label: "250 - 500", min: 250, max: 500 },
+            { label: "500 - 1,000", min: 500, max: 1000 },
+          ].map((preset) => (
+            <button
+              type="button"
+              key={preset.label}
+              onClick={() => {
+                setMinViews(String(preset.min));
+                setMaxViews(String(preset.max));
+              }}
+              className="text-[10px] font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 px-2 py-0.5 rounded-md transition-colors"
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Like ratio */}
+      <div>
+        <label className="block text-xs font-bold uppercase tracking-wider text-ink mb-1">
+          Likes Ratio (100 / 7)
+        </label>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            min="1"
+            max="100"
+            step="0.5"
+            required
+            value={likeRatio}
+            onChange={(e) => setLikeRatio(e.target.value)}
+            className="w-24 rounded-lg border border-line p-2 text-sm font-bold text-ink outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
+          />
+          <span className="text-xs font-semibold text-muted">
+            likes per 100 views (~{likeRatio}%)
+          </span>
+        </div>
+      </div>
+
+      {/* Monetized Creator Wallet Reward */}
+      <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-3.5 space-y-2.5">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+            <span>💰</span> Monetized Creator Wallet Reward
+          </span>
+          <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md">
+            Approved Creators Only
+          </span>
+        </div>
+
+        <div className="space-y-1.5 text-xs">
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="radio"
+              name="rewardMode"
+              value="once_per_creator"
+              checked={rewardMode === "once_per_creator"}
+              onChange={() => setRewardMode("once_per_creator")}
+              className="mt-0.5 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+            />
+            <span className="font-semibold text-emerald-950">
+              Fixed ₹{rewardAmount} once per creator{" "}
+              <span className="text-[11px] text-emerald-700 font-normal">
+                (Recommended — every creator receives exactly ₹{rewardAmount} total)
+              </span>
+            </span>
+          </label>
+
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="radio"
+              name="rewardMode"
+              value="per_video"
+              checked={rewardMode === "per_video"}
+              onChange={() => setRewardMode("per_video")}
+              className="mt-0.5 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+            />
+            <span className="font-semibold text-emerald-950">
+              ₹{rewardAmount} per video boosted{" "}
+              <span className="text-[11px] text-emerald-700 font-normal">
+                (Multiplies by creator's total uploaded videos)
+              </span>
+            </span>
+          </label>
+
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="radio"
+              name="rewardMode"
+              value="none"
+              checked={rewardMode === "none"}
+              onChange={() => setRewardMode("none")}
+              className="mt-0.5 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+            />
+            <span className="font-semibold text-emerald-950">
+              No wallet reward{" "}
+              <span className="text-[11px] text-emerald-700 font-normal">
+                (Views & Likes only, 0 ₹ credited)
+              </span>
+            </span>
+          </label>
+        </div>
+
+        {rewardMode !== "none" && (
+          <div className="pt-1.5 flex items-center gap-2 border-t border-emerald-200/60">
+            <span className="text-xs font-bold text-emerald-900">Reward Amount:</span>
+            <div className="relative w-28">
+              <span className="absolute inset-y-0 left-0 pl-2.5 flex items-center text-xs font-bold text-emerald-700 pointer-events-none">
+                ₹
+              </span>
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={rewardAmount}
+                onChange={(e) => setRewardAmount(e.target.value)}
+                className="w-full rounded-lg border border-emerald-300 bg-white pl-6 pr-2 py-1 text-xs font-bold text-ink focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-6 flex justify-end gap-2 pt-2 border-t border-line">
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={loading}
+          className="rounded-full bg-surface px-4 py-2 text-sm font-semibold text-ink hover:bg-line disabled:opacity-50"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={loading}
+          className="rounded-full bg-purple-600 px-6 py-2 text-sm font-semibold text-white shadow-brand hover:bg-purple-700 disabled:opacity-75 flex items-center gap-2"
+        >
+          {loading ? (
+            <>
+              <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span>Boosting...</span>
+            </>
+          ) : (
+            "⚡ Start Boost"
           )}
         </button>
       </div>
