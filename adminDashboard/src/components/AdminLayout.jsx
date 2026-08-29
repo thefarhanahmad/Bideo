@@ -105,29 +105,29 @@ const AdminLayout = () => {
       )}
 
       {/* Main area */}
-      <div className="lg:pl-64">
-        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-white/90 px-4 py-3 backdrop-blur sm:px-6">
-          <div className="flex items-center gap-3">
+      <div className="lg:pl-64 min-w-0 max-w-full overflow-x-hidden">
+        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-white/90 px-4 py-3 backdrop-blur sm:px-6 min-w-0">
+          <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={() => setOpen(true)}
-              className="grid h-10 w-10 place-items-center rounded-lg text-ink lg:hidden"
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-ink lg:hidden"
               aria-label="Open menu"
             >
               <MenuIcon className="h-6 w-6" />
             </button>
-            <h1 className="font-display text-lg font-bold text-ink">
+            <h1 className="font-display text-lg font-bold text-ink truncate">
               Dashboard
             </h1>
           </div>
           <button
             onClick={logout}
-            className="inline-flex items-center gap-2 rounded-full bg-red-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-600"
+            className="inline-flex items-center gap-2 rounded-full bg-red-500 px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-white transition-colors hover:bg-red-600 shrink-0"
           >
             <LogoutIcon className="h-4 w-4" /> Logout
           </button>
         </header>
 
-        <main className="p-4 sm:p-6 lg:p-8">
+        <main className="p-3.5 sm:p-6 lg:p-8 min-w-0 max-w-full overflow-x-hidden">
           <Outlet />
         </main>
       </div>

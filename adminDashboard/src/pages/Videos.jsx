@@ -1,6 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Modal from "../components/Modal";
 import ConfirmModal from "../components/ConfirmModal";
+import DataTableToolbar from "../components/DataTableToolbar";
+import Pagination from "../components/Pagination";
+import { useTableParams } from "../hooks/useTableParams";
 import { API_URL } from "../config";
 
 const resolveMediaUrl = (url) => {
@@ -54,6 +57,18 @@ const Videos = () => {
 
   const [categories, setCategories] = useState([]);
   const [users, setUsers] = useState([]);
+
+  // URL-synced search, filter, and pagination
+  const {
+    search,
+    setSearch,
+    filter,
+    setFilter,
+    page,
+    setPage,
+    limit,
+    setLimit,
+  } = useTableParams({ defaultFilter: "all", defaultLimit: 10 });
 
   const API = API_URL;
 
@@ -113,7 +128,6 @@ const Videos = () => {
     fetchVideos();
     fetchCategories();
     fetchUsers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleUpload = async (formData) => {
@@ -135,26 +149,13 @@ const Videos = () => {
   const handleUpdate = async (id, payload) => {
     try {
       const token = localStorage.getItem("admin_token");
-      const isFormData = payload instanceof FormData;
-
-      // Optimistically update local state if toggling pin
-      if (!isFormData && payload.isPinned !== undefined) {
-        setVideos((prev) =>
-          prev.map((v) => (v._id === id ? { ...v, isPinned: payload.isPinned } : v))
-        );
-      }
-
-      const headers = {
-        Authorization: `Bearer ${token}`,
-      };
-      if (!isFormData) {
-        headers["Content-Type"] = "application/json";
-      }
-
       const res = await fetch(API + "/api/videos/" + id, {
         method: "PUT",
-        headers,
-        body: isFormData ? payload : JSON.stringify(payload),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
         credentials: "include",
       });
       const data = await res.json();
@@ -163,8 +164,7 @@ const Videos = () => {
       setEditVideo(null);
       await fetchVideos();
     } catch (err) {
-      alert("Update failed: " + err.message);
-      await fetchVideos();
+      alert(err.message);
     }
   };
 
@@ -190,11 +190,11 @@ const Videos = () => {
 
   const visibilityBadge = (v) => {
     const map = {
-      public: "bg-emerald-50 text-emerald-600",
-      unlisted: "bg-amber-50 text-amber-600",
-      private: "bg-red-50 text-red-600",
+      public: "bg-emerald-50 text-emerald-600 border border-emerald-200",
+      unlisted: "bg-amber-50 text-amber-600 border border-amber-200",
+      private: "bg-red-50 text-red-600 border border-red-200",
     };
-    return map[v] || "bg-surface text-muted";
+    return map[v] || "bg-surface text-muted border border-line";
   };
 
   const formatCreatedDate = (date) => {
@@ -222,20 +222,102 @@ const Videos = () => {
     return `${formatSize(orig)} → ${formatSize(comp)} (${pct}% saved)`;
   };
 
+  // Search & Filter Logic
+  const { filteredVideos, filterCounts } = useMemo(() => {
+    const counts = {
+      all: videos.length,
+      long: 0,
+      shorts: 0,
+      public: 0,
+      private: 0,
+      pinned: 0,
+    };
+
+    videos.forEach((v) => {
+      if (v.isShort) counts.shorts += 1;
+      else counts.long += 1;
+      if (v.visibility === "public" || !v.visibility) counts.public += 1;
+      if (v.visibility === "private" || v.visibility === "unlisted") counts.private += 1;
+      if (v.isPinned) counts.pinned += 1;
+    });
+
+    const searchLower = (search || "").trim().toLowerCase();
+
+    const filtered = videos.filter((v) => {
+      // 1. Filter condition
+      if (filter === "long" && v.isShort) return false;
+      if (filter === "shorts" && !v.isShort) return false;
+      if (filter === "public" && v.visibility !== "public" && v.visibility) return false;
+      if (filter === "private" && v.visibility !== "private" && v.visibility !== "unlisted") return false;
+      if (filter === "pinned" && !v.isPinned) return false;
+
+      // 2. Search condition
+      if (!searchLower) return true;
+      const title = (v.title || "").toLowerCase();
+      const desc = (v.description || "").toLowerCase();
+      const ownerName = (v.owner?.name || "").toLowerCase();
+      const channel = (v.owner?.channelName || "").toLowerCase();
+      const catName = (v.category?.name || v.category || "").toLowerCase();
+
+      return (
+        title.includes(searchLower) ||
+        desc.includes(searchLower) ||
+        ownerName.includes(searchLower) ||
+        channel.includes(searchLower) ||
+        catName.includes(searchLower)
+      );
+    });
+
+    return { filteredVideos: filtered, filterCounts: counts };
+  }, [videos, filter, search]);
+
+  // Paginate filtered results
+  const totalPages = Math.max(1, Math.ceil(filteredVideos.length / limit));
+  const paginatedVideos = useMemo(() => {
+    const startIndex = (page - 1) * limit;
+    return filteredVideos.slice(startIndex, startIndex + limit);
+  }, [filteredVideos, page, limit]);
+
+  const filterOptions = [
+    { label: "All Videos", value: "all", count: filterCounts.all },
+    { label: "Long Form", value: "long", count: filterCounts.long },
+    { label: "Shorts", value: "shorts", count: filterCounts.shorts },
+    { label: "Public", value: "public", count: filterCounts.public },
+    { label: "Private / Unlisted", value: "private", count: filterCounts.private },
+    { label: "📌 Pinned", value: "pinned", count: filterCounts.pinned },
+  ];
+
   return (
-    <div>
-      <div className="mb-5 flex items-center justify-between">
-        <div>
-          <h2 className="font-display text-2xl font-extrabold text-ink">Videos</h2>
-          <p className="mt-1 text-sm text-muted">{videos.length} videos on the platform</p>
+    <div className="space-y-5 min-w-0 max-w-full">
+      {/* Page Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3 min-w-0">
+        <div className="min-w-0">
+          <h2 className="font-display text-xl sm:text-2xl font-extrabold text-ink truncate">Videos Management</h2>
+          <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-muted">
+            Manage uploaded videos, reels, compression pipelines, and homepage pin statuses.
+          </p>
         </div>
-        <button
-          onClick={() => setShowAdd(true)}
-          className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white shadow-brand transition-all hover:-translate-y-0.5 hover:bg-brand-dark"
-        >
-          + Upload Video
-        </button>
       </div>
+
+      {/* Toolbar: Search, Filters, Upload Button */}
+      <DataTableToolbar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by title, owner, channel, or category..."
+        filter={filter}
+        onFilterChange={setFilter}
+        filters={filterOptions}
+        totalCount={videos.length}
+        filteredCount={filteredVideos.length}
+        actions={
+          <button
+            onClick={() => setShowAdd(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-brand transition-all hover:-translate-y-0.5 hover:bg-brand-dark"
+          >
+            <span>+ Upload Video</span>
+          </button>
+        }
+      />
 
       {loading ? (
         <div className="rounded-2xl border border-line bg-white p-8 text-center text-muted shadow-card">
@@ -244,13 +326,13 @@ const Videos = () => {
       ) : error ? (
         <div className="rounded-2xl border border-red-100 bg-red-50 p-6 text-red-700">{error}</div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-card">
+        <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-card min-w-0">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[960px] text-sm">
               <thead>
                 <tr className="border-b border-line bg-surface/60 text-left text-xs uppercase tracking-wider text-muted">
-                  <th className="p-4 font-semibold">Video</th>
-                  <th className="p-4 font-semibold">Owner</th>
+                  <th className="p-4 font-semibold">Video Details</th>
+                  <th className="p-4 font-semibold">Owner & Channel</th>
                   <th className="p-4 font-semibold">Duration</th>
                   <th className="p-4 font-semibold">Category</th>
                   <th className="p-4 font-semibold">Views</th>
@@ -260,8 +342,8 @@ const Videos = () => {
                 </tr>
               </thead>
               <tbody>
-                {videos.map((v) => (
-                  <tr key={v._id} className="border-t border-line align-middle hover:bg-surface/50">
+                {paginatedVideos.map((v) => (
+                  <tr key={v._id} className="border-t border-line align-middle hover:bg-surface/50 transition-colors">
                     <td className="p-4">
                       <div className="flex items-center gap-3">
                         <div className="relative shrink-0 w-24 h-14 bg-surface rounded-lg overflow-hidden border border-line">
@@ -279,14 +361,19 @@ const Videos = () => {
                         </div>
                         <div className="min-w-0 max-w-xs">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="truncate font-semibold text-ink">{v.title}</span>
+                            <span className="truncate font-semibold text-ink text-sm">{v.title}</span>
                             {v.isPinned && (
-                              <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
+                              <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 border border-amber-300">
                                 📌 Pinned
                               </span>
                             )}
+                            {v.isShort && (
+                              <span className="inline-flex items-center gap-0.5 rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700 border border-blue-200">
+                                ⚡ Short
+                              </span>
+                            )}
                           </div>
-                          <div className="truncate text-xs text-muted">
+                          <div className="truncate text-xs text-muted mt-0.5">
                             {v.description
                               ? v.description.slice(0, 80) + (v.description.length > 80 ? "..." : "")
                               : ""}
@@ -307,31 +394,31 @@ const Videos = () => {
                       </div>
                     </td>
                     <td className="p-4 text-muted">
-                      <div className="font-semibold text-ink">{v.owner?.name || "Unknown"}</div>
+                      <div className="font-semibold text-ink text-xs">{v.owner?.name || "Unknown"}</div>
                       {v.owner?.channelName && (
-                        <div className="text-xs text-brand">@{v.owner.channelName}</div>
+                        <div className="text-xs text-brand mt-0.5">@{v.owner.channelName}</div>
                       )}
                     </td>
-                    <td className="p-4 font-semibold text-ink whitespace-nowrap">
+                    <td className="p-4 font-semibold text-ink whitespace-nowrap text-xs">
                       {formatDuration(v.duration)}
                     </td>
-                    <td className="p-4 text-muted">{v.category?.name || v.category || "-"}</td>
-                    <td className="p-4 text-muted">{v.views || 0}</td>
+                    <td className="p-4 text-muted text-xs">{v.category?.name || v.category || "-"}</td>
+                    <td className="p-4 text-ink font-semibold text-xs">{Number(v.views || 0).toLocaleString("en-IN")}</td>
                     <td className="p-4">
                       <span
-                        className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${visibilityBadge(
+                        className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold capitalize ${visibilityBadge(
                           v.visibility || "public"
                         )}`}
                       >
                         {v.visibility || "public"}
                       </span>
                     </td>
-                    <td className="p-4 text-muted whitespace-nowrap">{formatCreatedDate(v.createdAt)}</td>
+                    <td className="p-4 text-muted whitespace-nowrap text-xs">{formatCreatedDate(v.createdAt)}</td>
                     <td className="p-4">
-                      <div className="flex justify-end gap-2 whitespace-nowrap">
+                      <div className="flex justify-end gap-1.5 whitespace-nowrap">
                         <button
                           onClick={() => handleUpdate(v._id, { isPinned: !v.isPinned })}
-                          className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+                          className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
                             v.isPinned
                               ? "bg-amber-100 text-amber-800 hover:bg-amber-200 border border-amber-300"
                               : "bg-surface border border-line text-muted hover:text-ink hover:bg-line"
@@ -345,7 +432,7 @@ const Videos = () => {
                             setEditVideo(v);
                             setShowEdit(true);
                           }}
-                          className="rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-200"
+                          className="rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-100"
                         >
                           Edit
                         </button>
@@ -354,7 +441,7 @@ const Videos = () => {
                             setDeleteVideo(v);
                             setShowDelete(true);
                           }}
-                          className="rounded-lg bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-200"
+                          className="rounded-lg bg-red-50 border border-red-200 px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-100"
                         >
                           Delete
                         </button>
@@ -362,16 +449,26 @@ const Videos = () => {
                     </td>
                   </tr>
                 ))}
-                {videos.length === 0 && (
+                {paginatedVideos.length === 0 && (
                   <tr>
                     <td colSpan="8" className="p-8 text-center text-muted">
-                      No videos found.
+                      No matching videos found.
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
+
+          {/* Bottom Pagination */}
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+            totalItems={filteredVideos.length}
+            pageSize={limit}
+            onPageChange={setPage}
+            onPageSizeChange={setLimit}
+          />
         </div>
       )}
 

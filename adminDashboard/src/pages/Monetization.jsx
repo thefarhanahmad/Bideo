@@ -1,5 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Modal from "../components/Modal";
+import DataTableToolbar from "../components/DataTableToolbar";
+import Pagination from "../components/Pagination";
+import { useTableParams } from "../hooks/useTableParams";
 import { API_URL } from "../config";
 
 const resolveMediaUrl = (url) => {
@@ -9,11 +12,9 @@ const resolveMediaUrl = (url) => {
 };
 
 const Monetization = () => {
-  const [activeTab, setActiveTab] = useState("videos");
   const [applications, setApplications] = useState([]);
   const [videoReviews, setVideoReviews] = useState([]);
   const [monetizedUsers, setMonetizedUsers] = useState([]);
-  const [monetizedSearch, setMonetizedSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -35,6 +36,10 @@ const Monetization = () => {
   const [showMonetizedDetailsModal, setShowMonetizedDetailsModal] = useState(false);
   const [copiedField, setCopiedField] = useState(null);
 
+  // URL-synced search, filter (active tab), and pagination
+  const { search, setSearch, filter: activeTab, setFilter: setActiveTab, page, setPage, limit, setLimit } =
+    useTableParams({ defaultFilter: "videos", defaultLimit: 10 });
+
   const API = API_URL;
 
   const fetchData = async () => {
@@ -45,14 +50,14 @@ const Monetization = () => {
 
       const [appsRes, vidsRes, monetizedRes] = await Promise.all([
         fetch(API + "/api/admin/monetization-applications?status=pending", {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
         }),
         fetch(API + "/api/admin/videos/pending-reviews", {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
         }),
         fetch(API + "/api/admin/monetization-applications?status=approved", {
-          headers: { Authorization: `Bearer ${token}` }
-        })
+          headers: { Authorization: `Bearer ${token}` },
+        }),
       ]);
 
       const appsData = await appsRes.json();
@@ -74,7 +79,6 @@ const Monetization = () => {
 
   useEffect(() => {
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const formatDate = (date) => {
@@ -102,9 +106,9 @@ const Monetization = () => {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ status: "approved" })
+        body: JSON.stringify({ status: "approved" }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Approval failed");
@@ -125,12 +129,12 @@ const Monetization = () => {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           status: "rejected",
-          reviewMessage: rejectReason
-        })
+          reviewMessage: rejectReason,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Rejection failed");
@@ -151,9 +155,9 @@ const Monetization = () => {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ status: "passed" })
+        body: JSON.stringify({ status: "passed" }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Video audit approval failed");
@@ -174,12 +178,12 @@ const Monetization = () => {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           status: "failed",
-          reviewMessage: videoRejectReason
-        })
+          reviewMessage: videoRejectReason,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Video audit failure failed");
@@ -193,68 +197,120 @@ const Monetization = () => {
     }
   };
 
-  const filteredMonetizedUsers = monetizedUsers.filter((u) => {
-    if (!monetizedSearch.trim()) return true;
-    const q = monetizedSearch.toLowerCase();
-    const name = (u.name || "").toLowerCase();
-    const channel = (u.user?.channelName || "").toLowerCase();
-    const email = (u.user?.email || "").toLowerCase();
-    const phone = (u.phone || u.user?.phone || "").toLowerCase();
-    const upi = (u.upiId || "").toLowerCase();
-    const adhar = (u.adharNumber || "").toLowerCase();
-    const bank = (u.bankDetails?.bankName || "").toLowerCase();
-    const acc = (u.bankDetails?.accountNumber || "").toLowerCase();
-    const ifsc = (u.bankDetails?.ifscCode || "").toLowerCase();
+  const searchLower = (search || "").trim().toLowerCase();
 
-    return (
-      name.includes(q) ||
-      channel.includes(q) ||
-      email.includes(q) ||
-      phone.includes(q) ||
-      upi.includes(q) ||
-      adhar.includes(q) ||
-      bank.includes(q) ||
-      acc.includes(q) ||
-      ifsc.includes(q)
-    );
-  });
+  // 1. Filtered Video Reviews
+  const filteredVideoReviews = useMemo(() => {
+    if (!searchLower) return videoReviews;
+    return videoReviews.filter((group) => {
+      const userName = (group.user?.name || "").toLowerCase();
+      const channel = (group.user?.channelName || "").toLowerCase();
+      const phone = (group.user?.phone || "").toLowerCase();
+      const hasMatchingVideo = group.reviews.some((r) =>
+        (r.video?.title || "").toLowerCase().includes(searchLower)
+      );
+      return userName.includes(searchLower) || channel.includes(searchLower) || phone.includes(searchLower) || hasMatchingVideo;
+    });
+  }, [videoReviews, searchLower]);
+
+  // 2. Filtered Applications
+  const filteredApplications = useMemo(() => {
+    if (!searchLower) return applications;
+    return applications.filter((app) => {
+      const name = (app.name || "").toLowerCase();
+      const channel = (app.user?.channelName || "").toLowerCase();
+      const phone = (app.phone || "").toLowerCase();
+      const upi = (app.upiId || "").toLowerCase();
+      const adhar = (app.adharNumber || "").toLowerCase();
+      return name.includes(searchLower) || channel.includes(searchLower) || phone.includes(searchLower) || upi.includes(searchLower) || adhar.includes(searchLower);
+    });
+  }, [applications, searchLower]);
+
+  // 3. Filtered Monetized Users
+  const filteredMonetizedUsers = useMemo(() => {
+    if (!searchLower) return monetizedUsers;
+    return monetizedUsers.filter((u) => {
+      const name = (u.name || "").toLowerCase();
+      const channel = (u.user?.channelName || "").toLowerCase();
+      const email = (u.user?.email || "").toLowerCase();
+      const phone = (u.phone || u.user?.phone || "").toLowerCase();
+      const upi = (u.upiId || "").toLowerCase();
+      const adhar = (u.adharNumber || "").toLowerCase();
+      const bank = (u.bankDetails?.bankName || "").toLowerCase();
+      const acc = (u.bankDetails?.accountNumber || "").toLowerCase();
+      const ifsc = (u.bankDetails?.ifscCode || "").toLowerCase();
+
+      return (
+        name.includes(searchLower) ||
+        channel.includes(searchLower) ||
+        email.includes(searchLower) ||
+        phone.includes(searchLower) ||
+        upi.includes(searchLower) ||
+        adhar.includes(searchLower) ||
+        bank.includes(searchLower) ||
+        acc.includes(searchLower) ||
+        ifsc.includes(searchLower)
+      );
+    });
+  }, [monetizedUsers, searchLower]);
+
+  // Pagination for Applications
+  const totalAppPages = Math.max(1, Math.ceil(filteredApplications.length / limit));
+  const paginatedApplications = useMemo(() => {
+    const start = (page - 1) * limit;
+    return filteredApplications.slice(start, start + limit);
+  }, [filteredApplications, page, limit]);
+
+  // Pagination for Monetized Users
+  const totalMonetizedPages = Math.max(1, Math.ceil(filteredMonetizedUsers.length / limit));
+  const paginatedMonetizedUsers = useMemo(() => {
+    const start = (page - 1) * limit;
+    return filteredMonetizedUsers.slice(start, start + limit);
+  }, [filteredMonetizedUsers, page, limit]);
+
+  const totalPendingVideoCount = videoReviews.reduce((sum, g) => sum + g.reviews.length, 0);
+
+  const filterOptions = [
+    { label: "Video Audits", value: "videos", count: totalPendingVideoCount },
+    { label: "Monetization Apps", value: "applications", count: applications.length },
+    { label: "Monetized Creators", value: "monetized", count: monetizedUsers.length },
+  ];
 
   return (
-    <div>
-      <div className="mb-6 flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
-        <div>
-          <h2 className="font-display text-2xl font-extrabold text-ink">Monetization Audits</h2>
-          <p className="mt-1 text-sm text-muted">Review creator onboarding applications, video approvals, and monetized users.</p>
-        </div>
-        
-        {/* 3 Main Tabs in Single Row */}
-        <div className="flex flex-nowrap overflow-x-auto rounded-xl bg-surface p-1 border border-line gap-1 shrink-0">
-          <button
-            onClick={() => setActiveTab("videos")}
-            className={`whitespace-nowrap rounded-lg px-3.5 py-2 text-xs font-semibold uppercase tracking-wider transition-colors ${
-              activeTab === "videos" ? "bg-white text-brand shadow-sm" : "text-muted hover:text-ink"
-            }`}
-          >
-            Video Audits ({loading ? "..." : videoReviews.reduce((sum, g) => sum + g.reviews.length, 0)})
-          </button>
-          <button
-            onClick={() => setActiveTab("applications")}
-            className={`whitespace-nowrap rounded-lg px-3.5 py-2 text-xs font-semibold uppercase tracking-wider transition-colors ${
-              activeTab === "applications" ? "bg-white text-brand shadow-sm" : "text-muted hover:text-ink"
-            }`}
-          >
-            Monetization Apps ({loading ? "..." : applications.length})
-          </button>
-          <button
-            onClick={() => setActiveTab("monetized")}
-            className={`whitespace-nowrap rounded-lg px-3.5 py-2 text-xs font-semibold uppercase tracking-wider transition-colors ${
-              activeTab === "monetized" ? "bg-white text-brand shadow-sm" : "text-muted hover:text-ink"
-            }`}
-          >
-            Monetized Users ({loading ? "..." : monetizedUsers.length})
-          </button>
+    <div className="space-y-5 min-w-0 max-w-full">
+      {/* Page Header */}
+      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center min-w-0">
+        <div className="min-w-0">
+          <h2 className="font-display text-xl sm:text-2xl font-extrabold text-ink truncate">Monetization Audits</h2>
+          <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-muted">
+            Review creator onboarding KYC applications, video approvals, and active monetized partners.
+          </p>
         </div>
       </div>
+
+      {/* Toolbar: Search and Filter Tabs */}
+      <DataTableToolbar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by creator, channel, phone, UPI, video title, or KYC details..."
+        filter={activeTab}
+        onFilterChange={setActiveTab}
+        filters={filterOptions}
+        totalCount={
+          activeTab === "videos"
+            ? totalPendingVideoCount
+            : activeTab === "applications"
+            ? applications.length
+            : monetizedUsers.length
+        }
+        filteredCount={
+          activeTab === "videos"
+            ? filteredVideoReviews.reduce((sum, g) => sum + g.reviews.length, 0)
+            : activeTab === "applications"
+            ? filteredApplications.length
+            : filteredMonetizedUsers.length
+        }
+      />
 
       {loading ? (
         <div className="rounded-2xl border border-line bg-white p-8 text-center text-muted shadow-card">
@@ -264,35 +320,42 @@ const Monetization = () => {
         <div className="rounded-2xl border border-red-100 bg-red-50 p-6 text-red-700">{error}</div>
       ) : (
         <>
+          {/* TAB 1: Video Audits */}
           {activeTab === "videos" && (
             <div className="space-y-6">
-              {videoReviews.map((group) => (
-                <div key={group.user._id} className="overflow-hidden rounded-2xl border border-line bg-white shadow-card p-5">
+              {filteredVideoReviews.map((group) => (
+                <div
+                  key={group.user._id}
+                  className="overflow-hidden rounded-2xl border border-line bg-white shadow-card p-4 sm:p-5"
+                >
                   {/* Creator Header */}
                   <div className="flex items-center gap-3 border-b border-line pb-4 mb-4">
                     <img
-                      src={group.user?.avatar}
+                      src={resolveMediaUrl(group.user?.avatar)}
                       alt="avatar"
                       className="h-10 w-10 rounded-full bg-surface object-cover border border-line"
                       onError={(e) => {
                         e.currentTarget.src = "https://via.placeholder.com/80x80.png?text=User";
                       }}
                     />
-                    <div>
-                      <h4 className="font-display font-bold text-ink text-base">{group.user?.name}</h4>
-                      <p className="text-xs text-muted">
+                    <div className="min-w-0 flex-1">
+                      <h4 className="font-display font-bold text-ink text-base truncate">{group.user?.name}</h4>
+                      <p className="text-xs text-muted truncate">
                         @{group.user?.channelName || "No channel"} • {group.user?.phone || "No phone"} • {group.user?.email || "No email"}
                       </p>
                     </div>
-                    <div className="ml-auto bg-brand-50 text-brand px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
+                    <div className="ml-auto bg-brand-50 text-brand px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border border-brand/20 shrink-0">
                       {group.reviews.length} Pending
                     </div>
                   </div>
 
-                  {/* Inner Video List (Compact vertical rows) */}
+                  {/* Inner Video List */}
                   <div className="space-y-3">
                     {group.reviews.map((rev) => (
-                      <div key={rev._id} className="flex flex-col sm:flex-row sm:items-center gap-4 rounded-xl border border-line bg-surface/30 p-3 hover:bg-surface/50 transition-colors">
+                      <div
+                        key={rev._id}
+                        className="flex flex-col sm:flex-row sm:items-center gap-4 rounded-xl border border-line bg-surface/30 p-3 hover:bg-surface/50 transition-colors"
+                      >
                         {rev.video ? (
                           <>
                             {/* Thumbnail & Duration */}
@@ -316,9 +379,11 @@ const Monetization = () => {
                                 {rev.video.title}
                               </div>
                               <div className="text-xs text-muted mt-1 flex items-center gap-2">
-                                <span className={`inline-block rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${
-                                  rev.video.isShort ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-800"
-                                }`}>
+                                <span
+                                  className={`inline-block rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${
+                                    rev.video.isShort ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-800"
+                                  }`}
+                                >
                                   {rev.video.isShort ? "Short" : "Long video"}
                                 </span>
                                 <span>•</span>
@@ -350,32 +415,38 @@ const Monetization = () => {
                                   setSelectedVideoReview(rev);
                                   setShowRejectVideo(true);
                                 }}
-                                className="rounded-lg bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-200 transition-colors"
+                                className="rounded-lg bg-red-50 border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 transition-colors"
                               >
-                                Fail
+                                Reject
                               </button>
                             </div>
                           </>
                         ) : (
-                          <div className="text-red-500 font-semibold text-xs p-2">Video Deleted</div>
+                          <div className="text-sm text-muted">Video content not available</div>
                         )}
                       </div>
                     ))}
                   </div>
                 </div>
               ))}
-              {videoReviews.length === 0 && (
-                <div className="rounded-2xl border border-line bg-white p-8 text-center text-muted shadow-card">
-                  No pending video audits.
+
+              {filteredVideoReviews.length === 0 && (
+                <div className="rounded-2xl border border-line bg-white p-12 text-center text-muted shadow-card">
+                  <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-full bg-emerald-50 text-emerald-600">
+                    ✓
+                  </div>
+                  <h3 className="font-display font-bold text-ink text-lg">No Pending Video Audits</h3>
+                  <p className="mt-1 text-sm">All uploaded monetization review videos have been audited.</p>
                 </div>
               )}
             </div>
           )}
 
+          {/* TAB 2: Applications */}
           {activeTab === "applications" && (
-            <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-card">
+            <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-card min-w-0">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[900px] text-sm">
+                <table className="w-full min-w-[960px] text-sm">
                   <thead>
                     <tr className="border-b border-line bg-surface/60 text-left text-xs uppercase tracking-wider text-muted">
                       <th className="p-4 font-semibold">Creator</th>
@@ -383,16 +454,17 @@ const Monetization = () => {
                       <th className="p-4 font-semibold">Aadhaar Card</th>
                       <th className="p-4 font-semibold">UPI ID</th>
                       <th className="p-4 font-semibold">Bank details</th>
+                      <th className="p-4 font-semibold">Applied Date</th>
                       <th className="p-4 text-right font-semibold">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {applications.map((app) => (
-                      <tr key={app._id} className="border-t border-line align-top hover:bg-surface/50">
+                    {paginatedApplications.map((app) => (
+                      <tr key={app._id} className="border-t border-line align-top hover:bg-surface/50 transition-colors">
                         <td className="p-4">
                           <div className="flex items-center gap-3">
                             <img
-                              src={app.user?.avatar}
+                              src={resolveMediaUrl(app.user?.avatar)}
                               alt="avatar"
                               className="h-10 w-10 shrink-0 rounded-full bg-surface object-cover border border-line"
                               onError={(e) => {
@@ -405,19 +477,20 @@ const Monetization = () => {
                             </div>
                           </div>
                         </td>
-                        <td className="p-4 text-muted whitespace-nowrap">
+                        <td className="p-4 text-muted whitespace-nowrap text-xs">
                           <div>{app.phone}</div>
-                          <div className="text-xs">{app.user?.email}</div>
+                          <div className="text-muted mt-0.5">{app.user?.email}</div>
                         </td>
-                        <td className="p-4 font-mono text-ink whitespace-nowrap">{app.adharNumber}</td>
-                        <td className="p-4 font-mono text-brand whitespace-nowrap">{app.upiId}</td>
+                        <td className="p-4 font-mono text-ink whitespace-nowrap text-xs">{app.adharNumber}</td>
+                        <td className="p-4 font-mono text-brand whitespace-nowrap text-xs">{app.upiId}</td>
                         <td className="p-4 text-xs text-muted">
                           <div className="font-semibold text-ink">{app.bankDetails?.bankName}</div>
                           <div>A/C: {app.bankDetails?.accountNumber}</div>
                           <div>IFSC: {app.bankDetails?.ifscCode}</div>
                         </td>
-                        <td className="p-4 text-right">
-                          <div className="flex justify-end gap-2 whitespace-nowrap">
+                        <td className="p-4 text-muted whitespace-nowrap text-xs">{formatDate(app.createdAt)}</td>
+                        <td className="p-4">
+                          <div className="flex justify-end gap-1.5 whitespace-nowrap">
                             <button
                               onClick={() => {
                                 setSelectedApp(app);
@@ -430,9 +503,10 @@ const Monetization = () => {
                             <button
                               onClick={() => {
                                 setSelectedApp(app);
+                                setRejectReason("");
                                 setShowRejectApp(true);
                               }}
-                              className="rounded-lg bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-200 transition-colors"
+                              className="rounded-lg bg-red-50 border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 transition-colors"
                             >
                               Reject
                             </button>
@@ -440,9 +514,9 @@ const Monetization = () => {
                         </td>
                       </tr>
                     ))}
-                    {applications.length === 0 && (
+                    {paginatedApplications.length === 0 && (
                       <tr>
-                        <td colSpan="6" className="p-8 text-center text-muted">
+                        <td colSpan="7" className="p-8 text-center text-muted">
                           No pending monetization applications.
                         </td>
                       </tr>
@@ -450,103 +524,282 @@ const Monetization = () => {
                   </tbody>
                 </table>
               </div>
+
+              {/* Pagination */}
+              <Pagination
+                currentPage={page}
+                totalPages={totalAppPages}
+                totalItems={filteredApplications.length}
+                pageSize={limit}
+                onPageChange={setPage}
+                onPageSizeChange={setLimit}
+              />
             </div>
           )}
 
+          {/* TAB 3: Monetized Creators */}
           {activeTab === "monetized" && (
-            <div className="space-y-4">
-              {/* Search filter bar */}
-              <div className="flex items-center gap-3">
-                <input
-                  type="text"
-                  value={monetizedSearch}
-                  onChange={(e) => setMonetizedSearch(e.target.value)}
-                  placeholder="Search monetized creators by name, phone, channel, UPI, Aadhaar, Bank..."
-                  className="w-full max-w-md rounded-xl border border-line bg-white px-4 py-2 text-sm text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand shadow-sm"
-                />
-                <span className="text-xs text-muted font-medium">
-                  Showing {filteredMonetizedUsers.length} of {monetizedUsers.length} monetized creators
-                </span>
+            <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-card min-w-0">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[960px] text-sm">
+                  <thead>
+                    <tr className="border-b border-line bg-surface/60 text-left text-xs uppercase tracking-wider text-muted">
+                      <th className="p-4 font-semibold">Creator</th>
+                      <th className="p-4 font-semibold">Contact</th>
+                      <th className="p-4 font-semibold">Aadhaar Card</th>
+                      <th className="p-4 font-semibold">UPI ID</th>
+                      <th className="p-4 font-semibold">Bank details</th>
+                      <th className="p-4 font-semibold">Approved Date</th>
+                      <th className="p-4 text-right font-semibold">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedMonetizedUsers.map((app) => (
+                      <tr key={app._id} className="border-t border-line align-top hover:bg-surface/50 transition-colors">
+                        <td className="p-4">
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={resolveMediaUrl(app.user?.avatar)}
+                              alt="avatar"
+                              className="h-10 w-10 shrink-0 rounded-full bg-surface object-cover border border-line"
+                              onError={(e) => {
+                                e.currentTarget.src = "https://via.placeholder.com/80x80.png?text=User";
+                              }}
+                            />
+                            <div>
+                              <div className="font-semibold text-ink flex items-center gap-1.5">
+                                <span>{app.name}</span>
+                                <span
+                                  className="inline-block rounded-full bg-emerald-100 p-0.5 text-[10px] text-emerald-700"
+                                  title="Monetized Creator"
+                                >
+                                  ✓
+                                </span>
+                              </div>
+                              <div className="text-xs text-muted">@{app.user?.channelName || app.user?.name}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-4 text-muted whitespace-nowrap text-xs">
+                          <div>{app.phone}</div>
+                          <div className="text-muted mt-0.5">{app.user?.email}</div>
+                        </td>
+                        <td className="p-4 font-mono text-ink whitespace-nowrap text-xs">{app.adharNumber}</td>
+                        <td className="p-4 font-mono text-brand whitespace-nowrap text-xs">{app.upiId}</td>
+                        <td className="p-4 text-xs text-muted">
+                          <div className="font-semibold text-ink">{app.bankDetails?.bankName}</div>
+                          <div>A/C: {app.bankDetails?.accountNumber}</div>
+                          <div>IFSC: {app.bankDetails?.ifscCode}</div>
+                        </td>
+                        <td className="p-4 text-muted whitespace-nowrap text-xs">
+                          {formatDate(app.updatedAt || app.createdAt)}
+                        </td>
+                        <td className="p-4 text-right">
+                          <button
+                            onClick={() => {
+                              setSelectedMonetizedUser(app);
+                              setShowMonetizedDetailsModal(true);
+                            }}
+                            className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink hover:bg-surface hover:border-brand transition-colors"
+                          >
+                            View Details
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {paginatedMonetizedUsers.length === 0 && (
+                      <tr>
+                        <td colSpan="7" className="p-8 text-center text-muted">
+                          No monetized creators found.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
 
-              {/* Monetized Creators Table */}
-              <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-card">
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[960px] text-sm">
-                    <thead>
-                      <tr className="border-b border-line bg-surface/60 text-left text-xs uppercase tracking-wider text-muted">
-                        <th className="p-4 font-semibold">Creator</th>
-                        <th className="p-4 font-semibold">Contact</th>
-                        <th className="p-4 font-semibold">Aadhaar Card</th>
-                        <th className="p-4 font-semibold">UPI ID</th>
-                        <th className="p-4 font-semibold">Bank details</th>
-                        <th className="p-4 font-semibold">Approved Date</th>
-                        <th className="p-4 text-right font-semibold">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredMonetizedUsers.map((app) => (
-                        <tr key={app._id} className="border-t border-line align-top hover:bg-surface/50">
-                          <td className="p-4">
-                            <div className="flex items-center gap-3">
-                              <img
-                                src={app.user?.avatar}
-                                alt="avatar"
-                                className="h-10 w-10 shrink-0 rounded-full bg-surface object-cover border border-line"
-                                onError={(e) => {
-                                  e.currentTarget.src = "https://via.placeholder.com/80x80.png?text=User";
-                                }}
-                              />
-                              <div>
-                                <div className="font-semibold text-ink flex items-center gap-1.5">
-                                  <span>{app.name}</span>
-                                  <span className="inline-block rounded-full bg-emerald-100 p-0.5 text-[10px] text-emerald-700" title="Monetized Creator">
-                                    ✓
-                                  </span>
-                                </div>
-                                <div className="text-xs text-muted">@{app.user?.channelName || app.user?.name}</div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="p-4 text-muted whitespace-nowrap">
-                            <div>{app.phone}</div>
-                            <div className="text-xs">{app.user?.email}</div>
-                          </td>
-                          <td className="p-4 font-mono text-ink whitespace-nowrap">{app.adharNumber}</td>
-                          <td className="p-4 font-mono text-brand whitespace-nowrap">{app.upiId}</td>
-                          <td className="p-4 text-xs text-muted">
-                            <div className="font-semibold text-ink">{app.bankDetails?.bankName}</div>
-                            <div>A/C: {app.bankDetails?.accountNumber}</div>
-                            <div>IFSC: {app.bankDetails?.ifscCode}</div>
-                          </td>
-                          <td className="p-4 text-muted whitespace-nowrap">{formatDate(app.updatedAt || app.createdAt)}</td>
-                          <td className="p-4 text-right">
-                            <button
-                              onClick={() => {
-                                setSelectedMonetizedUser(app);
-                                setShowMonetizedDetailsModal(true);
-                              }}
-                              className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink hover:bg-surface hover:border-brand transition-colors"
-                            >
-                              View Details
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                      {filteredMonetizedUsers.length === 0 && (
-                        <tr>
-                          <td colSpan="7" className="p-8 text-center text-muted">
-                            No monetized creators found.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              {/* Pagination */}
+              <Pagination
+                currentPage={page}
+                totalPages={totalMonetizedPages}
+                totalItems={filteredMonetizedUsers.length}
+                pageSize={limit}
+                onPageChange={setPage}
+                onPageSizeChange={setLimit}
+              />
             </div>
           )}
         </>
+      )}
+
+      {/* Approve Application Modal */}
+      {showApproveApp && selectedApp && (
+        <Modal
+          title="Approve Monetization Application"
+          onClose={() => {
+            setShowApproveApp(false);
+            setSelectedApp(null);
+          }}
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-ink">
+              Are you sure you want to approve monetization eligibility for{" "}
+              <strong>{selectedApp.name}</strong> (@{selectedApp.user?.channelName})?
+            </p>
+            <div className="rounded-xl border border-line bg-surface/50 p-4 space-y-2 text-xs">
+              <div>
+                <strong>Aadhaar:</strong> {selectedApp.adharNumber}
+              </div>
+              <div>
+                <strong>UPI ID:</strong> {selectedApp.upiId}
+              </div>
+              <div>
+                <strong>Bank:</strong> {selectedApp.bankDetails?.bankName} ({selectedApp.bankDetails?.accountNumber})
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowApproveApp(false);
+                  setSelectedApp(null);
+                }}
+                className="rounded-full bg-surface px-4 py-2 text-sm font-semibold text-ink hover:bg-line"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleApproveAppSubmit}
+                className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-brand hover:bg-emerald-700"
+              >
+                Confirm Approval
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Reject Application Modal */}
+      {showRejectApp && selectedApp && (
+        <Modal
+          title="Reject Monetization Application"
+          onClose={() => {
+            setShowRejectApp(false);
+            setSelectedApp(null);
+          }}
+        >
+          <form onSubmit={handleRejectAppSubmit} className="space-y-4">
+            <p className="text-sm text-ink">
+              Rejecting application for <strong>{selectedApp.name}</strong>. Provide a reason so the creator knows why:
+            </p>
+            <textarea
+              required
+              rows={3}
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="e.g. Aadhaar details mismatched or unclear KYC documents"
+              className="w-full rounded-xl border border-line p-3 text-sm text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand"
+            />
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRejectApp(false);
+                  setSelectedApp(null);
+                }}
+                className="rounded-full bg-surface px-4 py-2 text-sm font-semibold text-ink hover:bg-line"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-brand hover:bg-red-700"
+              >
+                Reject Application
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Pass Video Modal */}
+      {showPassVideo && selectedVideoReview && (
+        <Modal
+          title="Pass Video for Monetization"
+          onClose={() => {
+            setShowPassVideo(false);
+            setSelectedVideoReview(null);
+          }}
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-ink">
+              Pass video <strong>"{selectedVideoReview.video?.title}"</strong> for monetization? This confirms it is original, advertiser-friendly, and complies with community guidelines.
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPassVideo(false);
+                  setSelectedVideoReview(null);
+                }}
+                className="rounded-full bg-surface px-4 py-2 text-sm font-semibold text-ink hover:bg-line"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleApproveVideoSubmit}
+                className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-brand hover:bg-emerald-700"
+              >
+                Pass Video
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Reject Video Modal */}
+      {showRejectVideo && selectedVideoReview && (
+        <Modal
+          title="Reject Video for Monetization"
+          onClose={() => {
+            setShowRejectVideo(false);
+            setSelectedVideoReview(null);
+          }}
+        >
+          <form onSubmit={handleRejectVideoSubmit} className="space-y-4">
+            <p className="text-sm text-ink">
+              Rejecting video <strong>"{selectedVideoReview.video?.title}"</strong>. Explain reason to the creator:
+            </p>
+            <textarea
+              required
+              rows={3}
+              value={videoRejectReason}
+              onChange={(e) => setVideoRejectReason(e.target.value)}
+              placeholder="e.g. Copyright violation, reused content, or non-original material"
+              className="w-full rounded-xl border border-line p-3 text-sm text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand"
+            />
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRejectVideo(false);
+                  setSelectedVideoReview(null);
+                }}
+                className="rounded-full bg-surface px-4 py-2 text-sm font-semibold text-ink hover:bg-line"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-brand hover:bg-red-700"
+              >
+                Reject Video
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
 
       {/* Monetized Creator Full Details Modal */}
@@ -562,7 +815,7 @@ const Monetization = () => {
           <div className="space-y-4">
             <div className="flex items-center gap-4 rounded-xl border border-line bg-surface/40 p-4">
               <img
-                src={selectedMonetizedUser.user?.avatar}
+                src={resolveMediaUrl(selectedMonetizedUser.user?.avatar)}
                 alt="avatar"
                 className="h-16 w-16 rounded-full bg-white object-cover border-2 border-brand/20 shadow-sm"
                 onError={(e) => {
@@ -578,7 +831,8 @@ const Monetization = () => {
                 </div>
                 <p className="text-xs text-brand font-semibold">@{selectedMonetizedUser.user?.channelName || "no-channel"}</p>
                 <p className="text-xs text-muted mt-0.5">
-                  Followers: {selectedMonetizedUser.user?.followersCount || 0} • Joined: {new Date(selectedMonetizedUser.user?.createdAt || selectedMonetizedUser.createdAt).toLocaleDateString("en-IN")}
+                  Followers: {selectedMonetizedUser.user?.followersCount || 0} • Joined:{" "}
+                  {new Date(selectedMonetizedUser.user?.createdAt || selectedMonetizedUser.createdAt).toLocaleDateString("en-IN")}
                 </p>
               </div>
             </div>
@@ -598,7 +852,7 @@ const Monetization = () => {
                   <span className="font-mono text-sm font-bold text-ink">{selectedMonetizedUser.adharNumber || "-"}</span>
                   <button
                     onClick={() => handleCopy(selectedMonetizedUser.adharNumber, "modal-adhar")}
-                    className="rounded bg-surface px-2 py-1 text-[11px] font-semibold text-brand hover:bg-brand/10 transition-colors"
+                    className="rounded bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand hover:bg-brand-100"
                   >
                     {copiedField === "modal-adhar" ? "Copied!" : "Copy"}
                   </button>
@@ -610,179 +864,44 @@ const Monetization = () => {
                   <span className="font-mono text-sm font-bold text-brand">{selectedMonetizedUser.upiId || "-"}</span>
                   <button
                     onClick={() => handleCopy(selectedMonetizedUser.upiId, "modal-upi")}
-                    className="rounded bg-surface px-2 py-1 text-[11px] font-semibold text-brand hover:bg-brand/10 transition-colors"
+                    className="rounded bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand hover:bg-brand-100"
                   >
                     {copiedField === "modal-upi" ? "Copied!" : "Copy"}
                   </button>
                 </div>
               </div>
-              <div className="flex items-center justify-between border-b border-line pb-2">
-                <span className="text-xs font-semibold text-muted uppercase">Bank Name</span>
-                <span className="text-sm font-semibold text-ink">{selectedMonetizedUser.bankDetails?.bankName || "-"}</span>
-              </div>
-              <div className="flex items-center justify-between border-b border-line pb-2">
-                <span className="text-xs font-semibold text-muted uppercase">Bank Account No.</span>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-sm font-bold text-ink">{selectedMonetizedUser.bankDetails?.accountNumber || "-"}</span>
-                  <button
-                    onClick={() => handleCopy(selectedMonetizedUser.bankDetails?.accountNumber, "modal-acc")}
-                    className="rounded bg-surface px-2 py-1 text-[11px] font-semibold text-brand hover:bg-brand/10 transition-colors"
-                  >
-                    {copiedField === "modal-acc" ? "Copied!" : "Copy"}
-                  </button>
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-muted uppercase">IFSC Code</span>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-sm font-bold text-ink">{selectedMonetizedUser.bankDetails?.ifscCode || "-"}</span>
-                  <button
-                    onClick={() => handleCopy(selectedMonetizedUser.bankDetails?.ifscCode, "modal-ifsc")}
-                    className="rounded bg-surface px-2 py-1 text-[11px] font-semibold text-brand hover:bg-brand/10 transition-colors"
-                  >
-                    {copiedField === "modal-ifsc" ? "Copied!" : "Copy"}
-                  </button>
+              <div>
+                <span className="text-xs font-semibold text-muted uppercase">Bank Account Details</span>
+                <div className="mt-2 rounded-lg bg-surface/50 p-3 space-y-1.5 text-xs text-ink">
+                  <div className="flex justify-between">
+                    <span className="text-muted">Bank Name:</span>
+                    <strong>{selectedMonetizedUser.bankDetails?.bankName || "-"}</strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted">Account Number:</span>
+                    <strong className="font-mono">{selectedMonetizedUser.bankDetails?.accountNumber || "-"}</strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted">IFSC Code:</span>
+                    <strong className="font-mono">{selectedMonetizedUser.bankDetails?.ifscCode || "-"}</strong>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="flex justify-end pt-3 border-t border-line">
+            <div className="flex justify-end pt-2">
               <button
                 type="button"
                 onClick={() => {
                   setShowMonetizedDetailsModal(false);
                   setSelectedMonetizedUser(null);
                 }}
-                className="rounded-full bg-brand px-6 py-2 text-sm font-semibold text-white hover:bg-brand/90 transition-colors"
+                className="rounded-full bg-surface px-5 py-2 text-sm font-semibold text-ink hover:bg-line"
               >
                 Close
               </button>
             </div>
           </div>
-        </Modal>
-      )}
-
-      {/* Approve Application Confirmation Modal */}
-      {showApproveApp && selectedApp && (
-        <Modal title="Approve Monetization" onClose={() => { setShowApproveApp(false); setSelectedApp(null); }}>
-          <p className="text-sm text-muted mb-5">
-            Are you sure you want to <strong>APPROVE</strong> the monetization application for <strong>{selectedApp.name}</strong>? This will instantly unlock their earnings metrics.
-          </p>
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setShowApproveApp(false);
-                setSelectedApp(null);
-              }}
-              className="rounded-full bg-surface px-4 py-2 text-sm font-semibold text-ink hover:bg-line"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleApproveAppSubmit}
-              className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
-            >
-              Approve Application
-            </button>
-          </div>
-        </Modal>
-      )}
-
-      {/* Pass Video Audit Confirmation Modal */}
-      {showPassVideo && selectedVideoReview && (
-        <Modal title="Pass Video Audit" onClose={() => { setShowPassVideo(false); setSelectedVideoReview(null); }}>
-          <p className="text-sm text-muted mb-5">
-            Are you sure you want to mark <strong>"{selectedVideoReview.video?.title}"</strong> as a passed original video? It will count toward the creator's monetization eligibility requirement.
-          </p>
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setShowPassVideo(false);
-                setSelectedVideoReview(null);
-              }}
-              className="rounded-full bg-surface px-4 py-2 text-sm font-semibold text-ink hover:bg-line"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleApproveVideoSubmit}
-              className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
-            >
-              Pass Video Audit
-            </button>
-          </div>
-        </Modal>
-      )}
-
-      {/* Reject Application Modal */}
-      {showRejectApp && selectedApp && (
-        <Modal title="Reject Monetization Application" onClose={() => { setShowRejectApp(false); setSelectedApp(null); setRejectReason(""); }}>
-          <form onSubmit={handleRejectAppSubmit}>
-            <p className="text-sm text-muted mb-3">Provide a clear reason for the rejection (visible to the user):</p>
-            <textarea
-              required
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-              placeholder="e.g. Aadhaar details do not match the account holder's name."
-              className="w-full rounded-lg border border-line p-3 text-sm focus:border-brand focus:ring-1 focus:ring-brand outline-none h-24 resize-none mb-4"
-            />
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowRejectApp(false);
-                  setSelectedApp(null);
-                  setRejectReason("");
-                }}
-                className="rounded-full bg-surface px-4 py-2 text-sm font-semibold text-ink hover:bg-line"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
-              >
-                Reject Application
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
-
-      {/* Fail Video Audit Modal */}
-      {showRejectVideo && selectedVideoReview && (
-        <Modal title="Fail Video Auditing" onClose={() => { setShowRejectVideo(false); setSelectedVideoReview(null); setVideoRejectReason(""); }}>
-          <form onSubmit={handleRejectVideoSubmit}>
-            <p className="text-sm text-muted mb-3">Provide a reason why this video failed monetization verification:</p>
-            <textarea
-              required
-              value={videoRejectReason}
-              onChange={(e) => setVideoRejectReason(e.target.value)}
-              placeholder="e.g. Video is not original content (copyrighted clip)."
-              className="w-full rounded-lg border border-line p-3 text-sm focus:border-brand focus:ring-1 focus:ring-brand outline-none h-24 resize-none mb-4"
-            />
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowRejectVideo(false);
-                  setSelectedVideoReview(null);
-                  setVideoRejectReason("");
-                }}
-                className="rounded-full bg-surface px-4 py-2 text-sm font-semibold text-ink hover:bg-line"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
-              >
-                Fail Review
-              </button>
-            </div>
-          </form>
         </Modal>
       )}
     </div>

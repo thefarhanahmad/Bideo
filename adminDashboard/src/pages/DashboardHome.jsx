@@ -3,6 +3,12 @@ import { Link } from 'react-router-dom';
 import { API_URL } from '../config';
 import StatCard from '../components/StatCard';
 import { UsersIcon, PlayIcon, TagIcon, FlagIcon, EyeIcon, ArrowRightIcon } from '../components/Icons';
+import {
+  UserGrowthChart,
+  UserSegmentationChart,
+  VideoUploadsChart,
+  VideoFormatsChart,
+} from '../components/AnalyticsCharts';
 
 const resolveMediaUrl = (url) => {
   if (!url) return "https://via.placeholder.com/640x360.png?text=No+Thumbnail";
@@ -48,8 +54,8 @@ const DashboardHome = () => {
     return (
       <div>
         <div className="h-8 w-48 animate-pulse rounded bg-line" />
-        <div className="mt-6 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
+        <div className="mt-6 grid grid-cols-2 gap-3.5 sm:gap-5 md:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="h-28 animate-pulse rounded-2xl bg-white shadow-card" />
           ))}
         </div>
@@ -67,64 +73,94 @@ const DashboardHome = () => {
   }
 
   const cards = [
-    { icon: UsersIcon, label: 'Total Users', value: fmt(stats.users.total), hint: `${stats.users.admins} admins`, tone: 'brand' },
-    { icon: PlayIcon, label: 'Videos', value: fmt(stats.videos.total), hint: `${stats.videos.public} public · ${stats.videos.private} private`, tone: 'blue' },
-    { icon: EyeIcon, label: 'Total Views', value: fmt(stats.totalViews), hint: 'across all videos', tone: 'violet' },
+    { icon: UsersIcon, label: 'Total Users', value: fmt(stats.users.total), hint: `${stats.users.admins} admins · ${stats.users.monetized || 0} monetized`, tone: 'brand' },
+    { icon: PlayIcon, label: 'Videos', value: fmt(stats.videos.total), hint: `${stats.videos.longVideos || 0} long · ${stats.videos.shorts || 0} shorts`, tone: 'blue' },
+    { icon: EyeIcon, label: 'Total Views', value: fmt(stats.totalViews), hint: `${fmt(stats.avgViewsPerVideo || 0)} avg / video`, tone: 'violet' },
     { icon: TagIcon, label: 'Categories', value: fmt(stats.categories.total), hint: 'content categories', tone: 'green' },
-    { icon: FlagIcon, label: 'Open Reports', value: fmt(stats.reports.open), hint: `${stats.reports.total} total reports`, tone: 'red' },
   ];
 
   return (
-    <div>
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="font-display text-2xl font-extrabold text-ink">Overview</h2>
-          <p className="mt-1 text-sm text-muted">A quick snapshot of your Bideo platform.</p>
+    <div className="space-y-6 sm:space-y-8 min-w-0 max-w-full overflow-hidden">
+      {/* Page Header */}
+      <div className="flex flex-wrap items-end justify-between gap-3 min-w-0">
+        <div className="min-w-0">
+          <h2 className="font-display text-xl sm:text-2xl font-extrabold text-ink truncate">Overview & Analytics</h2>
+          <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-muted">A live snapshot of user growth, video publishing, and audience reach.</p>
         </div>
         {stats.reports.open > 0 && (
           <Link
             to="/admin/reports"
-            className="inline-flex items-center gap-2 rounded-full bg-red-50 px-4 py-2 text-sm font-semibold text-red-600 transition-colors hover:bg-red-100"
+            className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-red-600 transition-colors hover:bg-red-100 shrink-0"
           >
             <FlagIcon className="h-4 w-4" /> {stats.reports.open} reports need review
           </Link>
         )}
       </div>
 
-      <div className="mt-6 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+      {/* Top Stat Cards (2-col on mobile, 4 in a single row on desktop) */}
+      <div className="grid grid-cols-2 gap-3.5 sm:gap-5 md:grid-cols-4 min-w-0 max-w-full">
         {cards.map((c) => (
           <StatCard key={c.label} {...c} />
         ))}
       </div>
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-2">
+      {/* Row 1: Users Analytics (2 charts side-by-side) */}
+      <div className="space-y-3 min-w-0 max-w-full">
+        <div className="flex items-center gap-2 min-w-0">
+          <h3 className="font-display text-base sm:text-lg font-extrabold text-ink">Users Analytics</h3>
+          <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand">Live DB Sync</span>
+        </div>
+        <div className="grid gap-4 sm:gap-6 lg:grid-cols-2 min-w-0 max-w-full">
+          <UserGrowthChart data={stats.userTrends} />
+          <UserSegmentationChart usersData={stats.users} />
+        </div>
+      </div>
+
+      {/* Row 2: Videos Analytics (2 charts side-by-side) */}
+      <div className="space-y-3 min-w-0 max-w-full">
+        <div className="flex items-center gap-2 min-w-0">
+          <h3 className="font-display text-base sm:text-lg font-extrabold text-ink">Videos & Reach Analytics</h3>
+          <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">Live DB Sync</span>
+        </div>
+        <div className="grid gap-4 sm:gap-6 lg:grid-cols-2 min-w-0 max-w-full">
+          <VideoUploadsChart data={stats.videoTrends} />
+          <VideoFormatsChart
+            videosData={stats.videos}
+            totalViews={stats.totalViews}
+            avgViews={stats.avgViewsPerVideo}
+          />
+        </div>
+      </div>
+
+      {/* Row 3: Recent Activity */}
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-2 min-w-0 max-w-full">
         {/* Recent videos */}
-        <section className="rounded-2xl border border-line bg-white p-5 shadow-card">
-          <div className="flex items-center justify-between">
-            <h3 className="font-display text-lg font-bold text-ink">Recent Videos</h3>
-            <Link to="/admin/videos" className="inline-flex items-center gap-1 text-sm font-semibold text-brand hover:underline">
-              View all <ArrowRightIcon className="h-4 w-4" />
+        <section className="rounded-2xl border border-line bg-white p-3.5 sm:p-5 shadow-card min-w-0 max-w-full overflow-hidden">
+          <div className="flex items-center justify-between min-w-0 pb-2 border-b border-line/60">
+            <h3 className="font-display text-sm sm:text-base font-bold text-ink truncate">Recent Videos</h3>
+            <Link to="/admin/videos" className="inline-flex items-center gap-1 text-xs sm:text-sm font-semibold text-brand hover:underline shrink-0">
+              View all <ArrowRightIcon className="h-3.5 w-3.5" />
             </Link>
           </div>
-          <div className="mt-4 space-y-3">
+          <div className="mt-3.5 space-y-3 min-w-0">
             {stats.recentVideos.length === 0 && (
               <p className="text-sm text-muted">No videos yet.</p>
             )}
             {stats.recentVideos.map((v) => (
-              <div key={v._id} className="flex items-center gap-3">
+              <div key={v._id} className="flex items-center gap-2.5 sm:gap-3 min-w-0">
                 <img
                   src={resolveMediaUrl(v.thumbnail)}
                   alt=""
-                  className="h-12 w-20 shrink-0 rounded-lg bg-surface object-cover border border-line"
+                  className="h-11 w-16 sm:h-12 sm:w-20 shrink-0 rounded-lg bg-surface object-cover border border-line"
                   onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/640x360.png?text=Thumbnail'; }}
                 />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-ink">{v.title || 'Untitled'}</p>
-                  <p className="truncate text-xs text-muted">
+                <div className="min-w-0 flex-1 overflow-hidden">
+                  <p className="truncate text-xs sm:text-sm font-semibold text-ink">{v.title || 'Untitled'}</p>
+                  <p className="truncate text-[11px] sm:text-xs text-muted mt-0.5">
                     {v.owner?.channelName || v.owner?.name || 'Unknown'} · {fmt(v.views)} views
                   </p>
                 </div>
-                <span className="shrink-0 rounded-full bg-surface px-2 py-0.5 text-xs capitalize text-muted">
+                <span className="shrink-0 rounded-full bg-surface px-2 py-0.5 text-[10px] sm:text-xs capitalize text-muted">
                   {v.visibility || 'public'}
                 </span>
               </div>
@@ -133,27 +169,27 @@ const DashboardHome = () => {
         </section>
 
         {/* Recent users */}
-        <section className="rounded-2xl border border-line bg-white p-5 shadow-card">
-          <div className="flex items-center justify-between">
-            <h3 className="font-display text-lg font-bold text-ink">Recent Users</h3>
-            <Link to="/admin/users" className="inline-flex items-center gap-1 text-sm font-semibold text-brand hover:underline">
-              View all <ArrowRightIcon className="h-4 w-4" />
+        <section className="rounded-2xl border border-line bg-white p-3.5 sm:p-5 shadow-card min-w-0 max-w-full overflow-hidden">
+          <div className="flex items-center justify-between min-w-0 pb-2 border-b border-line/60">
+            <h3 className="font-display text-sm sm:text-base font-bold text-ink truncate">Recent Users</h3>
+            <Link to="/admin/users" className="inline-flex items-center gap-1 text-xs sm:text-sm font-semibold text-brand hover:underline shrink-0">
+              View all <ArrowRightIcon className="h-3.5 w-3.5" />
             </Link>
           </div>
-          <div className="mt-4 space-y-3">
+          <div className="mt-3.5 space-y-3 min-w-0">
             {stats.recentUsers.length === 0 && (
               <p className="text-sm text-muted">No users yet.</p>
             )}
             {stats.recentUsers.map((u) => (
-              <div key={u._id} className="flex items-center gap-3">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-50 text-sm font-bold text-brand">
+              <div key={u._id} className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                <span className="grid h-8 w-8 sm:h-9 sm:w-9 shrink-0 place-items-center rounded-full bg-brand-50 text-xs sm:text-sm font-bold text-brand">
                   {(u.name || '?').charAt(0).toUpperCase()}
                 </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-ink">{u.name || 'Unnamed'}</p>
-                  <p className="truncate text-xs text-muted">{u.email || u.phone || '—'}</p>
+                <div className="min-w-0 flex-1 overflow-hidden">
+                  <p className="truncate text-xs sm:text-sm font-semibold text-ink">{u.name || 'Unnamed'}</p>
+                  <p className="truncate text-[11px] sm:text-xs text-muted mt-0.5">{u.email || u.phone || '—'}</p>
                 </div>
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium capitalize ${u.role === 'admin' ? 'bg-brand-50 text-brand' : 'bg-surface text-muted'}`}>
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] sm:text-xs font-medium capitalize ${u.role === 'admin' ? 'bg-brand-50 text-brand' : 'bg-surface text-muted'}`}>
                   {u.role}
                 </span>
               </div>

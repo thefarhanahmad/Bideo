@@ -1,13 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Modal from "../components/Modal";
+import DataTableToolbar from "../components/DataTableToolbar";
+import Pagination from "../components/Pagination";
+import { useTableParams } from "../hooks/useTableParams";
 import { API_URL } from "../config";
+
+const resolveMediaUrl = (url) => {
+  if (!url) return "https://via.placeholder.com/80x80.png?text=User";
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  return `${API_URL}${url.startsWith("/") ? "" : "/"}${url}`;
+};
 
 const Payouts = () => {
   const [withdrawals, setWithdrawals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeStatus, setActiveStatus] = useState("all");
-  const [searchQuery, setSearchQuery] = useState("");
 
   // Modal states
   const [selectedWithdrawal, setSelectedWithdrawal] = useState(null);
@@ -17,6 +24,10 @@ const Payouts = () => {
   const [rejectReason, setRejectReason] = useState("");
   const [processing, setProcessing] = useState(false);
   const [copiedField, setCopiedField] = useState(null);
+
+  // URL-synced search, filter, and pagination
+  const { search, setSearch, filter, setFilter, page, setPage, limit, setLimit } =
+    useTableParams({ defaultFilter: "all", defaultLimit: 10 });
 
   const API = API_URL;
 
@@ -122,36 +133,63 @@ const Payouts = () => {
     }
   };
 
-  const filteredWithdrawals = withdrawals.filter((w) => {
-    const matchesStatus = activeStatus === "all" ? true : w.status === activeStatus;
-    if (!matchesStatus) return false;
+  // Filter & Search Logic
+  const { filteredWithdrawals, filterCounts } = useMemo(() => {
+    const counts = {
+      all: withdrawals.length,
+      pending: 0,
+      approved: 0,
+      rejected: 0,
+    };
 
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    const name = (w.payoutDetails?.holderName || w.user?.name || "").toLowerCase();
-    const channel = (w.user?.channelName || "").toLowerCase();
-    const phone = (w.user?.phone || "").toLowerCase();
-    const upi = (w.payoutDetails?.upiId || "").toLowerCase();
-    const bank = (w.payoutDetails?.bankName || "").toLowerCase();
-    const acc = (w.payoutDetails?.accountNumber || "").toLowerCase();
-    const ifsc = (w.payoutDetails?.ifscCode || "").toLowerCase();
-    const txn = (w.transactionId || "").toLowerCase();
+    withdrawals.forEach((w) => {
+      if (counts[w.status] !== undefined) counts[w.status] += 1;
+    });
 
-    return (
-      name.includes(q) ||
-      channel.includes(q) ||
-      phone.includes(q) ||
-      upi.includes(q) ||
-      bank.includes(q) ||
-      acc.includes(q) ||
-      ifsc.includes(q) ||
-      txn.includes(q)
-    );
-  });
+    const searchLower = (search || "").trim().toLowerCase();
 
-  const pendingCount = withdrawals.filter((w) => w.status === "pending").length;
-  const approvedCount = withdrawals.filter((w) => w.status === "approved").length;
-  const rejectedCount = withdrawals.filter((w) => w.status === "rejected").length;
+    const filtered = withdrawals.filter((w) => {
+      // 1. Status Filter
+      if (filter !== "all" && w.status !== filter) return false;
+
+      // 2. Search query
+      if (!searchLower) return true;
+      const name = (w.payoutDetails?.holderName || w.user?.name || "").toLowerCase();
+      const channel = (w.user?.channelName || "").toLowerCase();
+      const phone = (w.user?.phone || "").toLowerCase();
+      const upi = (w.payoutDetails?.upiId || "").toLowerCase();
+      const bank = (w.payoutDetails?.bankName || "").toLowerCase();
+      const acc = (w.payoutDetails?.accountNumber || "").toLowerCase();
+      const ifsc = (w.payoutDetails?.ifscCode || "").toLowerCase();
+      const txn = (w.transactionId || "").toLowerCase();
+
+      return (
+        name.includes(searchLower) ||
+        channel.includes(searchLower) ||
+        phone.includes(searchLower) ||
+        upi.includes(searchLower) ||
+        bank.includes(searchLower) ||
+        acc.includes(searchLower) ||
+        ifsc.includes(searchLower) ||
+        txn.includes(searchLower)
+      );
+    });
+
+    return { filteredWithdrawals: filtered, filterCounts: counts };
+  }, [withdrawals, filter, search]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredWithdrawals.length / limit));
+  const paginatedWithdrawals = useMemo(() => {
+    const startIndex = (page - 1) * limit;
+    return filteredWithdrawals.slice(startIndex, startIndex + limit);
+  }, [filteredWithdrawals, page, limit]);
+
+  const filterOptions = [
+    { label: "All Requests", value: "all", count: filterCounts.all },
+    { label: "Pending", value: "pending", count: filterCounts.pending },
+    { label: "Paid / Approved", value: "approved", count: filterCounts.approved },
+    { label: "Rejected", value: "rejected", count: filterCounts.rejected },
+  ];
 
   const totalPaidAmount = withdrawals
     .filter((w) => w.status === "approved")
@@ -162,77 +200,44 @@ const Payouts = () => {
     .reduce((sum, w) => sum + (Number(w.amount) || 0), 0);
 
   return (
-    <div>
-      <div className="mb-6 flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
-        <div>
-          <h2 className="font-display text-2xl font-extrabold text-ink">Creator Payouts</h2>
-          <p className="mt-1 text-sm text-muted">
+    <div className="space-y-5 min-w-0 max-w-full">
+      {/* Page Header */}
+      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center min-w-0">
+        <div className="min-w-0">
+          <h2 className="font-display text-xl sm:text-2xl font-extrabold text-ink truncate">Creator Payouts</h2>
+          <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-muted">
             Manage creator wallet withdrawal requests, process direct UPI / Bank transfers, and verify payout records.
           </p>
         </div>
 
         {/* Quick Summary Badges */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="rounded-xl border border-line bg-white px-4 py-2 shadow-sm">
-            <span className="text-[11px] font-semibold uppercase text-muted">Pending Payouts</span>
-            <div className="font-display text-lg font-extrabold text-amber-600">
-              ₹{totalPendingAmount.toLocaleString("en-IN")} ({pendingCount})
+        <div className="flex flex-wrap items-center gap-3 shrink-0">
+          <div className="rounded-xl border border-line bg-white px-4 py-2 shadow-sm min-w-[140px]">
+            <span className="text-[10px] font-semibold uppercase text-muted">Pending Payouts</span>
+            <div className="font-display text-base sm:text-lg font-extrabold text-amber-600">
+              ₹{totalPendingAmount.toLocaleString("en-IN")} ({filterCounts.pending})
             </div>
           </div>
-          <div className="rounded-xl border border-line bg-white px-4 py-2 shadow-sm">
-            <span className="text-[11px] font-semibold uppercase text-muted">Total Paid</span>
-            <div className="font-display text-lg font-extrabold text-emerald-600">
-              ₹{totalPaidAmount.toLocaleString("en-IN")} ({approvedCount})
+          <div className="rounded-xl border border-line bg-white px-4 py-2 shadow-sm min-w-[140px]">
+            <span className="text-[10px] font-semibold uppercase text-muted">Total Paid</span>
+            <div className="font-display text-base sm:text-lg font-extrabold text-emerald-600">
+              ₹{totalPaidAmount.toLocaleString("en-IN")} ({filterCounts.approved})
             </div>
           </div>
         </div>
       </div>
 
-      {/* Filter Tabs & Search */}
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-nowrap overflow-x-auto rounded-xl bg-surface p-1 border border-line gap-1">
-          <button
-            onClick={() => setActiveStatus("all")}
-            className={`whitespace-nowrap rounded-lg px-3.5 py-2 text-xs font-semibold uppercase tracking-wider transition-colors ${
-              activeStatus === "all" ? "bg-white text-brand shadow-sm" : "text-muted hover:text-ink"
-            }`}
-          >
-            All Requests ({withdrawals.length})
-          </button>
-          <button
-            onClick={() => setActiveStatus("pending")}
-            className={`whitespace-nowrap rounded-lg px-3.5 py-2 text-xs font-semibold uppercase tracking-wider transition-colors ${
-              activeStatus === "pending" ? "bg-white text-amber-700 shadow-sm" : "text-muted hover:text-ink"
-            }`}
-          >
-            Pending ({pendingCount})
-          </button>
-          <button
-            onClick={() => setActiveStatus("approved")}
-            className={`whitespace-nowrap rounded-lg px-3.5 py-2 text-xs font-semibold uppercase tracking-wider transition-colors ${
-              activeStatus === "approved" ? "bg-white text-emerald-700 shadow-sm" : "text-muted hover:text-ink"
-            }`}
-          >
-            Paid / Approved ({approvedCount})
-          </button>
-          <button
-            onClick={() => setActiveStatus("rejected")}
-            className={`whitespace-nowrap rounded-lg px-3.5 py-2 text-xs font-semibold uppercase tracking-wider transition-colors ${
-              activeStatus === "rejected" ? "bg-white text-red-700 shadow-sm" : "text-muted hover:text-ink"
-            }`}
-          >
-            Rejected ({rejectedCount})
-          </button>
-        </div>
-
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search by name, phone, UPI, bank, UTR..."
-          className="w-full max-w-xs rounded-xl border border-line bg-white px-3.5 py-2 text-sm text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand shadow-sm"
-        />
-      </div>
+      {/* Toolbar */}
+      <DataTableToolbar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by name, phone, UPI, bank, UTR..."
+        filter={filter}
+        onFilterChange={setFilter}
+        filters={filterOptions}
+        totalCount={withdrawals.length}
+        filteredCount={filteredWithdrawals.length}
+      />
 
       {loading ? (
         <div className="rounded-2xl border border-line bg-white p-8 text-center text-muted shadow-card">
@@ -241,7 +246,7 @@ const Payouts = () => {
       ) : error ? (
         <div className="rounded-2xl border border-red-100 bg-red-50 p-6 text-red-700">{error}</div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-card">
+        <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-card min-w-0">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[960px] text-sm">
               <thead>
@@ -255,21 +260,21 @@ const Payouts = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredWithdrawals.map((w) => (
-                  <tr key={w._id} className="border-t border-line align-top hover:bg-surface/50">
+                {paginatedWithdrawals.map((w) => (
+                  <tr key={w._id} className="border-t border-line align-top hover:bg-surface/50 transition-colors">
                     <td className="p-4">
                       <div className="flex items-center gap-3">
                         <img
-                          src={w.user?.avatar}
+                          src={resolveMediaUrl(w.user?.avatar)}
                           alt="avatar"
                           className="h-10 w-10 shrink-0 rounded-full bg-surface object-cover border border-line"
                           onError={(e) => {
                             e.currentTarget.src = "https://via.placeholder.com/80x80.png?text=User";
                           }}
                         />
-                        <div>
-                          <div className="font-semibold text-ink">{w.payoutDetails?.holderName || w.user?.name}</div>
-                          <div className="text-xs text-muted">
+                        <div className="min-w-0">
+                          <div className="font-bold text-ink text-sm truncate">{w.payoutDetails?.holderName || w.user?.name}</div>
+                          <div className="text-xs text-muted truncate">
                             @{w.user?.channelName || "channel"} • {w.user?.phone || w.user?.email || "No contact"}
                           </div>
                         </div>
@@ -277,7 +282,7 @@ const Payouts = () => {
                     </td>
 
                     <td className="p-4 whitespace-nowrap">
-                      <div className="font-bold text-ink text-base">
+                      <div className="font-extrabold text-ink text-base">
                         ₹{Number(w.amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                       </div>
                       <div className="text-[11px] text-muted">
@@ -301,21 +306,24 @@ const Payouts = () => {
                         </div>
                       ) : (
                         <div className="rounded-lg border border-line bg-surface/40 p-2.5 space-y-1">
-                          <div className="font-semibold text-ink">{w.payoutDetails?.bankName}</div>
-                          <div className="text-muted flex items-center justify-between gap-2">
-                            <span>A/C: <strong className="text-ink font-mono">{w.payoutDetails?.accountNumber}</strong></span>
+                          <div className="font-semibold text-sky-700 flex items-center justify-between">
+                            <span>🏦 {w.payoutDetails?.bankName || "Bank Transfer"}</span>
+                            <span className="text-[10px] text-muted font-normal">A/C Holder: {w.payoutDetails?.holderName}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 font-mono">
+                            <span>A/C: <strong>{w.payoutDetails?.accountNumber}</strong></span>
                             <button
                               onClick={() => handleCopy(w.payoutDetails?.accountNumber, `acc-${w._id}`)}
-                              className="rounded bg-brand/10 px-2 py-0.5 text-[10px] font-bold text-brand hover:bg-brand/20 transition-colors"
+                              className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-800 hover:bg-sky-200"
                             >
                               {copiedField === `acc-${w._id}` ? "Copied!" : "Copy A/C"}
                             </button>
                           </div>
-                          <div className="text-muted flex items-center justify-between gap-2">
-                            <span>IFSC: <strong className="text-ink font-mono">{w.payoutDetails?.ifscCode}</strong></span>
+                          <div className="flex items-center justify-between gap-2 font-mono text-[11px] text-muted">
+                            <span>IFSC: {w.payoutDetails?.ifscCode}</span>
                             <button
                               onClick={() => handleCopy(w.payoutDetails?.ifscCode, `ifsc-${w._id}`)}
-                              className="rounded bg-brand/10 px-2 py-0.5 text-[10px] font-bold text-brand hover:bg-brand/20 transition-colors"
+                              className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-bold text-gray-800 hover:bg-gray-300"
                             >
                               {copiedField === `ifsc-${w._id}` ? "Copied!" : "Copy IFSC"}
                             </button>
@@ -324,59 +332,74 @@ const Payouts = () => {
                       )}
                     </td>
 
-                    <td className="p-4 text-muted text-xs whitespace-nowrap">{formatDate(w.createdAt)}</td>
+                    <td className="p-4 text-muted whitespace-nowrap text-xs">
+                      {formatDate(w.createdAt)}
+                    </td>
 
                     <td className="p-4 whitespace-nowrap">
-                      <span
-                        className={`rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-wider ${
-                          w.status === "approved"
-                            ? "bg-emerald-100 text-emerald-800"
-                            : w.status === "rejected"
-                            ? "bg-red-100 text-red-800"
-                            : "bg-amber-100 text-amber-800"
-                        }`}
-                      >
-                        {w.status === "approved" ? "Paid" : w.status}
-                      </span>
-                      {w.transactionId && (
-                        <div className="text-[11px] text-muted mt-1.5 font-mono">
-                          Ref: <strong className="text-ink">{w.transactionId}</strong>
+                      {w.status === "approved" ? (
+                        <div>
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-700 border border-emerald-200">
+                            ✓ Paid / Approved
+                          </span>
+                          {w.transactionId && (
+                            <div className="font-mono text-[11px] text-muted mt-1">
+                              Txn: {w.transactionId}
+                            </div>
+                          )}
                         </div>
-                      )}
-                      {w.adminNote && (
-                        <div className="text-[11px] text-red-600 mt-1 max-w-xs">{w.adminNote}</div>
+                      ) : w.status === "rejected" ? (
+                        <div>
+                          <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-bold text-red-700 border border-red-200">
+                            ✕ Rejected & Refunded
+                          </span>
+                          {w.adminNote && (
+                            <div className="text-[11px] text-red-600 mt-1 max-w-xs">
+                              "{w.adminNote}"
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-bold text-amber-700 border border-amber-200">
+                          ⏳ Pending Approval
+                        </span>
                       )}
                     </td>
 
-                    <td className="p-4 text-right">
-                      {w.status === "pending" ? (
-                        <div className="flex justify-end gap-2 whitespace-nowrap">
-                          <button
-                            onClick={() => {
-                              setSelectedWithdrawal(w);
-                              setShowApproveModal(true);
-                            }}
-                            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors"
-                          >
-                            Mark as Paid
-                          </button>
-                          <button
-                            onClick={() => {
-                              setSelectedWithdrawal(w);
-                              setShowRejectModal(true);
-                            }}
-                            className="rounded-lg bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-200 transition-colors"
-                          >
-                            Reject & Refund
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-muted font-medium">Processed</span>
-                      )}
+                    <td className="p-4">
+                      <div className="flex justify-end gap-1.5 whitespace-nowrap">
+                        {w.status === "pending" ? (
+                          <>
+                            <button
+                              onClick={() => {
+                                setSelectedWithdrawal(w);
+                                setTransactionId("");
+                                setShowApproveModal(true);
+                              }}
+                              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 shadow-sm transition-colors"
+                            >
+                              Mark as Paid
+                            </button>
+                            <button
+                              onClick={() => {
+                                setSelectedWithdrawal(w);
+                                setRejectReason("");
+                                setShowRejectModal(true);
+                              }}
+                              className="rounded-lg bg-red-50 border border-red-200 px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors"
+                            >
+                              Reject & Refund
+                            </button>
+                          </>
+                        ) : (
+                          <span className="text-xs text-muted font-medium">Completed</span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
-                {filteredWithdrawals.length === 0 && (
+
+                {paginatedWithdrawals.length === 0 && (
                   <tr>
                     <td colSpan="6" className="p-8 text-center text-muted">
                       No payout requests found.
@@ -386,127 +409,124 @@ const Payouts = () => {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination */}
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+            totalItems={filteredWithdrawals.length}
+            pageSize={limit}
+            onPageChange={setPage}
+            onPageSizeChange={setLimit}
+          />
         </div>
       )}
 
-      {/* Approve / Mark as Paid Modal */}
+      {/* Approve Modal */}
       {showApproveModal && selectedWithdrawal && (
         <Modal
-          title="Approve & Mark Payout as Paid"
+          title="Confirm Payout Transfer"
           onClose={() => {
             setShowApproveModal(false);
             setSelectedWithdrawal(null);
-            setTransactionId("");
           }}
         >
           <form onSubmit={handleApprove} className="space-y-4">
-            <div className="rounded-xl border border-line bg-surface/40 p-4 space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted">Beneficiary Name:</span>
-                <span className="font-semibold text-ink">
-                  {selectedWithdrawal.payoutDetails?.holderName || selectedWithdrawal.user?.name}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted">Payout Amount:</span>
-                <span className="font-bold text-brand text-base">
-                  ₹{Number(selectedWithdrawal.amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted">Destination:</span>
-                <span className="font-mono text-ink text-xs">
-                  {selectedWithdrawal.payoutMethod === "upi"
-                    ? `UPI: ${selectedWithdrawal.payoutDetails?.upiId}`
-                    : `${selectedWithdrawal.payoutDetails?.bankName} (A/C: ${selectedWithdrawal.payoutDetails?.accountNumber})`}
-                </span>
-              </div>
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3.5 text-xs text-emerald-900">
+              <p className="font-semibold text-sm text-emerald-800">
+                Confirm ₹{Number(selectedWithdrawal.amount).toLocaleString("en-IN")} Payout to {selectedWithdrawal.payoutDetails?.holderName || selectedWithdrawal.user?.name}
+              </p>
+              <p className="mt-1">
+                Please transfer the funds to the creator's {selectedWithdrawal.payoutMethod.toUpperCase()} destination, then enter the Bank UTR / Transaction Reference ID below.
+              </p>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-ink uppercase mb-1">
-                Bank / UPI Reference ID (UTR / Transaction ID)
+              <label className="block text-xs font-bold text-ink uppercase tracking-wider">
+                Bank UTR / Transaction ID (Optional)
               </label>
               <input
                 type="text"
                 value={transactionId}
                 onChange={(e) => setTransactionId(e.target.value)}
-                placeholder="e.g. UTR123456789 or UPI-TXN-98765"
-                className="w-full rounded-lg border border-line p-2.5 text-sm outline-none focus:border-brand focus:ring-1 focus:ring-brand"
+                placeholder="e.g. UTR1234567890 / IMPS / UPI Ref"
+                className="mt-1.5 w-full rounded-xl border border-line p-2.5 text-sm text-ink outline-none focus:border-brand"
               />
-              <p className="text-[11px] text-muted mt-1">Leave empty to auto-generate a reference number.</p>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-line">
+            <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => {
                   setShowApproveModal(false);
                   setSelectedWithdrawal(null);
-                  setTransactionId("");
                 }}
-                disabled={processing}
-                className="rounded-full bg-surface px-4 py-2 text-sm font-semibold text-ink hover:bg-line disabled:opacity-50"
+                className="rounded-full bg-surface px-4 py-2 text-sm font-semibold text-ink hover:bg-line"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={processing}
-                className="rounded-full bg-emerald-600 px-6 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-75"
+                className="rounded-full bg-emerald-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
               >
-                {processing ? "Processing..." : "Confirm & Mark as Paid"}
+                {processing ? "Saving..." : "Confirm Paid"}
               </button>
             </div>
           </form>
         </Modal>
       )}
 
-      {/* Reject Withdrawal Modal */}
+      {/* Reject Modal */}
       {showRejectModal && selectedWithdrawal && (
         <Modal
           title="Reject Withdrawal Request"
           onClose={() => {
             setShowRejectModal(false);
             setSelectedWithdrawal(null);
-            setRejectReason("");
           }}
         >
           <form onSubmit={handleReject} className="space-y-4">
-            <p className="text-sm text-muted">
-              Rejecting this withdrawal will <strong>automatically refund ₹{Number(selectedWithdrawal.amount).toLocaleString("en-IN")}</strong> back into the creator's wallet balance.
-            </p>
+            <div className="rounded-xl border border-red-200 bg-red-50 p-3.5 text-xs text-red-900">
+              <p className="font-semibold text-sm text-red-800">
+                Reject & Refund ₹{Number(selectedWithdrawal.amount).toLocaleString("en-IN")}
+              </p>
+              <p className="mt-1">
+                The requested amount will automatically be refunded back to the creator's wallet balance.
+              </p>
+            </div>
 
             <div>
-              <label className="block text-xs font-bold text-ink uppercase mb-1">Reason for Rejection</label>
+              <label className="block text-xs font-bold text-ink uppercase tracking-wider">
+                Reason for Rejection
+              </label>
               <textarea
-                required
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
-                placeholder="e.g. Incorrect UPI ID or account number. Please verify and request again."
-                className="w-full rounded-lg border border-line p-3 text-sm focus:border-brand focus:ring-1 focus:ring-brand outline-none h-24 resize-none"
+                placeholder="e.g. Incorrect UPI ID / Invalid Bank IFSC Code / KYC mismatch"
+                rows={3}
+                required
+                className="mt-1.5 w-full rounded-xl border border-line p-2.5 text-sm text-ink outline-none focus:border-brand"
               />
             </div>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-line">
+            <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => {
                   setShowRejectModal(false);
                   setSelectedWithdrawal(null);
-                  setRejectReason("");
                 }}
-                disabled={processing}
-                className="rounded-full bg-surface px-4 py-2 text-sm font-semibold text-ink hover:bg-line disabled:opacity-50"
+                className="rounded-full bg-surface px-4 py-2 text-sm font-semibold text-ink hover:bg-line"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={processing}
-                className="rounded-full bg-red-600 px-6 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-75"
+                className="rounded-full bg-red-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-700 disabled:opacity-50"
               >
-                {processing ? "Refunding..." : "Reject & Refund"}
+                {processing ? "Rejecting..." : "Confirm Reject & Refund"}
               </button>
             </div>
           </form>

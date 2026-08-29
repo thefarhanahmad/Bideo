@@ -6,6 +6,138 @@ const VideoMonetizationReview = require('../models/VideoMonetizationReview');
 const MonetizationApplication = require('../models/MonetizationApplication');
 const WithdrawalRequest = require('../models/WithdrawalRequest');
 
+// Helper to calculate daily, weekly, and monthly trends for Users & Videos
+const calculateAnalyticsTrends = async () => {
+  const now = new Date();
+
+  // 1. Daily (Last 14 days)
+  const dailyLabels = [];
+  const dailyDateMap = {};
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().split('T')[0];
+    const label = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+    dailyLabels.push({ dateStr, label });
+    dailyDateMap[dateStr] = { label, users: 0, longVideos: 0, shorts: 0, views: 0 };
+  }
+
+  // 2. Weekly (Last 8 weeks)
+  const weeklyDateMap = {};
+  const weeklyLabels = [];
+  for (let i = 7; i >= 0; i--) {
+    const start = new Date(now);
+    start.setDate(start.getDate() - (i * 7 + 6));
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(now);
+    end.setDate(end.getDate() - (i * 7));
+    end.setHours(23, 59, 59, 999);
+    const label = `Wk ${8 - i}`;
+    const key = `week_${i}`;
+    weeklyLabels.push({ key, label, start, end });
+    weeklyDateMap[key] = { label, users: 0, longVideos: 0, shorts: 0, views: 0 };
+  }
+
+  // 3. Monthly (Last 6 months)
+  const monthlyDateMap = {};
+  const monthlyLabels = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const yearMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const label = d.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' });
+    monthlyLabels.push({ yearMonth, label });
+    monthlyDateMap[yearMonth] = { label, users: 0, longVideos: 0, shorts: 0, views: 0 };
+  }
+
+  // Aggregate user signups
+  const userSignups = await User.aggregate([
+    {
+      $project: {
+        createdAt: 1,
+        dateStr: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+        yearMonth: { $dateToString: { format: "%Y-%m", date: "$createdAt" } }
+      }
+    }
+  ]);
+
+  userSignups.forEach((u) => {
+    if (dailyDateMap[u.dateStr]) dailyDateMap[u.dateStr].users += 1;
+    if (monthlyDateMap[u.yearMonth]) monthlyDateMap[u.yearMonth].users += 1;
+    const uTime = new Date(u.createdAt).getTime();
+    weeklyLabels.forEach((w) => {
+      if (uTime >= w.start.getTime() && uTime <= w.end.getTime()) {
+        weeklyDateMap[w.key].users += 1;
+      }
+    });
+  });
+
+  // Aggregate video uploads
+  const videoUploads = await Video.aggregate([
+    {
+      $project: {
+        createdAt: 1,
+        isShort: { $ifNull: ["$isShort", false] },
+        views: { $ifNull: ["$views", 0] },
+        dateStr: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+        yearMonth: { $dateToString: { format: "%Y-%m", date: "$createdAt" } }
+      }
+    }
+  ]);
+
+  videoUploads.forEach((v) => {
+    if (dailyDateMap[v.dateStr]) {
+      if (v.isShort) dailyDateMap[v.dateStr].shorts += 1;
+      else dailyDateMap[v.dateStr].longVideos += 1;
+      dailyDateMap[v.dateStr].views += (v.views || 0);
+    }
+    if (monthlyDateMap[v.yearMonth]) {
+      if (v.isShort) monthlyDateMap[v.yearMonth].shorts += 1;
+      else monthlyDateMap[v.yearMonth].longVideos += 1;
+      monthlyDateMap[v.yearMonth].views += (v.views || 0);
+    }
+    const vTime = new Date(v.createdAt).getTime();
+    weeklyLabels.forEach((w) => {
+      if (vTime >= w.start.getTime() && vTime <= w.end.getTime()) {
+        if (v.isShort) weeklyDateMap[w.key].shorts += 1;
+        else weeklyDateMap[w.key].longVideos += 1;
+        weeklyDateMap[w.key].views += (v.views || 0);
+      }
+    });
+  });
+
+  return {
+    userTrends: {
+      daily: dailyLabels.map((d) => ({ label: d.label, date: d.dateStr, count: dailyDateMap[d.dateStr].users })),
+      weekly: weeklyLabels.map((w) => ({ label: w.label, count: weeklyDateMap[w.key].users })),
+      monthly: monthlyLabels.map((m) => ({ label: m.label, count: monthlyDateMap[m.yearMonth].users }))
+    },
+    videoTrends: {
+      daily: dailyLabels.map((d) => ({
+        label: d.label,
+        date: d.dateStr,
+        longVideos: dailyDateMap[d.dateStr].longVideos,
+        shorts: dailyDateMap[d.dateStr].shorts,
+        total: dailyDateMap[d.dateStr].longVideos + dailyDateMap[d.dateStr].shorts,
+        views: dailyDateMap[d.dateStr].views
+      })),
+      weekly: weeklyLabels.map((w) => ({
+        label: w.label,
+        longVideos: weeklyDateMap[w.key].longVideos,
+        shorts: weeklyDateMap[w.key].shorts,
+        total: weeklyDateMap[w.key].longVideos + weeklyDateMap[w.key].shorts,
+        views: weeklyDateMap[w.key].views
+      })),
+      monthly: monthlyLabels.map((m) => ({
+        label: m.label,
+        longVideos: monthlyDateMap[m.yearMonth].longVideos,
+        shorts: monthlyDateMap[m.yearMonth].shorts,
+        total: monthlyDateMap[m.yearMonth].longVideos + monthlyDateMap[m.yearMonth].shorts,
+        views: monthlyDateMap[m.yearMonth].views
+      }))
+    }
+  };
+};
+
 // @desc    Aggregated stats for the admin dashboard overview
 // @route   GET /api/admin/stats
 // @access  Private/Admin
@@ -14,7 +146,10 @@ exports.getStats = async (req, res, next) => {
     const [
       usersTotal,
       adminsTotal,
+      monetizedTotal,
+      scheduledDeletionsTotal,
       videosTotal,
+      shortsTotal,
       categoriesTotal,
       reportsTotal,
       reportsOpen,
@@ -22,10 +157,14 @@ exports.getStats = async (req, res, next) => {
       viewsAgg,
       recentVideos,
       recentUsers,
+      trends,
     ] = await Promise.all([
       User.countDocuments(),
       User.countDocuments({ role: 'admin' }),
+      MonetizationApplication.countDocuments({ status: 'approved' }),
+      User.countDocuments({ deletionScheduled: true }),
       Video.countDocuments(),
+      Video.countDocuments({ isShort: true }),
       Category.countDocuments(),
       VideoReport.countDocuments(),
       VideoReport.countDocuments({ status: 'open' }),
@@ -37,6 +176,7 @@ exports.getStats = async (req, res, next) => {
         .populate('owner', 'name channelName avatar')
         .select('title thumbnail views visibility createdAt owner'),
       User.find().sort('-createdAt').limit(5).select('name email phone avatar role createdAt'),
+      calculateAnalyticsTrends(),
     ]);
 
     const visibility = { public: 0, unlisted: 0, private: 0 };
@@ -44,14 +184,31 @@ exports.getStats = async (req, res, next) => {
       if (row._id) visibility[row._id] = row.count;
     });
 
+    const totalViews = viewsAgg[0] ? viewsAgg[0].total : 0;
+    const longVideosTotal = Math.max(0, videosTotal - shortsTotal);
+
     res.status(200).json({
       success: true,
       data: {
-        users: { total: usersTotal, admins: adminsTotal },
-        videos: { total: videosTotal, ...visibility },
+        users: {
+          total: usersTotal,
+          admins: adminsTotal,
+          monetized: monetizedTotal,
+          scheduledDeletions: scheduledDeletionsTotal,
+          regular: Math.max(0, usersTotal - adminsTotal - monetizedTotal)
+        },
+        videos: {
+          total: videosTotal,
+          longVideos: longVideosTotal,
+          shorts: shortsTotal,
+          ...visibility
+        },
         categories: { total: categoriesTotal },
         reports: { total: reportsTotal, open: reportsOpen },
-        totalViews: viewsAgg[0] ? viewsAgg[0].total : 0,
+        totalViews,
+        avgViewsPerVideo: videosTotal > 0 ? Math.round(totalViews / videosTotal) : 0,
+        userTrends: trends.userTrends,
+        videoTrends: trends.videoTrends,
         recentVideos,
         recentUsers,
       },
