@@ -162,10 +162,10 @@ userSchema.methods.matchPassword = async function(enteredPassword) {
   return bcrypt.compare(enteredPassword, this.password);
 };
 
-// Sign JWT and return
+// Sign JWT and return (default to 365 days for seamless consumer app persistence)
 userSchema.methods.getSignedJwtToken = function () {
-  return jwt.sign({ id: this._id }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRE,
+  return jwt.sign({ id: this._id }, process.env.JWT_SECRET || 'supersecretkey', {
+    expiresIn: process.env.JWT_EXPIRE || '365d',
   });
 };
 

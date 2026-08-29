@@ -15,6 +15,24 @@ const api = axios.create({
   },
 });
 
+// Automatically ensure Bearer token is attached on every outgoing request
+api.interceptors.request.use(
+  async (config) => {
+    if (!config.headers.Authorization) {
+      try {
+        const token = await AsyncStorage.getItem('token');
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
+      } catch {
+        // ignore read error
+      }
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
 export const setAuthToken = (token?: string | null) => {
   if (token) {
     api.defaults.headers.common.Authorization = `Bearer ${token}`;

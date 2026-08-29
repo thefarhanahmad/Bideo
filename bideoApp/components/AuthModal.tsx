@@ -47,12 +47,13 @@ const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onLoginSuccess 
 
   const persistAuth = useCallback(async (backendRes: any) => {
     const token = backendRes.token || backendRes.data?.token;
-    const userData = backendRes.user || backendRes.data?.user || backendRes;
+    const userData = backendRes.user || backendRes.data?.user || backendRes.data || backendRes;
     if (!token || !userData) {
       throw new Error('Invalid authentication response');
     }
     if (token) {
       await AsyncStorage.setItem('token', token);
+      await AsyncStorage.setItem('cached_user', JSON.stringify(userData));
       setAuthToken(token);
     }
     dispatch(loginSuccess({ user: userData, token } as any));

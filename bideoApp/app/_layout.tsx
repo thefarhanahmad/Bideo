@@ -46,30 +46,50 @@ function Startup({ onReady }: { onReady: () => void }) {
           }
         }
 
-        // 2. Fast local token hydration
+        // 2. Fast local token & cached user profile hydration
         const token = await AsyncStorage.getItem('token');
+        const cachedUserStr = await AsyncStorage.getItem('cached_user');
+
         if (token) {
-          dispatch(loginStart());
           setAuthToken(token);
+          let initialUser = null;
+          if (cachedUserStr) {
+            try {
+              initialUser = JSON.parse(cachedUserStr);
+            } catch {
+              // ignore json parse error
+            }
+          }
+
+          if (initialUser) {
+            dispatch(loginSuccess({ user: initialUser, token } as any));
+          } else {
+            dispatch(loginStart());
+          }
 
           // Fast unblock splash screen immediately
           clearTimeout(fallbackTimer);
           onReady();
 
-          // Background verification of current user profile (timeout in 5s)
+          // Background verification of current user profile (timeout in 6s)
           api
-            .get('/auth/me', { timeout: 5000 })
+            .get('/auth/me', { timeout: 6000 })
             .then((res) => {
-              const user = res.data && res.data.data ? res.data.data : res.data;
-              dispatch(loginSuccess({ user, token } as any));
+              const freshUser = res.data && res.data.data ? res.data.data : res.data;
+              if (freshUser) {
+                dispatch(loginSuccess({ user: freshUser, token } as any));
+                AsyncStorage.setItem('cached_user', JSON.stringify(freshUser)).catch(() => {});
+              }
             })
             .catch((err) => {
+              // Only clear token if server explicitly rejected with HTTP 401
               if (err?.response?.status === 401) {
-                AsyncStorage.removeItem('token').catch(() => {});
+                console.log('Token expired or invalid on server. Logging out.');
+                AsyncStorage.multiRemove(['token', 'cached_user']).catch(() => {});
                 setAuthToken(null);
                 dispatch(loginFailure('Session expired'));
               } else {
-                console.log('Background auth check failed (retaining cached session):', err?.message || err);
+                console.log('Background auth check offline / network lag (retaining cached session):', err?.message || err);
               }
             });
           return;
