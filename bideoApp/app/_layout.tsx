@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Stack, useRouter, usePathname } from 'expo-router';
 import { Provider, useDispatch, useSelector } from 'react-redux';
 import { store, RootState } from '../redux/store';
@@ -15,48 +15,78 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 
 function Startup({ onReady }: { onReady: () => void }) {
   const dispatch = useDispatch();
+  const hasInitialized = useRef(false);
 
   useEffect(() => {
+    if (hasInitialized.current) return;
+    hasInitialized.current = true;
+
+    // Fail-safe safeguard: guarantee onReady is triggered within 1500ms max to prevent OS watchdog kills
+    const fallbackTimer = setTimeout(() => {
+      onReady();
+    }, 1500);
+
     const init = async () => {
       try {
-        // Initialize AdMob safely (skip in Expo Go or if native module missing)
-        const isExpoGo = Constants.appOwnership === 'expo';
+        // 1. Initialize AdMob non-blocking in background (skip in Expo Go)
+        const isExpoGo =
+          Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
         if (!isExpoGo) {
           try {
-            // Use dynamic require to prevent crash if native module is missing from binary
             const mobileAds = require('react-native-google-mobile-ads').default;
             if (mobileAds) {
-              await mobileAds().initialize();
+              mobileAds()
+                .initialize()
+                .catch((adErr: any) => {
+                  console.log('AdMob background init error:', adErr);
+                });
             }
           } catch (adError) {
-            console.log('AdMob native module not found or failed to init:', adError);
+            console.log('AdMob native module not found:', adError);
           }
-        } else {
-          console.log('Expo Go detected — skipping AdMob initialization');
         }
 
+        // 2. Fast local token hydration
         const token = await AsyncStorage.getItem('token');
         if (token) {
           dispatch(loginStart());
           setAuthToken(token);
-          // fetch current user
-          const res = await api.get('/auth/me');
-          const user = res.data && res.data.data ? res.data.data : res.data;
-          dispatch(loginSuccess({ user, token } as any));
+
+          // Fast unblock splash screen immediately
+          clearTimeout(fallbackTimer);
+          onReady();
+
+          // Background verification of current user profile (timeout in 5s)
+          api
+            .get('/auth/me', { timeout: 5000 })
+            .then((res) => {
+              const user = res.data && res.data.data ? res.data.data : res.data;
+              dispatch(loginSuccess({ user, token } as any));
+            })
+            .catch((err) => {
+              if (err?.response?.status === 401) {
+                AsyncStorage.removeItem('token').catch(() => {});
+                setAuthToken(null);
+                dispatch(loginFailure('Session expired'));
+              } else {
+                console.log('Background auth check failed (retaining cached session):', err?.message || err);
+              }
+            });
+          return;
         }
       } catch (err: any) {
-        await AsyncStorage.removeItem('token');
-        setAuthToken(null);
-        dispatch(loginFailure('Session expired'));
-        if (err?.response?.status !== 401) {
-          console.warn('Auth bootstrap error:', err?.message || err);
-        }
+        console.warn('Auth bootstrap error:', err?.message || err);
       } finally {
+        clearTimeout(fallbackTimer);
         onReady();
       }
     };
 
     init();
+
+    return () => {
+      clearTimeout(fallbackTimer);
+    };
   }, [dispatch, onReady]);
 
   return null;
@@ -81,7 +111,11 @@ export default function RootLayout() {
 
   const handleAppReady = useCallback(async () => {
     setAppIsReady(true);
-    await SplashScreen.hideAsync().catch(() => {});
+    try {
+      await SplashScreen.hideAsync();
+    } catch {
+      // ignore
+    }
   }, []);
 
   return (

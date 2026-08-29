@@ -86,8 +86,8 @@ export default function UploadVideoScreen() {
 
       if (!result.canceled) {
         const asset: any = result.assets[0];
-        if (asset.fileSize && asset.fileSize > 100 * 1024 * 1024) {
-          showAlert('File Too Large', 'Please select a video file under 100MB.');
+        if (asset.fileSize && asset.fileSize > 500 * 1024 * 1024) {
+          showAlert('File Too Large', 'Please select a video file under 500MB.');
           return;
         }
         if (uploadType === 'short') {
@@ -243,6 +243,7 @@ export default function UploadVideoScreen() {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
+        timeout: 600000, // 10 minutes timeout for large 500MB video uploads
         onUploadProgress: (event) => {
           if (event.total) setUploadProgress(Math.round((event.loaded / event.total) * 100));
         },

@@ -28,8 +28,8 @@ const channels = require("./routes/channels");
 const ads = require("./routes/ads");
 
 // Middlewares
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "500mb" }));
+app.use(express.urlencoded({ extended: true, limit: "500mb" }));
 app.use(cookieParser());
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use("/api/uploads", express.static(path.join(__dirname, "uploads")));
@@ -90,7 +90,7 @@ app.use((err, req, res, next) => {
   if (err && err.name === "MulterError") {
     const messages = {
       LIMIT_FILE_SIZE:
-        "This file is too large. Please upload a file under 100MB (try a shorter or lower-resolution video).",
+        "This file is too large. Please upload a video or media file under 500MB.",
       LIMIT_UNEXPECTED_FILE: "Unexpected file field in upload.",
     };
     return res.status(413).json({
