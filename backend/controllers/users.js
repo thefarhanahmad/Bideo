@@ -105,8 +105,24 @@ exports.getChannelProfile = async (req, res, next) => {
 // @access Private/Admin
 exports.getUsers = async (req, res, next) => {
   try {
-    const users = await User.find().sort('-createdAt').select('-__v');
-    res.status(200).json({ success: true, count: users.length, data: users });
+    const [users, approvedApps] = await Promise.all([
+      User.find().sort('-createdAt').select('-__v'),
+      MonetizationApplication.find({ status: 'approved' }).select('user'),
+    ]);
+
+    const approvedUserIds = new Set(
+      approvedApps
+        .filter((a) => a.user)
+        .map((a) => a.user.toString())
+    );
+
+    const usersWithMonetization = users.map((u) => {
+      const uObj = u.toObject();
+      uObj.isMonetized = approvedUserIds.has(u._id.toString());
+      return uObj;
+    });
+
+    res.status(200).json({ success: true, count: usersWithMonetization.length, data: usersWithMonetization });
   } catch (err) {
     next(err);
   }
@@ -119,7 +135,10 @@ exports.getUser = async (req, res, next) => {
   try {
     const user = await User.findById(req.params.id).select('-__v');
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-    res.status(200).json({ success: true, data: user });
+    const isMonetized = await MonetizationApplication.exists({ user: user._id, status: 'approved' });
+    const uObj = user.toObject();
+    uObj.isMonetized = !!isMonetized;
+    res.status(200).json({ success: true, data: uObj });
   } catch (err) {
     next(err);
   }

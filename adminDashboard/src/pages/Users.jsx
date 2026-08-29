@@ -492,6 +492,11 @@ const Users = () => {
                           >
                             {u.role}
                           </span>
+                          {u.isMonetized ? (
+                            <span className="rounded-full bg-emerald-100 border border-emerald-300 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                              💰 Monetized
+                            </span>
+                          ) : null}
                           {isRecoveryRequested ? (
                             <span className="rounded-full bg-amber-100 border border-amber-300 px-2.5 py-0.5 text-[10px] font-bold text-amber-900">
                               Recovery Requested
