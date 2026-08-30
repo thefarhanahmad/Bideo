@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, FlatList, Share } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, FlatList, Share, useWindowDimensions, StatusBar } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSelector } from 'react-redux';
@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '../../constants/Colors';
 import { RootState } from '../../redux/store';
 import api, { videoService } from '../../services/api';
@@ -25,6 +26,9 @@ const REQUIRED_WATCH_TIME = 3; // 3 seconds minimum watch time to count a view
 export default function VideoScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+  const playerHeight = Math.round((windowWidth * 9) / 16);
   const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
   // expo-video player (replaces the deprecated expo-av <Video>). Source is loaded
   // via player.replace() once the video data arrives.
@@ -360,24 +364,35 @@ export default function VideoScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.videoPlayerContainer}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.white} />
+      <View style={[styles.videoPlayerContainer, { height: playerHeight }]}>
         {showingAd ? (
           <View style={styles.adPlayerPlaceholder}>
             <ActivityIndicator size="large" color={Colors.primary} />
             <Text style={{ color: Colors.white, marginTop: 10, fontSize: 13, fontWeight: '600' }}>Loading Sponsor Ad...</Text>
           </View>
         ) : (
-          <VideoView
-            player={player}
-            style={styles.videoPlayer}
-            contentFit="contain"
-            nativeControls
-            fullscreenOptions={{ enable: true }}
-            allowsPictureInPicture
-            onFullscreenEnter={handleFullscreenEnter}
-            onFullscreenExit={handleFullscreenExit}
-          />
+          <>
+            <VideoView
+              player={player}
+              style={[styles.videoPlayer, { height: playerHeight }]}
+              contentFit="contain"
+              nativeControls
+              fullscreenOptions={{ enable: true }}
+              allowsPictureInPicture
+              onFullscreenEnter={handleFullscreenEnter}
+              onFullscreenExit={handleFullscreenExit}
+            />
+            <TouchableOpacity
+              style={styles.floatingBackButton}
+              onPress={() => router.back()}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="arrow-back" size={22} color={Colors.white} />
+            </TouchableOpacity>
+          </>
         )}
       </View>
 
@@ -495,19 +510,31 @@ const styles = StyleSheet.create({
   videoPlayerContainer: {
     position: 'relative',
     width: '100%',
-    height: 220,
-    backgroundColor: 'black',
+    backgroundColor: '#000000',
+    overflow: 'hidden',
+  },
+  floatingBackButton: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
   },
   adPlayerPlaceholder: {
     width: '100%',
     height: '100%',
-    backgroundColor: 'black',
+    backgroundColor: '#000000',
     justifyContent: 'center',
     alignItems: 'center',
   },
   videoPlayer: {
     width: '100%',
-    height: '100%',
+    backgroundColor: '#000000',
   },
   adOverlay: {
     ...StyleSheet.absoluteFillObject,
