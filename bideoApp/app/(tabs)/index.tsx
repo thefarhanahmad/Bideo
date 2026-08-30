@@ -369,8 +369,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   listContainer: {
-    paddingTop: 4,
-    paddingBottom: 4,
+    paddingTop: 6,
+    paddingBottom: 8,
+    paddingHorizontal: 8,
   },
   centerContainer: {
     flex: 1,
