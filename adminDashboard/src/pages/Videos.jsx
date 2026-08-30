@@ -1125,7 +1125,7 @@ const BoostModalForm = ({ target, totalVideosCount, onSuccess, onClose }) => {
             <div>
               <div className="text-xs font-bold text-emerald-900">Monetized Creator Rewards</div>
               <div className="text-[11px] text-emerald-700 mt-0.5">
-                {result.monetizedCreatorsRewarded} creator(s) rewarded ({rewardMode === "once_per_creator" ? "Fixed ₹0.10 each" : "per video"})
+                {result.monetizedCreatorsRewarded} creator(s) rewarded (Fixed ₹{rewardAmount} each)
               </div>
             </div>
             <div className="text-base font-black text-emerald-900">
@@ -1274,23 +1274,6 @@ const BoostModalForm = ({ target, totalVideosCount, onSuccess, onClose }) => {
               Fixed ₹{rewardAmount} once per creator{" "}
               <span className="text-[11px] text-emerald-700 font-normal">
                 (Recommended — every creator receives exactly ₹{rewardAmount} total)
-              </span>
-            </span>
-          </label>
-
-          <label className="flex items-start gap-2 cursor-pointer">
-            <input
-              type="radio"
-              name="rewardMode"
-              value="per_video"
-              checked={rewardMode === "per_video"}
-              onChange={() => setRewardMode("per_video")}
-              className="mt-0.5 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-            />
-            <span className="font-semibold text-emerald-950">
-              ₹{rewardAmount} per video boosted{" "}
-              <span className="text-[11px] text-emerald-700 font-normal">
-                (Multiplies by creator's total uploaded videos)
               </span>
             </span>
           </label>
