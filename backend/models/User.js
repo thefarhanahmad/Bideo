@@ -46,6 +46,7 @@ const userSchema = new mongoose.Schema({
     unique: true,
     sparse: true,
     trim: true,
+    maxlength: [25, 'Channel name cannot exceed 25 characters'],
   },
   about: {
     type: String,

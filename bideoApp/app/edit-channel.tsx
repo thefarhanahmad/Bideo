@@ -92,8 +92,13 @@ export default function EditChannelScreen() {
   };
 
   const handleSave = async () => {
-    if (!channelName.trim()) {
+    const trimmedChannelName = channelName.trim();
+    if (!trimmedChannelName) {
       showAlert('Error', 'Channel name is required');
+      return;
+    }
+    if (trimmedChannelName.length > 25) {
+      showAlert('Error', 'Channel name cannot exceed 25 characters');
       return;
     }
     hapticLight();
@@ -101,8 +106,8 @@ export default function EditChannelScreen() {
     setLoading(true);
     try {
       const formData = new FormData();
-      formData.append('name', name);
-      formData.append('channelName', channelName);
+      formData.append('name', name.trim());
+      formData.append('channelName', trimmedChannelName);
       formData.append('about', about);
       
       const isLocalAvatar = avatar?.startsWith('file://') || avatar?.startsWith('content://');
@@ -274,11 +279,17 @@ export default function EditChannelScreen() {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.fieldLabel}>Channel Name</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <Text style={[styles.fieldLabel, { marginBottom: 0 }]}>Channel Name</Text>
+              <Text style={{ fontSize: 11, color: channelName.length >= 25 ? Colors.danger : Colors.textGray, fontWeight: '600' }}>
+                {channelName.length}/25
+              </Text>
+            </View>
             <TextInput
               style={styles.textInput}
               placeholder="e.g. Cooking with Sam"
               placeholderTextColor={Colors.textGray}
+              maxLength={25}
               value={channelName}
               onChangeText={setChannelName}
             />

@@ -32,9 +32,25 @@ exports.createUser = async (req, res, next) => {
 exports.updateChannel = async (req, res, next) => {
   try {
     const { channelName, about, avatar, coverImage } = req.body;
+    let trimmedChannelName = undefined;
+    if (channelName !== undefined) {
+      if (typeof channelName !== 'string' || channelName.trim().length === 0) {
+        return res.status(400).json({ success: false, message: 'Channel name cannot be empty' });
+      }
+      trimmedChannelName = channelName.trim();
+      if (trimmedChannelName.length > 25) {
+        return res.status(400).json({ success: false, message: 'Channel name cannot exceed 25 characters' });
+      }
+    }
+
+    const updateFields = { about, avatar, coverImage };
+    if (trimmedChannelName !== undefined) {
+      updateFields.channelName = trimmedChannelName;
+    }
+
     const user = await User.findByIdAndUpdate(
       req.user.id,
-      { channelName, about, avatar, coverImage },
+      updateFields,
       { new: true, runValidators: true }
     ).select('-password');
 
@@ -170,7 +186,11 @@ exports.updateUser = async (req, res, next) => {
 
     if (update.channelName !== undefined) {
       if (typeof update.channelName === 'string' && update.channelName.trim()) {
-        update.channelName = update.channelName.trim();
+        const trimmedChannel = update.channelName.trim();
+        if (trimmedChannel.length > 25) {
+          return res.status(400).json({ success: false, message: 'Channel name cannot exceed 25 characters' });
+        }
+        update.channelName = trimmedChannel;
       } else {
         delete update.channelName;
       }

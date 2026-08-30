@@ -728,7 +728,13 @@ const UserForm = ({ initial = {}, onSubmit, onCancel }) => {
     };
     if (email.trim()) payload.email = email.trim();
     if (phone.trim()) payload.phone = phone.trim();
-    if (channelName.trim()) payload.channelName = channelName.trim();
+    if (channelName.trim()) {
+      if (channelName.trim().length > 25) {
+        alert("Channel name cannot exceed 25 characters");
+        return;
+      }
+      payload.channelName = channelName.trim();
+    }
     if (newPassword.trim()) payload.password = newPassword.trim();
 
     onSubmit(payload);
@@ -779,11 +785,17 @@ const UserForm = ({ initial = {}, onSubmit, onCancel }) => {
         {/* Row 2: 3 Columns (Channel Name, Role, Password Reset) */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start">
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-ink">
-              Channel Handle / Name
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold uppercase tracking-wider text-ink">
+                Channel Name
+              </label>
+              <span className={`text-[10px] font-semibold ${channelName.length >= 25 ? "text-red-500 font-bold" : "text-muted"}`}>
+                {channelName.length}/25
+              </span>
+            </div>
             <input
               value={channelName}
+              maxLength={25}
               onChange={(e) => setChannelName(e.target.value)}
               placeholder="@channel_name"
               className={inputClass}

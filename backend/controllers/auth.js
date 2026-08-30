@@ -132,7 +132,21 @@ exports.updateChannel = async (req, res, next) => {
       }
     }
 
-    const updateData = { name, channelName, about };
+    if (channelName !== undefined) {
+      if (typeof channelName !== 'string' || channelName.trim().length === 0) {
+        return res.status(400).json({ success: false, message: 'Channel name cannot be empty' });
+      }
+      const trimmed = channelName.trim();
+      if (trimmed.length > 25) {
+        return res.status(400).json({ success: false, message: 'Channel name cannot exceed 25 characters' });
+      }
+    }
+
+    const updateData = {
+      name: typeof name === 'string' ? name.trim() : undefined,
+      channelName: typeof channelName === 'string' ? channelName.trim() : undefined,
+      about,
+    };
     if (avatar !== undefined) updateData.avatar = avatar;
     if (coverImage !== undefined) updateData.coverImage = coverImage;
 
