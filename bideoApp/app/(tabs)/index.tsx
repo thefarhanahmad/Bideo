@@ -318,14 +318,6 @@ export default function HomeScreen() {
     );
   }, [isAuthenticated, renderShortsShelf]);
 
-  if (loading && videos.length === 0) {
-    return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
       <CategoryList
@@ -333,9 +325,14 @@ export default function HomeScreen() {
         selectedCategory={selectedCategory}
         onSelectCategory={setSelectedCategory}
       />
-      <FlatList
-        data={feedData}
-        keyExtractor={(item) => item._id}
+      {loading && videos.length === 0 ? (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      ) : (
+        <FlatList
+          data={feedData}
+          keyExtractor={(item) => item._id}
         renderItem={renderItem}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
@@ -365,7 +362,8 @@ export default function HomeScreen() {
             </View>
           ) : null
         }
-      />
+        />
+      )}
 
       <AuthModal
         visible={authModalVisible}

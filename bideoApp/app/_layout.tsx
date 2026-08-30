@@ -1,3 +1,4 @@
+import 'react-native-gesture-handler';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Stack, useRouter, usePathname } from 'expo-router';
 import { Provider, useDispatch, useSelector } from 'react-redux';
@@ -130,10 +131,7 @@ function DeletionGuard({ children }: { children: React.ReactNode }) {
 }
 
 export default function RootLayout() {
-  const [appIsReady, setAppIsReady] = useState(false);
-
   const handleAppReady = useCallback(async () => {
-    setAppIsReady(true);
     try {
       await SplashScreen.hideAsync();
     } catch {
@@ -142,26 +140,24 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <Provider store={store}>
-      <Startup onReady={handleAppReady} />
-      {appIsReady ? (
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <DeletionGuard>
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="(tabs)" />
-              <Stack.Screen name="video/[id]" options={{ presentation: 'modal' }} />
-              <Stack.Screen name="channel/[id]" />
-              <Stack.Screen name="notifications" />
-              <Stack.Screen name="upload-video" />
-              <Stack.Screen name="upload-post" />
-              <Stack.Screen name="settings/privacy" />
-              <Stack.Screen name="settings/delete-profile" />
-              <Stack.Screen name="account-recovery" />
-            </Stack>
-            <AlertHost />
-          </DeletionGuard>
-        </GestureHandlerRootView>
-      ) : null}
-    </Provider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <Provider store={store}>
+        <Startup onReady={handleAppReady} />
+        <DeletionGuard>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="video/[id]" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="channel/[id]" />
+            <Stack.Screen name="notifications" />
+            <Stack.Screen name="upload-video" />
+            <Stack.Screen name="upload-post" />
+            <Stack.Screen name="settings/privacy" />
+            <Stack.Screen name="settings/delete-profile" />
+            <Stack.Screen name="account-recovery" />
+          </Stack>
+          <AlertHost />
+        </DeletionGuard>
+      </Provider>
+    </GestureHandlerRootView>
   );
 }
