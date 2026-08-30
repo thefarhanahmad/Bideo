@@ -142,7 +142,8 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, onMenuPress, onPlaylistPre
           source={{ uri: resolveMediaUrl(video?.thumbnail) || FALLBACK_IMAGE }}
           style={styles.thumbnail}
           contentFit="cover"
-          transition={250}
+          transition={150}
+          cachePolicy="memory-disk"
         />
         <LinearGradient
           colors={['transparent', 'rgba(0,0,0,0.5)']}
@@ -156,7 +157,13 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, onMenuPress, onPlaylistPre
 
       <View style={styles.detailsContainer}>
         <TouchableOpacity onPress={() => video?.owner?._id && router.push(`/channel/${video.owner._id}`)}>
-          <Image source={{ uri: resolveMediaUrl(video?.owner?.avatar) || FALLBACK_AVATAR }} style={styles.avatar} contentFit="cover" transition={200} />
+          <Image
+            source={{ uri: resolveMediaUrl(video?.owner?.avatar) || FALLBACK_AVATAR }}
+            style={styles.avatar}
+            contentFit="cover"
+            transition={150}
+            cachePolicy="memory-disk"
+          />
         </TouchableOpacity>
         <View style={styles.textContainer}>
           <Text style={styles.title} numberOfLines={2}>

@@ -11,7 +11,7 @@ import { hapticLight, hapticSelection } from '../utils/haptics';
 import CommentList from './CommentList';
 import { useSelector } from 'react-redux';
 import { RootState } from '../redux/store';
-import api from '../services/api';
+import api, { resolveMediaUrl } from '../services/api';
 import AuthModal from './AuthModal';
 import VerifiedBadge from './VerifiedBadge';
 
@@ -113,7 +113,13 @@ const PostCard = ({ post, onDelete }: PostCardProps) => {
       
       <View style={styles.header}>
         <TouchableOpacity style={styles.headerInfo} onPress={() => owner._id && router.push(`/channel/${owner._id}`)}>
-          <Image source={{ uri: owner.avatar || FALLBACK_AVATAR }} style={styles.avatar} contentFit="cover" transition={200} />
+          <Image
+            source={{ uri: resolveMediaUrl(owner.avatar) || FALLBACK_AVATAR }}
+            style={styles.avatar}
+            contentFit="cover"
+            transition={150}
+            cachePolicy="memory-disk"
+          />
           <View style={styles.headerText}>
             <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
               <Text style={styles.ownerName}>{owner.channelName || owner.name || 'User'}</Text>
@@ -131,10 +137,11 @@ const PostCard = ({ post, onDelete }: PostCardProps) => {
       {!!post.text && <Text style={styles.text}>{post.text}</Text>}
       {!!post.imageUrl && (
         <Image
-          source={{ uri: post.imageUrl }}
+          source={{ uri: resolveMediaUrl(post.imageUrl) }}
           style={styles.image}
           contentFit="cover"
-          transition={250}
+          transition={150}
+          cachePolicy="memory-disk"
         />
       )}
 

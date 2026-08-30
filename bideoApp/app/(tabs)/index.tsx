@@ -277,7 +277,7 @@ export default function HomeScreen() {
             onPress={() => router.push({ pathname: '/shorts', params: { initialShortId: item._id } })}
           >
             <View style={styles.shortThumbWrap}>
-              <Image source={{ uri: item.thumbnail }} style={styles.shortThumbnail} contentFit="cover" transition={250} />
+              <Image source={{ uri: item.thumbnail }} style={styles.shortThumbnail} contentFit="cover" transition={150} cachePolicy="memory-disk" />
               <LinearGradient colors={['transparent', 'rgba(0,0,0,0.55)']} style={styles.shortThumbGradient} pointerEvents="none" />
               <View style={styles.shortPlayBadge}>
                 <Ionicons name="play" size={12} color={Colors.white} />
