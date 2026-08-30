@@ -59,4 +59,8 @@ sudo docker run --rm \
 echo "⚙️ Reloading host Nginx..."
 sudo systemctl reload nginx
 
+# 8. Automatic Docker Storage Housekeeping
+echo "🧹 Pruning old dangling images and build artifacts..."
+docker image prune -f > /dev/null 2>&1 || true
+
 echo "✅ Bideo deployment completed successfully!"
