@@ -41,8 +41,8 @@ export default function ShortsScreen() {
   const flatListRef = useRef<FlatList>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const isFetchingMore = useRef(false);
+  const hasMore = useRef(true);
   const [authModalVisible, setAuthModalVisible] = useState(false);
   const [selectedShortId, setSelectedShortId] = useState<string | null>(null);
   const [commentModalVisible, setCommentModalVisible] = useState(false);
@@ -72,9 +72,15 @@ export default function ShortsScreen() {
 
   const loadShorts = async () => {
     setLoading(true);
+    setPage(1);
+    hasMore.current = true;
+    isFetchingMore.current = false;
     try {
-      const data = await api.get('/videos', { params: { type: 'short' } });
-      const onlyShorts = (data.data.data || [])
+      const data = await api.get('/videos', { params: { type: 'short', page: 1, limit: 50 } });
+      const rawList = data.data.data || [];
+      if (rawList.length < 50) hasMore.current = false;
+
+      const onlyShorts = rawList
         .filter((v: any) => v.isShort === true)
         .map((v: any) => ({
           _id: v._id,
@@ -133,6 +139,66 @@ export default function ShortsScreen() {
       console.log('Failed to load shorts', e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMoreShorts = async () => {
+    if (isFetchingMore.current || !hasMore.current || loading) return;
+    isFetchingMore.current = true;
+    try {
+      const nextPage = page + 1;
+      const data = await api.get('/videos', { params: { type: 'short', page: nextPage, limit: 50 } });
+      const rawList = data.data.data || [];
+      if (rawList.length > 0) {
+        const onlyShorts = rawList
+          .filter((v: any) => v.isShort === true)
+          .map((v: any) => ({
+            _id: v._id,
+            videoUrl: v.videoUrl,
+            thumbnail: v.thumbnail,
+            owner: { 
+              _id: v.owner?._id,
+              name: v.owner?.name || 'Unknown', 
+              channelName: v.owner?.channelName,
+              avatar: v.owner?.avatar || '',
+              isVerified: Boolean(v.owner?.isVerified),
+            },
+            title: v.title,
+            likes: v.likes || [],
+            commentsCount: v.commentsCount || 0,
+            isLiked: v.isLiked ?? (isAuthenticated && v.likes?.includes(user?._id)),
+            isFollowing: v.isFollowing || false,
+            createdAt: v.createdAt,
+          }));
+
+        setShorts((prev) => {
+          const existingIds = new Set(prev.map((s: any) => s._id));
+          const trulyNew = onlyShorts.filter((s: any) => !existingIds.has(s._id));
+          if (trulyNew.length === 0) {
+            hasMore.current = false;
+            return prev;
+          }
+          const withAds: any[] = [];
+          for (let i = 0; i < trulyNew.length; i++) {
+            withAds.push(trulyNew[i]);
+            if ((prev.length + withAds.length) % 5 === 0) {
+              withAds.push({
+                _id: `short_ad_${trulyNew[i]?._id || i}`,
+                isAd: true,
+              });
+            }
+          }
+          return [...prev, ...withAds];
+        });
+        setPage(nextPage);
+        if (rawList.length < 50) hasMore.current = false;
+      } else {
+        hasMore.current = false;
+      }
+    } catch (e) {
+      console.log('Failed to load more shorts', e);
+    } finally {
+      isFetchingMore.current = false;
     }
   };
 
@@ -399,6 +465,8 @@ export default function ShortsScreen() {
         initialNumToRender={2}
         maxToRenderPerBatch={2}
         windowSize={3}
+        onEndReached={loadMoreShorts}
+        onEndReachedThreshold={0.5}
         getItemLayout={(data, index) => ({
           length: containerHeight,
           offset: containerHeight * index,

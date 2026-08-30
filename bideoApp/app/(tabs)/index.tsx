@@ -1,5 +1,5 @@
 import { showAlert } from '../../components/AppAlert';
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { View, FlatList, StyleSheet, ActivityIndicator, Text, Modal, TouchableOpacity, TextInput, Alert, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -82,6 +82,11 @@ export default function HomeScreen() {
   const [categoriesList, setCategoriesList] = useState<string[]>(['All']);
   const [posts, setPosts] = useState<any[]>([]);
 
+  const [page, setPage] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const isFetchingMore = useRef(false);
+  const hasMore = useRef(true);
+
   const [selectedVideo, setSelectedVideo] = useState<any>(null);
   const [reportModalVisible, setReportModalVisible] = useState(false);
   const [playlistModalVisible, setPlaylistModalVisible] = useState(false);
@@ -97,7 +102,10 @@ export default function HomeScreen() {
   const loadVideos = async () => {
     try {
       dispatch(fetchVideosStart());
-      const data = await videoService.getVideos();
+      setPage(1);
+      hasMore.current = true;
+      isFetchingMore.current = false;
+      const data = await videoService.getVideos({ page: 1, limit: 50 });
       if (data && data.length > 0) {
         const normalized = data.map((v: any) => ({
           ...v,
@@ -108,12 +116,44 @@ export default function HomeScreen() {
         const regular = normalized.filter((v: any) => !v.isPinned);
         const randomized = [...pinned, ...shuffleArray(regular)];
         dispatch(fetchVideosSuccess(randomized));
+        if (data.length < 50) hasMore.current = false;
       } else {
         dispatch(fetchVideosSuccess(shuffleArray(SAMPLE_VIDEOS)));
+        hasMore.current = false;
       }
     } catch (err: any) {
       console.error('Error fetching videos:', err);
       dispatch(fetchVideosSuccess(shuffleArray(SAMPLE_VIDEOS)));
+      hasMore.current = false;
+    }
+  };
+
+  const loadMoreVideos = async () => {
+    if (isFetchingMore.current || !hasMore.current || loading || loadingMore) return;
+    isFetchingMore.current = true;
+    setLoadingMore(true);
+    try {
+      const nextPage = page + 1;
+      const data = await videoService.getVideos({ page: nextPage, limit: 50 });
+      if (data && data.length > 0) {
+        const normalized = data.map((v: any) => ({
+          ...v,
+          category: v.category && (v.category.name || v.category),
+          isPinned: v.isPinned === true || v.isPinned === 'true',
+        }));
+        dispatch(appendVideos(normalized));
+        setPage(nextPage);
+        if (data.length < 50) {
+          hasMore.current = false;
+        }
+      } else {
+        hasMore.current = false;
+      }
+    } catch (err) {
+      console.log('Load more error:', err);
+    } finally {
+      setLoadingMore(false);
+      isFetchingMore.current = false;
     }
   };
 
@@ -291,6 +331,19 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator={false}
           refreshing={loading}
           onRefresh={handleRefresh}
+          onEndReached={loadMoreVideos}
+          onEndReachedThreshold={0.5}
+          removeClippedSubviews={false}
+          initialNumToRender={6}
+          maxToRenderPerBatch={6}
+          windowSize={9}
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={{ paddingVertical: 18, alignItems: 'center' }}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+              </View>
+            ) : null
+          }
           ListEmptyComponent={
             <View style={styles.centerContainer}>
               <Text style={styles.emptyText}>No videos found</Text>
