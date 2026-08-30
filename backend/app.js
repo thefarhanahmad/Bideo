@@ -62,6 +62,13 @@ if (process.env.NODE_ENV === "development") {
   app.use(morgan("dev"));
 }
 
+// Serve app-ads.txt directly for Google AdMob crawler verification
+const APP_ADS_TXT_CONTENT = "google.com, pub-3108167135160132, DIRECT, f08c47fec0942fa0\n";
+app.get(["/app-ads.txt", "/api/app-ads.txt"], (req, res) => {
+  res.setHeader("Content-Type", "text/plain");
+  res.status(200).send(APP_ADS_TXT_CONTENT);
+});
+
 // Mount routers
 app.use("/api/auth", auth);
 app.use("/api/admin", admin);

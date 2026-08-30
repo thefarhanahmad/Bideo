@@ -29,8 +29,8 @@ const resolveMediaUrl = (url: string) => {
 const TEST_BANNER_ID = Platform.OS === 'ios' ? 'ca-app-pub-3940256099942544/2934735716' : 'ca-app-pub-3940256099942544/6300978111';
 const TEST_INTERSTITIAL_ID = Platform.OS === 'ios' ? 'ca-app-pub-3940256099942544/4411468910' : 'ca-app-pub-3940256099942544/1033173712';
 
-const REAL_BANNER_ID = 'ca-app-pub-6331792031097303/7103600940';
-const REAL_INTERSTITIAL_ID = 'ca-app-pub-6331792031097303/8580334145';
+const REAL_BANNER_ID = 'ca-app-pub-3108167135160132/3447160062';
+const REAL_INTERSTITIAL_ID = 'ca-app-pub-3108167135160132/8016583160';
 
 // Use test ads in development OR when EXPO_PUBLIC_USE_TEST_ADS is explicitly true (local test APK builds)
 const isTestingAds = __DEV__ || process.env.EXPO_PUBLIC_USE_TEST_ADS === 'true';
@@ -54,20 +54,32 @@ interface AppAdBannerProps {
  * or if the native module failed to link correctly.
  */
 export const AppAdBanner: React.FC<AppAdBannerProps> = ({ size }: AppAdBannerProps) => {
-  const isExpoGo = Constants.appOwnership === 'expo';
+  const isExpoGo =
+    Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
   if (isExpoGo) return null;
 
+  const [useTestFallback, setUseTestFallback] = useState(isTestingAds);
+
   try {
-    const { BannerAd, BannerAdSize } = require('react-native-google-mobile-ads');
+    const { BannerAd, BannerAdSize, TestIds } = require('react-native-google-mobile-ads');
     if (!BannerAd) return null;
+
+    const unitId = useTestFallback ? (TestIds?.BANNER || TEST_BANNER_ID) : ADMOB_IDS.BANNER;
 
     return (
       <View style={styles.container}>
         <BannerAd
-          unitId={ADMOB_IDS.BANNER}
+          key={unitId}
+          unitId={unitId}
           size={size || BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
           requestOptions={{ requestNonPersonalizedAdsOnly: true }}
-          onAdFailedToLoad={(error: any) => console.log('Ad failed to load: ', error)}
+          onAdFailedToLoad={(error: any) => {
+            console.log(`Banner Ad failed with unit ${unitId}:`, error);
+            // If live production ad has NO_FILL or error, immediately fall back to Google Test Banner ID
+            if (!useTestFallback) {
+              setUseTestFallback(true);
+            }
+          }}
         />
       </View>
     );
@@ -86,8 +98,7 @@ interface AppInterstitialAdProps {
 
 /**
  * Fullscreen Interstitial Ad component.
- * Attempts to load and show a real AdMob interstitial. If loading fails or is running in Expo Go,
- * it displays a beautiful fullscreen mock ad with a countdown.
+ * Attempts to load and show a real AdMob interstitial with fallback to Test Ad & manual ads.
  */
 export const AppInterstitialAd: React.FC<AppInterstitialAdProps> = ({ visible, onClose }) => {
   const [adTimeRemaining, setAdTimeRemaining] = useState(5);
@@ -153,14 +164,13 @@ export const AppInterstitialAd: React.FC<AppInterstitialAdProps> = ({ visible, o
     }
 
     try {
-      const { InterstitialAd, AdEventType } = require('react-native-google-mobile-ads');
-      const adUnitId = ADMOB_IDS.INTERSTITIAL;
-
-      const interstitial = InterstitialAd.createForAdRequest(adUnitId, {
-        requestNonPersonalizedAdsOnly: true,
-      });
+      const { InterstitialAd, AdEventType, TestIds } = require('react-native-google-mobile-ads');
+      const primaryUnitId = ADMOB_IDS.INTERSTITIAL;
+      const testUnitId = TestIds?.INTERSTITIAL || TEST_INTERSTITIAL_ID;
 
       let hasResponded = false;
+      let hasTriedTestFallback = isTestingAds;
+
       const triggerFallback = () => {
         if (!hasResponded) {
           hasResponded = true;
@@ -175,26 +185,45 @@ export const AppInterstitialAd: React.FC<AppInterstitialAdProps> = ({ visible, o
         }
       };
 
-      const unsubscribeLoaded = interstitial.addAdEventListener(AdEventType.LOADED, () => {
-        if (!hasResponded) {
-          triggerSuccess();
-          interstitial.show().catch((err: any) => {
-            console.log('Failed to show interstitial:', err);
-            triggerFallback();
+      const loadAd = (unitId: string) => {
+        try {
+          const interstitial = InterstitialAd.createForAdRequest(unitId, {
+            requestNonPersonalizedAdsOnly: true,
           });
+
+          const unsubscribeLoaded = interstitial.addAdEventListener(AdEventType.LOADED, () => {
+            if (!hasResponded) {
+              triggerSuccess();
+              interstitial.show().catch((err: any) => {
+                console.log('Failed to show interstitial:', err);
+                triggerFallback();
+              });
+            }
+          });
+
+          const unsubscribeClosed = interstitial.addAdEventListener(AdEventType.CLOSED, () => {
+            onClose();
+          });
+
+          const unsubscribeError = interstitial.addAdEventListener(AdEventType.ERROR, (error: any) => {
+            console.log(`Interstitial load error on unit ${unitId}:`, error);
+            if (!hasTriedTestFallback) {
+              hasTriedTestFallback = true;
+              console.log('Retrying interstitial with Google Test ID...');
+              loadAd(testUnitId);
+            } else {
+              triggerFallback();
+            }
+          });
+
+          interstitial.load();
+        } catch (e) {
+          console.log('Failed to create interstitial:', e);
+          triggerFallback();
         }
-      });
+      };
 
-      const unsubscribeClosed = interstitial.addAdEventListener(AdEventType.CLOSED, () => {
-        onClose();
-      });
-
-      const unsubscribeError = interstitial.addAdEventListener(AdEventType.ERROR, (error: any) => {
-        console.log('Interstitial load error:', error);
-        triggerFallback();
-      });
-
-      interstitial.load();
+      loadAd(primaryUnitId);
 
       // 6-second safety timeout for loading the real ad. Fallback to manual ad if network is slow.
       const loadTimeout = setTimeout(() => {
@@ -203,11 +232,6 @@ export const AppInterstitialAd: React.FC<AppInterstitialAdProps> = ({ visible, o
 
       return () => {
         clearTimeout(loadTimeout);
-        try {
-          unsubscribeLoaded();
-          unsubscribeClosed();
-          unsubscribeError();
-        } catch { }
       };
     } catch (err) {
       console.log('Error loading AdMob Interstitial:', err);

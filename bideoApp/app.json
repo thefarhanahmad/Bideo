@@ -33,7 +33,7 @@
       [
         "react-native-google-mobile-ads",
         {
-          "androidAppId": "ca-app-pub-6331792031097303~2880044233",
+          "androidAppId": "ca-app-pub-3108167135160132~8755482596",
           "iosAppId": "ca-app-pub-3940256099942544~1458002511"
         }
       ],
@@ -67,8 +67,8 @@
     },
     "extra": {
       "router": {},
-      "ADMOB_BANNER_ID": "ca-app-pub-6331792031097303/7103600940",
-      "ADMOB_INTERSTITIAL_ID": "ca-app-pub-6331792031097303/8580334145",
+      "ADMOB_BANNER_ID": "ca-app-pub-3108167135160132/3447160062",
+      "ADMOB_INTERSTITIAL_ID": "ca-app-pub-3108167135160132/8016583160",
       "eas": {
         "projectId": "c9d54950-dd5f-4e87-bf77-fcc184d8bcf7"
       }

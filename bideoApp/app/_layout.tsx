@@ -33,10 +33,14 @@ function Startup({ onReady }: { onReady: () => void }) {
           Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
         if (!isExpoGo) {
           try {
-            const mobileAds = require('react-native-google-mobile-ads').default;
-            if (mobileAds) {
+            const googleMobileAds = require('react-native-google-mobile-ads');
+            const mobileAds = googleMobileAds.default || googleMobileAds;
+            if (typeof mobileAds === 'function') {
               mobileAds()
                 .initialize()
+                .then((adapterStatuses: any) => {
+                  console.log('AdMob initialized successfully in background:', adapterStatuses);
+                })
                 .catch((adErr: any) => {
                   console.log('AdMob background init error:', adErr);
                 });
