@@ -199,15 +199,34 @@ exports.searchVideos = async (req, res, next) => {
 
 exports.getVideos = async (req, res, next) => {
   try {
-    const videos = await Video.find(getVideoQuery(req))
-      .populate("owner", "name avatar channelName followersCount isVerified")
-      .populate("category", "name")
-      .sort(getSort(req.query.sort));
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const requestedLimit = parseInt(req.query.limit, 10);
+    // Default limit 50, maximum 100 per page to protect mobile RAM and network
+    const limit = requestedLimit > 0 ? Math.min(requestedLimit, 100) : 50;
+    const skip = (page - 1) * limit;
+
+    const query = getVideoQuery(req);
+
+    const [videos, total] = await Promise.all([
+      Video.find(query)
+        .populate("owner", "name avatar channelName followersCount isVerified")
+        .populate("category", "name")
+        .sort(getSort(req.query.sort))
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Video.countDocuments(query),
+    ]);
 
     const results = await decorateVideos(videos, req);
-    res
-      .status(200)
-      .json({ success: true, count: results.length, data: results });
+    res.status(200).json({
+      success: true,
+      count: results.length,
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+      data: results,
+    });
   } catch (err) {
     next(err);
   }

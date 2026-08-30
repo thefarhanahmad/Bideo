@@ -21,6 +21,7 @@ import Reports from './pages/Reports';
 import Ads from './pages/Ads';
 import Monetization from './pages/Monetization';
 import Payouts from './pages/Payouts';
+import ErrorLogs from './pages/ErrorLogs';
 import './App.css';
 
 const PrivateRoute = ({ children }) => {
@@ -61,6 +62,7 @@ function App() {
           <Route path="ads" element={<Ads />} />
           <Route path="monetization" element={<Monetization />} />
           <Route path="payouts" element={<Payouts />} />
+          <Route path="error-logs" element={<ErrorLogs />} />
         </Route>
 
         {/* Fallback */}

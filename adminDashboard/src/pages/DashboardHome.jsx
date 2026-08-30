@@ -9,6 +9,7 @@ import {
   VideoUploadsChart,
   VideoFormatsChart,
 } from '../components/AnalyticsCharts';
+import LoadingSkeleton from '../components/LoadingSkeleton';
 
 const resolveMediaUrl = (url) => {
   if (!url) return "https://via.placeholder.com/640x360.png?text=No+Thumbnail";
@@ -52,12 +53,20 @@ const DashboardHome = () => {
 
   if (loading) {
     return (
-      <div>
-        <div className="h-8 w-48 animate-pulse rounded bg-line" />
-        <div className="mt-6 grid grid-cols-2 gap-3.5 sm:gap-5 md:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-28 animate-pulse rounded-2xl bg-white shadow-card" />
-          ))}
+      <div className="space-y-6 sm:space-y-8 min-w-0 max-w-full overflow-hidden">
+        <div className="flex flex-wrap items-end justify-between gap-3 min-w-0">
+          <div className="space-y-1.5">
+            <div className="shimmer-effect h-7 w-48 rounded-lg" />
+            <div className="shimmer-effect h-4 w-72 rounded-lg" />
+          </div>
+        </div>
+        <LoadingSkeleton type="cards" count={4} />
+        <div className="space-y-3">
+          <div className="shimmer-effect h-5 w-36 rounded-md" />
+          <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
+            <LoadingSkeleton type="charts" />
+            <LoadingSkeleton type="charts" />
+          </div>
         </div>
       </div>
     );

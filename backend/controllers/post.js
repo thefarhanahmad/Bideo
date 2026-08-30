@@ -80,7 +80,12 @@ exports.getPosts = async (req, res, next) => {
   try {
     const query = { visibility: 'public' };
     if (req.query.owner) query.owner = req.query.owner;
-    const posts = await Post.find(query).populate('owner', 'name avatar channelName isVerified').sort('-createdAt');
+    const limit = Math.min(parseInt(req.query.limit, 10) || 30, 100);
+    const posts = await Post.find(query)
+      .populate('owner', 'name avatar channelName isVerified')
+      .sort('-createdAt')
+      .limit(limit)
+      .lean();
     res.status(200).json({ success: true, count: posts.length, data: posts });
   } catch (err) {
     next(err);

@@ -3,6 +3,7 @@ import Modal from "../components/Modal";
 import ConfirmModal from "../components/ConfirmModal";
 import DataTableToolbar from "../components/DataTableToolbar";
 import Pagination from "../components/Pagination";
+import LoadingSkeleton from "../components/LoadingSkeleton";
 import { useTableParams } from "../hooks/useTableParams";
 import { API_URL } from "../config";
 
@@ -77,7 +78,7 @@ const Videos = () => {
     setError(null);
     try {
       const token = localStorage.getItem("admin_token");
-      const res = await fetch(API + "/api/videos?sort=latest", {
+      const res = await fetch(API + "/api/videos?limit=100&sort=latest", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -111,7 +112,7 @@ const Videos = () => {
   const fetchUsers = async () => {
     try {
       const token = localStorage.getItem("admin_token");
-      const res = await fetch(API + "/api/users", {
+      const res = await fetch(API + "/api/users?simple=true", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -338,9 +339,7 @@ const Videos = () => {
       />
 
       {loading ? (
-        <div className="rounded-2xl border border-line bg-white p-8 text-center text-muted shadow-card">
-          Loading videos...
-        </div>
+        <LoadingSkeleton type="table" rows={8} cols={8} />
       ) : error ? (
         <div className="rounded-2xl border border-red-100 bg-red-50 p-6 text-red-700">{error}</div>
       ) : (

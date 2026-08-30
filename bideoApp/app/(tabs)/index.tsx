@@ -1,6 +1,6 @@
 import { showAlert } from '../../components/AppAlert';
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, FlatList, StyleSheet, ActivityIndicator, Text, Modal, TouchableOpacity, TextInput, Alert } from 'react-native';
+import { View, FlatList, StyleSheet, ActivityIndicator, Text, Modal, TouchableOpacity, TextInput, Alert, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,7 +11,7 @@ import VideoCard from '../../components/VideoCard';
 import PostCard from '../../components/PostCard';
 import CategoryList from '../../components/CategoryList';
 import { videoService, categoryService } from '../../services/api';
-import { fetchVideosStart, fetchVideosSuccess, fetchVideosFailure } from '../../redux/slices/videoSlice';
+import { fetchVideosStart, fetchVideosSuccess, appendVideos, fetchVideosFailure } from '../../redux/slices/videoSlice';
 import { RootState } from '../../redux/store';
 import api from '../../services/api';
 import AuthModal from '../../components/AuthModal';
@@ -82,6 +82,11 @@ export default function HomeScreen() {
   const [categoriesList, setCategoriesList] = useState<string[]>(['All']);
   const [posts, setPosts] = useState<any[]>([]);
 
+  // Pagination states for YouTube-style infinite scroll
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+
   const [selectedVideo, setSelectedVideo] = useState<any>(null);
   const [reportModalVisible, setReportModalVisible] = useState(false);
   const [playlistModalVisible, setPlaylistModalVisible] = useState(false);
@@ -90,39 +95,56 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      loadVideos();
+      loadVideos(1, true);
       loadPosts();
       loadCategories();
     }, [isAuthenticated])
   );
 
-  const loadVideos = async () => {
+  const loadVideos = async (pageNumber = 1, isRefresh = false) => {
     try {
-      dispatch(fetchVideosStart());
-      const data = await videoService.getVideos();
-      // data: array of videos
-      console.log('Fetched videos from API ✅');
+      if (pageNumber === 1) {
+        dispatch(fetchVideosStart());
+        setHasMore(true);
+      } else {
+        setLoadingMore(true);
+      }
+
+      const data = await videoService.getVideos({ page: pageNumber, limit: 12 });
       if (data && data.length > 0) {
-        // normalize category and isPinned flag
         const normalized = data.map((v: any) => ({
           ...v,
           category: v.category && (v.category.name || v.category),
           isPinned: v.isPinned === true || v.isPinned === 'true',
         }));
-        // Pinned videos stay on top, regular videos are randomized
-        const pinned = normalized.filter((v: any) => v.isPinned);
-        const regular = normalized.filter((v: any) => !v.isPinned);
-        const randomized = [...pinned, ...shuffleArray(regular)];
-        dispatch(fetchVideosSuccess(randomized));
+
+        if (data.length < 12) {
+          setHasMore(false);
+        }
+
+        if (pageNumber === 1) {
+          const pinned = normalized.filter((v: any) => v.isPinned);
+          const regular = normalized.filter((v: any) => !v.isPinned);
+          const randomized = [...pinned, ...shuffleArray(regular)];
+          dispatch(fetchVideosSuccess(randomized));
+          setPage(1);
+        } else {
+          dispatch(appendVideos(normalized));
+          setPage(pageNumber);
+        }
       } else {
-        // Fallback to sample data if API returns empty
-        dispatch(fetchVideosSuccess(shuffleArray(SAMPLE_VIDEOS)));
+        if (pageNumber === 1) {
+          dispatch(fetchVideosSuccess(shuffleArray(SAMPLE_VIDEOS)));
+        }
+        setHasMore(false);
       }
     } catch (err: any) {
-      // Fallback to sample data on error
       console.error('Error fetching videos:', err);
-      dispatch(fetchVideosSuccess(shuffleArray(SAMPLE_VIDEOS)));
-      console.log('Using sample data due to API error');
+      if (pageNumber === 1) {
+        dispatch(fetchVideosSuccess(shuffleArray(SAMPLE_VIDEOS)));
+      }
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -212,6 +234,7 @@ export default function HomeScreen() {
   const feedData: any[] = [];
   for (let i = 0; i < baseItems.length; i++) {
     feedData.push(baseItems[i]);
+    // Insert a banner ad after every 5 items in the feed
     if ((i + 1) % 5 === 0) {
       feedData.push({ _id: `ad_banner_${i}`, itemType: 'ad_banner' });
     }
@@ -300,8 +323,26 @@ export default function HomeScreen() {
         }}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
-        refreshing={loading}
+        refreshing={loading && !loadingMore}
         onRefresh={handleRefresh}
+        onEndReached={() => {
+          if (!loading && !loadingMore && hasMore) {
+            loadVideos(page + 1);
+          }
+        }}
+        onEndReachedThreshold={0.5}
+        initialNumToRender={6}
+        maxToRenderPerBatch={6}
+        windowSize={5}
+        removeClippedSubviews={Platform.OS === 'android'}
+        updateCellsBatchingPeriod={50}
+        ListFooterComponent={
+          loadingMore ? (
+            <View style={{ paddingVertical: 18, alignItems: 'center' }}>
+              <ActivityIndicator size="small" color={Colors.primary} />
+            </View>
+          ) : null
+        }
         ListEmptyComponent={
           <View style={styles.centerContainer}>
             <Text style={styles.emptyText}>No videos found</Text>

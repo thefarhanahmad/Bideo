@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import Modal from "../components/Modal";
 import DataTableToolbar from "../components/DataTableToolbar";
 import Pagination from "../components/Pagination";
+import LoadingSkeleton from "../components/LoadingSkeleton";
 import { useTableParams } from "../hooks/useTableParams";
 import { API_URL } from "../config";
 
@@ -313,9 +314,7 @@ const Monetization = () => {
       />
 
       {loading ? (
-        <div className="rounded-2xl border border-line bg-white p-8 text-center text-muted shadow-card">
-          Loading monetization data...
-        </div>
+        <LoadingSkeleton type="table" rows={6} cols={6} />
       ) : error ? (
         <div className="rounded-2xl border border-red-100 bg-red-50 p-6 text-red-700">{error}</div>
       ) : (

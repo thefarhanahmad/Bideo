@@ -96,7 +96,9 @@ exports.getChannelProfile = async (req, res, next) => {
     if (filter === 'posts') {
       posts = await Post.find(postQuery)
         .populate('owner', 'name avatar channelName isVerified')
-        .sort(sortQuery);
+        .sort(sortQuery)
+        .limit(60)
+        .lean();
     } else {
       if (filter === 'shorts') {
         videoQuery.isShort = true;
@@ -107,7 +109,9 @@ exports.getChannelProfile = async (req, res, next) => {
       videos = await Video.find(videoQuery)
         .populate('owner', 'name avatar channelName followersCount isVerified')
         .populate('category', 'name')
-        .sort(sortQuery);
+        .sort(sortQuery)
+        .limit(60)
+        .lean();
     }
 
     res.status(200).json({ success: true, data: { channel, videos, posts } });
@@ -121,9 +125,17 @@ exports.getChannelProfile = async (req, res, next) => {
 // @access Private/Admin
 exports.getUsers = async (req, res, next) => {
   try {
+    if (req.query.simple === 'true') {
+      const simpleUsers = await User.find()
+        .select('name channelName avatar isVerified')
+        .sort('name')
+        .lean();
+      return res.status(200).json({ success: true, count: simpleUsers.length, data: simpleUsers });
+    }
+
     const [users, approvedApps] = await Promise.all([
-      User.find().sort('-createdAt').select('-__v'),
-      MonetizationApplication.find({ status: 'approved' }).select('user'),
+      User.find().sort('-createdAt').select('-password -__v').lean(),
+      MonetizationApplication.find({ status: 'approved' }).select('user').lean(),
     ]);
 
     const approvedUserIds = new Set(
@@ -132,11 +144,10 @@ exports.getUsers = async (req, res, next) => {
         .map((a) => a.user.toString())
     );
 
-    const usersWithMonetization = users.map((u) => {
-      const uObj = u.toObject();
-      uObj.isMonetized = approvedUserIds.has(u._id.toString());
-      return uObj;
-    });
+    const usersWithMonetization = users.map((u) => ({
+      ...u,
+      isMonetized: approvedUserIds.has(u._id.toString()),
+    }));
 
     res.status(200).json({ success: true, count: usersWithMonetization.length, data: usersWithMonetization });
   } catch (err) {

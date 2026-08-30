@@ -19,10 +19,13 @@ exports.getComments = async (req, res, next) => {
     else if (postId) query.post = postId;
     else query.video = req.params.videoId; // fallback for old route
 
+    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
     const comments = await Comment.find(query)
       .populate('user', 'name avatar channelName isVerified')
       .populate('replies.user', 'name avatar channelName isVerified')
-      .sort('-createdAt');
+      .sort('-createdAt')
+      .limit(limit)
+      .lean();
 
     res.status(200).json({
       success: true,

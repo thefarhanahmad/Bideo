@@ -5,7 +5,7 @@ const Category = require('../models/Category');
 // @access Public
 exports.getCategories = async (req, res, next) => {
   try {
-    const categories = await Category.find();
+    const categories = await Category.find().lean();
     res.status(200).json({ success: true, count: categories.length, data: categories });
   } catch (err) {
     next(err);

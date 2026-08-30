@@ -151,7 +151,7 @@ export default function VideoScreen() {
       setLoading(true);
       const [videoRes, allVideosRes] = await Promise.all([
         videoService.getVideo(id as string),
-        videoService.getVideos(),
+        videoService.getVideos({ limit: 15 }),
       ]);
       const videoData = videoRes?.data || videoRes;
       const allVideos: any[] = Array.isArray(allVideosRes) ? allVideosRes : ((allVideosRes as any)?.data || []);

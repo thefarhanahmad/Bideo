@@ -5,6 +5,7 @@ const Category = require('../models/Category');
 const VideoMonetizationReview = require('../models/VideoMonetizationReview');
 const MonetizationApplication = require('../models/MonetizationApplication');
 const WithdrawalRequest = require('../models/WithdrawalRequest');
+const ErrorLog = require('../models/ErrorLog');
 
 // Helper to calculate daily, weekly, and monthly trends for Users & Videos
 const calculateAnalyticsTrends = async () => {
@@ -49,8 +50,11 @@ const calculateAnalyticsTrends = async () => {
     monthlyDateMap[yearMonth] = { label, users: 0, longVideos: 0, shorts: 0, views: 0 };
   }
 
-  // Aggregate user signups
+  const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+
+  // Aggregate user signups with indexed date match
   const userSignups = await User.aggregate([
+    { $match: { createdAt: { $gte: sixMonthsAgo } } },
     {
       $project: {
         createdAt: 1,
@@ -71,8 +75,9 @@ const calculateAnalyticsTrends = async () => {
     });
   });
 
-  // Aggregate video uploads
+  // Aggregate video uploads with indexed date match
   const videoUploads = await Video.aggregate([
+    { $match: { createdAt: { $gte: sixMonthsAgo } } },
     {
       $project: {
         createdAt: 1,
@@ -262,7 +267,8 @@ exports.getVideoReports = async (req, res, next) => {
         populate: { path: 'owner', select: 'name channelName avatar' },
       })
       .populate('reporter', 'name channelName avatar phone email')
-      .sort('-createdAt');
+      .sort('-createdAt')
+      .lean();
     res.status(200).json({ success: true, count: reports.length, data: reports });
   } catch (err) {
     next(err);
@@ -298,13 +304,14 @@ exports.getPendingVideoReviews = async (req, res, next) => {
     const reviews = await VideoMonetizationReview.find({ status: 'pending' })
       .populate('video', 'title thumbnail videoUrl views duration isShort createdAt')
       .populate('user', 'name channelName avatar email phone')
-      .sort('-createdAt');
+      .sort('-createdAt')
+      .lean();
 
     // Group reviews by user ID
     const userGroupsMap = {};
     for (const r of reviews) {
       if (!r.user) continue;
-      const userId = r.user._id.toString();
+      const userId = (r.user._id || r.user.id || r.user).toString();
       if (!userGroupsMap[userId]) {
         userGroupsMap[userId] = {
           user: r.user,
@@ -353,7 +360,8 @@ exports.getMonetizationApplications = async (req, res, next) => {
     const query = status === 'all' ? {} : { status };
     const applications = await MonetizationApplication.find(query)
       .populate('user', 'name channelName avatar email phone followersCount createdAt')
-      .sort(status === 'approved' ? '-updatedAt' : '-createdAt');
+      .sort(status === 'approved' ? '-updatedAt' : '-createdAt')
+      .lean();
     res.status(200).json({ success: true, count: applications.length, data: applications });
   } catch (err) {
     next(err);
@@ -392,7 +400,8 @@ exports.getWithdrawals = async (req, res, next) => {
     const query = status === 'all' ? {} : { status };
     const withdrawals = await WithdrawalRequest.find(query)
       .populate('user', 'name channelName avatar email phone walletBalance')
-      .sort('-createdAt');
+      .sort('-createdAt')
+      .lean();
     res.status(200).json({ success: true, count: withdrawals.length, data: withdrawals });
   } catch (err) {
     next(err);
@@ -554,6 +563,107 @@ exports.boostVideoEngagement = async (req, res, next) => {
         totalEarningsCredited: Number(totalEarningsCredited.toFixed(2)),
       },
     });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Get paginated server error logs
+// @route   GET /api/admin/error-logs
+// @access  Private/Admin
+exports.getErrorLogs = async (req, res, next) => {
+  try {
+    const status = req.query.status || 'unresolved';
+    const search = req.query.search ? req.query.search.trim() : '';
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 100);
+    const skip = (page - 1) * limit;
+
+    const query = {};
+    if (status !== 'all') {
+      query.status = status;
+    }
+    if (search) {
+      query.$or = [
+        { message: { $regex: search, $options: 'i' } },
+        { endpoint: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    const [logs, total, unresolvedCount, resolvedCount] = await Promise.all([
+      ErrorLog.find(query)
+        .sort('-lastSeenAt')
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      ErrorLog.countDocuments(query),
+      ErrorLog.countDocuments({ status: 'unresolved' }),
+      ErrorLog.countDocuments({ status: 'resolved' }),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      count: logs.length,
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+      counts: {
+        unresolved: unresolvedCount,
+        resolved: resolvedCount,
+        all: unresolvedCount + resolvedCount,
+      },
+      data: logs,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Update error log status or note
+// @route   PUT /api/admin/error-logs/:id
+// @access  Private/Admin
+exports.updateErrorLog = async (req, res, next) => {
+  try {
+    const { status, adminNote } = req.body;
+    const update = {};
+    if (status && ['unresolved', 'resolved'].includes(status)) {
+      update.status = status;
+      if (status === 'resolved') {
+        update.resolvedAt = new Date();
+      }
+    }
+    if (adminNote !== undefined) {
+      update.adminNote = adminNote;
+    }
+
+    const log = await ErrorLog.findByIdAndUpdate(req.params.id, update, { new: true });
+    if (!log) return res.status(404).json({ success: false, message: 'Error log not found' });
+    res.status(200).json({ success: true, data: log });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Delete single error log
+// @route   DELETE /api/admin/error-logs/:id
+// @access  Private/Admin
+exports.deleteErrorLog = async (req, res, next) => {
+  try {
+    const log = await ErrorLog.findByIdAndDelete(req.params.id);
+    if (!log) return res.status(404).json({ success: false, message: 'Error log not found' });
+    res.status(200).json({ success: true, message: 'Error log deleted successfully' });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Clear all resolved error logs
+// @route   DELETE /api/admin/error-logs/clear-resolved
+// @access  Private/Admin
+exports.clearResolvedErrorLogs = async (req, res, next) => {
+  try {
+    const result = await ErrorLog.deleteMany({ status: 'resolved' });
+    res.status(200).json({ success: true, message: `Cleared ${result.deletedCount} resolved error logs` });
   } catch (err) {
     next(err);
   }

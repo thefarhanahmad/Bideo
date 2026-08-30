@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import DataTableToolbar from "../components/DataTableToolbar";
 import Pagination from "../components/Pagination";
+import LoadingSkeleton from "../components/LoadingSkeleton";
 import { useTableParams } from "../hooks/useTableParams";
 import { API_URL } from "../config";
 
@@ -165,9 +166,7 @@ const Reports = () => {
       />
 
       {loading ? (
-        <div className="rounded-2xl border border-line bg-white p-8 text-center text-muted shadow-card">
-          Loading reports...
-        </div>
+        <LoadingSkeleton type="table" rows={6} cols={5} />
       ) : (
         <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-card min-w-0">
           <div className="overflow-x-auto">

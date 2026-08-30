@@ -26,6 +26,13 @@ const videoSlice = createSlice({
       state.loading = false;
       state.videos = action.payload;
     },
+    appendVideos: (state, action: PayloadAction<any[]>) => {
+      state.loading = false;
+      // Filter out any duplicates by _id
+      const existingIds = new Set(state.videos.map(v => v._id));
+      const newUnique = action.payload.filter(v => !existingIds.has(v._id));
+      state.videos = [...state.videos, ...newUnique];
+    },
     fetchVideosFailure: (state, action: PayloadAction<string>) => {
       state.loading = false;
       state.error = action.payload;
@@ -36,5 +43,5 @@ const videoSlice = createSlice({
   },
 });
 
-export const { fetchVideosStart, fetchVideosSuccess, fetchVideosFailure, setCurrentVideo } = videoSlice.actions;
+export const { fetchVideosStart, fetchVideosSuccess, appendVideos, fetchVideosFailure, setCurrentVideo } = videoSlice.actions;
 export default videoSlice.reducer;

@@ -40,6 +40,9 @@ export default function ShortsScreen() {
   const [shorts, setShorts] = useState<any[]>([]);
   const flatListRef = useRef<FlatList>(null);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [authModalVisible, setAuthModalVisible] = useState(false);
   const [selectedShortId, setSelectedShortId] = useState<string | null>(null);
   const [commentModalVisible, setCommentModalVisible] = useState(false);
@@ -64,14 +67,26 @@ export default function ShortsScreen() {
   }, [initialShortId, shorts.length]);
 
   useEffect(() => {
-    loadShorts();
+    loadShorts(1);
   }, [isAuthenticated]);
 
-  const loadShorts = async () => {
-    setLoading(true);
+  const loadShorts = async (pageNumber = 1) => {
+    if (pageNumber === 1) {
+      setLoading(true);
+      setHasMore(true);
+    } else {
+      setLoadingMore(true);
+    }
+
     try {
-      const data = await api.get('/videos', { params: { type: 'short' } });
-      const onlyShorts = (data.data.data || [])
+      const data = await api.get('/videos', { params: { type: 'short', page: pageNumber, limit: 15 } });
+      const rawList = data.data.data || [];
+
+      if (rawList.length < 15) {
+        setHasMore(false);
+      }
+
+      const onlyShorts = rawList
         .filter((v: any) => v.isShort === true) // Extra check
         .map((v: any) => ({
           _id: v._id,
@@ -92,11 +107,10 @@ export default function ShortsScreen() {
           createdAt: v.createdAt,
         }));
       
-      // Randomize shorts for a fresh discover feed on every app visit
-      let randomizedShorts: any[] = shuffleArray(onlyShorts);
+      let randomizedShorts: any[] = pageNumber === 1 ? shuffleArray(onlyShorts) : onlyShorts;
 
       // If opened with a specific initial short ID, move it to the top
-      if (initialShortId) {
+      if (pageNumber === 1 && initialShortId) {
         const targetIndex = randomizedShorts.findIndex((s: any) => s._id === initialShortId);
         if (targetIndex > 0) {
           const [targetShort] = randomizedShorts.splice(targetIndex, 1);
@@ -105,34 +119,40 @@ export default function ShortsScreen() {
       }
       
       const withAds: any[] = [];
-      let shortCount = 0;
       for (let i = 0; i < randomizedShorts.length; i++) {
         withAds.push(randomizedShorts[i]);
-        shortCount++;
-        if (shortCount === 5) {
+        if ((i + 1) % 5 === 0) {
           withAds.push({
-            _id: `short_ad_${i}`,
+            _id: `short_ad_${pageNumber}_${i}`,
             isAd: true,
           });
-          shortCount = 0;
         }
       }
-      setShorts(withAds);
 
-      // Scroll to initial short if it exists
-      if (initialShortId && withAds.length > 0) {
-        const index = withAds.findIndex(s => s._id === initialShortId);
-        if (index !== -1) {
-          setTimeout(() => {
-            flatListRef.current?.scrollToIndex({ index, animated: false });
-            setActiveVideoIndex(index);
-          }, 100);
+      if (pageNumber === 1) {
+        setShorts(withAds);
+        setPage(1);
+
+        // Scroll to initial short if it exists
+        if (initialShortId && withAds.length > 0) {
+          const index = withAds.findIndex(s => s._id === initialShortId);
+          if (index !== -1) {
+            setTimeout(() => {
+              flatListRef.current?.scrollToIndex({ index, animated: false });
+              setActiveVideoIndex(index);
+            }, 100);
+          }
         }
+      } else {
+        setShorts(prev => [...prev, ...withAds]);
+        setPage(pageNumber);
       }
     } catch (e) {
       console.log('Failed to load shorts', e);
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
     }
-    setLoading(false);
   };
 
   const handleLike = async (shortId: string) => {
@@ -398,6 +418,12 @@ export default function ShortsScreen() {
         initialNumToRender={2}
         maxToRenderPerBatch={3}
         windowSize={5}
+        onEndReached={() => {
+          if (!loading && !loadingMore && hasMore) {
+            loadShorts(page + 1);
+          }
+        }}
+        onEndReachedThreshold={0.5}
         getItemLayout={(data, index) => ({
           length: containerHeight,
           offset: containerHeight * index,

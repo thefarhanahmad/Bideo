@@ -11,6 +11,10 @@ const {
   getWithdrawals,
   processWithdrawal,
   boostVideoEngagement,
+  getErrorLogs,
+  updateErrorLog,
+  deleteErrorLog,
+  clearResolvedErrorLogs,
 } = require('../controllers/admin');
 const { protect, authorize } = require('../middlewares/auth');
 
@@ -38,5 +42,11 @@ router.put('/users/:userId/review-monetization', reviewMonetizationApplication);
 // Creator Withdrawals / Payouts
 router.get('/withdrawals', getWithdrawals);
 router.put('/withdrawals/:id', processWithdrawal);
+
+// Error Logs & Monitoring
+router.get('/error-logs', getErrorLogs);
+router.delete('/error-logs/clear-resolved', clearResolvedErrorLogs);
+router.put('/error-logs/:id', updateErrorLog);
+router.delete('/error-logs/:id', deleteErrorLog);
 
 module.exports = router;

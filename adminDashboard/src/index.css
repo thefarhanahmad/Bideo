@@ -33,11 +33,35 @@
     transition-delay: 0.3s;
   }
 
+  @keyframes shimmerWave {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+
+  .shimmer-effect {
+    background: linear-gradient(
+      90deg,
+      rgba(243, 244, 246, 1) 0%,
+      rgba(229, 231, 235, 0.8) 50%,
+      rgba(243, 244, 246, 1) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmerWave 1.6s ease-in-out infinite;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .reveal {
       opacity: 1;
       transform: none;
       transition: none;
+    }
+    .shimmer-effect {
+      animation: none;
+      background: #f3f4f6;
     }
     html {
       scroll-behavior: auto;

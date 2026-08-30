@@ -92,7 +92,50 @@ app.get("/api/health", (req, res) => {
 });
 
 // Error handling middleware
+const ErrorLog = require("./models/ErrorLog");
+
 app.use((err, req, res, next) => {
+  const statusCode = err.statusCode || (err.name === "MulterError" ? 413 : 500);
+  const message = err.message || "Internal Server Error";
+  const endpoint = req.originalUrl || req.url || "Unknown";
+  const method = req.method || "GET";
+  const stack = err.stack || "";
+
+  // Asynchronously record server-side errors (5xx and critical failures) without blocking response
+  if (statusCode >= 400) {
+    (async () => {
+      try {
+        const existing = await ErrorLog.findOne({
+          message,
+          endpoint,
+          method,
+          status: "unresolved",
+        });
+
+        if (existing) {
+          existing.count += 1;
+          existing.lastSeenAt = new Date();
+          existing.stack = stack;
+          await existing.save();
+        } else {
+          await ErrorLog.create({
+            message,
+            stack,
+            statusCode,
+            endpoint,
+            method,
+            status: "unresolved",
+            count: 1,
+            firstSeenAt: new Date(),
+            lastSeenAt: new Date(),
+          });
+        }
+      } catch (logErr) {
+        console.error("Error logging to database:", logErr.message);
+      }
+    })();
+  }
+
   // Friendly messages for file-upload (multer) errors instead of a generic 500.
   if (err && err.name === "MulterError") {
     const messages = {
@@ -106,10 +149,9 @@ app.use((err, req, res, next) => {
     });
   }
 
-  const statusCode = err.statusCode || 500;
   res.status(statusCode).json({
     success: false,
-    message: err.message || "Internal Server Error",
+    message,
     stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
   });
 });
