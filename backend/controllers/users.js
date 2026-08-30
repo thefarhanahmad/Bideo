@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const Video = require('../models/Video');
@@ -273,18 +274,24 @@ exports.toggleVerifyUser = async (req, res, next) => {
 exports.addToHistory = async (req, res, next) => {
   try {
     const { videoId } = req.body;
-    const user = await User.findById(req.user.id);
-
-    // Remove if already exists to move to top
-    user.watchHistory = (user.watchHistory || []).filter(id => id.toString() !== videoId);
-    user.watchHistory.unshift(videoId);
-    
-    // Keep only last 50
-    if (user.watchHistory.length > 50) {
-      user.watchHistory = user.watchHistory.slice(0, 50);
+    if (!videoId || !mongoose.Types.ObjectId.isValid(videoId)) {
+      return res.status(400).json({ success: false, message: 'Valid videoId is required' });
     }
 
-    await user.save();
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const stringId = videoId.toString();
+    const currentHistory = (user.watchHistory || []).filter(
+      id => id && id.toString() !== stringId
+    );
+
+    currentHistory.unshift(videoId);
+    user.watchHistory = currentHistory.slice(0, 50);
+
+    await user.save({ validateBeforeSave: false });
     res.status(200).json({ success: true, data: user.watchHistory });
   } catch (err) {
     next(err);
