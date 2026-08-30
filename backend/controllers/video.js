@@ -253,14 +253,35 @@ exports.recordView = async (req, res, next) => {
         .json({ success: false, message: "Video not found" });
 
     const userId = req.user?._id;
-    const deviceId = req.headers["x-device-id"] || req.body.deviceId;
-    if (!userId && !deviceId) {
-      return res.status(400).json({
-        success: false,
-        message: "Device id is required for anonymous views",
+    const deviceId = req.headers["x-device-id"] || req.body.deviceId || req.ip || req.connection?.remoteAddress || "anonymous_viewer";
+
+    // 5-hour cooldown deduplication window per user / device
+    const VIEW_COOLDOWN_MS = 5 * 60 * 60 * 1000; // 5 hours
+    const cooldownDate = new Date(Date.now() - VIEW_COOLDOWN_MS);
+
+    const existingViewQuery = {
+      video: video._id,
+      createdAt: { $gte: cooldownDate },
+    };
+
+    if (userId) {
+      existingViewQuery.user = userId;
+    } else {
+      existingViewQuery.deviceId = String(deviceId);
+    }
+
+    const recentView = await VideoView.findOne(existingViewQuery).lean();
+
+    if (recentView) {
+      // Repeat view within 5-hour cooldown window: ignore duplicate count & earnings
+      return res.status(200).json({
+        success: true,
+        message: "Repeat view within 5h cooldown window",
+        views: video.views,
       });
     }
 
+    // Record the valid new view log
     try {
       await VideoView.create({
         video: video._id,

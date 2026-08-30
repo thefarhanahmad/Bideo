@@ -21,6 +21,8 @@ const videoViewSchema = new mongoose.Schema({
 });
 
 videoViewSchema.index({ video: 1, createdAt: -1 });
+videoViewSchema.index({ video: 1, user: 1, createdAt: -1 });
+videoViewSchema.index({ video: 1, deviceId: 1, createdAt: -1 });
 videoViewSchema.index({ user: 1 });
 videoViewSchema.index({ deviceId: 1 });
 
