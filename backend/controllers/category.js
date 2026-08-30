@@ -1,12 +1,30 @@
 const Category = require('../models/Category');
+const Video = require('../models/Video');
 
-// @desc Get all categories
+// @desc Get all categories with video counts
 // @route GET /api/categories
 // @access Public
 exports.getCategories = async (req, res, next) => {
   try {
-    const categories = await Category.find().lean();
-    res.status(200).json({ success: true, count: categories.length, data: categories });
+    const [categories, videoCounts] = await Promise.all([
+      Category.find().sort('name').lean(),
+      Video.aggregate([
+        { $match: { category: { $ne: null } } },
+        { $group: { _id: '$category', count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const countMap = {};
+    videoCounts.forEach((c) => {
+      if (c._id) countMap[c._id.toString()] = c.count;
+    });
+
+    const data = categories.map((cat) => ({
+      ...cat,
+      videosCount: countMap[cat._id.toString()] || 0,
+    }));
+
+    res.status(200).json({ success: true, count: data.length, data });
   } catch (err) {
     next(err);
   }

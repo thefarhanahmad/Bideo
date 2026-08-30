@@ -163,7 +163,7 @@ const Categories = () => {
               <thead>
                 <tr className="border-b border-line bg-surface/60 text-left text-xs uppercase tracking-wider text-muted">
                   <th className="p-4 font-semibold">Category Name</th>
-                  <th className="p-4 font-semibold">Category ID</th>
+                  <th className="p-4 font-semibold">Videos Count</th>
                   <th className="p-4 text-right font-semibold">Actions</th>
                 </tr>
               </thead>
@@ -178,7 +178,13 @@ const Categories = () => {
                         <span className="font-bold text-ink text-sm">{c.name}</span>
                       </div>
                     </td>
-                    <td className="p-4 text-xs font-mono text-muted">{c._id}</td>
+                    <td className="p-4 whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 border border-blue-200">
+                        <span className="h-1.5 w-1.5 rounded-full bg-blue-600" />
+                        {(c.videosCount || 0).toLocaleString("en-IN")}{" "}
+                        {c.videosCount === 1 ? "video" : "videos"}
+                      </span>
+                    </td>
                     <td className="p-4">
                       <div className="flex justify-end gap-1.5">
                         <button
