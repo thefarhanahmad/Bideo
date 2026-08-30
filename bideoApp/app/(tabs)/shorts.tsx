@@ -67,30 +67,15 @@ export default function ShortsScreen() {
   }, [initialShortId, shorts.length]);
 
   useEffect(() => {
-    loadShorts(1);
+    loadShorts();
   }, [isAuthenticated]);
 
-  const loadShorts = async (pageNumber = 1) => {
-    if (pageNumber > 1 && (loadingMore || !hasMore)) return;
-    if (pageNumber === 1) {
-      if (shorts.length === 0) setLoading(true);
-      setHasMore(true);
-    } else {
-      setLoadingMore(true);
-    }
-
+  const loadShorts = async () => {
+    setLoading(true);
     try {
-      const data = await api.get('/videos', { params: { type: 'short', page: pageNumber, limit: 15 } });
-      const rawList = data.data.data || [];
-
-      if (rawList.length < 15) {
-        setHasMore(false);
-      } else {
-        setHasMore(true);
-      }
-
-      const onlyShorts = rawList
-        .filter((v: any) => v.isShort === true) // Extra check
+      const data = await api.get('/videos', { params: { type: 'short' } });
+      const onlyShorts = (data.data.data || [])
+        .filter((v: any) => v.isShort === true)
         .map((v: any) => ({
           _id: v._id,
           videoUrl: v.videoUrl,
@@ -110,10 +95,9 @@ export default function ShortsScreen() {
           createdAt: v.createdAt,
         }));
       
-      let randomizedShorts: any[] = pageNumber === 1 ? shuffleArray(onlyShorts) : onlyShorts;
+      let randomizedShorts: any[] = shuffleArray(onlyShorts);
 
-      // If opened with a specific initial short ID, move it to the top
-      if (pageNumber === 1 && initialShortId) {
+      if (initialShortId) {
         const targetIndex = randomizedShorts.findIndex((s: any) => s._id === initialShortId);
         if (targetIndex > 0) {
           const [targetShort] = randomizedShorts.splice(targetIndex, 1);
@@ -122,44 +106,33 @@ export default function ShortsScreen() {
       }
       
       const withAds: any[] = [];
+      let shortCount = 0;
       for (let i = 0; i < randomizedShorts.length; i++) {
         withAds.push(randomizedShorts[i]);
-        if ((i + 1) % 5 === 0) {
-          const prevId = randomizedShorts[i]?._id || `idx_${i}`;
+        shortCount++;
+        if (shortCount === 5) {
           withAds.push({
-            _id: `short_ad_${prevId}`,
+            _id: `short_ad_${i}`,
             isAd: true,
           });
+          shortCount = 0;
         }
       }
+      setShorts(withAds);
 
-      if (pageNumber === 1) {
-        setShorts(withAds);
-        setPage(1);
-
-        // Scroll to initial short if it exists
-        if (initialShortId && withAds.length > 0) {
-          const index = withAds.findIndex(s => s._id === initialShortId);
-          if (index !== -1) {
-            setTimeout(() => {
-              flatListRef.current?.scrollToIndex({ index, animated: false });
-              setActiveVideoIndex(index);
-            }, 100);
-          }
+      if (initialShortId && withAds.length > 0) {
+        const index = withAds.findIndex(s => s._id === initialShortId);
+        if (index !== -1) {
+          setTimeout(() => {
+            flatListRef.current?.scrollToIndex({ index, animated: false });
+            setActiveVideoIndex(index);
+          }, 100);
         }
-      } else {
-        setShorts((prev) => {
-          const existingIds = new Set(prev.map((s) => s._id));
-          const newUnique = withAds.filter((s) => !existingIds.has(s._id));
-          return [...prev, ...newUnique];
-        });
-        setPage(pageNumber);
       }
     } catch (e) {
       console.log('Failed to load shorts', e);
     } finally {
       setLoading(false);
-      setLoadingMore(false);
     }
   };
 
@@ -426,12 +399,6 @@ export default function ShortsScreen() {
         initialNumToRender={2}
         maxToRenderPerBatch={2}
         windowSize={3}
-        onEndReached={() => {
-          if (!loadingMore && hasMore && !loading) {
-            loadShorts(page + 1);
-          }
-        }}
-        onEndReachedThreshold={1}
         getItemLayout={(data, index) => ({
           length: containerHeight,
           offset: containerHeight * index,

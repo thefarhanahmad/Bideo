@@ -82,74 +82,38 @@ export default function HomeScreen() {
   const [categoriesList, setCategoriesList] = useState<string[]>(['All']);
   const [posts, setPosts] = useState<any[]>([]);
 
-  // Pagination states for YouTube-style infinite scroll
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-
   const [selectedVideo, setSelectedVideo] = useState<any>(null);
   const [reportModalVisible, setReportModalVisible] = useState(false);
   const [playlistModalVisible, setPlaylistModalVisible] = useState(false);
   const [authModalVisible, setAuthModalVisible] = useState(false);
   const [reportReason, setReportReason] = useState('');
 
-  // Initial load only on mount or auth change — does NOT reset feed on tab focus
   useEffect(() => {
-    if (videos.length === 0) {
-      loadVideos(1);
-    }
+    loadVideos();
     loadPosts();
     loadCategories();
   }, [isAuthenticated]);
 
-  const loadVideos = async (pageNumber = 1, isRefresh = false) => {
-    if (pageNumber > 1 && (loadingMore || !hasMore)) return;
+  const loadVideos = async () => {
     try {
-      if (pageNumber === 1 && !isRefresh && videos.length === 0) {
-        dispatch(fetchVideosStart());
-      }
-      if (pageNumber > 1) {
-        setLoadingMore(true);
-      }
-
-      const data = await videoService.getVideos({ page: pageNumber, limit: 12 });
+      dispatch(fetchVideosStart());
+      const data = await videoService.getVideos();
       if (data && data.length > 0) {
         const normalized = data.map((v: any) => ({
           ...v,
           category: v.category && (v.category.name || v.category),
           isPinned: v.isPinned === true || v.isPinned === 'true',
         }));
-
-        if (data.length < 12) {
-          setHasMore(false);
-        } else {
-          setHasMore(true);
-        }
-
-        if (pageNumber === 1) {
-          const pinned = normalized.filter((v: any) => v.isPinned);
-          const regular = normalized.filter((v: any) => !v.isPinned);
-          const randomized = [...pinned, ...shuffleArray(regular)];
-          dispatch(fetchVideosSuccess(randomized));
-          setPage(1);
-        } else {
-          dispatch(appendVideos(normalized));
-          setPage(pageNumber);
-        }
+        const pinned = normalized.filter((v: any) => v.isPinned);
+        const regular = normalized.filter((v: any) => !v.isPinned);
+        const randomized = [...pinned, ...shuffleArray(regular)];
+        dispatch(fetchVideosSuccess(randomized));
       } else {
-        if (pageNumber === 1 && videos.length === 0) {
-          dispatch(fetchVideosSuccess(shuffleArray(SAMPLE_VIDEOS)));
-        }
-        setHasMore(false);
+        dispatch(fetchVideosSuccess(shuffleArray(SAMPLE_VIDEOS)));
       }
     } catch (err: any) {
       console.error('Error fetching videos:', err);
-      if (pageNumber === 1 && videos.length === 0) {
-        dispatch(fetchVideosSuccess(shuffleArray(SAMPLE_VIDEOS)));
-      }
-    } finally {
-      setLoadingMore(false);
+      dispatch(fetchVideosSuccess(shuffleArray(SAMPLE_VIDEOS)));
     }
   };
 
@@ -158,13 +122,10 @@ export default function HomeScreen() {
       const res = await categoryService.getCategories();
       if (res && res.length > 0) {
         let names = res.map((c: any) => c.name);
-
-        // Fisher-Yates shuffle for randomness
         for (let i = names.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
           [names[i], names[j]] = [names[j], names[i]];
         }
-
         setCategoriesList(['All', 'Posts', ...names]);
       } else {
         setCategoriesList(['All', 'Posts']);
@@ -175,9 +136,7 @@ export default function HomeScreen() {
   };
 
   const handleRefresh = async () => {
-    setRefreshing(true);
-    await Promise.all([loadVideos(1, true), loadPosts(), loadCategories()]);
-    setRefreshing(false);
+    await Promise.all([loadVideos(), loadPosts(), loadCategories()]);
   };
 
   const loadPosts = async () => {
@@ -199,7 +158,6 @@ export default function HomeScreen() {
     ? posts
     : [];
 
-  // Pinned videos are always placed on top of the longVideos feed
   const pinnedVideos = filteredVideos
     .filter((v: any) => v.isPinned === true || v.isPinned === 'true')
     .map((item: any) => ({ ...item, itemType: 'video' }));
@@ -216,50 +174,47 @@ export default function HomeScreen() {
 
   const shortsItems = filteredVideos.filter(v => v.isShort);
 
-  const feedData = useMemo(() => {
-    const baseItems: any[] = [];
-    if (selectedCategory === 'All') {
-      baseItems.push(...longVideosAndPosts.slice(0, 2));
+  const baseItems: any[] = [];
+  if (selectedCategory === 'All') {
+    baseItems.push(...longVideosAndPosts.slice(0, 2));
 
-      if (shortsItems.length > 0) {
-        baseItems.push({
-          _id: 'shorts_shelf',
-          itemType: 'shorts_shelf',
-          data: shortsItems.slice(0, 4),
-        });
-      }
-
-      baseItems.push(...longVideosAndPosts.slice(2));
-    } else if (selectedCategory === 'Posts') {
-      baseItems.push(...filteredPosts.map((p) => ({ ...p, itemType: 'post' })));
-    } else {
-      baseItems.push(
-        ...filteredVideos
-          .filter((v) => !v.isShort)
-          .map((v) => ({ ...v, itemType: 'video' }))
-      );
+    if (shortsItems.length > 0) {
+      baseItems.push({
+        _id: 'shorts_shelf',
+        itemType: 'shorts_shelf',
+        data: shortsItems.slice(0, 4),
+      });
     }
 
-    const itemsWithAds: any[] = [];
-    for (let i = 0; i < baseItems.length; i++) {
-      itemsWithAds.push(baseItems[i]);
-      if ((i + 1) % 5 === 0) {
-        const prevId = baseItems[i]?._id || `pos_${i}`;
-        itemsWithAds.push({
-          _id: `feed_ad_${prevId}`,
-          itemType: 'ad_banner',
-        });
-      }
-    }
-    return itemsWithAds;
-  }, [selectedCategory, longVideosAndPosts, shortsItems, filteredPosts, filteredVideos]);
+    baseItems.push(...longVideosAndPosts.slice(2));
+  } else if (selectedCategory === 'Posts') {
+    baseItems.push(...filteredPosts.map((p) => ({ ...p, itemType: 'post' })));
+  } else {
+    baseItems.push(
+      ...filteredVideos
+        .filter((v) => !v.isShort)
+        .map((v) => ({ ...v, itemType: 'video' }))
+    );
+  }
 
-  const renderShortsShelf = useCallback((shorts: any[]) => (
+  const feedData: any[] = [];
+  for (let i = 0; i < baseItems.length; i++) {
+    feedData.push(baseItems[i]);
+    if ((i + 1) % 5 === 0) {
+      const prevId = baseItems[i]?._id || `pos_${i}`;
+      feedData.push({
+        _id: `feed_ad_${prevId}`,
+        itemType: 'ad_banner',
+      });
+    }
+  }
+
+  const renderShortsShelf = (shortsList: any[]) => (
     <View style={styles.shortsShelf}>
       <View style={styles.shelfHeader}>
         <View style={styles.shelfHeaderLeft}>
           <View style={styles.shelfIconBadge}>
-            <Ionicons name="flash" size={16} color={Colors.white} />
+            <Ionicons name="play" size={14} color={Colors.white} />
           </View>
           <Text style={styles.shelfTitle}>Shorts</Text>
         </View>
@@ -269,7 +224,7 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
       <View style={styles.shortsGrid}>
-        {shorts.map((item) => (
+        {shortsList.map((item) => (
           <TouchableOpacity
             key={item._id}
             style={styles.shortGridItem}
@@ -289,34 +244,7 @@ export default function HomeScreen() {
         ))}
       </View>
     </View>
-  ), [router]);
-
-  const renderItem = useCallback(({ item }: any) => {
-    if (item.itemType === 'ad_banner') {
-      return <AppAdBanner />;
-    }
-    if (item.itemType === 'shorts_shelf') {
-      return renderShortsShelf(item.data);
-    }
-    if (item.itemType === 'post') {
-      return <PostCard post={item} />;
-    }
-    return (
-      <VideoCard
-        video={item}
-        onPlaylistPress={(id) => {
-          if (!isAuthenticated) return setAuthModalVisible(true);
-          setSelectedVideo(item);
-          setPlaylistModalVisible(true);
-        }}
-        onReportPress={(v) => {
-          if (!isAuthenticated) return setAuthModalVisible(true);
-          setSelectedVideo(v);
-          setReportModalVisible(true);
-        }}
-      />
-    );
-  }, [isAuthenticated, renderShortsShelf]);
+  );
 
   return (
     <View style={styles.container}>
@@ -333,35 +261,41 @@ export default function HomeScreen() {
         <FlatList
           data={feedData}
           keyExtractor={(item) => item._id}
-        renderItem={renderItem}
-        contentContainerStyle={styles.listContainer}
-        showsVerticalScrollIndicator={false}
-        refreshing={refreshing}
-        onRefresh={handleRefresh}
-        onEndReached={() => {
-          if (!loadingMore && hasMore && !loading) {
-            loadVideos(page + 1);
-          }
-        }}
-        onEndReachedThreshold={0.4}
-        initialNumToRender={5}
-        maxToRenderPerBatch={6}
-        windowSize={9}
-        removeClippedSubviews={false}
-        ListFooterComponent={
-          loadingMore ? (
-            <View style={{ paddingVertical: 18, alignItems: 'center' }}>
-              <ActivityIndicator size="small" color={Colors.primary} />
-            </View>
-          ) : null
-        }
-        ListEmptyComponent={
-          !loading ? (
+          renderItem={({ item }) => {
+            if (item.itemType === 'ad_banner') {
+              return <AppAdBanner />;
+            }
+            if (item.itemType === 'shorts_shelf') {
+              return renderShortsShelf(item.data);
+            }
+            if (item.itemType === 'post') {
+              return <PostCard post={item} />;
+            }
+            return (
+              <VideoCard
+                video={item}
+                onPlaylistPress={(id) => {
+                  if (!isAuthenticated) return setAuthModalVisible(true);
+                  setSelectedVideo(item);
+                  setPlaylistModalVisible(true);
+                }}
+                onReportPress={(v) => {
+                  if (!isAuthenticated) return setAuthModalVisible(true);
+                  setSelectedVideo(v);
+                  setReportModalVisible(true);
+                }}
+              />
+            );
+          }}
+          contentContainerStyle={styles.listContainer}
+          showsVerticalScrollIndicator={false}
+          refreshing={loading}
+          onRefresh={handleRefresh}
+          ListEmptyComponent={
             <View style={styles.centerContainer}>
               <Text style={styles.emptyText}>No videos found</Text>
             </View>
-          ) : null
-        }
+          }
         />
       )}
 
