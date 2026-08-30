@@ -9,7 +9,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import { logout } from '../../redux/slices/authSlice';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import api, { setAuthToken } from '../../services/api';
+import api, { clearAuthSession, setAuthToken } from '../../services/api';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -57,8 +57,7 @@ export default function SettingsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await AsyncStorage.removeItem('token');
-              setAuthToken(null);
+              await clearAuthSession();
               dispatch(logout());
               router.replace('/');
             } catch (err) {

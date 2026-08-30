@@ -16,7 +16,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../redux/store';
 import { logout, updateUser } from '../redux/slices/authSlice';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import api, { setAuthToken } from '../services/api';
+import api, { clearAuthSession, setAuthToken } from '../services/api';
 import { showAlert } from '../components/AppAlert';
 
 const RECOVERY_REASON_OPTIONS = [
@@ -118,8 +118,7 @@ export default function AccountRecoveryScreen() {
   };
 
   const handleLogout = async () => {
-    await AsyncStorage.removeItem('token');
-    setAuthToken(null);
+    await clearAuthSession();
     dispatch(logout());
     router.replace('/');
   };

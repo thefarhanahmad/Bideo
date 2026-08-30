@@ -22,7 +22,8 @@ exports.protect = async (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const secret = process.env.JWT_SECRET || 'supersecretkey';
+    const decoded = jwt.verify(token, secret);
     req.user = await User.findById(decoded.id);
 
     if (!req.user) {
@@ -73,7 +74,8 @@ exports.softProtect = async (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const secret = process.env.JWT_SECRET || 'supersecretkey';
+    const decoded = jwt.verify(token, secret);
     req.user = await User.findById(decoded.id);
     next();
   } catch (err) {

@@ -15,9 +15,23 @@ const api = axios.create({
   },
 });
 
-// Automatically ensure Bearer token is attached on every outgoing request
+// Automatically attach Bearer token on protected requests, but bypass for public auth routes
 api.interceptors.request.use(
   async (config) => {
+    const isAuthRoute =
+      config.url?.includes('/auth/login') ||
+      config.url?.includes('/auth/signup') ||
+      config.url?.includes('/auth/google') ||
+      config.url?.includes('/auth/forgot-password') ||
+      config.url?.includes('/auth/reset-password');
+
+    if (isAuthRoute) {
+      if (config.headers) {
+        delete config.headers.Authorization;
+      }
+      return config;
+    }
+
     if (!config.headers.Authorization) {
       try {
         const token = await AsyncStorage.getItem('token');
@@ -36,9 +50,20 @@ api.interceptors.request.use(
 export const setAuthToken = (token?: string | null) => {
   if (token) {
     api.defaults.headers.common.Authorization = `Bearer ${token}`;
+    api.defaults.headers.Authorization = `Bearer ${token}`;
   } else {
     delete api.defaults.headers.common.Authorization;
+    delete api.defaults.headers.Authorization;
   }
+};
+
+export const clearAuthSession = async () => {
+  try {
+    await AsyncStorage.multiRemove(['token', 'cached_user']);
+  } catch {
+    // ignore
+  }
+  setAuthToken(null);
 };
 
 export const resolveMediaUrl = (url?: string | null): string => {
