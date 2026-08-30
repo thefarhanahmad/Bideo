@@ -9,12 +9,16 @@ if (!globalThis.crypto) {
 const app = require("./app");
 const connectDB = require("./config/db");
 const { initDeletionScheduler } = require("./utils/deletionScheduler");
+const { initAutoBoostScheduler } = require("./utils/autoBoostScheduler");
 
 // Connect to database
 connectDB();
 
 // Initialize deletion scheduler cron/timer
 initDeletionScheduler();
+
+// Initialize organic 5-day auto-boost scheduler
+initAutoBoostScheduler();
 
 const PORT = process.env.PORT || 5000;
 
