@@ -94,25 +94,51 @@ const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onLoginSuccess 
     }
   }, [response, getUserInfo]);
 
+  const cleanPhoneInput = useCallback((val: string): string => {
+    let digits = val.replace(/\D/g, '');
+    if (digits.length === 12 && digits.startsWith('91')) {
+      digits = digits.slice(2);
+    } else if (digits.length === 11 && digits.startsWith('0')) {
+      digits = digits.slice(1);
+    } else if (digits.length > 10) {
+      digits = digits.slice(-10);
+    }
+    return digits;
+  }, []);
+
   const handlePhoneAuth = useCallback(async () => {
-    if ((isSignup && !name.trim()) || !phone.trim() || !password) return showAlert('Missing Fields', 'Please fill name, phone and password.');
-    if (phone.trim().length !== 10) return showAlert('Invalid Phone', 'Phone number must be 10 digits.');
+    const trimmedName = name.trim();
+    const sanitizedPhone = cleanPhoneInput(phone);
+    const trimmedPassword = password.trim();
+
+    if (isSignup && !trimmedName) return showAlert('Missing Name', 'Please enter your name.');
+    if (!sanitizedPhone) return showAlert('Missing Phone', 'Please enter your 10-digit mobile number.');
+    if (sanitizedPhone.length !== 10) return showAlert('Invalid Phone', 'Mobile number must be exactly 10 digits.');
+    if (!trimmedPassword) return showAlert('Missing Password', 'Please enter your password.');
+    if (isSignup && trimmedPassword.length < 6) return showAlert('Short Password', 'Password must be at least 6 characters.');
 
     setAuthLoading(true);
     dispatch(loginStart());
     try {
       const backendRes = isSignup 
-        ? await authService.signupWithPhone({ name: name.trim(), phone: phone.trim(), password }) 
-        : await authService.loginWithPhone({ phone: phone.trim(), password });
+        ? await authService.signupWithPhone({ name: trimmedName, phone: sanitizedPhone, password: trimmedPassword }) 
+        : await authService.loginWithPhone({ phone: sanitizedPhone, password: trimmedPassword });
       await persistAuth(backendRes);
     } catch (err: any) {
       dispatch(loginFailure('Phone auth failed'));
-      const apiError = err?.response?.data?.message || err?.response?.data?.errors?.[0]?.msg;
-      showAlert('Authentication Failed', apiError || 'Unable to authenticate');
+      const apiError =
+        err?.response?.data?.message ||
+        err?.response?.data?.errors?.[0]?.msg ||
+        err?.response?.data?.errors?.[0]?.message ||
+        (err?.message === 'Network Error' ? 'Unable to connect to server. Please check your internet connection.' : null) ||
+        (err?.code === 'ECONNABORTED' ? 'Request timed out. Please try again.' : null) ||
+        err?.message ||
+        'Unable to authenticate. Please check your credentials.';
+      showAlert('Authentication Failed', apiError);
     } finally {
       setAuthLoading(false);
     }
-  }, [isSignup, name, phone, password, dispatch, persistAuth]);
+  }, [isSignup, name, phone, password, cleanPhoneInput, dispatch, persistAuth]);
 
   const handleGoogleLogin = useCallback(async () => {
     if (Platform.OS === 'android' && !ANDROID_CLIENT_ID) return showAlert('Google Login Not Configured', 'Set EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID in your app env to enable Google login on Android.');
@@ -173,9 +199,9 @@ const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onLoginSuccess 
                 placeholder="Phone Number"
                 placeholderTextColor={Colors.textGray}
                 value={phone}
-                onChangeText={(v) => setPhone(v.replace(/\D/g, '').slice(0, 10))}
+                onChangeText={(v) => setPhone(cleanPhoneInput(v))}
                 keyboardType="phone-pad"
-                maxLength={10}
+                maxLength={14}
                 autoCorrect={false}
               />
 

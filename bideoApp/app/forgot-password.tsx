@@ -15,36 +15,60 @@ export default function ForgotPasswordScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const cleanPhone = (val: string): string => {
+    let digits = val.replace(/\D/g, '');
+    if (digits.length === 12 && digits.startsWith('91')) {
+      digits = digits.slice(2);
+    } else if (digits.length === 11 && digits.startsWith('0')) {
+      digits = digits.slice(1);
+    } else if (digits.length > 10) {
+      digits = digits.slice(-10);
+    }
+    return digits;
+  };
+
   const handleRequestOtp = async () => {
-    if (phone.length !== 10) return showAlert('Error', 'Enter a valid 10-digit phone number');
+    const sanitized = cleanPhone(phone);
+    if (sanitized.length !== 10) return showAlert('Invalid Phone', 'Enter a valid 10-digit phone number');
     setLoading(true);
     try {
-      const res = await api.post('/auth/forgot-password', { phone });
+      const res = await api.post('/auth/forgot-password', { phone: sanitized });
       if (res.data.success) {
         setStep(2);
         showAlert('OTP Sent', 'Use dummy OTP 1234 to proceed');
       }
     } catch (err: any) {
-      showAlert('Error', err.response?.data?.message || 'Failed to request OTP');
+      const apiError =
+        err.response?.data?.message ||
+        err.response?.data?.errors?.[0]?.msg ||
+        err.response?.data?.errors?.[0]?.message ||
+        'Failed to request OTP';
+      showAlert('Error', apiError);
     } finally {
       setLoading(false);
     }
   };
 
   const handleResetPassword = async () => {
-    if (otp !== '1234') return showAlert('Error', 'Invalid OTP. Use 1234');
-    if (password.length < 6) return showAlert('Error', 'Password must be at least 6 characters');
+    const sanitized = cleanPhone(phone);
+    if (otp !== '1234') return showAlert('Invalid OTP', 'Invalid OTP. Use 1234');
+    if (password.length < 6) return showAlert('Short Password', 'Password must be at least 6 characters');
     
     setLoading(true);
     try {
-      const res = await api.post('/auth/reset-password', { phone, otp, password });
+      const res = await api.post('/auth/reset-password', { phone: sanitized, otp, password });
       if (res.data.success) {
         showAlert('Success', 'Password reset successfully. You can now login.', [
           { text: 'OK', onPress: () => router.back() }
         ]);
       }
     } catch (err: any) {
-      showAlert('Error', err.response?.data?.message || 'Failed to reset password');
+      const apiError =
+        err.response?.data?.message ||
+        err.response?.data?.errors?.[0]?.msg ||
+        err.response?.data?.errors?.[0]?.message ||
+        'Failed to reset password';
+      showAlert('Error', apiError);
     } finally {
       setLoading(false);
     }
@@ -79,9 +103,9 @@ export default function ForgotPasswordScreen() {
               placeholder="Phone Number"
               placeholderTextColor={Colors.textGray}
               value={phone}
-              onChangeText={(v) => setPhone(v.replace(/\D/g, '').slice(0, 10))}
+              onChangeText={(v) => setPhone(cleanPhone(v))}
               keyboardType="phone-pad"
-              maxLength={10}
+              maxLength={14}
             />
             <TouchableOpacity 
               style={[styles.primaryButton, loading && { opacity: 0.7 }]} 

@@ -1,4 +1,6 @@
 const User = require('../models/User');
+const { cleanPhone } = require('../validators');
+
 const normalizeAvatar = (avatar) => {
   if (!avatar || typeof avatar !== 'string') return null;
   const value = avatar.trim();
@@ -8,12 +10,16 @@ const normalizeAvatar = (avatar) => {
 
 exports.signupWithPhone = async (req, res, next) => {
   try {
-    const { name, phone, password } = req.body;
+    const { name, password } = req.body;
+    const phone = cleanPhone(req.body.phone);
+    if (!phone || phone.length !== 10) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid 10-digit phone number' });
+    }
     const existing = await User.findOne({ phone });
     if (existing) {
-      return res.status(400).json({ success: false, message: 'Phone already registered' });
+      return res.status(400).json({ success: false, message: 'This phone number is already registered. Please login instead.' });
     }
-    const user = await User.create({ name, phone, password, authProvider: 'phone' });
+    const user = await User.create({ name: (name || '').trim(), phone, password, authProvider: 'phone' });
     sendTokenResponse(user, 201, res);
   } catch (err) {
     next(err);
@@ -22,10 +28,14 @@ exports.signupWithPhone = async (req, res, next) => {
 
 exports.loginWithPhone = async (req, res, next) => {
   try {
-    const { phone, password } = req.body;
+    const phone = cleanPhone(req.body.phone);
+    const { password } = req.body;
+    if (!phone || !password) {
+      return res.status(400).json({ success: false, message: 'Phone number and password are required' });
+    }
     const user = await User.findOne({ phone }).select('+password');
     if (!user || !(await user.matchPassword(password))) {
-      return res.status(401).json({ success: false, message: 'Invalid phone or password' });
+      return res.status(401).json({ success: false, message: 'Incorrect phone number or password' });
     }
     sendTokenResponse(user, 200, res);
   } catch (err) {
@@ -38,13 +48,11 @@ exports.loginWithPhone = async (req, res, next) => {
 // @access  Public
 exports.forgotPassword = async (req, res, next) => {
   try {
-    const { phone } = req.body;
+    const phone = cleanPhone(req.body.phone);
     const user = await User.findOne({ phone });
     if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
+      return res.status(404).json({ success: false, message: 'No account found with this phone number' });
     }
-    // Since we use dummy OTP "1234", we don't actually need to store it or send it.
-    // In a real app, we would generate a token, save it with expiry, and send SMS.
     res.status(200).json({ success: true, message: 'OTP sent to phone' });
   } catch (err) {
     next(err);
@@ -56,17 +64,18 @@ exports.forgotPassword = async (req, res, next) => {
 // @access  Public
 exports.resetPassword = async (req, res, next) => {
   try {
-    const { phone, otp, password } = req.body;
+    const phone = cleanPhone(req.body.phone);
+    const { otp, password } = req.body;
     if (otp !== '1234') {
-      return res.status(400).json({ success: false, message: 'Invalid OTP' });
+      return res.status(400).json({ success: false, message: 'Invalid OTP. Please enter 1234' });
     }
     const user = await User.findOne({ phone });
     if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
+      return res.status(404).json({ success: false, message: 'No account found with this phone number' });
     }
     user.password = password;
     await user.save();
-    res.status(200).json({ success: true, message: 'Password reset successful' });
+    res.status(200).json({ success: true, message: 'Password reset successfully' });
   } catch (err) {
     next(err);
   }
