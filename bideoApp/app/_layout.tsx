@@ -5,7 +5,7 @@ import { store, RootState } from '../redux/store';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SplashScreen from 'expo-splash-screen';
-import api, { setAuthToken } from '../services/api';
+import api, { clearAuthSession, setAuthToken } from '../services/api';
 import { loginSuccess, loginStart, loginFailure } from '../redux/slices/authSlice';
 import { AlertHost } from '../components/AppAlert';
 import Constants from 'expo-constants';
@@ -89,8 +89,7 @@ function Startup({ onReady }: { onReady: () => void }) {
               // Only clear token if server explicitly rejected with HTTP 401
               if (err?.response?.status === 401) {
                 console.log('Token expired or invalid on server. Logging out.');
-                AsyncStorage.multiRemove(['token', 'cached_user']).catch(() => {});
-                setAuthToken(null);
+                clearAuthSession().catch(() => {});
                 dispatch(loginFailure('Session expired'));
               } else {
                 console.log('Background auth check offline / network lag (retaining cached session):', err?.message || err);

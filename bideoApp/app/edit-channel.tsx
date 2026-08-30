@@ -12,6 +12,7 @@ import { hapticLight, hapticSelection } from '../utils/haptics';
 import api from '../services/api';
 import { RootState } from '../redux/store';
 import { loginSuccess } from '../redux/slices/authSlice';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 
 const getAvatarUri = (avatar?: string) => {
@@ -187,7 +188,9 @@ export default function EditChannelScreen() {
       });
 
       if (res.data.success) {
-        dispatch(loginSuccess({ user: res.data.data, token: token! }));
+        const updatedUser = res.data.data;
+        dispatch(loginSuccess({ user: updatedUser, token: token! }));
+        AsyncStorage.setItem('cached_user', JSON.stringify(updatedUser)).catch(() => {});
         showAlert('Success', 'Channel customization saved');
         router.back();
       }
