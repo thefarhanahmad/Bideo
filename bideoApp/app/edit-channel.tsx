@@ -281,7 +281,7 @@ export default function EditChannelScreen() {
           <View style={styles.inputGroup}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <Text style={[styles.fieldLabel, { marginBottom: 0 }]}>Channel Name</Text>
-              <Text style={{ fontSize: 11, color: channelName.length >= 25 ? Colors.danger : Colors.textGray, fontWeight: '600' }}>
+              <Text style={{ fontSize: 11, color: channelName.length >= 25 ? Colors.error : Colors.textGray, fontWeight: '600' }}>
                 {channelName.length}/25
               </Text>
             </View>
