@@ -1,5 +1,5 @@
 import { showAlert } from '../../components/AppAlert';
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { View, FlatList, StyleSheet, ActivityIndicator, Text, Modal, TouchableOpacity, TextInput, Alert, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -86,6 +86,7 @@ export default function HomeScreen() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const [selectedVideo, setSelectedVideo] = useState<any>(null);
   const [reportModalVisible, setReportModalVisible] = useState(false);
@@ -93,20 +94,22 @@ export default function HomeScreen() {
   const [authModalVisible, setAuthModalVisible] = useState(false);
   const [reportReason, setReportReason] = useState('');
 
-  useFocusEffect(
-    useCallback(() => {
-      loadVideos(1, true);
-      loadPosts();
-      loadCategories();
-    }, [isAuthenticated])
-  );
+  // Initial load only on mount or auth change — does NOT reset feed on tab focus
+  useEffect(() => {
+    if (videos.length === 0) {
+      loadVideos(1);
+    }
+    loadPosts();
+    loadCategories();
+  }, [isAuthenticated]);
 
   const loadVideos = async (pageNumber = 1, isRefresh = false) => {
+    if (pageNumber > 1 && (loadingMore || !hasMore)) return;
     try {
-      if (pageNumber === 1) {
+      if (pageNumber === 1 && !isRefresh && videos.length === 0) {
         dispatch(fetchVideosStart());
-        setHasMore(true);
-      } else {
+      }
+      if (pageNumber > 1) {
         setLoadingMore(true);
       }
 
@@ -120,6 +123,8 @@ export default function HomeScreen() {
 
         if (data.length < 12) {
           setHasMore(false);
+        } else {
+          setHasMore(true);
         }
 
         if (pageNumber === 1) {
@@ -133,14 +138,14 @@ export default function HomeScreen() {
           setPage(pageNumber);
         }
       } else {
-        if (pageNumber === 1) {
+        if (pageNumber === 1 && videos.length === 0) {
           dispatch(fetchVideosSuccess(shuffleArray(SAMPLE_VIDEOS)));
         }
         setHasMore(false);
       }
     } catch (err: any) {
       console.error('Error fetching videos:', err);
-      if (pageNumber === 1) {
+      if (pageNumber === 1 && videos.length === 0) {
         dispatch(fetchVideosSuccess(shuffleArray(SAMPLE_VIDEOS)));
       }
     } finally {
@@ -170,7 +175,9 @@ export default function HomeScreen() {
   };
 
   const handleRefresh = async () => {
-    await Promise.all([loadVideos(), loadPosts()]);
+    setRefreshing(true);
+    await Promise.all([loadVideos(1, true), loadPosts(), loadCategories()]);
+    setRefreshing(false);
   };
 
   const loadPosts = async () => {
@@ -209,38 +216,45 @@ export default function HomeScreen() {
 
   const shortsItems = filteredVideos.filter(v => v.isShort);
 
-  const baseItems: any[] = [];
-  if (selectedCategory === 'All') {
-    // Top 2 items
-    baseItems.push(...longVideosAndPosts.slice(0, 2));
+  const feedData = useMemo(() => {
+    const baseItems: any[] = [];
+    if (selectedCategory === 'All') {
+      baseItems.push(...longVideosAndPosts.slice(0, 2));
 
-    // Insert Shorts Shelf if we have shorts
-    if (shortsItems.length > 0) {
-      baseItems.push({
-        _id: 'shorts_shelf',
-        itemType: 'shorts_shelf',
-        data: shortsItems.slice(0, 4)
-      });
+      if (shortsItems.length > 0) {
+        baseItems.push({
+          _id: 'shorts_shelf',
+          itemType: 'shorts_shelf',
+          data: shortsItems.slice(0, 4),
+        });
+      }
+
+      baseItems.push(...longVideosAndPosts.slice(2));
+    } else if (selectedCategory === 'Posts') {
+      baseItems.push(...filteredPosts.map((p) => ({ ...p, itemType: 'post' })));
+    } else {
+      baseItems.push(
+        ...filteredVideos
+          .filter((v) => !v.isShort)
+          .map((v) => ({ ...v, itemType: 'video' }))
+      );
     }
 
-    // Remaining items
-    baseItems.push(...longVideosAndPosts.slice(2));
-  } else if (selectedCategory === 'Posts') {
-    baseItems.push(...filteredPosts.map(p => ({ ...p, itemType: 'post' })));
-  } else {
-    baseItems.push(...filteredVideos.filter(v => !v.isShort).map(v => ({ ...v, itemType: 'video' })));
-  }
-
-  const feedData: any[] = [];
-  for (let i = 0; i < baseItems.length; i++) {
-    feedData.push(baseItems[i]);
-    // Insert a banner ad after every 5 items in the feed
-    if ((i + 1) % 5 === 0) {
-      feedData.push({ _id: `ad_banner_${i}`, itemType: 'ad_banner' });
+    const itemsWithAds: any[] = [];
+    for (let i = 0; i < baseItems.length; i++) {
+      itemsWithAds.push(baseItems[i]);
+      if ((i + 1) % 5 === 0) {
+        const prevId = baseItems[i]?._id || `pos_${i}`;
+        itemsWithAds.push({
+          _id: `feed_ad_${prevId}`,
+          itemType: 'ad_banner',
+        });
+      }
     }
-  }
+    return itemsWithAds;
+  }, [selectedCategory, longVideosAndPosts, shortsItems, filteredPosts, filteredVideos]);
 
-  const renderShortsShelf = (shorts: any[]) => (
+  const renderShortsShelf = useCallback((shorts: any[]) => (
     <View style={styles.shortsShelf}>
       <View style={styles.shelfHeader}>
         <View style={styles.shelfHeaderLeft}>
@@ -275,7 +289,34 @@ export default function HomeScreen() {
         ))}
       </View>
     </View>
-  );
+  ), [router]);
+
+  const renderItem = useCallback(({ item }: any) => {
+    if (item.itemType === 'ad_banner') {
+      return <AppAdBanner />;
+    }
+    if (item.itemType === 'shorts_shelf') {
+      return renderShortsShelf(item.data);
+    }
+    if (item.itemType === 'post') {
+      return <PostCard post={item} />;
+    }
+    return (
+      <VideoCard
+        video={item}
+        onPlaylistPress={(id) => {
+          if (!isAuthenticated) return setAuthModalVisible(true);
+          setSelectedVideo(item);
+          setPlaylistModalVisible(true);
+        }}
+        onReportPress={(v) => {
+          if (!isAuthenticated) return setAuthModalVisible(true);
+          setSelectedVideo(v);
+          setReportModalVisible(true);
+        }}
+      />
+    );
+  }, [isAuthenticated, renderShortsShelf]);
 
   if (loading && videos.length === 0) {
     return (
@@ -295,47 +336,21 @@ export default function HomeScreen() {
       <FlatList
         data={feedData}
         keyExtractor={(item) => item._id}
-        renderItem={({ item }) => {
-          if (item.itemType === 'ad_banner') {
-            return <AppAdBanner />;
-          }
-          if (item.itemType === 'shorts_shelf') {
-            return renderShortsShelf(item.data);
-          }
-          if (item.itemType === 'post') {
-            return <PostCard post={item} />;
-          }
-          return (
-            <VideoCard
-              video={item}
-              onPlaylistPress={(id) => {
-                if (!isAuthenticated) return setAuthModalVisible(true);
-                setSelectedVideo(item);
-                setPlaylistModalVisible(true);
-              }}
-              onReportPress={(v) => {
-                if (!isAuthenticated) return setAuthModalVisible(true);
-                setSelectedVideo(v);
-                setReportModalVisible(true);
-              }}
-            />
-          );
-        }}
+        renderItem={renderItem}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
-        refreshing={loading && !loadingMore}
+        refreshing={refreshing}
         onRefresh={handleRefresh}
         onEndReached={() => {
-          if (!loading && !loadingMore && hasMore) {
+          if (!loadingMore && hasMore && !loading) {
             loadVideos(page + 1);
           }
         }}
-        onEndReachedThreshold={0.5}
-        initialNumToRender={6}
+        onEndReachedThreshold={0.4}
+        initialNumToRender={5}
         maxToRenderPerBatch={6}
-        windowSize={5}
-        removeClippedSubviews={Platform.OS === 'android'}
-        updateCellsBatchingPeriod={50}
+        windowSize={9}
+        removeClippedSubviews={false}
         ListFooterComponent={
           loadingMore ? (
             <View style={{ paddingVertical: 18, alignItems: 'center' }}>
@@ -344,9 +359,11 @@ export default function HomeScreen() {
           ) : null
         }
         ListEmptyComponent={
-          <View style={styles.centerContainer}>
-            <Text style={styles.emptyText}>No videos found</Text>
-          </View>
+          !loading ? (
+            <View style={styles.centerContainer}>
+              <Text style={styles.emptyText}>No videos found</Text>
+            </View>
+          ) : null
         }
       />
 

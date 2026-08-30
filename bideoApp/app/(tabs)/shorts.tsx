@@ -71,8 +71,9 @@ export default function ShortsScreen() {
   }, [isAuthenticated]);
 
   const loadShorts = async (pageNumber = 1) => {
+    if (pageNumber > 1 && (loadingMore || !hasMore)) return;
     if (pageNumber === 1) {
-      setLoading(true);
+      if (shorts.length === 0) setLoading(true);
       setHasMore(true);
     } else {
       setLoadingMore(true);
@@ -84,6 +85,8 @@ export default function ShortsScreen() {
 
       if (rawList.length < 15) {
         setHasMore(false);
+      } else {
+        setHasMore(true);
       }
 
       const onlyShorts = rawList
@@ -122,8 +125,9 @@ export default function ShortsScreen() {
       for (let i = 0; i < randomizedShorts.length; i++) {
         withAds.push(randomizedShorts[i]);
         if ((i + 1) % 5 === 0) {
+          const prevId = randomizedShorts[i]?._id || `idx_${i}`;
           withAds.push({
-            _id: `short_ad_${pageNumber}_${i}`,
+            _id: `short_ad_${prevId}`,
             isAd: true,
           });
         }
@@ -144,7 +148,11 @@ export default function ShortsScreen() {
           }
         }
       } else {
-        setShorts(prev => [...prev, ...withAds]);
+        setShorts((prev) => {
+          const existingIds = new Set(prev.map((s) => s._id));
+          const newUnique = withAds.filter((s) => !existingIds.has(s._id));
+          return [...prev, ...newUnique];
+        });
         setPage(pageNumber);
       }
     } catch (e) {
@@ -414,16 +422,16 @@ export default function ShortsScreen() {
         showsVerticalScrollIndicator={false}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
-        removeClippedSubviews={true}
+        removeClippedSubviews={false}
         initialNumToRender={2}
-        maxToRenderPerBatch={3}
-        windowSize={5}
+        maxToRenderPerBatch={2}
+        windowSize={3}
         onEndReached={() => {
-          if (!loading && !loadingMore && hasMore) {
+          if (!loadingMore && hasMore && !loading) {
             loadShorts(page + 1);
           }
         }}
-        onEndReachedThreshold={0.5}
+        onEndReachedThreshold={1}
         getItemLayout={(data, index) => ({
           length: containerHeight,
           offset: containerHeight * index,
