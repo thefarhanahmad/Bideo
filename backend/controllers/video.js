@@ -11,6 +11,15 @@ const MonetizationApplication = require("../models/MonetizationApplication");
 const fs = require("fs");
 const { saveLocalFile, deleteLocalFile } = require("../utils/localUpload");
 
+const createNotification = async ({ recipient, actor, type, video, post, comment, message }) => {
+  if (!recipient || !actor || recipient.toString() === actor.toString()) return;
+  try {
+    await Notification.create({ recipient, actor, type, video, post, comment, message });
+  } catch (err) {
+    console.error("Failed to create notification:", err);
+  }
+};
+
 const FALLBACK_THUMBNAIL =
   "https://via.placeholder.com/640x360.png?text=Tube+India";
 
