@@ -160,7 +160,8 @@ const Ads = () => {
       if (a.type === "full") counts.full += 1;
     });
 
-    const searchLower = (search || "").trim().toLowerCase();
+    const searchTrimmed = (search || "").trim().toLowerCase();
+    const searchTerms = searchTrimmed ? searchTrimmed.split(/\s+/).filter(Boolean) : [];
 
     const filtered = ads.filter((a) => {
       // 1. Filter condition
@@ -170,12 +171,14 @@ const Ads = () => {
       if (filter === "full" && a.type !== "full") return false;
 
       // 2. Search condition
-      if (!searchLower) return true;
+      if (searchTerms.length === 0) return true;
       const title = (a.title || "").toLowerCase();
       const link = (a.link || "").toLowerCase();
       const type = (a.type || "").toLowerCase();
+      const id = (a._id || a.id || "").toLowerCase();
 
-      return title.includes(searchLower) || link.includes(searchLower) || type.includes(searchLower);
+      const fullText = `${title} ${link} ${type} ${id}`;
+      return searchTerms.every((term) => fullText.includes(term));
     });
 
     return { filteredAds: filtered, filterCounts: counts };

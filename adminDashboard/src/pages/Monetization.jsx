@@ -198,38 +198,50 @@ const Monetization = () => {
     }
   };
 
-  const searchLower = (search || "").trim().toLowerCase();
+  const searchTrimmed = (search || "").trim().toLowerCase();
+  const searchTerms = useMemo(
+    () => (searchTrimmed ? searchTrimmed.split(/\s+/).filter(Boolean) : []),
+    [searchTrimmed]
+  );
 
   // 1. Filtered Video Reviews
   const filteredVideoReviews = useMemo(() => {
-    if (!searchLower) return videoReviews;
+    if (searchTerms.length === 0) return videoReviews;
     return videoReviews.filter((group) => {
       const userName = (group.user?.name || "").toLowerCase();
       const channel = (group.user?.channelName || "").toLowerCase();
+      const email = (group.user?.email || "").toLowerCase();
       const phone = (group.user?.phone || "").toLowerCase();
-      const hasMatchingVideo = group.reviews.some((r) =>
-        (r.video?.title || "").toLowerCase().includes(searchLower)
-      );
-      return userName.includes(searchLower) || channel.includes(searchLower) || phone.includes(searchLower) || hasMatchingVideo;
+      const userId = (group.user?._id || group.user?.id || "").toLowerCase();
+      const videoTitles = group.reviews.map((r) => (r.video?.title || "").toLowerCase()).join(" ");
+      const videoIds = group.reviews.map((r) => (r.video?._id || r._id || "").toLowerCase()).join(" ");
+
+      const fullText = `${userName} ${channel} ${email} ${phone} ${userId} ${videoTitles} ${videoIds}`;
+      return searchTerms.every((term) => fullText.includes(term.replace(/^@/, "")));
     });
-  }, [videoReviews, searchLower]);
+  }, [videoReviews, searchTerms]);
 
   // 2. Filtered Applications
   const filteredApplications = useMemo(() => {
-    if (!searchLower) return applications;
+    if (searchTerms.length === 0) return applications;
     return applications.filter((app) => {
       const name = (app.name || "").toLowerCase();
       const channel = (app.user?.channelName || "").toLowerCase();
+      const email = (app.user?.email || "").toLowerCase();
       const phone = (app.phone || "").toLowerCase();
       const upi = (app.upiId || "").toLowerCase();
       const adhar = (app.adharNumber || "").toLowerCase();
-      return name.includes(searchLower) || channel.includes(searchLower) || phone.includes(searchLower) || upi.includes(searchLower) || adhar.includes(searchLower);
+      const status = (app.status || "").toLowerCase();
+      const id = (app._id || app.id || "").toLowerCase();
+
+      const fullText = `${name} ${channel} ${email} ${phone} ${upi} ${adhar} ${status} ${id}`;
+      return searchTerms.every((term) => fullText.includes(term.replace(/^@/, "")));
     });
-  }, [applications, searchLower]);
+  }, [applications, searchTerms]);
 
   // 3. Filtered Monetized Users
   const filteredMonetizedUsers = useMemo(() => {
-    if (!searchLower) return monetizedUsers;
+    if (searchTerms.length === 0) return monetizedUsers;
     return monetizedUsers.filter((u) => {
       const name = (u.name || "").toLowerCase();
       const channel = (u.user?.channelName || "").toLowerCase();
@@ -240,20 +252,12 @@ const Monetization = () => {
       const bank = (u.bankDetails?.bankName || "").toLowerCase();
       const acc = (u.bankDetails?.accountNumber || "").toLowerCase();
       const ifsc = (u.bankDetails?.ifscCode || "").toLowerCase();
+      const id = (u._id || u.id || u.user?._id || "").toLowerCase();
 
-      return (
-        name.includes(searchLower) ||
-        channel.includes(searchLower) ||
-        email.includes(searchLower) ||
-        phone.includes(searchLower) ||
-        upi.includes(searchLower) ||
-        adhar.includes(searchLower) ||
-        bank.includes(searchLower) ||
-        acc.includes(searchLower) ||
-        ifsc.includes(searchLower)
-      );
+      const fullText = `${name} ${channel} ${email} ${phone} ${upi} ${adhar} ${bank} ${acc} ${ifsc} ${id}`;
+      return searchTerms.every((term) => fullText.includes(term.replace(/^@/, "")));
     });
-  }, [monetizedUsers, searchLower]);
+  }, [monetizedUsers, searchTerms]);
 
   // Pagination for Applications
   const totalAppPages = Math.max(1, Math.ceil(filteredApplications.length / limit));

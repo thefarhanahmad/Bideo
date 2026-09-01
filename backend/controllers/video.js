@@ -1,5 +1,7 @@
+const mongoose = require("mongoose");
 const Video = require("../models/Video");
 const User = require("../models/User");
+const Category = require("../models/Category");
 const Follower = require("../models/Follower");
 const VideoView = require("../models/VideoView");
 const VideoReport = require("../models/VideoReport");
@@ -54,14 +56,28 @@ const applyVideoTypeFilter = (query, type) => {
   return query;
 };
 
-const getVideoQuery = (req, onlyPublic = false) => {
-  const query = { visibility: "public" };
+const getVideoQuery = (req) => {
+  const query = {};
+  const isAdmin = req.user && req.user.role === 'admin';
+
+  // Admin can view all or specific visibility; public users only see public videos
+  if (req.query.visibility && req.query.visibility !== 'all') {
+    query.visibility = req.query.visibility;
+  } else if (!isAdmin) {
+    query.visibility = 'public';
+  }
+
   if (req.query.owner) query.owner = req.query.owner;
+  if (req.query.category) query.category = req.query.category;
+  if (req.query.isPinned !== undefined) {
+    query.isPinned = req.query.isPinned === 'true';
+  }
   return applyVideoTypeFilter(query, req.query.type);
 };
 
 const getSort = (sort) => {
   if (sort === "popular") return { isPinned: -1, views: -1, createdAt: -1 };
+  if (sort === "oldest") return { createdAt: 1 };
   return { isPinned: -1, createdAt: -1 };
 };
 
@@ -123,45 +139,238 @@ const decorateVideos = async (videos, req) => {
   return results;
 };
 
-const createNotification = async ({
-  recipient,
-  actor,
-  type,
-  video,
-  comment,
-  message,
-}) => {
-  if (!recipient || !actor || recipient.toString() === actor.toString()) return;
-  await Notification.create({
-    recipient,
-    actor,
-    type,
-    video,
-    comment,
-    message,
-  });
+// Helper for escaping regex strings
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Helper to tokenize query into individual keywords and clean phrases
+const parseSearchKeywords = (rawQuery) => {
+  const clean = (rawQuery || '').trim();
+  if (!clean) return { phrase: '', terms: [], regexes: [], phraseRegex: null };
+
+  const phrase = clean.replace(/^[#@]+/, '').trim();
+  const phraseRegex = new RegExp(escapeRegex(phrase), 'i');
+
+  // Split on whitespace, commas, pluses, slashes, hashtags
+  const rawTerms = clean
+    .split(/[\s,+#|/]+/)
+    .map((t) => t.trim().replace(/^[#@]+/, ''))
+    .filter((t) => t.length > 0);
+
+  const terms = Array.from(new Set(rawTerms));
+  const regexes = terms.map((t) => new RegExp(escapeRegex(t), 'i'));
+
+  return { phrase, terms, regexes, phraseRegex };
+};
+
+// Relevance scorer for videos
+const scoreVideoRelevance = (v, { phrase, terms }) => {
+  let score = 0;
+  const title = (v.title || '').toLowerCase();
+  const desc = (v.description || '').toLowerCase();
+  const channel = (v.owner?.channelName || '').toLowerCase();
+  const ownerName = (v.owner?.name || '').toLowerCase();
+  const catName = (v.category?.name || '').toLowerCase();
+  const idStr = (v._id ? v._id.toString() : '').toLowerCase();
+
+  const rawTags = Array.isArray(v.tags) ? v.tags : (v.tags || '').split(',');
+  const tags = rawTags.map((t) => (typeof t === 'string' ? t.trim().toLowerCase() : '')).filter(Boolean);
+  const tagsStr = tags.join(' ');
+
+  const phraseLower = phrase.toLowerCase();
+
+  // 1. Exact Video ID Match
+  if (idStr && idStr === phraseLower) return 10000;
+
+  // 2. Title scoring
+  if (title === phraseLower) score += 3000;
+  else if (title.startsWith(phraseLower)) score += 1500;
+  else if (title.includes(phraseLower)) score += 800;
+
+  // 3. Tag scoring
+  if (tags.includes(phraseLower)) score += 1200;
+  else if (tagsStr.includes(phraseLower)) score += 600;
+
+  // 4. Channel / Owner scoring
+  if (channel === phraseLower || ownerName === phraseLower) score += 1000;
+  else if (channel.includes(phraseLower) || ownerName.includes(phraseLower)) score += 500;
+
+  // 5. Description scoring
+  if (desc.includes(phraseLower)) score += 200;
+
+  // 6. Category scoring
+  if (catName.includes(phraseLower)) score += 150;
+
+  // 7. Individual keyword terms scoring
+  let matchedTermsCount = 0;
+  for (const term of terms) {
+    const tLower = term.toLowerCase();
+    let termMatched = false;
+
+    if (title.includes(tLower)) {
+      score += 250;
+      termMatched = true;
+    }
+    if (tags.some((tag) => tag.includes(tLower) || tLower.includes(tag))) {
+      score += 200;
+      termMatched = true;
+    }
+    if (channel.includes(tLower) || ownerName.includes(tLower)) {
+      score += 180;
+      termMatched = true;
+    }
+    if (desc.includes(tLower)) {
+      score += 50;
+      termMatched = true;
+    }
+    if (catName.includes(tLower)) {
+      score += 40;
+      termMatched = true;
+    }
+
+    if (termMatched) matchedTermsCount++;
+  }
+
+  // Bonus if all terms matched
+  if (terms.length > 1 && matchedTermsCount === terms.length) {
+    score += 500;
+  }
+
+  // Engagement tie-breaker (views)
+  score += Math.min(20, Math.log10((v.views || 0) + 1) * 3);
+
+  return score;
+};
+
+// Relevance scorer for users / channels
+const scoreUserRelevance = (u, { phrase, terms }) => {
+  let score = 0;
+  const channel = (u.channelName || '').toLowerCase();
+  const name = (u.name || '').toLowerCase();
+  const email = (u.email || '').toLowerCase();
+  const phone = (u.phone || '').toLowerCase();
+  const about = (u.about || '').toLowerCase();
+  const idStr = (u._id ? u._id.toString() : (u.id ? u.id.toString() : '')).toLowerCase();
+  const phraseLower = phrase.toLowerCase();
+
+  if (idStr && idStr === phraseLower) return 10000;
+
+  if (channel === phraseLower || name === phraseLower) score += 3000;
+  else if (channel.startsWith(phraseLower) || name.startsWith(phraseLower)) score += 1500;
+  else if (channel.includes(phraseLower) || name.includes(phraseLower)) score += 800;
+
+  if (email.includes(phraseLower) || phone.includes(phraseLower)) score += 700;
+  if (about.includes(phraseLower)) score += 150;
+
+  let matchedTermsCount = 0;
+  for (const term of terms) {
+    const tLower = term.toLowerCase();
+    let termMatched = false;
+    if (channel.includes(tLower)) {
+      score += 300;
+      termMatched = true;
+    }
+    if (name.includes(tLower)) {
+      score += 250;
+      termMatched = true;
+    }
+    if (email.includes(tLower) || phone.includes(tLower)) {
+      score += 200;
+      termMatched = true;
+    }
+    if (about.includes(tLower)) {
+      score += 50;
+      termMatched = true;
+    }
+    if (termMatched) matchedTermsCount++;
+  }
+
+  if (terms.length > 1 && matchedTermsCount === terms.length) score += 500;
+  if (u.isVerified) score += 50;
+
+  return score;
 };
 
 exports.searchVideos = async (req, res, next) => {
   try {
-    const { q } = req.query;
+    const rawQ = req.query.q || req.query.search || '';
+    const q = rawQ.trim();
     if (!q) return res.status(200).json({ success: true, count: 0, data: { channels: [], videos: [] } });
 
-    // 1. Search channels (users with a channelName or matching name)
-    const channels = await User.find({
-      $or: [
-        { channelName: { $regex: q, $options: "i" } },
-        { name: { $regex: q, $options: "i" } },
-      ],
-    }).select("name avatar channelName followersCount about");
+    const { phrase, terms, regexes, phraseRegex } = parseSearchKeywords(q);
+    const isObjectId = mongoose.Types.ObjectId.isValid(q);
+    const isAdmin = req.user && req.user.role === 'admin';
+
+    // 1. Search channels (users with a channelName or matching name/email/phone)
+    const channelOrClauses = [];
+    if (phraseRegex) {
+      channelOrClauses.push({ channelName: phraseRegex });
+      channelOrClauses.push({ name: phraseRegex });
+      channelOrClauses.push({ email: phraseRegex });
+      channelOrClauses.push({ phone: phraseRegex });
+    }
+    regexes.forEach((tRegex) => {
+      channelOrClauses.push({ channelName: tRegex });
+      channelOrClauses.push({ name: tRegex });
+      channelOrClauses.push({ email: tRegex });
+      channelOrClauses.push({ phone: tRegex });
+    });
+    if (isObjectId) {
+      channelOrClauses.push({ _id: q });
+    }
+
+    const channels = await User.find({ $or: channelOrClauses })
+      .select("name avatar channelName followersCount about isVerified role")
+      .limit(30)
+      .lean();
+
+    const channelIds = channels.map((c) => c._id);
+
+    // 2. Search videos (matches title, description, tags, matching channel/creator, or ID)
+    const videoOrClauses = [];
+    if (phraseRegex) {
+      videoOrClauses.push({ title: phraseRegex });
+      videoOrClauses.push({ description: phraseRegex });
+      videoOrClauses.push({ tags: phraseRegex });
+      videoOrClauses.push({ tags: { $in: [phraseRegex] } });
+    }
+    regexes.forEach((tRegex) => {
+      videoOrClauses.push({ title: tRegex });
+      videoOrClauses.push({ description: tRegex });
+      videoOrClauses.push({ tags: tRegex });
+      videoOrClauses.push({ tags: { $in: [tRegex] } });
+    });
+    if (channelIds.length > 0) {
+      videoOrClauses.push({ owner: { $in: channelIds } });
+    }
+    if (isObjectId) {
+      videoOrClauses.push({ _id: q });
+    }
+
+    const videoQuery = { $or: videoOrClauses };
+
+    if (!isAdmin) {
+      videoQuery.visibility = "public";
+    }
+
+    const videos = await Video.find(videoQuery)
+      .populate("owner", "name avatar channelName followersCount isVerified")
+      .populate("category", "name")
+      .limit(60)
+      .lean();
+
+    // Score and rank channels
+    const scoredChannels = channels
+      .map((c) => ({ ...c, _score: scoreUserRelevance(c, { phrase, terms }) }))
+      .sort((a, b) => b._score - a._score)
+      .slice(0, 20);
 
     const channelsData = [];
-    for (let c of channels) {
-      const channelObj = c.toObject();
+    for (let c of scoredChannels) {
+      const channelObj = typeof c === 'object' ? { ...c } : c;
       if (req.user) {
         const isFollowing = await Follower.findOne({
           follower: req.user.id,
-          channel: c.id,
+          channel: c._id,
         });
         channelObj.isFollowing = !!isFollowing;
       } else {
@@ -170,23 +379,16 @@ exports.searchVideos = async (req, res, next) => {
       channelsData.push(channelObj);
     }
 
-    // 2. Search videos
-    const videos = await Video.find({
-      $or: [
-        { title: { $regex: q, $options: "i" } },
-        { description: { $regex: q, $options: "i" } },
-        { tags: { $regex: q, $options: "i" } },
-      ],
-      visibility: "public",
-    })
-      .populate("owner", "name avatar channelName followersCount isVerified")
-      .populate("category", "name")
-      .sort("-createdAt");
+    // Score and rank videos
+    const scoredVideos = videos
+      .map((v) => ({ ...v, _score: scoreVideoRelevance(v, { phrase, terms }) }))
+      .sort((a, b) => b._score - a._score);
 
-    const results = await decorateVideos(videos, req);
+    const results = await decorateVideos(scoredVideos, req);
 
     res.status(200).json({
       success: true,
+      count: results.length,
       data: {
         channels: channelsData,
         videos: results,
@@ -199,26 +401,99 @@ exports.searchVideos = async (req, res, next) => {
 
 exports.getVideos = async (req, res, next) => {
   try {
+    const isAdmin = req.user && req.user.role === 'admin';
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const requestedLimit = parseInt(req.query.limit, 10);
-    // Default limit 50, maximum 100 per page to protect mobile RAM and network
-    const limit = requestedLimit > 0 ? Math.min(requestedLimit, 100) : 50;
+    const fetchAll = req.query.all === 'true' || req.query.limit === 'all';
+
+    // Set appropriate pagination limits
+    let limit = 50;
+    if (fetchAll) {
+      limit = 3000;
+    } else if (requestedLimit > 0) {
+      limit = isAdmin ? Math.min(requestedLimit, 3000) : Math.min(requestedLimit, 100);
+    }
     const skip = (page - 1) * limit;
 
     const query = getVideoQuery(req);
 
+    // Support search query parameter in getVideos
+    const rawSearch = (req.query.search || req.query.q || '').trim();
+    let searchKeywords = null;
+
+    if (rawSearch) {
+      searchKeywords = parseSearchKeywords(rawSearch);
+      const { phrase, terms, regexes, phraseRegex } = searchKeywords;
+      const isObjectId = mongoose.Types.ObjectId.isValid(rawSearch);
+
+      const userSearchOr = [];
+      if (phraseRegex) {
+        userSearchOr.push({ name: phraseRegex }, { channelName: phraseRegex }, { email: phraseRegex }, { phone: phraseRegex });
+      }
+      regexes.forEach((tRegex) => {
+        userSearchOr.push({ name: tRegex }, { channelName: tRegex }, { email: tRegex }, { phone: tRegex });
+      });
+
+      const [matchingUsers, matchingCategories] = await Promise.all([
+        User.find({ $or: userSearchOr }).select('_id').lean(),
+        Category.find({
+          $or: [
+            ...(phraseRegex ? [{ name: phraseRegex }, { slug: phraseRegex }] : []),
+            ...regexes.map((r) => ({ name: r })),
+          ],
+        }).select('_id').lean(),
+      ]);
+
+      const matchingUserIds = matchingUsers.map((u) => u._id);
+      const matchingCatIds = matchingCategories.map((c) => c._id);
+
+      const searchOr = [];
+      if (phraseRegex) {
+        searchOr.push({ title: phraseRegex }, { description: phraseRegex }, { tags: phraseRegex }, { tags: { $in: [phraseRegex] } });
+      }
+      regexes.forEach((tRegex) => {
+        searchOr.push({ title: tRegex }, { description: tRegex }, { tags: tRegex }, { tags: { $in: [tRegex] } });
+      });
+
+      if (matchingUserIds.length > 0) {
+        searchOr.push({ owner: { $in: matchingUserIds } });
+      }
+      if (matchingCatIds.length > 0) {
+        searchOr.push({ category: { $in: matchingCatIds } });
+      }
+      if (isObjectId) {
+        searchOr.push({ _id: rawSearch });
+      }
+
+      if (query.$or) {
+        query.$and = [{ $or: query.$or }, { $or: searchOr }];
+        delete query.$or;
+      } else {
+        query.$or = searchOr;
+      }
+    }
+
+    const sortOption = req.query.sort;
     const [videos, total] = await Promise.all([
       Video.find(query)
-        .populate("owner", "name avatar channelName followersCount isVerified")
+        .populate("owner", "name avatar channelName followersCount isVerified email phone")
         .populate("category", "name")
-        .sort(getSort(req.query.sort))
+        .sort(getSort(sortOption))
         .skip(skip)
         .limit(limit)
         .lean(),
       Video.countDocuments(query),
     ]);
 
-    const results = await decorateVideos(videos, req);
+    let results = await decorateVideos(videos, req);
+
+    // If searching and no explicit custom sort requested, rank by keyword relevance
+    if (searchKeywords && (!sortOption || sortOption === 'latest')) {
+      results = results
+        .map((v) => ({ ...v, _score: scoreVideoRelevance(v, searchKeywords) }))
+        .sort((a, b) => b._score - a._score);
+    }
+
     res.status(200).json({
       success: true,
       count: results.length,

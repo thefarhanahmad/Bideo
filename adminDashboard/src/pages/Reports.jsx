@@ -103,25 +103,26 @@ const Reports = () => {
       if (counts[r.status] !== undefined) counts[r.status] += 1;
     });
 
-    const searchLower = (search || "").trim().toLowerCase();
+    const searchTrimmed = (search || "").trim().toLowerCase();
+    const searchTerms = searchTrimmed ? searchTrimmed.split(/\s+/).filter(Boolean) : [];
 
     const filtered = reports.filter((r) => {
       // 1. Filter status
       if (filter !== "all" && r.status !== filter) return false;
 
       // 2. Search
-      if (!searchLower) return true;
+      if (searchTerms.length === 0) return true;
       const title = (r.video?.title || "").toLowerCase();
       const owner = (r.video?.owner?.name || r.video?.owner?.channelName || "").toLowerCase();
-      const reporter = (r.reporter?.name || r.reporter?.channelName || "").toLowerCase();
+      const reporter = (r.reporter?.name || r.reporter?.channelName || r.reporter?.email || r.reporter?.phone || "").toLowerCase();
       const reason = (r.reason || "").toLowerCase();
+      const adminNote = (r.adminNote || "").toLowerCase();
+      const status = (r.status || "").toLowerCase();
+      const id = (r._id || r.id || "").toLowerCase();
+      const videoId = (r.video?._id || r.video?.id || "").toLowerCase();
 
-      return (
-        title.includes(searchLower) ||
-        owner.includes(searchLower) ||
-        reporter.includes(searchLower) ||
-        reason.includes(searchLower)
-      );
+      const fullText = `${title} ${owner} ${reporter} ${reason} ${adminNote} ${status} ${id} ${videoId}`;
+      return searchTerms.every((term) => fullText.includes(term.replace(/^@/, "")));
     });
 
     return { filteredReports: filtered, filterCounts: counts };

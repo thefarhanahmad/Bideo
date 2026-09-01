@@ -147,33 +147,30 @@ const Payouts = () => {
       if (counts[w.status] !== undefined) counts[w.status] += 1;
     });
 
-    const searchLower = (search || "").trim().toLowerCase();
+    const searchTrimmed = (search || "").trim().toLowerCase();
+    const searchTerms = searchTrimmed ? searchTrimmed.split(/\s+/).filter(Boolean) : [];
 
     const filtered = withdrawals.filter((w) => {
       // 1. Status Filter
       if (filter !== "all" && w.status !== filter) return false;
 
       // 2. Search query
-      if (!searchLower) return true;
+      if (searchTerms.length === 0) return true;
       const name = (w.payoutDetails?.holderName || w.user?.name || "").toLowerCase();
       const channel = (w.user?.channelName || "").toLowerCase();
+      const email = (w.user?.email || "").toLowerCase();
       const phone = (w.user?.phone || "").toLowerCase();
       const upi = (w.payoutDetails?.upiId || "").toLowerCase();
       const bank = (w.payoutDetails?.bankName || "").toLowerCase();
       const acc = (w.payoutDetails?.accountNumber || "").toLowerCase();
       const ifsc = (w.payoutDetails?.ifscCode || "").toLowerCase();
       const txn = (w.transactionId || "").toLowerCase();
+      const amount = String(w.amount || "");
+      const adminNote = (w.adminNote || "").toLowerCase();
+      const id = (w._id || w.id || "").toLowerCase();
 
-      return (
-        name.includes(searchLower) ||
-        channel.includes(searchLower) ||
-        phone.includes(searchLower) ||
-        upi.includes(searchLower) ||
-        bank.includes(searchLower) ||
-        acc.includes(searchLower) ||
-        ifsc.includes(searchLower) ||
-        txn.includes(searchLower)
-      );
+      const fullText = `${name} ${channel} ${email} ${phone} ${upi} ${bank} ${acc} ${ifsc} ${txn} ${amount} ${adminNote} ${id}`;
+      return searchTerms.every((term) => fullText.includes(term.replace(/^@/, "")));
     });
 
     return { filteredWithdrawals: filtered, filterCounts: counts };

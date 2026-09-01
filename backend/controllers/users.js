@@ -126,16 +126,41 @@ exports.getChannelProfile = async (req, res, next) => {
 // @access Private/Admin
 exports.getUsers = async (req, res, next) => {
   try {
+    const rawSearch = req.query.search || req.query.q || '';
+    const search = rawSearch.trim();
+
+    let query = {};
+    if (req.query.role) {
+      query.role = req.query.role;
+    }
+
+    if (search) {
+      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escaped, 'i');
+      const isObjectId = mongoose.Types.ObjectId.isValid(search);
+      const orList = [
+        { name: regex },
+        { channelName: regex },
+        { email: regex },
+        { phone: regex },
+        { about: regex },
+      ];
+      if (isObjectId) {
+        orList.push({ _id: search });
+      }
+      query.$or = orList;
+    }
+
     if (req.query.simple === 'true') {
-      const simpleUsers = await User.find()
-        .select('name channelName avatar isVerified')
+      const simpleUsers = await User.find(query)
+        .select('name channelName avatar isVerified email phone')
         .sort('name')
         .lean();
       return res.status(200).json({ success: true, count: simpleUsers.length, data: simpleUsers });
     }
 
     const [users, approvedApps] = await Promise.all([
-      User.find().sort('-createdAt').select('-password -__v').lean(),
+      User.find(query).sort('-createdAt').select('-password -__v').lean(),
       MonetizationApplication.find({ status: 'approved' }).select('user').lean(),
     ]);
 

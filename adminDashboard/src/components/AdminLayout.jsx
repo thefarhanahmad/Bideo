@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { NavLink, Outlet, useNavigate, Link } from "react-router-dom";
 import Logo from "./Logo";
+import AdminGlobalSearch from "./AdminGlobalSearch";
 import {
   GridIcon,
   UsersIcon,
@@ -108,25 +109,34 @@ const AdminLayout = () => {
 
       {/* Main area */}
       <div className="lg:pl-64 min-w-0 max-w-full overflow-x-hidden">
-        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-white/90 px-4 py-3 backdrop-blur sm:px-6 min-w-0">
-          <div className="flex items-center gap-3 min-w-0">
+        <header className="sticky top-0 z-30 flex items-center justify-between gap-3 sm:gap-4 border-b border-line bg-white/95 px-4 py-2.5 backdrop-blur sm:px-6 min-w-0">
+          <div className="flex items-center gap-3 min-w-0 shrink-0">
             <button
               onClick={() => setOpen(true)}
-              className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-ink lg:hidden"
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-ink lg:hidden hover:bg-surface"
               aria-label="Open menu"
             >
               <MenuIcon className="h-6 w-6" />
             </button>
-            <h1 className="font-display text-lg font-bold text-ink truncate">
+            <h1 className="font-display text-base sm:text-lg font-bold text-ink truncate hidden md:block">
               Dashboard
             </h1>
           </div>
-          <button
-            onClick={logout}
-            className="inline-flex items-center gap-2 rounded-full bg-red-500 px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-white transition-colors hover:bg-red-600 shrink-0"
-          >
-            <LogoutIcon className="h-4 w-4" /> Logout
-          </button>
+
+          {/* Global Search Omnibox */}
+          <div className="flex-1 max-w-xl mx-1 sm:mx-4 min-w-0">
+            <AdminGlobalSearch />
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={logout}
+              className="inline-flex items-center gap-1.5 sm:gap-2 rounded-full bg-red-500 px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-white transition-colors hover:bg-red-600 shrink-0 shadow-xs"
+            >
+              <LogoutIcon className="h-4 w-4" />
+              <span className="hidden sm:inline">Logout</span>
+            </button>
+          </div>
         </header>
 
         <main className="p-3.5 sm:p-6 lg:p-8 min-w-0 max-w-full overflow-x-hidden">

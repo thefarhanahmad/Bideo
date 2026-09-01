@@ -78,7 +78,7 @@ const Videos = () => {
     setError(null);
     try {
       const token = localStorage.getItem("admin_token");
-      const res = await fetch(API + "/api/videos?limit=100&sort=latest", {
+      const res = await fetch(API + "/api/videos?all=true&limit=3000&sort=latest", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -250,34 +250,113 @@ const Videos = () => {
       if (v.isPinned) counts.pinned += 1;
     });
 
-    const searchLower = (search || "").trim().toLowerCase();
+    const searchTrimmed = (search || "").trim().toLowerCase();
+    const rawTerms = searchTrimmed
+      ? searchTrimmed.split(/[\s,+#|/]+/).map((t) => t.replace(/^[#@]+/, "").trim()).filter(Boolean)
+      : [];
+    const searchTerms = Array.from(new Set(rawTerms));
+    const phrase = searchTrimmed.replace(/^[#@]+/, "").trim();
 
-    const filtered = videos.filter((v) => {
-      // 1. Filter condition
+    // 1. Tab / Category Filter
+    const tabFiltered = videos.filter((v) => {
       if (filter === "long" && v.isShort) return false;
       if (filter === "shorts" && !v.isShort) return false;
       if (filter === "public" && v.visibility !== "public" && v.visibility) return false;
       if (filter === "private" && v.visibility !== "private" && v.visibility !== "unlisted") return false;
       if (filter === "pinned" && !v.isPinned) return false;
+      return true;
+    });
 
-      // 2. Search condition
-      if (!searchLower) return true;
+    if (searchTerms.length === 0 && !phrase) {
+      return { filteredVideos: tabFiltered, filterCounts: counts };
+    }
+
+    // 2. Score every video against phrase and keyword terms
+    const scored = [];
+    for (const v of tabFiltered) {
       const title = (v.title || "").toLowerCase();
       const desc = (v.description || "").toLowerCase();
       const ownerName = (v.owner?.name || "").toLowerCase();
       const channel = (v.owner?.channelName || "").toLowerCase();
+      const ownerEmail = (v.owner?.email || "").toLowerCase();
+      const ownerPhone = (v.owner?.phone || "").toLowerCase();
       const catName = (v.category?.name || v.category || "").toLowerCase();
+      const id = (v._id || v.id || "").toLowerCase();
 
-      return (
-        title.includes(searchLower) ||
-        desc.includes(searchLower) ||
-        ownerName.includes(searchLower) ||
-        channel.includes(searchLower) ||
-        catName.includes(searchLower)
-      );
-    });
+      const rawTags = Array.isArray(v.tags) ? v.tags : (v.tags || "").split(",");
+      const tags = rawTags.map((t) => (typeof t === "string" ? t.trim().toLowerCase() : "")).filter(Boolean);
+      const tagsStr = tags.join(" ");
 
-    return { filteredVideos: filtered, filterCounts: counts };
+      let score = 0;
+
+      // Exact ID
+      if (id && id === phrase) score += 10000;
+
+      // Title match
+      if (title === phrase) score += 3000;
+      else if (title.startsWith(phrase)) score += 1500;
+      else if (title.includes(phrase)) score += 800;
+
+      // Tags match
+      if (tags.includes(phrase)) score += 1200;
+      else if (tagsStr.includes(phrase)) score += 600;
+
+      // Channel / Creator match
+      if (channel === phrase || ownerName === phrase) score += 1000;
+      else if (channel.includes(phrase) || ownerName.includes(phrase)) score += 500;
+
+      // Description match
+      if (desc.includes(phrase)) score += 200;
+
+      // Category match
+      if (catName.includes(phrase)) score += 150;
+
+      // Check individual keyword terms
+      let termsMatched = 0;
+      for (const term of searchTerms) {
+        let matched = false;
+        if (title.includes(term)) {
+          score += 250;
+          matched = true;
+        }
+        if (tags.some((t) => t.includes(term) || term.includes(t))) {
+          score += 200;
+          matched = true;
+        }
+        if (channel.includes(term) || ownerName.includes(term)) {
+          score += 180;
+          matched = true;
+        }
+        if (ownerEmail.includes(term) || ownerPhone.includes(term)) {
+          score += 150;
+          matched = true;
+        }
+        if (desc.includes(term)) {
+          score += 50;
+          matched = true;
+        }
+        if (catName.includes(term)) {
+          score += 40;
+          matched = true;
+        }
+        if (matched) termsMatched++;
+      }
+
+      // Bonus if all terms matched
+      if (searchTerms.length > 1 && termsMatched === searchTerms.length) {
+        score += 500;
+      }
+
+      if (score > 0) {
+        scored.push({ video: v, score });
+      }
+    }
+
+    // Sort descending by relevance score
+    scored.sort((a, b) => b.score - a.score);
+    const resultVideos = scored.map((s) => s.video);
+
+    return { filteredVideos: resultVideos, filterCounts: counts };
   }, [videos, filter, search]);
 
   // Paginate filtered results

@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const VideoReport = require('../models/VideoReport');
 const Video = require('../models/Video');
@@ -6,6 +7,7 @@ const VideoMonetizationReview = require('../models/VideoMonetizationReview');
 const MonetizationApplication = require('../models/MonetizationApplication');
 const WithdrawalRequest = require('../models/WithdrawalRequest');
 const ErrorLog = require('../models/ErrorLog');
+const Ad = require('../models/Ad');
 
 // Helper to calculate daily, weekly, and monthly trends for Users & Videos
 const calculateAnalyticsTrends = async () => {
@@ -584,10 +586,21 @@ exports.getErrorLogs = async (req, res, next) => {
       query.status = status;
     }
     if (search) {
-      query.$or = [
-        { message: { $regex: search, $options: 'i' } },
-        { endpoint: { $regex: search, $options: 'i' } },
+      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escaped, 'i');
+      const isObjectId = mongoose.Types.ObjectId.isValid(search);
+      const orConditions = [
+        { message: regex },
+        { endpoint: regex },
+        { errorType: regex },
+        { method: regex },
+        { stack: regex },
+        { adminNote: regex },
       ];
+      if (isObjectId) {
+        orConditions.push({ _id: search });
+      }
+      query.$or = orConditions;
     }
 
     const [logs, total, unresolvedCount, resolvedCount] = await Promise.all([
@@ -664,6 +677,407 @@ exports.clearResolvedErrorLogs = async (req, res, next) => {
   try {
     const result = await ErrorLog.deleteMany({ status: 'resolved' });
     res.status(200).json({ success: true, message: `Cleared ${result.deletedCount} resolved error logs` });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Helper for escaping regex strings
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Helper to tokenize query into individual keywords and clean phrases
+const parseSearchKeywords = (rawQuery) => {
+  const clean = (rawQuery || '').trim();
+  if (!clean) return { phrase: '', terms: [], regexes: [], phraseRegex: null };
+
+  const phrase = clean.replace(/^[#@]+/, '').trim();
+  const phraseRegex = new RegExp(escapeRegex(phrase), 'i');
+
+  // Split on whitespace, commas, pluses, slashes, hashtags
+  const rawTerms = clean
+    .split(/[\s,+#|/]+/)
+    .map((t) => t.trim().replace(/^[#@]+/, ''))
+    .filter((t) => t.length > 0);
+
+  const terms = Array.from(new Set(rawTerms));
+  const regexes = terms.map((t) => new RegExp(escapeRegex(t), 'i'));
+
+  return { phrase, terms, regexes, phraseRegex };
+};
+
+// Relevance scorer for videos
+const scoreVideoRelevance = (v, { phrase, terms }) => {
+  let score = 0;
+  const title = (v.title || '').toLowerCase();
+  const desc = (v.description || '').toLowerCase();
+  const channel = (v.owner?.channelName || '').toLowerCase();
+  const ownerName = (v.owner?.name || '').toLowerCase();
+  const catName = (v.category?.name || '').toLowerCase();
+  const idStr = (v._id ? v._id.toString() : '').toLowerCase();
+
+  const rawTags = Array.isArray(v.tags) ? v.tags : (v.tags || '').split(',');
+  const tags = rawTags.map((t) => (typeof t === 'string' ? t.trim().toLowerCase() : '')).filter(Boolean);
+  const tagsStr = tags.join(' ');
+
+  const phraseLower = phrase.toLowerCase();
+
+  // 1. Exact Video ID Match
+  if (idStr && idStr === phraseLower) return 10000;
+
+  // 2. Title scoring
+  if (title === phraseLower) score += 3000;
+  else if (title.startsWith(phraseLower)) score += 1500;
+  else if (title.includes(phraseLower)) score += 800;
+
+  // 3. Tag scoring
+  if (tags.includes(phraseLower)) score += 1200;
+  else if (tagsStr.includes(phraseLower)) score += 600;
+
+  // 4. Channel / Owner scoring
+  if (channel === phraseLower || ownerName === phraseLower) score += 1000;
+  else if (channel.includes(phraseLower) || ownerName.includes(phraseLower)) score += 500;
+
+  // 5. Description scoring
+  if (desc.includes(phraseLower)) score += 200;
+
+  // 6. Category scoring
+  if (catName.includes(phraseLower)) score += 150;
+
+  // 7. Individual keyword terms scoring
+  let matchedTermsCount = 0;
+  for (const term of terms) {
+    const tLower = term.toLowerCase();
+    let termMatched = false;
+
+    if (title.includes(tLower)) {
+      score += 250;
+      termMatched = true;
+    }
+    if (tags.some((tag) => tag.includes(tLower) || tLower.includes(tag))) {
+      score += 200;
+      termMatched = true;
+    }
+    if (channel.includes(tLower) || ownerName.includes(tLower)) {
+      score += 180;
+      termMatched = true;
+    }
+    if (desc.includes(tLower)) {
+      score += 50;
+      termMatched = true;
+    }
+    if (catName.includes(tLower)) {
+      score += 40;
+      termMatched = true;
+    }
+
+    if (termMatched) matchedTermsCount++;
+  }
+
+  // Bonus if all terms matched
+  if (terms.length > 1 && matchedTermsCount === terms.length) {
+    score += 500;
+  }
+
+  // Engagement tie-breaker (views)
+  score += Math.min(20, Math.log10((v.views || 0) + 1) * 3);
+
+  return score;
+};
+
+// Relevance scorer for users
+const scoreUserRelevance = (u, { phrase, terms }) => {
+  let score = 0;
+  const channel = (u.channelName || '').toLowerCase();
+  const name = (u.name || '').toLowerCase();
+  const email = (u.email || '').toLowerCase();
+  const phone = (u.phone || '').toLowerCase();
+  const about = (u.about || '').toLowerCase();
+  const idStr = (u._id ? u._id.toString() : '').toLowerCase();
+  const phraseLower = phrase.toLowerCase();
+
+  if (idStr && idStr === phraseLower) return 10000;
+
+  if (channel === phraseLower || name === phraseLower) score += 3000;
+  else if (channel.startsWith(phraseLower) || name.startsWith(phraseLower)) score += 1500;
+  else if (channel.includes(phraseLower) || name.includes(phraseLower)) score += 800;
+
+  if (email.includes(phraseLower) || phone.includes(phraseLower)) score += 700;
+  if (about.includes(phraseLower)) score += 150;
+
+  let matchedTermsCount = 0;
+  for (const term of terms) {
+    const tLower = term.toLowerCase();
+    let termMatched = false;
+    if (channel.includes(tLower)) {
+      score += 300;
+      termMatched = true;
+    }
+    if (name.includes(tLower)) {
+      score += 250;
+      termMatched = true;
+    }
+    if (email.includes(tLower) || phone.includes(tLower)) {
+      score += 200;
+      termMatched = true;
+    }
+    if (about.includes(tLower)) {
+      score += 50;
+      termMatched = true;
+    }
+    if (termMatched) matchedTermsCount++;
+  }
+
+  if (terms.length > 1 && matchedTermsCount === terms.length) score += 500;
+  if (u.isVerified) score += 50;
+  if (u.isMonetized) score += 30;
+
+  return score;
+};
+
+// @desc    Global multi-entity search across all admin dashboard resources
+// @route   GET /api/admin/search
+// @access  Private/Admin
+exports.globalAdminSearch = async (req, res, next) => {
+  try {
+    const rawQuery = req.query.q || req.query.search || '';
+    const q = rawQuery.trim();
+
+    if (!q) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          videos: [],
+          users: [],
+          categories: [],
+          reports: [],
+          monetization: [],
+          payouts: [],
+          ads: [],
+        },
+        counts: {
+          videos: 0,
+          users: 0,
+          categories: 0,
+          reports: 0,
+          monetization: 0,
+          payouts: 0,
+          ads: 0,
+          total: 0,
+        },
+      });
+    }
+
+    const { phrase, terms, regexes, phraseRegex } = parseSearchKeywords(q);
+    const isObjectId = mongoose.Types.ObjectId.isValid(q);
+
+    // Build user search clauses
+    const userOrClauses = [];
+    if (phraseRegex) {
+      userOrClauses.push({ name: phraseRegex });
+      userOrClauses.push({ channelName: phraseRegex });
+      userOrClauses.push({ email: phraseRegex });
+      userOrClauses.push({ phone: phraseRegex });
+      userOrClauses.push({ about: phraseRegex });
+    }
+    regexes.forEach((tRegex) => {
+      userOrClauses.push({ name: tRegex });
+      userOrClauses.push({ channelName: tRegex });
+      userOrClauses.push({ email: tRegex });
+      userOrClauses.push({ phone: tRegex });
+    });
+    if (isObjectId) {
+      userOrClauses.push({ _id: q });
+    }
+
+    // 1. First find matching user IDs for creator/channel linkage
+    const matchingUsers = await User.find({ $or: userOrClauses })
+      .select('name channelName avatar email phone role isVerified totalEarnings walletBalance followersCount createdAt')
+      .limit(30)
+      .lean();
+
+    const matchingUserIds = matchingUsers.map((u) => u._id);
+
+    // Build video search clauses (matching title, description, tags, creator, or exact ID)
+    const videoOrClauses = [];
+    if (phraseRegex) {
+      videoOrClauses.push({ title: phraseRegex });
+      videoOrClauses.push({ description: phraseRegex });
+      videoOrClauses.push({ tags: phraseRegex });
+      videoOrClauses.push({ tags: { $in: [phraseRegex] } });
+    }
+    regexes.forEach((tRegex) => {
+      videoOrClauses.push({ title: tRegex });
+      videoOrClauses.push({ description: tRegex });
+      videoOrClauses.push({ tags: tRegex });
+      videoOrClauses.push({ tags: { $in: [tRegex] } });
+    });
+    if (matchingUserIds.length > 0) {
+      videoOrClauses.push({ owner: { $in: matchingUserIds } });
+    }
+    if (isObjectId) {
+      videoOrClauses.push({ _id: q });
+    }
+
+    // 2. Parallel search across other collections
+    const [
+      videos,
+      categories,
+      reports,
+      monetizationApps,
+      payouts,
+      ads,
+      approvedMonetizationApps,
+    ] = await Promise.all([
+      // Videos: Title, description, tags, matching owners, or exact ID
+      Video.find({ $or: videoOrClauses })
+        .populate('owner', 'name channelName avatar isVerified email phone')
+        .populate('category', 'name')
+        .limit(60)
+        .lean(),
+
+      // Categories: Name, slug, description
+      Category.find({
+        $or: [
+          ...(phraseRegex ? [{ name: phraseRegex }, { slug: phraseRegex }, { description: phraseRegex }] : []),
+          ...regexes.map((r) => ({ name: r })),
+          ...(isObjectId ? [{ _id: q }] : []),
+        ],
+      })
+        .limit(15)
+        .lean(),
+
+      // Reports: Reason, adminNote, status, or matching video / reporter
+      VideoReport.find({
+        $or: [
+          ...(phraseRegex ? [{ reason: phraseRegex }, { adminNote: phraseRegex }, { status: phraseRegex }] : []),
+          ...regexes.map((r) => ({ reason: r })),
+          ...(matchingUserIds.length > 0 ? [{ reporter: { $in: matchingUserIds } }] : []),
+          ...(isObjectId ? [{ _id: q }] : []),
+        ],
+      })
+        .populate({
+          path: 'video',
+          select: 'title thumbnail owner visibility views isShort tags',
+          populate: { path: 'owner', select: 'name channelName avatar' },
+        })
+        .populate('reporter', 'name channelName avatar email phone')
+        .limit(20)
+        .lean(),
+
+      // Monetization Applications
+      MonetizationApplication.find({
+        $or: [
+          ...(phraseRegex
+            ? [
+                { name: phraseRegex },
+                { phone: phraseRegex },
+                { upiId: phraseRegex },
+                { adharNumber: phraseRegex },
+                { status: phraseRegex },
+                { reviewMessage: phraseRegex },
+              ]
+            : []),
+          ...regexes.map((r) => ({ name: r })),
+          ...regexes.map((r) => ({ upiId: r })),
+          ...(matchingUserIds.length > 0 ? [{ user: { $in: matchingUserIds } }] : []),
+          ...(isObjectId ? [{ _id: q }] : []),
+        ],
+      })
+        .populate('user', 'name channelName avatar email phone followersCount')
+        .limit(15)
+        .lean(),
+
+      // Payouts (Withdrawals)
+      WithdrawalRequest.find({
+        $or: [
+          ...(phraseRegex
+            ? [
+                { transactionId: phraseRegex },
+                { adminNote: phraseRegex },
+                { status: phraseRegex },
+                { 'payoutDetails.holderName': phraseRegex },
+                { 'payoutDetails.bankName': phraseRegex },
+                { 'payoutDetails.accountNumber': phraseRegex },
+                { 'payoutDetails.ifscCode': phraseRegex },
+                { 'payoutDetails.upiId': phraseRegex },
+              ]
+            : []),
+          ...regexes.map((r) => ({ transactionId: r })),
+          ...regexes.map((r) => ({ 'payoutDetails.holderName': r })),
+          ...(matchingUserIds.length > 0 ? [{ user: { $in: matchingUserIds } }] : []),
+          ...(isObjectId ? [{ _id: q }] : []),
+        ],
+      })
+        .populate('user', 'name channelName avatar email phone walletBalance')
+        .limit(15)
+        .lean(),
+
+      // Ads
+      Ad.find({
+        $or: [
+          ...(phraseRegex ? [{ title: phraseRegex }, { link: phraseRegex }, { type: phraseRegex }] : []),
+          ...regexes.map((r) => ({ title: r })),
+          ...(isObjectId ? [{ _id: q }] : []),
+        ],
+      })
+        .limit(10)
+        .lean(),
+
+      // Monetization status check for users
+      MonetizationApplication.find({ status: 'approved' }).select('user').lean(),
+    ]);
+
+    const approvedUserIdSet = new Set(
+      approvedMonetizationApps.filter((a) => a.user).map((a) => a.user.toString())
+    );
+
+    // Rank and score videos
+    const scoredVideos = videos
+      .map((v) => ({ ...v, _score: scoreVideoRelevance(v, { phrase, terms }) }))
+      .sort((a, b) => b._score - a._score)
+      .slice(0, 30);
+
+    // Rank and score users
+    const scoredUsers = matchingUsers
+      .map((u) => ({
+        ...u,
+        isMonetized: approvedUserIdSet.has(u._id.toString()),
+        _score: scoreUserRelevance(u, { phrase, terms }),
+      }))
+      .sort((a, b) => b._score - a._score)
+      .slice(0, 20);
+
+    const totalCount =
+      scoredVideos.length +
+      scoredUsers.length +
+      categories.length +
+      reports.length +
+      monetizationApps.length +
+      payouts.length +
+      ads.length;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        videos: scoredVideos,
+        users: scoredUsers,
+        categories,
+        reports,
+        monetization: monetizationApps,
+        payouts,
+        ads,
+      },
+      counts: {
+        videos: scoredVideos.length,
+        users: scoredUsers.length,
+        categories: categories.length,
+        reports: reports.length,
+        monetization: monetizationApps.length,
+        payouts: payouts.length,
+        ads: ads.length,
+        total: totalCount,
+      },
+    });
   } catch (err) {
     next(err);
   }

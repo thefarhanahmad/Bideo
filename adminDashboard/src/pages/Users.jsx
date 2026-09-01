@@ -297,31 +297,99 @@ const Users = () => {
       if (u.recoveryRequested || u.deletionStatus === "recovery_requested") counts.recovery += 1;
     });
 
-    const searchLower = (search || "").trim().toLowerCase();
+    const searchTrimmed = (search || "").trim().toLowerCase();
+    const rawTerms = searchTrimmed
+      ? searchTrimmed.split(/[\s,+#|/]+/).map((t) => t.replace(/^[#@]+/, "").trim()).filter(Boolean)
+      : [];
+    const searchTerms = Array.from(new Set(rawTerms));
+    const phrase = searchTrimmed.replace(/^[#@]+/, "").trim();
 
-    const filtered = users.filter((u) => {
-      // 1. Filter condition
+    // 1. Tab / Category Filter
+    const tabFiltered = users.filter((u) => {
       if (filter === "admins" && u.role !== "admin") return false;
       if (filter === "monetized" && !(u.isMonetized || u.monetizationApproved || (u.totalEarnings && u.totalEarnings > 0))) return false;
       if (filter === "scheduled" && !u.deletionScheduled) return false;
       if (filter === "recovery" && !(u.recoveryRequested || u.deletionStatus === "recovery_requested")) return false;
+      return true;
+    });
 
-      // 2. Search condition
-      if (!searchLower) return true;
+    if (searchTerms.length === 0 && !phrase) {
+      return { filteredUsers: tabFiltered, filterCounts: counts };
+    }
+
+    // 2. Score every user against phrase and keyword terms
+    const scored = [];
+    for (const u of tabFiltered) {
       const name = (u.name || "").toLowerCase();
       const email = (u.email || "").toLowerCase();
       const phone = (u.phone || "").toLowerCase();
       const channel = (u.channelName || "").toLowerCase();
+      const about = (u.about || "").toLowerCase();
+      const id = (u._id || u.id || "").toLowerCase();
 
-      return (
-        name.includes(searchLower) ||
-        email.includes(searchLower) ||
-        phone.includes(searchLower) ||
-        channel.includes(searchLower)
-      );
-    });
+      let score = 0;
 
-    return { filteredUsers: filtered, filterCounts: counts };
+      // Exact User ID
+      if (id && id === phrase) score += 10000;
+
+      // Channel match
+      if (channel === phrase) score += 3000;
+      else if (channel.startsWith(phrase)) score += 1500;
+      else if (channel.includes(phrase)) score += 800;
+
+      // Name match
+      if (name === phrase) score += 2000;
+      else if (name.startsWith(phrase)) score += 1000;
+      else if (name.includes(phrase)) score += 600;
+
+      // Email / Phone match
+      if (email === phrase || phone === phrase) score += 1500;
+      else if (email.includes(phrase) || phone.includes(phrase)) score += 700;
+
+      // About match
+      if (about.includes(phrase)) score += 150;
+
+      // Individual keyword terms
+      let termsMatched = 0;
+      for (const term of searchTerms) {
+        let matched = false;
+        if (channel.includes(term)) {
+          score += 300;
+          matched = true;
+        }
+        if (name.includes(term)) {
+          score += 250;
+          matched = true;
+        }
+        if (email.includes(term) || phone.includes(term)) {
+          score += 200;
+          matched = true;
+        }
+        if (about.includes(term)) {
+          score += 50;
+          matched = true;
+        }
+        if (matched) termsMatched++;
+      }
+
+      // Bonus if all terms matched
+      if (searchTerms.length > 1 && termsMatched === searchTerms.length) {
+        score += 500;
+      }
+
+      if (u.isVerified) score += 50;
+      if (u.isMonetized) score += 30;
+
+      if (score > 0) {
+        scored.push({ user: u, score });
+      }
+    }
+
+    // Sort descending by relevance score
+    scored.sort((a, b) => b.score - a.score);
+    const resultUsers = scored.map((s) => s.user);
+
+    return { filteredUsers: resultUsers, filterCounts: counts };
   }, [users, filter, search]);
 
   // Paginate filtered results

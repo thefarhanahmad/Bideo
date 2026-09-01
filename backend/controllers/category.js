@@ -6,8 +6,17 @@ const Video = require('../models/Video');
 // @access Public
 exports.getCategories = async (req, res, next) => {
   try {
+    const rawSearch = req.query.search || req.query.q || '';
+    const search = rawSearch.trim();
+    let query = {};
+    if (search) {
+      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escaped, 'i');
+      query.$or = [{ name: regex }, { slug: regex }, { description: regex }];
+    }
+
     const [categories, videoCounts] = await Promise.all([
-      Category.find().sort('name').lean(),
+      Category.find(query).sort('name').lean(),
       Video.aggregate([
         { $match: { category: { $ne: null } } },
         { $group: { _id: '$category', count: { $sum: 1 } } },

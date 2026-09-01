@@ -112,9 +112,18 @@ const Categories = () => {
 
   // Filter & Search Logic
   const filteredCats = useMemo(() => {
-    const searchLower = (search || "").trim().toLowerCase();
-    if (!searchLower) return cats;
-    return cats.filter((c) => (c.name || "").toLowerCase().includes(searchLower));
+    const searchTrimmed = (search || "").trim().toLowerCase();
+    const searchTerms = searchTrimmed ? searchTrimmed.split(/\s+/).filter(Boolean) : [];
+    if (searchTerms.length === 0) return cats;
+
+    return cats.filter((c) => {
+      const name = (c.name || "").toLowerCase();
+      const slug = (c.slug || "").toLowerCase();
+      const desc = (c.description || "").toLowerCase();
+      const id = (c._id || c.id || "").toLowerCase();
+      const fullText = `${name} ${slug} ${desc} ${id}`;
+      return searchTerms.every((term) => fullText.includes(term));
+    });
   }, [cats, search]);
 
   const totalPages = Math.max(1, Math.ceil(filteredCats.length / limit));
