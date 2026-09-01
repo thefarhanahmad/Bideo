@@ -165,7 +165,7 @@ export default function ChannelScreen() {
     return (
       <TouchableOpacity 
         style={styles.horizontalCard} 
-        onPress={() => router.push(`/video/${item._id}`)}
+        onPress={() => router.push({ pathname: `/video/${item._id}`, params: { fromChannelId: id } })}
         activeOpacity={0.7}
       >
         <View style={styles.thumbnailContainer}>
@@ -198,7 +198,7 @@ export default function ChannelScreen() {
     return (
       <TouchableOpacity 
         style={styles.shortGridItem} 
-        onPress={() => router.push({ pathname: '/shorts', params: { initialShortId: item._id } })}
+        onPress={() => router.push({ pathname: '/shorts', params: { initialShortId: item._id, fromChannelId: id } })}
         activeOpacity={0.9}
       >
         <View style={styles.shortGridThumbnailContainer}>

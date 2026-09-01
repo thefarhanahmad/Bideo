@@ -9,6 +9,7 @@ const {
   toggleReplyLike,
   updateReply,
   deleteReply,
+  togglePinComment,
 } = require("../controllers/comment");
 const { protect } = require("../middlewares/auth");
 
@@ -23,6 +24,7 @@ router
 
 router.route("/:videoId").get(getComments);
 
+router.put("/:id/pin", protect, togglePinComment);
 router.post("/:id/like", protect, toggleCommentLike);
 router.post("/:id/replies", protect, addReply);
 router

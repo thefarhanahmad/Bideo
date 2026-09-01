@@ -19,6 +19,19 @@ const commentSchema = new mongoose.Schema({
     required: [true, 'Please add some text'],
     maxlength: [500, 'Comment cannot be more than 500 characters'],
   },
+  isPinned: {
+    type: Boolean,
+    default: false,
+  },
+  pinnedAt: {
+    type: Date,
+    default: null,
+  },
+  pinnedBy: {
+    type: mongoose.Schema.ObjectId,
+    ref: 'User',
+    default: null,
+  },
   likes: [
     {
       type: mongoose.Schema.ObjectId,

@@ -22,8 +22,9 @@ exports.getComments = async (req, res, next) => {
     const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
     const comments = await Comment.find(query)
       .populate('user', 'name avatar channelName isVerified')
+      .populate('pinnedBy', 'name avatar channelName isVerified')
       .populate('replies.user', 'name avatar channelName isVerified')
-      .sort('-createdAt')
+      .sort('-isPinned -createdAt')
       .limit(limit)
       .lean();
 
@@ -294,6 +295,64 @@ exports.deleteComment = async (req, res, next) => {
     res.status(200).json({
       success: true,
       data: {},
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Pin or unpin comment (by video/post creator or admin)
+// @route   PUT /api/comments/:id/pin
+// @access  Private
+exports.togglePinComment = async (req, res, next) => {
+  try {
+    const comment = await Comment.findById(req.params.id);
+    if (!comment) {
+      return res.status(404).json({ success: false, message: 'Comment not found' });
+    }
+
+    let parent;
+    if (comment.video) parent = await Video.findById(comment.video);
+    else if (comment.post) parent = await Post.findById(comment.post);
+
+    if (!parent) {
+      return res.status(404).json({ success: false, message: 'Parent video or post not found' });
+    }
+
+    const isCreator = parent.owner.toString() === req.user.id.toString();
+    const isAdmin = req.user.role === 'admin';
+
+    if (!isCreator && !isAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only the creator of this content or an administrator can pin comments',
+      });
+    }
+
+    const isCurrentlyPinned = Boolean(comment.isPinned);
+
+    if (isCurrentlyPinned) {
+      comment.isPinned = false;
+      comment.pinnedAt = null;
+      comment.pinnedBy = null;
+      await comment.save();
+    } else {
+      const filter = comment.video ? { video: comment.video } : { post: comment.post };
+      await Comment.updateMany(filter, { isPinned: false, pinnedAt: null, pinnedBy: null });
+
+      comment.isPinned = true;
+      comment.pinnedAt = new Date();
+      comment.pinnedBy = req.user.id;
+      await comment.save();
+    }
+
+    await comment.populate('user', 'name avatar channelName isVerified');
+    await comment.populate('pinnedBy', 'name avatar channelName isVerified');
+
+    res.status(200).json({
+      success: true,
+      message: comment.isPinned ? 'Comment pinned successfully' : 'Comment unpinned successfully',
+      data: comment,
     });
   } catch (err) {
     next(err);

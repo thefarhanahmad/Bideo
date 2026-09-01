@@ -214,6 +214,7 @@ const PostCard = ({ post, onDelete }: PostCardProps) => {
           <ScrollView>
             <CommentList 
               postId={post._id} 
+              contentOwnerId={post?.owner?._id || post?.owner}
               onCommentAdded={() => setCommentsCount((prev: number) => prev + 1)}
               isAuthenticated={isAuthenticated}
               onAuthRequired={() => setAuthModalVisible(true)}

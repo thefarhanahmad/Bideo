@@ -11,18 +11,20 @@ import { useSelector } from 'react-redux';
 import { RootState } from '../redux/store';
 import { formatTimeAgo } from '../utils/formatDate';
 import VerifiedBadge from './VerifiedBadge';
+import HashtagText from './HashtagText';
 
 const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
 
 interface CommentListProps {
   videoId?: string;
   postId?: string;
+  contentOwnerId?: string;
   onCommentAdded: () => void;
   isAuthenticated: boolean;
   onAuthRequired: () => void;
 }
 
-const CommentList: React.FC<CommentListProps> = ({ videoId, postId, onCommentAdded, isAuthenticated, onAuthRequired }) => {
+const CommentList: React.FC<CommentListProps> = ({ videoId, postId, contentOwnerId, onCommentAdded, isAuthenticated, onAuthRequired }) => {
   const { user } = useSelector((state: RootState) => state.auth);
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -38,6 +40,14 @@ const CommentList: React.FC<CommentListProps> = ({ videoId, postId, onCommentAdd
   const [replyText, setReplyText] = useState('');
   const [replySubmitting, setReplySubmitting] = useState(false);
   const replyInputRef = useRef<TextInput>(null);
+
+  const isCreator = Boolean(
+    user?._id &&
+    contentOwnerId &&
+    user._id.toString() === contentOwnerId.toString()
+  );
+  const isAdmin = user?.role === 'admin';
+  const canManagePin = isCreator || isAdmin;
 
   useEffect(() => {
     fetchComments();
@@ -173,13 +183,22 @@ const CommentList: React.FC<CommentListProps> = ({ videoId, postId, onCommentAdd
 
   const handleLikeReply = async (commentId: string, replyId: string) => {
     if (!isAuthenticated) return onAuthRequired();
-    // Assuming backend supports liking replies. If not, we might need a separate endpoint.
-    // For now, let's assume the same /like endpoint works or we'll need to add it.
     try {
       const res = await api.post(`/comments/${commentId}/replies/${replyId}/like`);
       fetchComments(true);
     } catch (err) {
       console.error('Failed to like reply', err);
+    }
+  };
+
+  const handlePinComment = async (commentId: string) => {
+    if (!isAuthenticated) return onAuthRequired();
+    try {
+      await api.put(`/comments/${commentId}/pin`);
+      fetchComments(true);
+    } catch (err: any) {
+      console.error('Failed to pin/unpin comment', err);
+      showAlert('Error', err?.response?.data?.message || 'Failed to update pin status');
     }
   };
 
@@ -213,6 +232,8 @@ const CommentList: React.FC<CommentListProps> = ({ videoId, postId, onCommentAdd
             key={item._id}
             item={item}
             userId={user?._id}
+            canManagePin={canManagePin}
+            onPin={() => handlePinComment(item._id)}
             onOpenChannel={(channelId: string) => router.push(`/channel/${channelId}`)}
             onLike={() => handleLikeComment(item._id)}
             onReply={() => openReplyComposer(item)}
@@ -369,53 +390,87 @@ const CommentList: React.FC<CommentListProps> = ({ videoId, postId, onCommentAdd
   );
 };
 
-const CommentItem = ({ item, userId, onOpenChannel, onLike, onReply, onLikeReply, onEdit, onDelete }: any) => {
+const CommentItem = ({
+  item,
+  userId,
+  canManagePin,
+  onOpenChannel,
+  onLike,
+  onReply,
+  onLikeReply,
+  onEdit,
+  onDelete,
+  onPin,
+}: any) => {
   const liked = item.likes?.some((id: string) => id === userId);
   const isOwner = item.user?._id === userId;
 
   const showOptions = () => {
+    const options: any[] = [{ text: 'Cancel', style: 'cancel' }];
+
+    if (canManagePin) {
+      options.push({
+        text: item.isPinned ? 'Unpin comment' : 'Pin comment',
+        onPress: onPin,
+      });
+    }
+
+    if (isOwner) {
+      options.push({ text: 'Edit', onPress: onEdit });
+    }
+
+    if (isOwner || canManagePin) {
+      options.push({
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          showAlert('Delete', 'Are you sure you want to delete this comment?', [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Delete', style: 'destructive', onPress: onDelete },
+          ]);
+        },
+      });
+    }
+
     if (Platform.OS === 'web') {
-      if (confirm('Delete this comment?')) onDelete();
+      if (confirm(item.isPinned ? 'Unpin this comment?' : 'Pin this comment?')) {
+        if (canManagePin) onPin();
+      }
       return;
     }
-    
-    showAlert(
-      'Comment Options',
-      'What would you like to do?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Edit', onPress: onEdit },
-        { text: 'Delete', style: 'destructive', onPress: () => {
-          showAlert('Delete', 'Are you sure?', [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Delete', style: 'destructive', onPress: onDelete }
-          ]);
-        } },
-      ]
-    );
+
+    showAlert('Comment Options', 'What would you like to do?', options);
   };
 
   return (
-    <View style={styles.commentItem}>
+    <View style={[styles.commentItem, item.isPinned && styles.pinnedCommentItem]}>
       <TouchableOpacity onPress={() => item.user?._id && onOpenChannel(item.user._id)}>
         <Image source={{ uri: item.user?.avatar || FALLBACK_AVATAR }} style={styles.avatar} />
       </TouchableOpacity>
       <View style={styles.commentContent}>
+        {Boolean(item.isPinned) && (
+          <View style={styles.pinnedBadgeRow}>
+            <Ionicons name="pin" size={12} color={Colors.textGray} style={{ marginRight: 4 }} />
+            <Text style={styles.pinnedBadgeText} numberOfLines={1}>
+              Pinned by {item.pinnedBy?.channelName || item.pinnedBy?.name || 'creator'}
+            </Text>
+          </View>
+        )}
         <View style={styles.commentHeader}>
           <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
             <Text style={styles.username} onPress={() => item.user?._id && onOpenChannel(item.user._id)}>
               {item.user?.channelName || item.user?.name || 'User'}
             </Text>
             {Boolean(item.user?.isVerified) && <VerifiedBadge size={12} style={{ marginLeft: 2 }} />}
-            <Text style={styles.time}> - {formatTimeAgo(item.createdAt)}</Text>
+            <Text style={styles.time}> • {formatTimeAgo(item.createdAt)}</Text>
           </View>
-          {isOwner && (
+          {(isOwner || canManagePin) && (
             <TouchableOpacity onPress={showOptions} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <Ionicons name="ellipsis-vertical" size={14} color={Colors.textGray} />
             </TouchableOpacity>
           )}
         </View>
-        <Text style={styles.commentText}>{item.text}</Text>
+        <HashtagText text={item.text} style={styles.commentText} />
         <View style={styles.commentActions}>
           <TouchableOpacity style={styles.actionItem} onPress={onLike}>
             <Ionicons name={liked ? 'thumbs-up' : 'thumbs-up-outline'} size={14} color={liked ? Colors.primary : Colors.textGray} />
@@ -433,9 +488,9 @@ const CommentItem = ({ item, userId, onOpenChannel, onLike, onReply, onLikeReply
               <View style={styles.replyHeader}>
                 <Text style={styles.username}>{reply.user?.channelName || reply.user?.name || 'User'}</Text>
                 {Boolean(reply.user?.isVerified) && <VerifiedBadge size={11} style={{ marginLeft: 2 }} />}
-                <Text style={styles.time}> - {formatTimeAgo(reply.createdAt)}</Text>
+                <Text style={styles.time}> • {formatTimeAgo(reply.createdAt)}</Text>
               </View>
-              <Text style={styles.commentText}>{reply.text}</Text>
+              <HashtagText text={reply.text} style={styles.commentText} />
               <View style={styles.commentActions}>
                 <TouchableOpacity style={styles.actionItem} onPress={() => onLikeReply(reply._id)}>
                   <Ionicons name={replyLiked ? 'thumbs-up' : 'thumbs-up-outline'} size={12} color={replyLiked ? Colors.primary : Colors.textGray} />
@@ -462,6 +517,23 @@ const styles = StyleSheet.create({
   sendButton: { padding: 5, marginLeft: 10 },
   commentsList: { marginTop: 6 },
   commentItem: { flexDirection: 'row', marginBottom: 18 },
+  pinnedCommentItem: {
+    backgroundColor: 'rgba(0,0,0,0.02)',
+    padding: 8,
+    borderRadius: 12,
+    borderLeftWidth: 2,
+    borderLeftColor: Colors.primary,
+  },
+  pinnedBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  pinnedBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.textGray,
+  },
   avatar: { width: 36, height: 36, borderRadius: 18, marginRight: 12, backgroundColor: '#E5E7EB' },
   commentContent: { flex: 1 },
   commentHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },

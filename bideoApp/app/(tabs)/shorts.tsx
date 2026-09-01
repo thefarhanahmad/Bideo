@@ -1,6 +1,6 @@
 import { showAlert } from '../../components/AppAlert';
-import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, Dimensions, TouchableOpacity, ActivityIndicator, ScrollView, Platform, Modal, Pressable, Share, TextInput, Animated } from 'react-native';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, Dimensions, TouchableOpacity, ActivityIndicator, ScrollView, Platform, Modal, Pressable, Share, TextInput, Animated, BackHandler } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -56,7 +56,7 @@ export default function ShortsScreen() {
   const insets = useSafeAreaInsets();
   const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
   const router = useRouter();
-  const { initialShortId } = useLocalSearchParams<{ initialShortId?: string }>();
+  const { initialShortId, fromChannelId } = useLocalSearchParams<{ initialShortId?: string; fromChannelId?: string }>();
   const isFocused = useIsFocused();
   const [shorts, setShorts] = useState<any[]>([]);
   const flatListRef = useRef<FlatList>(null);
@@ -74,6 +74,34 @@ export default function ShortsScreen() {
   const [selectedShort, setSelectedShort] = useState<any>(null);
   const [reportModalVisible, setReportModalVisible] = useState(false);
   const [reportReason, setReportReason] = useState('');
+
+  const handleBack = useCallback(() => {
+    if (fromChannelId) {
+      router.replace(`/channel/${fromChannelId}`);
+    } else if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.push('/(tabs)');
+    }
+  }, [fromChannelId]);
+
+  useEffect(() => {
+    if (!isFocused) return;
+    const onBackPress = () => {
+      if (fromChannelId) {
+        router.replace(`/channel/${fromChannelId}`);
+        return true;
+      }
+      if (initialShortId && router.canGoBack()) {
+        router.back();
+        return true;
+      }
+      return false;
+    };
+
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [isFocused, fromChannelId, initialShortId]);
 
   useEffect(() => {
     loadShorts(initialShortId);
@@ -303,6 +331,8 @@ export default function ShortsScreen() {
       setAuthModalVisible(true);
       return;
     }
+    const foundShort = shorts.find((s) => s._id === shortId);
+    if (foundShort) setSelectedShort(foundShort);
     setSelectedShortId(shortId);
     setCommentModalVisible(true);
   };
@@ -451,6 +481,7 @@ export default function ShortsScreen() {
               {selectedShortId && (
                 <CommentList 
                   videoId={selectedShortId} 
+                  contentOwnerId={selectedShort?.owner?._id || selectedShort?.owner}
                   onCommentAdded={() => {}} 
                   isAuthenticated={isAuthenticated} 
                   onAuthRequired={() => {
@@ -519,6 +550,8 @@ export default function ShortsScreen() {
                 insets={insets}
                 isActive={activeVideoIndex === index}
                 onComplete={() => handleAdComplete(index)}
+                showBackButton={Boolean(fromChannelId || initialShortId)}
+                onBack={handleBack}
               />
             );
           }
@@ -531,6 +564,8 @@ export default function ShortsScreen() {
               isFocused={isFocused}
               insets={insets}
               user={user}
+              showBackButton={Boolean(fromChannelId || initialShortId)}
+              onBack={handleBack}
               onLike={handleLike}
               onCommentClick={handleCommentClick}
               onShare={handleShare}
@@ -544,9 +579,22 @@ export default function ShortsScreen() {
   );
 }
 
-const ShortAdItem = ({ containerHeight, insets, isActive, onComplete }: any) => {
+const ShortAdItem = ({ containerHeight, insets, isActive, onComplete, showBackButton, onBack }: any) => {
   return (
     <View style={[styles.shortItem, { height: containerHeight, justifyContent: 'center', alignItems: 'center', backgroundColor: 'black' }]}>
+      {showBackButton && (
+        <View style={[styles.topHeader, { top: insets.top + 10 }]}>
+          <TouchableOpacity 
+            style={styles.headerBackBtn}
+            onPress={onBack}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="arrow-back" size={24} color={Colors.white} />
+          </TouchableOpacity>
+          <Text style={styles.shortsHeaderTitle}>Shorts</Text>
+        </View>
+      )}
       <ActivityIndicator size="large" color={Colors.primary} />
       <Text style={{ color: Colors.white, marginTop: 15, fontSize: 14, fontWeight: 'bold' }}>
         Loading Sponsor Ad...
@@ -556,7 +604,7 @@ const ShortAdItem = ({ containerHeight, insets, isActive, onComplete }: any) => 
   );
 };
 
-const ShortItem = ({ item, index, activeVideoIndex, containerHeight, isFocused, insets, user, onLike, onCommentClick, onShare, onMenuClick, onFollow }: any) => {
+const ShortItem = ({ item, index, activeVideoIndex, containerHeight, isFocused, insets, user, showBackButton, onBack, onLike, onCommentClick, onShare, onMenuClick, onFollow }: any) => {
   const router = useRouter();
   const player = useVideoPlayer(item.videoUrl, (p) => {
     p.loop = true;
@@ -682,6 +730,16 @@ const ShortItem = ({ item, index, activeVideoIndex, containerHeight, isFocused, 
 
       <View style={styles.overlay} pointerEvents="box-none">
         <View style={[styles.topHeader, { top: insets.top + 10 }]}>
+          {showBackButton && (
+            <TouchableOpacity 
+              style={styles.headerBackBtn}
+              onPress={onBack}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="arrow-back" size={24} color={Colors.white} />
+            </TouchableOpacity>
+          )}
           <Text style={styles.shortsHeaderTitle}>Shorts</Text>
         </View>
 
@@ -866,8 +924,19 @@ const styles = StyleSheet.create({
   },
   topHeader: {
     position: 'absolute',
-    left: 20,
+    left: 16,
     zIndex: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerBackBtn: {
+    marginRight: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   shortsHeaderTitle: {
     color: Colors.white,

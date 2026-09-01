@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, FlatList, Share, useWindowDimensions, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, FlatList, Share, useWindowDimensions, StatusBar, BackHandler } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSelector } from 'react-redux';
@@ -25,12 +25,39 @@ const FALLBACK_IMAGE = 'https://via.placeholder.com/80x80.png?text=User';
 const REQUIRED_WATCH_TIME = 3; // 3 seconds minimum watch time to count a view
 
 export default function VideoScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, fromChannelId } = useLocalSearchParams<{ id: string; fromChannelId?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const playerHeight = Math.round((windowWidth * 9) / 16);
   const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
+
+  const handleBack = useCallback(() => {
+    if (fromChannelId) {
+      router.replace(`/channel/${fromChannelId}`);
+    } else if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.push('/(tabs)');
+    }
+  }, [fromChannelId]);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      if (fromChannelId) {
+        router.replace(`/channel/${fromChannelId}`);
+        return true;
+      }
+      if (router.canGoBack()) {
+        router.back();
+        return true;
+      }
+      return false;
+    };
+
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [fromChannelId]);
   // expo-video player (replaces the deprecated expo-av <Video>). Source is loaded
   // via player.replace() once the video data arrives.
   const player = useVideoPlayer(null, (p) => {
@@ -387,7 +414,7 @@ export default function VideoScreen() {
             />
             <TouchableOpacity
               style={styles.floatingBackButton}
-              onPress={() => router.back()}
+              onPress={handleBack}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               activeOpacity={0.7}
             >
@@ -468,6 +495,7 @@ export default function VideoScreen() {
             
             <CommentList 
               videoId={video._id} 
+              contentOwnerId={video?.owner?._id || video?.owner}
               onCommentAdded={() => setVideo((prev: any) => prev ? { ...prev, commentsCount: (prev.commentsCount || 0) + 1 } : prev)}
               isAuthenticated={isAuthenticated}
               onAuthRequired={() => setAuthModalVisible(true)}
