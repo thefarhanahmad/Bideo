@@ -250,10 +250,15 @@ export default function ChannelSelect({
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1 leading-tight">
-                        <span className="font-semibold text-xs truncate">
-                          {u.channelName ? `@${u.channelName}` : u.name}
+                      <div className="flex items-center gap-1.5 leading-tight">
+                        <span className="font-bold text-xs text-ink truncate">
+                          {u.channelName ? `@${u.channelName}` : (u.name || "Unnamed Channel")}
                         </span>
+                        {u.channelName && u.name && u.name.toLowerCase() !== u.channelName.toLowerCase() && (
+                          <span className="text-[11px] text-muted truncate">
+                            • {u.name}
+                          </span>
+                        )}
                         {u.isVerified && (
                           <span className="text-blue-500 text-[10px] font-bold" title="Verified Creator">
                             ✓
@@ -265,9 +270,12 @@ export default function ChannelSelect({
                           </span>
                         )}
                       </div>
-                      <div className="text-[10px] text-muted truncate mt-0.5 leading-tight">
-                        {u.name}
-                        {u.phone ? ` • ${u.phone}` : u.email ? ` • ${u.email}` : ""}
+                      <div className="text-[10px] text-muted truncate mt-0.5 leading-tight flex items-center gap-2">
+                        {u.name && (!u.channelName || u.name.toLowerCase() === u.channelName.toLowerCase()) ? (
+                          <span>Channel & User Profile</span>
+                        ) : null}
+                        {u.phone ? <span>📞 {u.phone}</span> : u.email ? <span>✉️ {u.email}</span> : null}
+                        {u._id && <span className="text-[9px] text-muted/60 font-mono">ID: {String(u._id).slice(-6)}</span>}
                       </div>
                     </div>
 

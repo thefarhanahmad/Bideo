@@ -409,7 +409,11 @@ const Videos = () => {
               <span>⚡ Boost All (100-300 Views)</span>
             </button>
             <button
-              onClick={() => setShowAdd(true)}
+              onClick={() => {
+                fetchUsers();
+                fetchCategories();
+                setShowAdd(true);
+              }}
               className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-brand transition-all hover:-translate-y-0.5 hover:bg-brand-dark"
             >
               <span>+ Upload Video</span>
@@ -540,6 +544,8 @@ const Videos = () => {
                         </button>
                         <button
                           onClick={() => {
+                            fetchUsers();
+                            fetchCategories();
                             setEditVideo(v);
                             setShowEdit(true);
                           }}
