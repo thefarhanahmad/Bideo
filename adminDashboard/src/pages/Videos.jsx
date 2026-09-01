@@ -4,6 +4,7 @@ import ConfirmModal from "../components/ConfirmModal";
 import DataTableToolbar from "../components/DataTableToolbar";
 import Pagination from "../components/Pagination";
 import LoadingSkeleton from "../components/LoadingSkeleton";
+import ChannelSelect from "../components/ChannelSelect";
 import { useTableParams } from "../hooks/useTableParams";
 import { API_URL } from "../config";
 
@@ -765,23 +766,17 @@ const UploadForm = ({ categories = [], users = [], onSubmit, onCancel }) => {
 
       {/* Target Channel / Creator Selector */}
       <div>
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between items-center mb-1">
           <label className="block text-sm font-medium text-ink">Target Channel / Creator</label>
-          <span className="text-[11px] text-muted">{users.length} channels available</span>
+          <span className="text-[11px] text-muted font-medium">{users.length} channels available</span>
         </div>
-        <select
+        <ChannelSelect
+          users={users}
           value={owner}
-          onChange={(e) => setOwner(e.target.value)}
-          className={inputClass}
+          onChange={setOwner}
           disabled={uploading}
-        >
-          <option value="">Default (Admin Account)</option>
-          {users.map((u) => (
-            <option key={u._id} value={u._id}>
-              {u.name} {u.channelName ? `(@${u.channelName})` : ""} {u.phone ? `• ${u.phone}` : u.email ? `• ${u.email}` : ""}
-            </option>
-          ))}
-        </select>
+          placeholder="Default (Admin Account)"
+        />
         <p className="mt-1 text-[11px] text-muted">
           Select which channel profile this video will appear under.
         </p>
@@ -993,20 +988,17 @@ const EditForm = ({ initial = {}, categories = [], users = [], onSubmit, onCance
 
       {/* Target Channel / Creator Selector on Edit */}
       <div>
-        <label className="block text-sm font-medium text-ink">Channel / Creator</label>
-        <select
+        <div className="flex justify-between items-center mb-1">
+          <label className="block text-sm font-medium text-ink">Channel / Creator</label>
+          <span className="text-[11px] text-muted font-medium">{users.length} channels available</span>
+        </div>
+        <ChannelSelect
+          users={users}
           value={owner}
-          onChange={(e) => setOwner(e.target.value)}
-          className={inputClass}
+          onChange={setOwner}
           disabled={saving}
-        >
-          <option value="">Default (Admin Account)</option>
-          {users.map((u) => (
-            <option key={u._id} value={u._id}>
-              {u.name} {u.channelName ? `(@${u.channelName})` : ""} {u.phone ? `• ${u.phone}` : u.email ? `• ${u.email}` : ""}
-            </option>
-          ))}
-        </select>
+          placeholder="Default (Admin Account)"
+        />
       </div>
 
       {/* Thumbnail edit / preview */}

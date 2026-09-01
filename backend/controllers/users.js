@@ -153,8 +153,8 @@ exports.getUsers = async (req, res, next) => {
 
     if (req.query.simple === 'true') {
       const simpleUsers = await User.find(query)
-        .select('name channelName avatar isVerified email phone')
-        .sort('name')
+        .select('name channelName avatar isVerified email phone role')
+        .sort('channelName name')
         .lean();
       return res.status(200).json({ success: true, count: simpleUsers.length, data: simpleUsers });
     }
@@ -303,21 +303,34 @@ exports.addToHistory = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Valid videoId is required' });
     }
 
-    const user = await User.findById(req.user.id);
-    if (!user) {
+    const videoObjId = new mongoose.Types.ObjectId(videoId);
+
+    // 1. Atomically remove duplicate if already present in history
+    await User.updateOne(
+      { _id: req.user.id },
+      { $pull: { watchHistory: videoObjId } }
+    );
+
+    // 2. Atomically prepend to the beginning ($position: 0) and slice to max 50 items (avoids VersionError)
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user.id,
+      {
+        $push: {
+          watchHistory: {
+            $each: [videoObjId],
+            $position: 0,
+            $slice: 50,
+          },
+        },
+      },
+      { new: true, select: 'watchHistory' }
+    );
+
+    if (!updatedUser) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    const stringId = videoId.toString();
-    const currentHistory = (user.watchHistory || []).filter(
-      id => id && id.toString() !== stringId
-    );
-
-    currentHistory.unshift(videoId);
-    user.watchHistory = currentHistory.slice(0, 50);
-
-    await user.save({ validateBeforeSave: false });
-    res.status(200).json({ success: true, data: user.watchHistory });
+    res.status(200).json({ success: true, data: updatedUser.watchHistory || [] });
   } catch (err) {
     next(err);
   }
@@ -333,7 +346,7 @@ exports.getHistory = async (req, res, next) => {
       populate: { path: 'owner', select: 'name channelName avatar' }
     });
 
-    res.status(200).json({ success: true, data: user.watchHistory || [] });
+    res.status(200).json({ success: true, data: user?.watchHistory || [] });
   } catch (err) {
     next(err);
   }
@@ -348,7 +361,7 @@ exports.getLikedVideos = async (req, res, next) => {
         { path: 'category', select: 'name' },
       ],
     });
-    res.status(200).json({ success: true, data: user.likedVideos || [] });
+    res.status(200).json({ success: true, data: user?.likedVideos || [] });
   } catch (err) {
     next(err);
   }
@@ -358,12 +371,36 @@ exports.addSearchHistory = async (req, res, next) => {
   try {
     const term = (req.body.term || '').trim();
     if (!term) return res.status(400).json({ success: false, message: 'Search term is required' });
-    const user = await User.findById(req.user.id);
-    user.searchHistory = (user.searchHistory || []).filter((item) => item.term.toLowerCase() !== term.toLowerCase());
-    user.searchHistory.unshift({ term, createdAt: new Date() });
-    user.searchHistory = user.searchHistory.slice(0, 20);
-    await user.save();
-    res.status(200).json({ success: true, data: user.searchHistory });
+
+    const searchItem = { term, createdAt: new Date() };
+    const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    // 1. Atomically remove existing search item matching term case-insensitively
+    await User.updateOne(
+      { _id: req.user.id },
+      { $pull: { searchHistory: { term: new RegExp(`^${escapedTerm}$`, 'i') } } }
+    );
+
+    // 2. Atomically prepend new search term and cap at 20 entries (avoids VersionError)
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user.id,
+      {
+        $push: {
+          searchHistory: {
+            $each: [searchItem],
+            $position: 0,
+            $slice: 20,
+          },
+        },
+      },
+      { new: true, select: 'searchHistory' }
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    res.status(200).json({ success: true, data: updatedUser.searchHistory || [] });
   } catch (err) {
     next(err);
   }
@@ -450,8 +487,8 @@ exports.getMonetizationStatus = async (req, res, next) => {
         walletBalance: Math.round((walletBalance || 0) * 100) / 100,
         totalEarnings: Math.round((totalEarnings || 0) * 100) / 100,
         totalViews,
-        ratePerThousandViews: 30,
-        ratePerView: 0.03,
+        ratePerThousandViews: Math.round((Number(process.env.VIEW_REWARD_RATE) || 0.15) * 1000),
+        ratePerView: Number(process.env.VIEW_REWARD_RATE) || 0.15,
         minWithdrawal: 1000,
       }
     });

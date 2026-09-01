@@ -121,12 +121,23 @@ exports.togglePostLike = async (req, res, next) => {
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ success: false, message: 'Post not found' });
 
-    const userId = req.user.id.toString();
-    const alreadyLiked = post.likes.some((id) => id.toString() === userId);
+    const userId = req.user.id;
+    const userIdStr = userId.toString();
+    const alreadyLiked = (post.likes || []).some((id) => id.toString() === userIdStr);
+
+    let updatedPost;
     if (alreadyLiked) {
-      post.likes = post.likes.filter((id) => id.toString() !== userId);
+      updatedPost = await Post.findByIdAndUpdate(
+        post._id,
+        { $pull: { likes: userId } },
+        { new: true }
+      );
     } else {
-      post.likes.addToSet(req.user.id);
+      updatedPost = await Post.findByIdAndUpdate(
+        post._id,
+        { $addToSet: { likes: userId } },
+        { new: true }
+      );
       await createNotification({
         recipient: post.owner,
         actor: req.user.id,
@@ -136,8 +147,11 @@ exports.togglePostLike = async (req, res, next) => {
       });
     }
 
-    await post.save();
-    res.status(200).json({ success: true, likes: post.likes, isLiked: !alreadyLiked });
+    res.status(200).json({
+      success: true,
+      likes: updatedPost ? updatedPost.likes : [],
+      isLiked: !alreadyLiked,
+    });
   } catch (err) {
     next(err);
   }

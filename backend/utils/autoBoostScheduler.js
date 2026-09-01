@@ -29,9 +29,10 @@ const processAutoHourlyBoost = async () => {
     const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
     const threeHoursAgo = new Date(Date.now() - THREE_HOURS_MS);
 
-    // 1. Fetch eligible public videos uploaded at least 3 hours ago with views under max threshold
+    // 1. Fetch eligible unpinned public videos uploaded at least 3 hours ago with views under max threshold
     const videos = await Video.find({
       visibility: 'public',
+      isPinned: { $ne: true }, // Only unpinned videos should increase views
       views: { $lt: 290 },
       createdAt: { $lte: threeHoursAgo },
     });
@@ -49,6 +50,11 @@ const processAutoHourlyBoost = async () => {
     let totalLikesAdded = 0;
 
     for (const video of videos) {
+      // Strictly skip any pinned video
+      if (video.isPinned === true || video.isPinned === 'true') {
+        continue;
+      }
+
       const targetCap = getTargetCap(video._id);
       const currentViews = Math.round(Number(video.views) || 0);
 

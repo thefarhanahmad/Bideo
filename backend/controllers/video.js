@@ -9,10 +9,7 @@ const Notification = require("../models/Notification");
 const VideoMonetizationReview = require("../models/VideoMonetizationReview");
 const MonetizationApplication = require("../models/MonetizationApplication");
 const fs = require("fs");
-const {
-  saveLocalFile,
-  deleteLocalFile,
-} = require("../utils/localUpload");
+const { saveLocalFile, deleteLocalFile } = require("../utils/localUpload");
 
 const FALLBACK_THUMBNAIL =
   "https://via.placeholder.com/640x360.png?text=Tube+India";
@@ -58,19 +55,19 @@ const applyVideoTypeFilter = (query, type) => {
 
 const getVideoQuery = (req) => {
   const query = {};
-  const isAdmin = req.user && req.user.role === 'admin';
+  const isAdmin = req.user && req.user.role === "admin";
 
   // Admin can view all or specific visibility; public users only see public videos
-  if (req.query.visibility && req.query.visibility !== 'all') {
+  if (req.query.visibility && req.query.visibility !== "all") {
     query.visibility = req.query.visibility;
   } else if (!isAdmin) {
-    query.visibility = 'public';
+    query.visibility = "public";
   }
 
   if (req.query.owner) query.owner = req.query.owner;
   if (req.query.category) query.category = req.query.category;
   if (req.query.isPinned !== undefined) {
-    query.isPinned = req.query.isPinned === 'true';
+    query.isPinned = req.query.isPinned === "true";
   }
   return applyVideoTypeFilter(query, req.query.type);
 };
@@ -83,24 +80,29 @@ const getSort = (sort) => {
 
 const formatMediaUrl = (url, req) => {
   if (!url) return url;
-  if (url.startsWith('https://') && !url.includes('localhost') && !url.includes('127.0.0.1')) {
+  if (
+    url.startsWith("https://") &&
+    !url.includes("localhost") &&
+    !url.includes("127.0.0.1")
+  ) {
     return url;
   }
 
   let serverBase = process.env.BASE_URL;
   if (!serverBase && req) {
-    const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
-    const host = req.headers['x-forwarded-host'] || req.get('host') || 'localhost:5000';
+    const proto = req.headers["x-forwarded-proto"] || req.protocol || "http";
+    const host =
+      req.headers["x-forwarded-host"] || req.get("host") || "localhost:5000";
     serverBase = `${proto}://${host}`;
   }
   if (!serverBase) return url;
-  serverBase = serverBase.replace(/\/$/, '');
+  serverBase = serverBase.replace(/\/$/, "");
 
-  if (url.startsWith('/')) {
+  if (url.startsWith("/")) {
     return `${serverBase}${url}`;
   }
 
-  if (url.includes('localhost:5000') || url.includes('127.0.0.1:5000')) {
+  if (url.includes("localhost:5000") || url.includes("127.0.0.1:5000")) {
     return url
       .replace(/https?:\/\/localhost:5000/, serverBase)
       .replace(/https?:\/\/127\.0\.0\.1:5000/, serverBase);
@@ -111,10 +113,11 @@ const formatMediaUrl = (url, req) => {
 
 const decorateVideos = async (videos, req) => {
   let results = videos.map((v) => {
-    const obj = typeof v.toObject === 'function' ? v.toObject() : { ...v };
+    const obj = typeof v.toObject === "function" ? v.toObject() : { ...v };
     if (obj.thumbnail) obj.thumbnail = formatMediaUrl(obj.thumbnail, req);
     if (obj.videoUrl) obj.videoUrl = formatMediaUrl(obj.videoUrl, req);
-    if (obj.owner && obj.owner.avatar) obj.owner.avatar = formatMediaUrl(obj.owner.avatar, req);
+    if (obj.owner && obj.owner.avatar)
+      obj.owner.avatar = formatMediaUrl(obj.owner.avatar, req);
     return obj;
   });
 
@@ -132,7 +135,9 @@ const decorateVideos = async (videos, req) => {
     isFollowing:
       user && user.followingChannels && v.owner
         ? user.followingChannels.some(
-            (id) => id.toString() === (v.owner._id ? v.owner._id.toString() : v.owner.toString()),
+            (id) =>
+              id.toString() ===
+              (v.owner._id ? v.owner._id.toString() : v.owner.toString()),
           )
         : false,
   }));
@@ -140,24 +145,24 @@ const decorateVideos = async (videos, req) => {
 };
 
 // Helper for escaping regex strings
-const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // Helper to tokenize query into individual keywords and clean phrases
 const parseSearchKeywords = (rawQuery) => {
-  const clean = (rawQuery || '').trim();
-  if (!clean) return { phrase: '', terms: [], regexes: [], phraseRegex: null };
+  const clean = (rawQuery || "").trim();
+  if (!clean) return { phrase: "", terms: [], regexes: [], phraseRegex: null };
 
-  const phrase = clean.replace(/^[#@]+/, '').trim();
-  const phraseRegex = new RegExp(escapeRegex(phrase), 'i');
+  const phrase = clean.replace(/^[#@]+/, "").trim();
+  const phraseRegex = new RegExp(escapeRegex(phrase), "i");
 
   // Split on whitespace, commas, pluses, slashes, hashtags
   const rawTerms = clean
     .split(/[\s,+#|/]+/)
-    .map((t) => t.trim().replace(/^[#@]+/, ''))
+    .map((t) => t.trim().replace(/^[#@]+/, ""))
     .filter((t) => t.length > 0);
 
   const terms = Array.from(new Set(rawTerms));
-  const regexes = terms.map((t) => new RegExp(escapeRegex(t), 'i'));
+  const regexes = terms.map((t) => new RegExp(escapeRegex(t), "i"));
 
   return { phrase, terms, regexes, phraseRegex };
 };
@@ -165,16 +170,18 @@ const parseSearchKeywords = (rawQuery) => {
 // Relevance scorer for videos
 const scoreVideoRelevance = (v, { phrase, terms }) => {
   let score = 0;
-  const title = (v.title || '').toLowerCase();
-  const desc = (v.description || '').toLowerCase();
-  const channel = (v.owner?.channelName || '').toLowerCase();
-  const ownerName = (v.owner?.name || '').toLowerCase();
-  const catName = (v.category?.name || '').toLowerCase();
-  const idStr = (v._id ? v._id.toString() : '').toLowerCase();
+  const title = (v.title || "").toLowerCase();
+  const desc = (v.description || "").toLowerCase();
+  const channel = (v.owner?.channelName || "").toLowerCase();
+  const ownerName = (v.owner?.name || "").toLowerCase();
+  const catName = (v.category?.name || "").toLowerCase();
+  const idStr = (v._id ? v._id.toString() : "").toLowerCase();
 
-  const rawTags = Array.isArray(v.tags) ? v.tags : (v.tags || '').split(',');
-  const tags = rawTags.map((t) => (typeof t === 'string' ? t.trim().toLowerCase() : '')).filter(Boolean);
-  const tagsStr = tags.join(' ');
+  const rawTags = Array.isArray(v.tags) ? v.tags : (v.tags || "").split(",");
+  const tags = rawTags
+    .map((t) => (typeof t === "string" ? t.trim().toLowerCase() : ""))
+    .filter(Boolean);
+  const tagsStr = tags.join(" ");
 
   const phraseLower = phrase.toLowerCase();
 
@@ -192,7 +199,8 @@ const scoreVideoRelevance = (v, { phrase, terms }) => {
 
   // 4. Channel / Owner scoring
   if (channel === phraseLower || ownerName === phraseLower) score += 1000;
-  else if (channel.includes(phraseLower) || ownerName.includes(phraseLower)) score += 500;
+  else if (channel.includes(phraseLower) || ownerName.includes(phraseLower))
+    score += 500;
 
   // 5. Description scoring
   if (desc.includes(phraseLower)) score += 200;
@@ -244,19 +252,23 @@ const scoreVideoRelevance = (v, { phrase, terms }) => {
 // Relevance scorer for users / channels
 const scoreUserRelevance = (u, { phrase, terms }) => {
   let score = 0;
-  const channel = (u.channelName || '').toLowerCase();
-  const name = (u.name || '').toLowerCase();
-  const email = (u.email || '').toLowerCase();
-  const phone = (u.phone || '').toLowerCase();
-  const about = (u.about || '').toLowerCase();
-  const idStr = (u._id ? u._id.toString() : (u.id ? u.id.toString() : '')).toLowerCase();
+  const channel = (u.channelName || "").toLowerCase();
+  const name = (u.name || "").toLowerCase();
+  const email = (u.email || "").toLowerCase();
+  const phone = (u.phone || "").toLowerCase();
+  const about = (u.about || "").toLowerCase();
+  const idStr = (
+    u._id ? u._id.toString() : u.id ? u.id.toString() : ""
+  ).toLowerCase();
   const phraseLower = phrase.toLowerCase();
 
   if (idStr && idStr === phraseLower) return 10000;
 
   if (channel === phraseLower || name === phraseLower) score += 3000;
-  else if (channel.startsWith(phraseLower) || name.startsWith(phraseLower)) score += 1500;
-  else if (channel.includes(phraseLower) || name.includes(phraseLower)) score += 800;
+  else if (channel.startsWith(phraseLower) || name.startsWith(phraseLower))
+    score += 1500;
+  else if (channel.includes(phraseLower) || name.includes(phraseLower))
+    score += 800;
 
   if (email.includes(phraseLower) || phone.includes(phraseLower)) score += 700;
   if (about.includes(phraseLower)) score += 150;
@@ -292,13 +304,16 @@ const scoreUserRelevance = (u, { phrase, terms }) => {
 
 exports.searchVideos = async (req, res, next) => {
   try {
-    const rawQ = req.query.q || req.query.search || '';
+    const rawQ = req.query.q || req.query.search || "";
     const q = rawQ.trim();
-    if (!q) return res.status(200).json({ success: true, count: 0, data: { channels: [], videos: [] } });
+    if (!q)
+      return res
+        .status(200)
+        .json({ success: true, count: 0, data: { channels: [], videos: [] } });
 
     const { phrase, terms, regexes, phraseRegex } = parseSearchKeywords(q);
     const isObjectId = mongoose.Types.ObjectId.isValid(q);
-    const isAdmin = req.user && req.user.role === 'admin';
+    const isAdmin = req.user && req.user.role === "admin";
 
     // 1. Search channels (users with a channelName or matching name/email/phone)
     const channelOrClauses = [];
@@ -366,7 +381,7 @@ exports.searchVideos = async (req, res, next) => {
 
     const channelsData = [];
     for (let c of scoredChannels) {
-      const channelObj = typeof c === 'object' ? { ...c } : c;
+      const channelObj = typeof c === "object" ? { ...c } : c;
       if (req.user) {
         const isFollowing = await Follower.findOne({
           follower: req.user.id,
@@ -401,24 +416,26 @@ exports.searchVideos = async (req, res, next) => {
 
 exports.getVideos = async (req, res, next) => {
   try {
-    const isAdmin = req.user && req.user.role === 'admin';
+    const isAdmin = req.user && req.user.role === "admin";
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const requestedLimit = parseInt(req.query.limit, 10);
-    const fetchAll = req.query.all === 'true' || req.query.limit === 'all';
+    const fetchAll = req.query.all === "true" || req.query.limit === "all";
 
     // Set appropriate pagination limits
     let limit = 50;
     if (fetchAll) {
       limit = 3000;
     } else if (requestedLimit > 0) {
-      limit = isAdmin ? Math.min(requestedLimit, 3000) : Math.min(requestedLimit, 100);
+      limit = isAdmin
+        ? Math.min(requestedLimit, 3000)
+        : Math.min(requestedLimit, 100);
     }
     const skip = (page - 1) * limit;
 
     const query = getVideoQuery(req);
 
     // Support search query parameter in getVideos
-    const rawSearch = (req.query.search || req.query.q || '').trim();
+    const rawSearch = (req.query.search || req.query.q || "").trim();
     let searchKeywords = null;
 
     if (rawSearch) {
@@ -428,20 +445,34 @@ exports.getVideos = async (req, res, next) => {
 
       const userSearchOr = [];
       if (phraseRegex) {
-        userSearchOr.push({ name: phraseRegex }, { channelName: phraseRegex }, { email: phraseRegex }, { phone: phraseRegex });
+        userSearchOr.push(
+          { name: phraseRegex },
+          { channelName: phraseRegex },
+          { email: phraseRegex },
+          { phone: phraseRegex },
+        );
       }
       regexes.forEach((tRegex) => {
-        userSearchOr.push({ name: tRegex }, { channelName: tRegex }, { email: tRegex }, { phone: tRegex });
+        userSearchOr.push(
+          { name: tRegex },
+          { channelName: tRegex },
+          { email: tRegex },
+          { phone: tRegex },
+        );
       });
 
       const [matchingUsers, matchingCategories] = await Promise.all([
-        User.find({ $or: userSearchOr }).select('_id').lean(),
+        User.find({ $or: userSearchOr }).select("_id").lean(),
         Category.find({
           $or: [
-            ...(phraseRegex ? [{ name: phraseRegex }, { slug: phraseRegex }] : []),
+            ...(phraseRegex
+              ? [{ name: phraseRegex }, { slug: phraseRegex }]
+              : []),
             ...regexes.map((r) => ({ name: r })),
           ],
-        }).select('_id').lean(),
+        })
+          .select("_id")
+          .lean(),
       ]);
 
       const matchingUserIds = matchingUsers.map((u) => u._id);
@@ -449,10 +480,20 @@ exports.getVideos = async (req, res, next) => {
 
       const searchOr = [];
       if (phraseRegex) {
-        searchOr.push({ title: phraseRegex }, { description: phraseRegex }, { tags: phraseRegex }, { tags: { $in: [phraseRegex] } });
+        searchOr.push(
+          { title: phraseRegex },
+          { description: phraseRegex },
+          { tags: phraseRegex },
+          { tags: { $in: [phraseRegex] } },
+        );
       }
       regexes.forEach((tRegex) => {
-        searchOr.push({ title: tRegex }, { description: tRegex }, { tags: tRegex }, { tags: { $in: [tRegex] } });
+        searchOr.push(
+          { title: tRegex },
+          { description: tRegex },
+          { tags: tRegex },
+          { tags: { $in: [tRegex] } },
+        );
       });
 
       if (matchingUserIds.length > 0) {
@@ -476,7 +517,10 @@ exports.getVideos = async (req, res, next) => {
     const sortOption = req.query.sort;
     const [videos, total] = await Promise.all([
       Video.find(query)
-        .populate("owner", "name avatar channelName followersCount isVerified email phone")
+        .populate(
+          "owner",
+          "name avatar channelName followersCount isVerified email phone",
+        )
         .populate("category", "name")
         .sort(getSort(sortOption))
         .skip(skip)
@@ -488,7 +532,7 @@ exports.getVideos = async (req, res, next) => {
     let results = await decorateVideos(videos, req);
 
     // If searching and no explicit custom sort requested, rank by keyword relevance
-    if (searchKeywords && (!sortOption || sortOption === 'latest')) {
+    if (searchKeywords && (!sortOption || sortOption === "latest")) {
       results = results
         .map((v) => ({ ...v, _score: scoreVideoRelevance(v, searchKeywords) }))
         .sort((a, b) => b._score - a._score);
@@ -547,7 +591,12 @@ exports.recordView = async (req, res, next) => {
         .json({ success: false, message: "Video not found" });
 
     const userId = req.user?._id;
-    const deviceId = req.headers["x-device-id"] || req.body.deviceId || req.ip || req.connection?.remoteAddress || "anonymous_viewer";
+    const deviceId =
+      req.headers["x-device-id"] ||
+      req.body.deviceId ||
+      req.ip ||
+      req.connection?.remoteAddress ||
+      "anonymous_viewer";
 
     // 5-hour cooldown deduplication window per user / device
     const VIEW_COOLDOWN_MS = 5 * 60 * 60 * 1000; // 5 hours
@@ -583,17 +632,19 @@ exports.recordView = async (req, res, next) => {
         deviceId: userId ? undefined : String(deviceId),
       });
     } catch (err) {
-      if (err.code !== 11000) console.warn("VideoView logging warning:", err.message);
+      if (err.code !== 11000)
+        console.warn("VideoView logging warning:", err.message);
     }
 
     const updatedVideo = await Video.findByIdAndUpdate(
       video._id,
       { $inc: { views: 1 } },
-      { new: true }
+      { new: true },
     );
 
-    // Real-time earnings: credit ₹0.03 per view (₹30 per 1,000 views) ONLY when a real viewer (not the creator) watches
-    const isSelfView = userId && video.owner && userId.toString() === video.owner.toString();
+    // Real-time earnings: credit ₹0.15 per view (₹150 per 1,000 views) ONLY when a real viewer (not the creator) watches
+    const isSelfView =
+      userId && video.owner && userId.toString() === video.owner.toString();
     if (video.owner && !isSelfView) {
       try {
         const isMonetized = await MonetizationApplication.exists({
@@ -601,8 +652,12 @@ exports.recordView = async (req, res, next) => {
           status: "approved",
         });
         if (isMonetized) {
+          const rewardPerView = Number(process.env.VIEW_REWARD_RATE) || 0.15;
           await User.findByIdAndUpdate(video.owner, {
-            $inc: { walletBalance: 0.03, totalEarnings: 0.03 },
+            $inc: {
+              walletBalance: rewardPerView,
+              totalEarnings: rewardPerView,
+            },
           });
         }
       } catch (earnErr) {
@@ -610,7 +665,10 @@ exports.recordView = async (req, res, next) => {
       }
     }
 
-    res.status(200).json({ success: true, views: updatedVideo ? updatedVideo.views : (video.views + 1) });
+    res.status(200).json({
+      success: true,
+      views: updatedVideo ? updatedVideo.views : video.views + 1,
+    });
   } catch (err) {
     next(err);
   }
@@ -660,16 +718,29 @@ exports.toggleLike = async (req, res, next) => {
         .status(404)
         .json({ success: false, message: "Video not found" });
 
-    const userId = req.user.id.toString();
-    const alreadyLiked = video.likes.some((id) => id.toString() === userId);
+    const userId = req.user.id;
+    const userIdStr = userId.toString();
+    const alreadyLiked = (video.likes || []).some((id) => id.toString() === userIdStr);
+
+    let updatedVideo;
     if (alreadyLiked) {
-      video.likes = video.likes.filter((id) => id.toString() !== userId);
+      updatedVideo = await Video.findByIdAndUpdate(
+        video._id,
+        { $pull: { likes: userId } },
+        { new: true }
+      );
       await User.findByIdAndUpdate(req.user.id, {
         $pull: { likedVideos: video._id },
       });
     } else {
-      video.likes.addToSet(req.user.id);
-      video.dislikes = video.dislikes.filter((id) => id.toString() !== userId);
+      updatedVideo = await Video.findByIdAndUpdate(
+        video._id,
+        {
+          $addToSet: { likes: userId },
+          $pull: { dislikes: userId },
+        },
+        { new: true }
+      );
       await User.findByIdAndUpdate(req.user.id, {
         $addToSet: { likedVideos: video._id },
       });
@@ -682,11 +753,10 @@ exports.toggleLike = async (req, res, next) => {
       });
     }
 
-    await video.save();
     res.status(200).json({
       success: true,
-      likes: video.likes,
-      dislikes: video.dislikes,
+      likes: updatedVideo ? updatedVideo.likes : [],
+      dislikes: updatedVideo ? updatedVideo.dislikes : [],
       isLiked: !alreadyLiked,
     });
   } catch (err) {
@@ -702,21 +772,36 @@ exports.toggleDislike = async (req, res, next) => {
         .status(404)
         .json({ success: false, message: "Video not found" });
 
-    const userId = req.user.id.toString();
-    if (video.dislikes.some((id) => id.toString() === userId)) {
-      video.dislikes = video.dislikes.filter((id) => id.toString() !== userId);
+    const userId = req.user.id;
+    const userIdStr = userId.toString();
+    const alreadyDisliked = (video.dislikes || []).some((id) => id.toString() === userIdStr);
+
+    let updatedVideo;
+    if (alreadyDisliked) {
+      updatedVideo = await Video.findByIdAndUpdate(
+        video._id,
+        { $pull: { dislikes: userId } },
+        { new: true }
+      );
     } else {
-      video.dislikes.addToSet(req.user.id);
-      video.likes = video.likes.filter((id) => id.toString() !== userId);
+      updatedVideo = await Video.findByIdAndUpdate(
+        video._id,
+        {
+          $addToSet: { dislikes: userId },
+          $pull: { likes: userId },
+        },
+        { new: true }
+      );
       await User.findByIdAndUpdate(req.user.id, {
         $pull: { likedVideos: video._id },
       });
     }
 
-    await video.save();
-    res
-      .status(200)
-      .json({ success: true, likes: video.likes, dislikes: video.dislikes });
+    res.status(200).json({
+      success: true,
+      likes: updatedVideo ? updatedVideo.likes : [],
+      dislikes: updatedVideo ? updatedVideo.dislikes : [],
+    });
   } catch (err) {
     next(err);
   }
@@ -737,7 +822,7 @@ exports.uploadVideo = async (req, res, next) => {
     }
 
     const uploadType = req.body.uploadType === "short" ? "short" : "video";
-    
+
     // Save video locally
     const videoResult = await saveLocalFile(req, req.files.video[0], "video");
     const videoIdx = tempFiles.indexOf(req.files.video[0].path);
@@ -771,7 +856,11 @@ exports.uploadVideo = async (req, res, next) => {
       originalThumbnailSize = Number(req.body.originalThumbnailSize || 0);
       compressedThumbnailSize = req.files.thumbnail[0].size || 0;
 
-      const thumbnailResult = await saveLocalFile(req, req.files.thumbnail[0], "image");
+      const thumbnailResult = await saveLocalFile(
+        req,
+        req.files.thumbnail[0],
+        "image",
+      );
       thumbnail = thumbnailResult.url;
       const thumbIdx = tempFiles.indexOf(req.files.thumbnail[0].path);
       if (thumbIdx !== -1) tempFiles.splice(thumbIdx, 1);
@@ -786,7 +875,10 @@ exports.uploadVideo = async (req, res, next) => {
     }
 
     let isPinned = false;
-    if (req.user.role === "admin" && (req.body.isPinned === "true" || req.body.isPinned === true)) {
+    if (
+      req.user.role === "admin" &&
+      (req.body.isPinned === "true" || req.body.isPinned === true)
+    ) {
       isPinned = true;
     }
 
@@ -813,7 +905,7 @@ exports.uploadVideo = async (req, res, next) => {
     await VideoMonetizationReview.create({
       video: video._id,
       user: targetOwnerId,
-      status: "pending"
+      status: "pending",
     });
 
     res.status(201).json({ success: true, data: video });
@@ -822,7 +914,7 @@ exports.uploadVideo = async (req, res, next) => {
   } finally {
     for (const filePath of tempFiles) {
       fs.unlink(filePath, (err) => {
-        if (err && err.code !== 'ENOENT') {
+        if (err && err.code !== "ENOENT") {
           console.error(`Failed to delete temp file ${filePath}:`, err);
         }
       });
@@ -838,8 +930,10 @@ exports.updateVideo = async (req, res, next) => {
       return res
         .status(404)
         .json({ success: false, message: "Video not found" });
-    const isOwner = video.owner && video.owner.toString() === req.user.id.toString();
-    const isAdmin = req.user && (req.user.role === "admin" || req.user.isAdmin === true);
+    const isOwner =
+      video.owner && video.owner.toString() === req.user.id.toString();
+    const isAdmin =
+      req.user && (req.user.role === "admin" || req.user.isAdmin === true);
 
     if (!isOwner && !isAdmin) {
       return res.status(401).json({
@@ -864,7 +958,8 @@ exports.updateVideo = async (req, res, next) => {
     }
 
     if (isAdmin && req.body.isPinned !== undefined) {
-      updates.isPinned = req.body.isPinned === "true" || req.body.isPinned === true;
+      updates.isPinned =
+        req.body.isPinned === "true" || req.body.isPinned === true;
     }
 
     if (req.body.duration !== undefined && req.body.duration !== null) {
@@ -875,9 +970,15 @@ exports.updateVideo = async (req, res, next) => {
 
     if (req.files && req.files.thumbnail && req.files.thumbnail[0]) {
       tempFiles.push(req.files.thumbnail[0].path);
-      const thumbnailResult = await saveLocalFile(req, req.files.thumbnail[0], "image");
+      const thumbnailResult = await saveLocalFile(
+        req,
+        req.files.thumbnail[0],
+        "image",
+      );
       updates.thumbnail = thumbnailResult.url;
-      updates.originalThumbnailSize = Number(req.body.originalThumbnailSize || 0);
+      updates.originalThumbnailSize = Number(
+        req.body.originalThumbnailSize || 0,
+      );
       updates.compressedThumbnailSize = req.files.thumbnail[0].size || 0;
       const thumbIdx = tempFiles.indexOf(req.files.thumbnail[0].path);
       if (thumbIdx !== -1) tempFiles.splice(thumbIdx, 1);
@@ -895,7 +996,7 @@ exports.updateVideo = async (req, res, next) => {
   } finally {
     for (const filePath of tempFiles) {
       fs.unlink(filePath, (err) => {
-        if (err && err.code !== 'ENOENT') {
+        if (err && err.code !== "ENOENT") {
           console.error(`Failed to delete temp file ${filePath}:`, err);
         }
       });
