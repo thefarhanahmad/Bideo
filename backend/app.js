@@ -136,6 +136,37 @@ app.use((err, req, res, next) => {
     })();
   }
 
+  // Duplicate key error handling (E11000)
+  if (err && (err.code === 11000 || (err.name === 'MongoServerError' && err.code === 11000))) {
+    let duplicateMessage = 'Duplicate value entered';
+    if (err.keyPattern) {
+      if (err.keyPattern.channelName) {
+        duplicateMessage = 'Channel name already exists. Please choose a different channel name.';
+      } else if (err.keyPattern.name) {
+        duplicateMessage = 'Username already exists. Please choose another username.';
+      } else if (err.keyPattern.phone) {
+        duplicateMessage = 'This phone number is already registered. Please login instead.';
+      } else if (err.keyPattern.email) {
+        duplicateMessage = 'This email is already registered.';
+      }
+    } else if (err.message) {
+      if (err.message.includes('channelName')) {
+        duplicateMessage = 'Channel name already exists. Please choose a different channel name.';
+      } else if (err.message.includes('name')) {
+        duplicateMessage = 'Username already exists. Please choose another username.';
+      } else if (err.message.includes('phone')) {
+        duplicateMessage = 'This phone number is already registered. Please login instead.';
+      } else if (err.message.includes('email')) {
+        duplicateMessage = 'This email is already registered.';
+      }
+    }
+
+    return res.status(400).json({
+      success: false,
+      message: duplicateMessage,
+    });
+  }
+
   // Friendly messages for file-upload (multer) errors instead of a generic 500.
   if (err && err.name === "MulterError") {
     const messages = {

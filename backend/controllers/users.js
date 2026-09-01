@@ -9,18 +9,61 @@ const VideoMonetizationReview = require('../models/VideoMonetizationReview');
 const MonetizationApplication = require('../models/MonetizationApplication');
 const WithdrawalRequest = require('../models/WithdrawalRequest');
 
+const escapeRegex = (str) => {
+  if (!str || typeof str !== 'string') return '';
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+};
+
 // @desc Create user
 // @route POST /api/users
 // @access Private/Admin
 exports.createUser = async (req, res, next) => {
   try {
-    const { name, email, avatar, role } = req.body;
+    const { name, email, avatar, role, phone, channelName, password } = req.body;
     if (!name || !email) return res.status(400).json({ success: false, message: 'Name and email are required' });
 
-    let existing = await User.findOne({ email });
-    if (existing) return res.status(400).json({ success: false, message: 'User with this email already exists' });
+    const trimmedName = name.trim();
+    const existingEmail = await User.findOne({ email });
+    if (existingEmail) return res.status(400).json({ success: false, message: 'User with this email already exists' });
 
-    const user = await User.create({ name, email, avatar: avatar || '', role: role || 'user' });
+    const existingName = await User.findOne({
+      name: { $regex: new RegExp(`^${escapeRegex(trimmedName)}$`, 'i') },
+    });
+    if (existingName) {
+      return res.status(400).json({ success: false, message: 'Username is already taken' });
+    }
+
+    if (phone) {
+      const existingPhone = await User.findOne({ phone: phone.trim() });
+      if (existingPhone) {
+        return res.status(400).json({ success: false, message: 'Phone number already registered' });
+      }
+    }
+
+    let trimmedChannel = undefined;
+    if (channelName && typeof channelName === 'string' && channelName.trim()) {
+      trimmedChannel = channelName.trim();
+      const existingChannel = await User.findOne({
+        channelName: { $regex: new RegExp(`^${escapeRegex(trimmedChannel)}$`, 'i') },
+      });
+      if (existingChannel) {
+        return res.status(400).json({ success: false, message: 'Channel name already exists' });
+      }
+    }
+
+    const userData = {
+      name: trimmedName,
+      email,
+      avatar: avatar || '',
+      role: role || 'user',
+      channelNameEditCount: 0,
+      channelNameChangedAt: trimmedChannel ? new Date() : null,
+    };
+    if (phone) userData.phone = phone.trim();
+    if (trimmedChannel) userData.channelName = trimmedChannel;
+    if (password) userData.password = password;
+
+    const user = await User.create(userData);
     res.status(201).json({ success: true, data: user });
   } catch (err) {
     next(err);
@@ -32,8 +75,13 @@ exports.createUser = async (req, res, next) => {
 // @access Private
 exports.updateChannel = async (req, res, next) => {
   try {
-    const { channelName, about, avatar, coverImage } = req.body;
+    const { channelName, about, avatar, coverImage, name } = req.body;
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
     let trimmedChannelName = undefined;
+    let shouldUpdateChannelName = false;
+
     if (channelName !== undefined) {
       if (typeof channelName !== 'string' || channelName.trim().length === 0) {
         return res.status(400).json({ success: false, message: 'Channel name cannot be empty' });
@@ -42,20 +90,71 @@ exports.updateChannel = async (req, res, next) => {
       if (trimmedChannelName.length > 25) {
         return res.status(400).json({ success: false, message: 'Channel name cannot exceed 25 characters' });
       }
+
+      const currentChannelName = user.channelName ? user.channelName.trim() : '';
+      if (trimmedChannelName.toLowerCase() !== currentChannelName.toLowerCase()) {
+        shouldUpdateChannelName = true;
+
+        const existingChannel = await User.findOne({
+          _id: { $ne: user._id },
+          channelName: { $regex: new RegExp(`^${escapeRegex(trimmedChannelName)}$`, 'i') },
+        });
+
+        if (existingChannel) {
+          return res.status(400).json({
+            success: false,
+            message: 'Channel name already exists. Please choose a different channel name.',
+          });
+        }
+
+        const isFirstCreation = !user.channelName;
+        if (!isFirstCreation) {
+          const editCount = user.channelNameEditCount || 0;
+          if (editCount >= 1 && user.channelNameChangedAt) {
+            const COOLDOWN_DAYS = 60;
+            const COOLDOWN_MS = COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
+            const timeSinceLastChange = Date.now() - new Date(user.channelNameChangedAt).getTime();
+
+            if (timeSinceLastChange < COOLDOWN_MS) {
+              const daysRemaining = Math.max(1, Math.ceil((COOLDOWN_MS - timeSinceLastChange) / (24 * 60 * 60 * 1000)));
+              const nextAllowedDate = new Date(new Date(user.channelNameChangedAt).getTime() + COOLDOWN_MS);
+              return res.status(400).json({
+                success: false,
+                message: `You can only change your channel name once every 60 days. You will be able to change it again in ${daysRemaining} day${daysRemaining === 1 ? '' : 's'}.`,
+                daysRemaining,
+                nextAllowedDate,
+              });
+            }
+          }
+        }
+      }
     }
 
-    const updateFields = { about, avatar, coverImage };
-    if (trimmedChannelName !== undefined) {
+    const updateFields = {};
+    if (about !== undefined) updateFields.about = about;
+    if (avatar !== undefined) updateFields.avatar = avatar;
+    if (coverImage !== undefined) updateFields.coverImage = coverImage;
+    if (name !== undefined && typeof name === 'string' && name.trim()) updateFields.name = name.trim();
+
+    if (shouldUpdateChannelName && trimmedChannelName) {
       updateFields.channelName = trimmedChannelName;
+      const isFirstCreation = !user.channelName;
+      if (isFirstCreation) {
+        updateFields.channelNameEditCount = 0;
+        updateFields.channelNameChangedAt = new Date();
+      } else {
+        updateFields.channelNameEditCount = (user.channelNameEditCount || 0) + 1;
+        updateFields.channelNameChangedAt = new Date();
+      }
     }
 
-    const user = await User.findByIdAndUpdate(
+    const updated = await User.findByIdAndUpdate(
       req.user.id,
       updateFields,
       { new: true, runValidators: true }
     ).select('-password');
 
-    res.status(200).json({ success: true, data: user });
+    res.status(200).json({ success: true, data: updated });
   } catch (err) {
     next(err);
   }
@@ -204,10 +303,34 @@ exports.updateUser = async (req, res, next) => {
   try {
     const update = { ...req.body };
 
+    if (update.name !== undefined) {
+      if (typeof update.name === 'string' && update.name.trim()) {
+        const trimmedName = update.name.trim();
+        const existingName = await User.findOne({
+          _id: { $ne: req.params.id },
+          name: { $regex: new RegExp(`^${escapeRegex(trimmedName)}$`, 'i') },
+        });
+        if (existingName) {
+          return res.status(400).json({ success: false, message: 'Username is already taken' });
+        }
+        update.name = trimmedName;
+      } else {
+        delete update.name;
+      }
+    }
+
     // Clean up unique/sparse string fields so empty strings don't trigger E11000 duplicate key error
     if (update.email !== undefined) {
       if (typeof update.email === 'string' && update.email.trim()) {
-        update.email = update.email.trim();
+        const trimmedEmail = update.email.trim().toLowerCase();
+        const existingEmail = await User.findOne({
+          _id: { $ne: req.params.id },
+          email: trimmedEmail,
+        });
+        if (existingEmail) {
+          return res.status(400).json({ success: false, message: 'Email already exists' });
+        }
+        update.email = trimmedEmail;
       } else {
         delete update.email;
       }
@@ -215,7 +338,15 @@ exports.updateUser = async (req, res, next) => {
 
     if (update.phone !== undefined) {
       if (typeof update.phone === 'string' && update.phone.trim()) {
-        update.phone = update.phone.trim();
+        const trimmedPhone = update.phone.trim();
+        const existingPhone = await User.findOne({
+          _id: { $ne: req.params.id },
+          phone: trimmedPhone,
+        });
+        if (existingPhone) {
+          return res.status(400).json({ success: false, message: 'Phone number already exists' });
+        }
+        update.phone = trimmedPhone;
       } else {
         delete update.phone;
       }
@@ -226,6 +357,13 @@ exports.updateUser = async (req, res, next) => {
         const trimmedChannel = update.channelName.trim();
         if (trimmedChannel.length > 25) {
           return res.status(400).json({ success: false, message: 'Channel name cannot exceed 25 characters' });
+        }
+        const existingChannel = await User.findOne({
+          _id: { $ne: req.params.id },
+          channelName: { $regex: new RegExp(`^${escapeRegex(trimmedChannel)}$`, 'i') },
+        });
+        if (existingChannel) {
+          return res.status(400).json({ success: false, message: 'Channel name already exists' });
         }
         update.channelName = trimmedChannel;
       } else {

@@ -1,6 +1,11 @@
 const User = require('../models/User');
 const { cleanPhone } = require('../validators');
 
+const escapeRegex = (str) => {
+  if (!str || typeof str !== 'string') return '';
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+};
+
 const normalizeAvatar = (avatar) => {
   if (!avatar || typeof avatar !== 'string') return null;
   const value = avatar.trim();
@@ -10,16 +15,51 @@ const normalizeAvatar = (avatar) => {
 
 exports.signupWithPhone = async (req, res, next) => {
   try {
-    const { name, password } = req.body;
+    const { password } = req.body;
+    const name = (req.body.name || '').trim();
     const phone = cleanPhone(req.body.phone);
+
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'Username is required' });
+    }
+
+    if (/\s/.test(name)) {
+      return res.status(400).json({ success: false, message: 'Username cannot contain spaces' });
+    }
+
+    if (!/^[a-zA-Z0-9._]+$/.test(name)) {
+      return res.status(400).json({ success: false, message: 'Username can only contain letters, numbers, underscores, and periods' });
+    }
+
+    if (name.length < 3 || name.length > 30) {
+      return res.status(400).json({ success: false, message: 'Username must be between 3 and 30 characters' });
+    }
+
     if (!phone || phone.length !== 10) {
       return res.status(400).json({ success: false, message: 'Please provide a valid 10-digit phone number' });
     }
-    const existing = await User.findOne({ phone });
-    if (existing) {
+
+    const existingPhone = await User.findOne({ phone });
+    if (existingPhone) {
       return res.status(400).json({ success: false, message: 'This phone number is already registered. Please login instead.' });
     }
-    const user = await User.create({ name: (name || '').trim(), phone, password, authProvider: 'phone' });
+
+    const existingUsername = await User.findOne({
+      name: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') },
+    });
+    if (existingUsername) {
+      return res.status(400).json({ success: false, message: 'Username already exists. Please choose another username.' });
+    }
+
+    const user = await User.create({
+      name,
+      phone,
+      password,
+      authProvider: 'phone',
+      channelNameEditCount: 0,
+      channelNameChangedAt: null,
+    });
+
     sendTokenResponse(user, 201, res);
   } catch (err) {
     next(err);
@@ -96,6 +136,8 @@ exports.googleLogin = async (req, res, next) => {
         email,
         avatar: normalizeAvatar(providedAvatar),
         authProvider: 'google',
+        channelNameEditCount: 0,
+        channelNameChangedAt: null,
       });
     } else if (!user.authProvider) {
       user.authProvider = 'google';
@@ -141,23 +183,80 @@ exports.updateChannel = async (req, res, next) => {
       }
     }
 
+    let trimmedChannelName = undefined;
+    let shouldUpdateChannelName = false;
+
     if (channelName !== undefined) {
       if (typeof channelName !== 'string' || channelName.trim().length === 0) {
         return res.status(400).json({ success: false, message: 'Channel name cannot be empty' });
       }
-      const trimmed = channelName.trim();
-      if (trimmed.length > 25) {
+      trimmedChannelName = channelName.trim();
+      if (trimmedChannelName.length > 25) {
         return res.status(400).json({ success: false, message: 'Channel name cannot exceed 25 characters' });
+      }
+
+      const currentChannelName = user.channelName ? user.channelName.trim() : '';
+      if (trimmedChannelName.toLowerCase() !== currentChannelName.toLowerCase()) {
+        shouldUpdateChannelName = true;
+
+        // 1. Check uniqueness (case-insensitive across all other users)
+        const existingChannel = await User.findOne({
+          _id: { $ne: user._id },
+          channelName: { $regex: new RegExp(`^${escapeRegex(trimmedChannelName)}$`, 'i') },
+        });
+
+        if (existingChannel) {
+          return res.status(400).json({
+            success: false,
+            message: 'Channel name already exists. Please choose a different channel name.',
+          });
+        }
+
+        // 2. Check 60-day edit cooldown
+        const isFirstCreation = !user.channelName;
+        if (!isFirstCreation) {
+          const editCount = user.channelNameEditCount || 0;
+          if (editCount >= 1 && user.channelNameChangedAt) {
+            const COOLDOWN_DAYS = 60;
+            const COOLDOWN_MS = COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
+            const timeSinceLastChange = Date.now() - new Date(user.channelNameChangedAt).getTime();
+
+            if (timeSinceLastChange < COOLDOWN_MS) {
+              const daysRemaining = Math.max(1, Math.ceil((COOLDOWN_MS - timeSinceLastChange) / (24 * 60 * 60 * 1000)));
+              const nextAllowedDate = new Date(new Date(user.channelNameChangedAt).getTime() + COOLDOWN_MS);
+              return res.status(400).json({
+                success: false,
+                message: `You can only change your channel name once every 60 days. You will be able to change it again in ${daysRemaining} day${daysRemaining === 1 ? '' : 's'}.`,
+                daysRemaining,
+                nextAllowedDate,
+              });
+            }
+          }
+        }
       }
     }
 
-    const updateData = {
-      name: typeof name === 'string' ? name.trim() : undefined,
-      channelName: typeof channelName === 'string' ? channelName.trim() : undefined,
-      about,
-    };
+    const updateData = {};
+    if (typeof name === 'string' && name.trim()) {
+      updateData.name = name.trim();
+    }
+    if (about !== undefined) {
+      updateData.about = about;
+    }
     if (avatar !== undefined) updateData.avatar = avatar;
     if (coverImage !== undefined) updateData.coverImage = coverImage;
+
+    if (shouldUpdateChannelName && trimmedChannelName) {
+      updateData.channelName = trimmedChannelName;
+      const isFirstCreation = !user.channelName;
+      if (isFirstCreation) {
+        updateData.channelNameEditCount = 0;
+        updateData.channelNameChangedAt = new Date();
+      } else {
+        updateData.channelNameEditCount = (user.channelNameEditCount || 0) + 1;
+        updateData.channelNameChangedAt = new Date();
+      }
+    }
 
     const updatedUser = await User.findByIdAndUpdate(
       req.user.id,
@@ -218,6 +317,9 @@ const sendTokenResponse = (user, statusCode, res) => {
         role: user.role,
         phone: user.phone,
         channelName: user.channelName,
+        channelNameEditCount: user.channelNameEditCount || 0,
+        channelNameChangedAt: user.channelNameChangedAt || null,
+        coverImage: user.coverImage || null,
         about: user.about,
         isVerified: !!user.isVerified,
         deletionScheduled: !!user.deletionScheduled,

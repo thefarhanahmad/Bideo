@@ -36,6 +36,27 @@ export default function EditChannelScreen() {
   const dispatch = useDispatch();
   const router = useRouter();
   const isCreateMode = !user?.channelName;
+  const editCount = user?.channelNameEditCount || 0;
+  const lastChangedAt = user?.channelNameChangedAt ? new Date(user.channelNameChangedAt).getTime() : null;
+
+  let isChannelNameLocked = false;
+  let daysRemaining = 0;
+  let nextAllowedDateStr = '';
+
+  if (!isCreateMode && editCount >= 1 && lastChangedAt) {
+    const COOLDOWN_MS = 60 * 24 * 60 * 60 * 1000;
+    const elapsed = Date.now() - lastChangedAt;
+    if (elapsed < COOLDOWN_MS) {
+      isChannelNameLocked = true;
+      daysRemaining = Math.max(1, Math.ceil((COOLDOWN_MS - elapsed) / (24 * 60 * 60 * 1000)));
+      const nextDate = new Date(lastChangedAt + COOLDOWN_MS);
+      nextAllowedDateStr = nextDate.toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+    }
+  }
 
   const [name, setName] = useState(user?.name || '');
   const [channelName, setChannelName] = useState(user?.channelName || '');
@@ -102,6 +123,15 @@ export default function EditChannelScreen() {
       showAlert('Error', 'Channel name cannot exceed 25 characters');
       return;
     }
+
+    if (isChannelNameLocked && trimmedChannelName.toLowerCase() !== (user?.channelName || '').toLowerCase()) {
+      showAlert(
+        'Channel Name Locked',
+        `You can only change your channel name once every 60 days. You will be able to change it again in ${daysRemaining} day${daysRemaining === 1 ? '' : 's'}.`
+      );
+      return;
+    }
+
     hapticLight();
 
     setLoading(true);
@@ -196,7 +226,12 @@ export default function EditChannelScreen() {
       }
     } catch (err: any) {
       console.error('[edit-channel.tsx] handleSave error:', err);
-      showAlert('Error', 'Failed to update channel. Please check your network and try again.');
+      const apiError =
+        err?.response?.data?.message ||
+        err?.response?.data?.errors?.[0]?.msg ||
+        err?.response?.data?.errors?.[0]?.message ||
+        'Failed to update channel. Please check your network and try again.';
+      showAlert('Error', apiError);
     } finally {
       setLoading(false);
     }
@@ -283,19 +318,73 @@ export default function EditChannelScreen() {
 
           <View style={styles.inputGroup}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <Text style={[styles.fieldLabel, { marginBottom: 0 }]}>Channel Name</Text>
-              <Text style={{ fontSize: 11, color: channelName.length >= 25 ? Colors.error : Colors.textGray, fontWeight: '600' }}>
-                {channelName.length}/25
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={[styles.fieldLabel, { marginBottom: 0 }]}>Channel Name</Text>
+                {isChannelNameLocked && (
+                  <View style={styles.lockedBadge}>
+                    <Ionicons name="lock-closed" size={11} color="#B45309" />
+                    <Text style={styles.lockedBadgeText}>Locked</Text>
+                  </View>
+                )}
+              </View>
+              {!isChannelNameLocked && (
+                <Text style={{ fontSize: 11, color: channelName.length >= 25 ? Colors.error : Colors.textGray, fontWeight: '600' }}>
+                  {channelName.length}/25
+                </Text>
+              )}
             </View>
-            <TextInput
-              style={styles.textInput}
-              placeholder="e.g. Cooking with Sam"
-              placeholderTextColor={Colors.textGray}
-              maxLength={25}
-              value={channelName}
-              onChangeText={setChannelName}
-            />
+
+            {isChannelNameLocked ? (
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => showAlert('Channel Name Locked', `Channel name can only be changed once every 60 days. You will be able to edit it again in ${daysRemaining} day${daysRemaining === 1 ? '' : 's'} (on ${nextAllowedDateStr}).`)}
+              >
+                <View style={[styles.textInput, styles.lockedInput]}>
+                  <Text style={styles.lockedInputText}>{channelName}</Text>
+                  <Ionicons name="lock-closed-outline" size={18} color={Colors.textGray} />
+                </View>
+              </TouchableOpacity>
+            ) : (
+              <TextInput
+                style={styles.textInput}
+                placeholder="e.g. Cooking with Sam"
+                placeholderTextColor={Colors.textGray}
+                maxLength={25}
+                value={channelName}
+                onChangeText={setChannelName}
+              />
+            )}
+
+            {/* Helper & Warning text below Channel Name */}
+            {isChannelNameLocked ? (
+              <View style={styles.warningBox}>
+                <Ionicons name="time-outline" size={15} color="#D97706" style={{ marginTop: 1, marginRight: 6 }} />
+                <Text style={styles.warningBoxText}>
+                  Channel name is locked. You will be able to change it after 60 days (in <Text style={{ fontWeight: '700' }}>{daysRemaining} day{daysRemaining === 1 ? '' : 's'}</Text> on {nextAllowedDateStr}).
+                </Text>
+              </View>
+            ) : !isCreateMode && editCount === 0 ? (
+              <View style={styles.infoBox}>
+                <Ionicons name="information-circle-outline" size={15} color={Colors.primary} style={{ marginTop: 1, marginRight: 6 }} />
+                <Text style={styles.infoBoxText}>
+                  You can change your channel name once. After this edit, you will only be able to change it again after 60 days.
+                </Text>
+              </View>
+            ) : isCreateMode ? (
+              <View style={styles.infoBox}>
+                <Ionicons name="information-circle-outline" size={15} color={Colors.textGray} style={{ marginTop: 1, marginRight: 6 }} />
+                <Text style={[styles.infoBoxText, { color: Colors.textGray }]}>
+                  Choose your channel name. You will be able to change it once after creation, and then once every 60 days.
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.warningBox}>
+                <Ionicons name="alert-circle-outline" size={15} color="#D97706" style={{ marginTop: 1, marginRight: 6 }} />
+                <Text style={styles.warningBoxText}>
+                  Changing your channel name now will lock it for the next 60 days.
+                </Text>
+              </View>
+            )}
           </View>
 
           <View style={styles.inputGroup}>
@@ -481,6 +570,65 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: Colors.text,
     backgroundColor: '#F9FAFB',
+  },
+  lockedInput: {
+    backgroundColor: '#F3F4F6',
+    borderColor: '#E5E7EB',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  lockedInputText: {
+    fontSize: 15,
+    color: Colors.textGray,
+    fontWeight: '500',
+  },
+  lockedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 8,
+  },
+  lockedBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#B45309',
+    marginLeft: 3,
+  },
+  warningBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 8,
+  },
+  warningBoxText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#92400E',
+    lineHeight: 17,
+  },
+  infoBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 8,
+  },
+  infoBoxText: {
+    flex: 1,
+    fontSize: 12,
+    color: Colors.text,
+    lineHeight: 17,
   },
   textArea: {
     height: 80,

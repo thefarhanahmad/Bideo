@@ -490,7 +490,7 @@ export default function EarningsScreen() {
                 <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="e.g. Rahul Sharma" placeholderTextColor="#999" />
 
                 <Text style={styles.inputLabel}>Registered Phone Number</Text>
-                <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder="e.g. 9876543210" keyboardType="phone-pad" placeholderTextColor="#999" />
+                <TextInput style={styles.input} value={phone} onChangeText={(v) => setPhone(v.replace(/\D/g, '').slice(0, 10))} placeholder="e.g. 9876543210" keyboardType="phone-pad" maxLength={10} placeholderTextColor="#999" />
 
                 <Text style={styles.inputLabel}>Aadhaar Number</Text>
                 <TextInput style={styles.input} value={adharNumber} onChangeText={setAdharNumber} placeholder="12-digit Aadhaar UID" keyboardType="numeric" maxLength={12} placeholderTextColor="#999" />

@@ -21,8 +21,9 @@ export default function ForgotPasswordScreen() {
       digits = digits.slice(2);
     } else if (digits.length === 11 && digits.startsWith('0')) {
       digits = digits.slice(1);
-    } else if (digits.length > 10) {
-      digits = digits.slice(-10);
+    }
+    if (digits.length > 10) {
+      digits = digits.slice(0, 10);
     }
     return digits;
   };
@@ -105,7 +106,7 @@ export default function ForgotPasswordScreen() {
               value={phone}
               onChangeText={(v) => setPhone(cleanPhone(v))}
               keyboardType="phone-pad"
-              maxLength={14}
+              maxLength={10}
             />
             <TouchableOpacity 
               style={[styles.primaryButton, loading && { opacity: 0.7 }]} 

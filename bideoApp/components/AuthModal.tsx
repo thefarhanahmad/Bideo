@@ -100,8 +100,9 @@ const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onLoginSuccess 
       digits = digits.slice(2);
     } else if (digits.length === 11 && digits.startsWith('0')) {
       digits = digits.slice(1);
-    } else if (digits.length > 10) {
-      digits = digits.slice(-10);
+    }
+    if (digits.length > 10) {
+      digits = digits.slice(0, 10);
     }
     return digits;
   }, []);
@@ -111,7 +112,12 @@ const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onLoginSuccess 
     const sanitizedPhone = cleanPhoneInput(phone);
     const trimmedPassword = password.trim();
 
-    if (isSignup && !trimmedName) return showAlert('Missing Name', 'Please enter your name.');
+    if (isSignup) {
+      if (!trimmedName) return showAlert('Missing Username', 'Please enter a username.');
+      if (/\s/.test(trimmedName)) return showAlert('Invalid Username', 'Username cannot contain spaces.');
+      if (!/^[a-zA-Z0-9._]+$/.test(trimmedName)) return showAlert('Invalid Username', 'Username can only contain letters, numbers, underscores (_), and periods (.).');
+      if (trimmedName.length < 3 || trimmedName.length > 30) return showAlert('Invalid Username', 'Username must be between 3 and 30 characters.');
+    }
     if (!sanitizedPhone) return showAlert('Missing Phone', 'Please enter your 10-digit mobile number.');
     if (sanitizedPhone.length !== 10) return showAlert('Invalid Phone', 'Mobile number must be exactly 10 digits.');
     if (!trimmedPassword) return showAlert('Missing Password', 'Please enter your password.');
@@ -184,14 +190,21 @@ const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onLoginSuccess 
               </View>
 
               {isSignup && (
-                <TextInput
-                  style={styles.input}
-                  placeholder="Full Name"
-                  placeholderTextColor={Colors.textGray}
-                  value={name}
-                  onChangeText={setName}
-                  autoCorrect={false}
-                />
+                <View style={{ width: '100%', marginBottom: 12 }}>
+                  <TextInput
+                    style={[styles.input, { marginBottom: 4 }]}
+                    placeholder="Username (e.g. johndoe)"
+                    placeholderTextColor={Colors.textGray}
+                    value={name}
+                    onChangeText={(v) => setName(v.replace(/\s+/g, ''))}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    maxLength={30}
+                  />
+                  <Text style={styles.inputHint}>
+                    No spaces. Letters, numbers, dots & underscores only.
+                  </Text>
+                </View>
               )}
 
               <TextInput
@@ -201,7 +214,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onLoginSuccess 
                 value={phone}
                 onChangeText={(v) => setPhone(cleanPhoneInput(v))}
                 keyboardType="phone-pad"
-                maxLength={14}
+                maxLength={10}
                 autoCorrect={false}
               />
 
@@ -332,6 +345,13 @@ const styles = StyleSheet.create({
     color: Colors.text,
     backgroundColor: '#F9FAFB',
     marginBottom: 12
+  },
+  inputHint: {
+    fontSize: 11,
+    color: Colors.textGray,
+    paddingHorizontal: 6,
+    marginTop: -2,
+    marginBottom: 4,
   },
   passwordRow: {
     width: "100%",

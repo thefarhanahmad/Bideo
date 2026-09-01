@@ -48,6 +48,14 @@ const userSchema = new mongoose.Schema({
     trim: true,
     maxlength: [25, 'Channel name cannot exceed 25 characters'],
   },
+  channelNameEditCount: {
+    type: Number,
+    default: 0,
+  },
+  channelNameChangedAt: {
+    type: Date,
+    default: null,
+  },
   about: {
     type: String,
   },

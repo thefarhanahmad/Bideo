@@ -31,7 +31,23 @@ const cleanPhone = (val) => {
 };
 
 const phoneSignupValidationRules = () => [
-  body('name').trim().notEmpty().withMessage('Name is required').isString(),
+  body('name')
+    .trim()
+    .notEmpty()
+    .withMessage('Username is required')
+    .isString()
+    .custom((val) => {
+      if (/\s/.test(val)) {
+        throw new Error('Username cannot contain spaces');
+      }
+      if (!/^[a-zA-Z0-9._]+$/.test(val)) {
+        throw new Error('Username can only contain letters, numbers, underscores, and periods');
+      }
+      if (val.length < 3 || val.length > 30) {
+        throw new Error('Username must be between 3 and 30 characters');
+      }
+      return true;
+    }),
   body('phone')
     .customSanitizer(cleanPhone)
     .notEmpty()
