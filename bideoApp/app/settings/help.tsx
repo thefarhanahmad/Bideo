@@ -23,7 +23,7 @@ export default function HelpScreen() {
     },
     {
       question: 'How can I contact support?',
-      answer: 'You can email us at bideoApps@gmail.com for any technical issues or inquiries.'
+      answer: 'You can email us at bideoapps@gmail.com or DM us on Instagram @bideo.app for any technical issues or assistance.'
     }
   ];
 
@@ -75,21 +75,53 @@ export default function HelpScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Contact Us</Text>
-          <View style={styles.contactContainer}>
-            <TouchableOpacity style={styles.contactCard} onPress={() => Linking.openURL('mailto:bideoApps@gmail.com')}>
-              <View style={[styles.contactIcon, {backgroundColor: '#E8F5E9'}]}>
-                <Ionicons name="mail" size={24} color="#4CAF50" />
+          <View style={styles.contactListCard}>
+            {/* Email Support Row */}
+            <TouchableOpacity 
+              style={styles.contactRow} 
+              onPress={() => Linking.openURL('mailto:bideoapps@gmail.com')}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.contactRowIcon, { backgroundColor: '#E8F5E9' }]}>
+                <Ionicons name="mail" size={22} color="#16A34A" />
               </View>
-              <Text style={styles.contactLabel}>Email Support</Text>
-              <Text style={styles.contactValue}>bideoApps@gmail.com</Text>
+              <View style={styles.contactRowContent}>
+                <Text style={styles.contactRowLabel}>Email Support</Text>
+                <Text style={styles.contactRowValue}>bideoapps@gmail.com</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={Colors.textGray} />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.contactCard} onPress={() => Linking.openURL('https://bideo.in')}>
-              <View style={[styles.contactIcon, {backgroundColor: '#E3F2FD'}]}>
-                <Ionicons name="globe" size={24} color="#2196F3" />
+            {/* Instagram Row */}
+            <TouchableOpacity 
+              style={styles.contactRow} 
+              onPress={() => Linking.openURL('https://www.instagram.com/bideo.app/')}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.contactRowIcon, { backgroundColor: '#FCE7F3' }]}>
+                <Ionicons name="logo-instagram" size={22} color="#E1306C" />
               </View>
-              <Text style={styles.contactLabel}>Our Website</Text>
-              <Text style={styles.contactValue}>bideo.in</Text>
+              <View style={styles.contactRowContent}>
+                <Text style={styles.contactRowLabel}>Instagram</Text>
+                <Text style={styles.contactRowValue}>@bideo.app</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={Colors.textGray} />
+            </TouchableOpacity>
+
+            {/* Website Row */}
+            <TouchableOpacity 
+              style={[styles.contactRow, styles.noBorder]} 
+              onPress={() => Linking.openURL('https://bideo.in')}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.contactRowIcon, { backgroundColor: '#E0F2FE' }]}>
+                <Ionicons name="globe" size={22} color="#0284C7" />
+              </View>
+              <View style={styles.contactRowContent}>
+                <Text style={styles.contactRowLabel}>Website</Text>
+                <Text style={styles.contactRowValue}>bideo.in</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={Colors.textGray} />
             </TouchableOpacity>
           </View>
         </View>
@@ -209,40 +241,47 @@ const styles = StyleSheet.create({
     color: '#4B5563',
     lineHeight: 22,
   },
-  contactContainer: {
-    flexDirection: 'row',
-    gap: 15,
-  },
-  contactCard: {
-    flex: 1,
+  contactListCard: {
     backgroundColor: Colors.white,
-    padding: 15,
-    borderRadius: 15,
-    alignItems: 'center',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 5,
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
     elevation: 1,
   },
-  contactIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 15,
-    justifyContent: 'center',
+  contactRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
-  contactLabel: {
-    fontSize: 13,
-    color: Colors.textGray,
-    marginBottom: 4,
+  contactRowIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
   },
-  contactValue: {
+  contactRowContent: {
+    flex: 1,
+  },
+  contactRowLabel: {
     fontSize: 12,
+    color: Colors.textGray,
+    fontWeight: '600',
+    marginBottom: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  contactRowValue: {
+    fontSize: 15,
     fontWeight: '700',
     color: Colors.text,
-    textAlign: 'center',
   },
   footer: {
     alignItems: 'center',

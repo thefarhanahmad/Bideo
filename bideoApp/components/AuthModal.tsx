@@ -233,12 +233,11 @@ const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onLoginSuccess 
                 </TouchableOpacity>
               </View>
 
-              {/* Temporarily hidden Forgot Password button */}
-              {/* {!isSignup && (
+              {!isSignup && (
                 <TouchableOpacity style={styles.forgotBtn} onPress={handleForgotPassword}>
                   <Text style={styles.forgotText}>Forgot Password?</Text>
                 </TouchableOpacity>
-              )} */}
+              )}
 
               <TouchableOpacity 
                 style={[styles.primaryButton, authLoading && { opacity: 0.7 }]} 

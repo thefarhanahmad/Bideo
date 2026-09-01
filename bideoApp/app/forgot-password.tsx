@@ -1,175 +1,94 @@
-import { showAlert } from '../components/AppAlert';
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../constants/Colors';
-import api from '../services/api';
+import { hapticSelection } from '../utils/haptics';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
-  const [step, setStep] = useState(1); // 1: Phone, 2: OTP & New Password
-  const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
 
-  const cleanPhone = (val: string): string => {
-    let digits = val.replace(/\D/g, '');
-    if (digits.length === 12 && digits.startsWith('91')) {
-      digits = digits.slice(2);
-    } else if (digits.length === 11 && digits.startsWith('0')) {
-      digits = digits.slice(1);
-    }
-    if (digits.length > 10) {
-      digits = digits.slice(0, 10);
-    }
-    return digits;
+  const handleEmailSupport = () => {
+    hapticSelection();
+    Linking.openURL(
+      'mailto:bideoapps@gmail.com?subject=Bideo%20Password%20Reset%20Request&body=Hi%20Bideo%20Team%2C%0A%0AI%20forgot%20my%20password%20and%20would%20like%20to%20reset%20it.%0A%0ARegistered%20Phone%20Number%20or%20Username%3A%20%0A%0AThank%20you!'
+    );
   };
 
-  const handleRequestOtp = async () => {
-    const sanitized = cleanPhone(phone);
-    if (sanitized.length !== 10) return showAlert('Invalid Phone', 'Enter a valid 10-digit phone number');
-    setLoading(true);
-    try {
-      const res = await api.post('/auth/forgot-password', { phone: sanitized });
-      if (res.data.success) {
-        setStep(2);
-        showAlert('OTP Sent', 'Use dummy OTP 1234 to proceed');
-      }
-    } catch (err: any) {
-      const apiError =
-        err.response?.data?.message ||
-        err.response?.data?.errors?.[0]?.msg ||
-        err.response?.data?.errors?.[0]?.message ||
-        'Failed to request OTP';
-      showAlert('Error', apiError);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResetPassword = async () => {
-    const sanitized = cleanPhone(phone);
-    if (otp !== '1234') return showAlert('Invalid OTP', 'Invalid OTP. Use 1234');
-    if (password.length < 6) return showAlert('Short Password', 'Password must be at least 6 characters');
-    
-    setLoading(true);
-    try {
-      const res = await api.post('/auth/reset-password', { phone: sanitized, otp, password });
-      if (res.data.success) {
-        showAlert('Success', 'Password reset successfully. You can now login.', [
-          { text: 'OK', onPress: () => router.back() }
-        ]);
-      }
-    } catch (err: any) {
-      const apiError =
-        err.response?.data?.message ||
-        err.response?.data?.errors?.[0]?.msg ||
-        err.response?.data?.errors?.[0]?.message ||
-        'Failed to reset password';
-      showAlert('Error', apiError);
-    } finally {
-      setLoading(false);
-    }
+  const handleInstagramSupport = () => {
+    hapticSelection();
+    Linking.openURL('https://www.instagram.com/bideo.app/');
   };
 
   return (
-    <KeyboardAvoidingView 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-      style={styles.container}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+    <View style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
 
         <View style={styles.header}>
           <View style={styles.iconCircle}>
-            <Ionicons name="lock-closed" size={36} color={Colors.primary} />
+            <Ionicons name="key-outline" size={38} color={Colors.primary} />
           </View>
-          <Text style={styles.title}>Forgot Password</Text>
+          <Text style={styles.title}>Forgot Password?</Text>
           <Text style={styles.subtitle}>
-            {step === 1 
-              ? "Enter your registered phone number to receive an OTP." 
-              : "Enter the OTP sent to your phone and your new password."}
+            To reset or recover your account password, please contact our support team directly via Email or Instagram DM with your registered phone number or username.
           </Text>
         </View>
 
-        {step === 1 ? (
-          <View style={styles.form}>
-            <TextInput
-              style={styles.input}
-              placeholder="Phone Number"
-              placeholderTextColor={Colors.textGray}
-              value={phone}
-              onChangeText={(v) => setPhone(cleanPhone(v))}
-              keyboardType="phone-pad"
-              maxLength={10}
-            />
-            <TouchableOpacity 
-              style={[styles.primaryButton, loading && { opacity: 0.7 }]} 
-              onPress={handleRequestOtp}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color={Colors.white} />
-              ) : (
-                <Text style={styles.buttonText}>Send OTP</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={styles.form}>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter OTP (1234)"
-              placeholderTextColor={Colors.textGray}
-              value={otp}
-              onChangeText={setOtp}
-              keyboardType="number-pad"
-              maxLength={4}
-            />
-            <View style={styles.passwordRow}>
-              <TextInput
-                style={[styles.input, styles.passwordInput]}
-                placeholder="New Password"
-                placeholderTextColor={Colors.textGray}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-              />
-              <TouchableOpacity 
-                style={styles.eyeButton} 
-                onPress={() => setShowPassword(!showPassword)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Ionicons 
-                  name={showPassword ? "eye-off-outline" : "eye-outline"} 
-                  size={22} 
-                  color={Colors.textGray} 
-                />
-              </TouchableOpacity>
+        <View style={styles.cardsContainer}>
+          {/* Email Card */}
+          <TouchableOpacity
+            style={styles.actionCard}
+            onPress={handleEmailSupport}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.cardIconWrap, { backgroundColor: '#FEF3C7' }]}>
+              <Ionicons name="mail" size={24} color={Colors.primary} />
             </View>
-            <TouchableOpacity 
-              style={[styles.primaryButton, loading && { opacity: 0.7 }]} 
-              onPress={handleResetPassword}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color={Colors.white} />
-              ) : (
-                <Text style={styles.buttonText}>Reset Password</Text>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setStep(1)} style={styles.backToStepBtn}>
-              <Text style={styles.backToStepText}>Change Phone Number</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+            <View style={styles.cardContent}>
+              <Text style={styles.cardLabel}>Send Email to Support</Text>
+              <Text style={styles.cardValue}>bideoapps@gmail.com</Text>
+              <Text style={styles.cardActionHint}>Tap to open mail app</Text>
+            </View>
+            <Ionicons name="open-outline" size={20} color={Colors.textGray} />
+          </TouchableOpacity>
+
+          {/* Instagram Card */}
+          <TouchableOpacity
+            style={styles.actionCard}
+            onPress={handleInstagramSupport}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.cardIconWrap, { backgroundColor: '#FCE7F3' }]}>
+              <Ionicons name="logo-instagram" size={24} color="#E1306C" />
+            </View>
+            <View style={styles.cardContent}>
+              <Text style={styles.cardLabel}>Instagram Direct Message</Text>
+              <Text style={styles.cardValue}>@bideo.app</Text>
+              <Text style={styles.cardActionHint}>Tap to open Instagram profile</Text>
+            </View>
+            <Ionicons name="open-outline" size={20} color={Colors.textGray} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.noticeBox}>
+          <Ionicons name="shield-checkmark-outline" size={18} color="#059669" style={{ marginRight: 8, marginTop: 1 }} />
+          <Text style={styles.noticeText}>
+            Our support team will verify your registered account details and help you restore access within 24 hours.
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          style={styles.backToLoginBtn}
+          onPress={() => router.back()}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.backToLoginText}>Back to Login</Text>
+        </TouchableOpacity>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -180,98 +99,123 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    padding: 24,
-    paddingTop: 60,
+    paddingHorizontal: 24,
+    paddingTop: 54,
+    paddingBottom: 36,
   },
   backBtn: {
+    alignSelf: 'flex-start',
+    padding: 6,
     marginBottom: 20,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 32,
   },
   iconCircle: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    backgroundColor: Colors.primary + '14',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: Colors.primary + '18',
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 16,
   },
   title: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: '800',
     color: Colors.text,
-    marginTop: 16,
     marginBottom: 8,
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: 14,
     color: Colors.textGray,
     textAlign: 'center',
-    paddingHorizontal: 20,
-    lineHeight: 20,
+    lineHeight: 21,
+    paddingHorizontal: 10,
   },
-  form: {
+  cardsContainer: {
     width: '100%',
+    gap: 14,
+    marginBottom: 20,
   },
-  input: {
-    width: '100%',
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginBottom: 16,
-    fontSize: 16,
-    color: Colors.text,
-    backgroundColor: '#F9FAFB',
-  },
-  passwordRow: {
-    width: '100%',
+  actionCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    marginBottom: 16,
-    paddingRight: 8,
     backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
   },
-  passwordInput: {
-    flex: 1,
-    marginBottom: 0,
-    borderWidth: 0,
-    backgroundColor: 'transparent',
-  },
-  eyeButton: {
-    padding: 10,
-  },
-  primaryButton: {
-    backgroundColor: Colors.primary,
-    width: '100%',
-    paddingVertical: 16,
-    borderRadius: 999,
+  cardIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 4,
+    marginRight: 14,
   },
-  buttonText: {
-    color: Colors.white,
+  cardContent: {
+    flex: 1,
+  },
+  cardLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textGray,
+    marginBottom: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  cardValue: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
+    color: Colors.text,
+    marginBottom: 2,
   },
-  backToStepBtn: {
-    marginTop: 20,
-    alignItems: 'center',
-  },
-  backToStepText: {
+  cardActionHint: {
+    fontSize: 12,
     color: Colors.primary,
     fontWeight: '600',
+  },
+  noticeBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 28,
+  },
+  noticeText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#065F46',
+    lineHeight: 18,
+  },
+  backToLoginBtn: {
+    backgroundColor: Colors.primary,
+    width: '100%',
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  backToLoginText: {
+    color: Colors.white,
+    fontSize: 16,
+    fontWeight: '700',
   },
 });
