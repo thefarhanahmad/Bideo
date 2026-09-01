@@ -19,6 +19,7 @@ import VerifiedBadge from '../../components/VerifiedBadge';
 import { formatTimeAgo, formatViews } from '../../utils/formatDate';
 import { hapticLight } from '../../utils/haptics';
 import { AppInterstitialAd } from '../../components/AppAds';
+import HashtagText from '../../components/HashtagText';
 
 const FALLBACK_IMAGE = 'https://via.placeholder.com/80x80.png?text=User';
 const REQUIRED_WATCH_TIME = 3; // 3 seconds minimum watch time to count a view
@@ -399,7 +400,7 @@ export default function VideoScreen() {
       <FlatList
         ListHeaderComponent={
           <View style={styles.contentContainer}>
-            <Text style={styles.title}>{video.title}</Text>
+            <HashtagText text={video.title} style={styles.title} />
             <Text style={styles.metadata}>
               {formatViews(video.views || 0)} views • {formatTimeAgo(video.createdAt)}
             </Text>
@@ -455,9 +456,11 @@ export default function VideoScreen() {
             {!!video.description && (
               <>
                 <View style={styles.descriptionContainer}>
-                  <Text style={styles.description} numberOfLines={2}>
-                    {video.description}
-                  </Text>
+                  <HashtagText
+                    text={video.description}
+                    style={styles.description}
+                    numberOfLines={4}
+                  />
                 </View>
                 <View style={styles.divider} />
               </>

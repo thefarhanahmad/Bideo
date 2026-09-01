@@ -162,10 +162,17 @@ exports.updateChannel = async (req, res, next) => {
 
 exports.getChannelProfile = async (req, res, next) => {
   try {
-    const channelObj = await User.findById(req.params.id).select('name avatar coverImage channelName about followersCount isVerified createdAt');
+    const channelObj = await User.findById(req.params.id).select('name avatar coverImage channelName about followersCount isVerified isBlocked blockedAt blockReason createdAt');
     if (!channelObj) return res.status(404).json({ success: false, message: 'Channel not found' });
 
     const channel = channelObj.toObject();
+    const isOwner = req.user && req.user.id.toString() === channel._id.toString();
+    const isAdmin = req.user && req.user.role === 'admin';
+
+    if (channel.isBlocked && !isAdmin && !isOwner) {
+      return res.status(404).json({ success: false, message: 'This channel has been suspended' });
+    }
+
     if (req.user) {
       const isFollowing = await Follower.findOne({
         follower: req.user.id,
@@ -178,8 +185,6 @@ exports.getChannelProfile = async (req, res, next) => {
 
     const filter = (req.query.filter || 'videos').toLowerCase();
     const sort = (req.query.sort || 'latest').toLowerCase();
-    const isOwner = req.user && req.user.id.toString() === channel._id.toString();
-    const isAdmin = req.user && req.user.role === 'admin';
     const visibilityQuery = isOwner || isAdmin
       ? {}
       : { $or: [{ visibility: 'public' }, { visibility: { $exists: false } }] };
@@ -424,6 +429,34 @@ exports.toggleVerifyUser = async (req, res, next) => {
     res.status(200).json({
       success: true,
       message: user.isVerified ? 'Verification badge granted' : 'Verification badge removed',
+      data: user,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Toggle user blocked status (Admin)
+// @route   PUT /api/users/:id/block
+// @access  Private/Admin
+exports.toggleBlockUser = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    if (user.role === 'admin') {
+      return res.status(400).json({ success: false, message: 'Cannot block an administrator account' });
+    }
+
+    const isCurrentlyBlocked = Boolean(user.isBlocked);
+    user.isBlocked = !isCurrentlyBlocked;
+    user.blockedAt = user.isBlocked ? new Date() : null;
+    user.blockReason = user.isBlocked ? (req.body.reason || 'Blocked by administrator') : null;
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: user.isBlocked ? 'User has been blocked successfully' : 'User has been unblocked successfully',
       data: user,
     });
   } catch (err) {

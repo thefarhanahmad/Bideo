@@ -1,4 +1,5 @@
 const Post = require('../models/Post');
+const User = require('../models/User');
 const Follower = require('../models/Follower');
 const Notification = require('../models/Notification');
 const { saveLocalFile, deleteLocalFile } = require('../utils/localUpload');
@@ -78,8 +79,24 @@ exports.updatePost = async (req, res, next) => {
 
 exports.getPosts = async (req, res, next) => {
   try {
+    const isAdmin = req.user && req.user.role === 'admin';
     const query = { visibility: 'public' };
     if (req.query.owner) query.owner = req.query.owner;
+
+    if (!isAdmin) {
+      const blockedUsers = await User.find({ isBlocked: true }).select('_id').lean();
+      const blockedIds = blockedUsers.map((u) => u._id);
+      if (blockedIds.length > 0) {
+        if (query.owner) {
+          if (blockedIds.some((bId) => bId.toString() === query.owner.toString())) {
+            return res.status(200).json({ success: true, count: 0, data: [] });
+          }
+        } else {
+          query.owner = { $nin: blockedIds };
+        }
+      }
+    }
+
     const limit = Math.min(parseInt(req.query.limit, 10) || 30, 100);
     const posts = await Post.find(query)
       .populate('owner', 'name avatar channelName isVerified')
@@ -94,8 +111,11 @@ exports.getPosts = async (req, res, next) => {
 
 exports.getPost = async (req, res, next) => {
   try {
-    const post = await Post.findById(req.params.id).populate('owner', 'name avatar channelName isVerified');
+    const post = await Post.findById(req.params.id).populate('owner', 'name avatar channelName isVerified isBlocked');
     if (!post) return res.status(404).json({ success: false, message: 'Post not found' });
+    if (post.owner?.isBlocked && (!req.user || req.user.role !== 'admin')) {
+      return res.status(404).json({ success: false, message: 'Post not found' });
+    }
     res.status(200).json({ success: true, data: post });
   } catch (err) {
     next(err);
@@ -106,7 +126,12 @@ exports.getFollowedPosts = async (req, res, next) => {
   try {
     const followings = await Follower.find({ follower: req.user.id });
     const channelIds = followings.map((f) => f.channel);
-    const posts = await Post.find({ owner: { $in: channelIds }, visibility: 'public' })
+
+    const blockedUsers = await User.find({ isBlocked: true }).select('_id').lean();
+    const blockedIds = new Set(blockedUsers.map((u) => u._id.toString()));
+    const validChannelIds = channelIds.filter((cId) => !blockedIds.has(cId.toString()));
+
+    const posts = await Post.find({ owner: { $in: validChannelIds }, visibility: 'public' })
       .populate('owner', 'name avatar channelName isVerified')
       .sort('-createdAt');
 

@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatViews } from '../../utils/formatDate';
 import { hapticLight } from '../../utils/haptics';
 import { AppInterstitialAd } from '../../components/AppAds';
+import HashtagText from '../../components/HashtagText';
 
 const shuffleArray = <T,>(array: T[]): T[] => {
   const shuffled = [...array];
@@ -26,6 +27,26 @@ const shuffleArray = <T,>(array: T[]): T[] => {
   }
   return shuffled;
 };
+
+const formatShortItem = (v: any, currentUserId?: string, isAuth?: boolean) => ({
+  _id: v._id,
+  videoUrl: v.videoUrl,
+  thumbnail: v.thumbnail,
+  owner: { 
+    _id: v.owner?._id || v.owner,
+    name: v.owner?.name || 'Unknown', 
+    channelName: v.owner?.channelName,
+    avatar: v.owner?.avatar || '',
+    isVerified: Boolean(v.owner?.isVerified),
+  },
+  title: v.title,
+  description: v.description,
+  likes: v.likes || [],
+  commentsCount: v.commentsCount || 0,
+  isLiked: v.isLiked ?? (isAuth && v.likes?.includes(currentUserId)),
+  isFollowing: v.isFollowing || false,
+  createdAt: v.createdAt,
+});
 
 const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
 
@@ -55,22 +76,47 @@ export default function ShortsScreen() {
   const [reportReason, setReportReason] = useState('');
 
   useEffect(() => {
-    if (initialShortId && shorts.length > 0) {
-      const index = shorts.findIndex(s => s._id === initialShortId);
-      if (index !== -1 && index !== activeVideoIndex) {
-        setActiveVideoIndex(index);
-        setTimeout(() => {
-          flatListRef.current?.scrollToIndex({ index, animated: false });
-        }, 100);
-      }
-    }
-  }, [initialShortId, shorts.length]);
-
-  useEffect(() => {
-    loadShorts();
+    loadShorts(initialShortId);
   }, [isAuthenticated]);
 
-  const loadShorts = async () => {
+  useEffect(() => {
+    if (!initialShortId) return;
+
+    const syncTargetShort = async () => {
+      // Check if it's already in the loaded list
+      const existingIndex = shorts.findIndex((s) => s._id === initialShortId);
+      if (existingIndex !== -1) {
+        if (existingIndex !== activeVideoIndex) {
+          setActiveVideoIndex(existingIndex);
+        }
+        setTimeout(() => {
+          flatListRef.current?.scrollToIndex({ index: existingIndex, animated: false });
+        }, 80);
+        return;
+      }
+
+      // If not present in current shorts, fetch and prepend to top
+      try {
+        const res = await api.get(`/videos/${initialShortId}`);
+        if (res.data?.success && res.data?.data) {
+          const formatted = formatShortItem(res.data.data, user?._id, isAuthenticated);
+          setShorts((prev) => [formatted, ...prev.filter((s) => s._id !== initialShortId)]);
+          setActiveVideoIndex(0);
+          setTimeout(() => {
+            flatListRef.current?.scrollToIndex({ index: 0, animated: false });
+          }, 80);
+        }
+      } catch (err) {
+        console.error('Failed to fetch initial short by id:', err);
+      }
+    };
+
+    if (isFocused) {
+      syncTargetShort();
+    }
+  }, [initialShortId, isFocused]);
+
+  const loadShorts = async (targetId = initialShortId) => {
     setLoading(true);
     setPage(1);
     hasMore.current = true;
@@ -82,32 +128,26 @@ export default function ShortsScreen() {
 
       const onlyShorts = rawList
         .filter((v: any) => v.isShort === true)
-        .map((v: any) => ({
-          _id: v._id,
-          videoUrl: v.videoUrl,
-          thumbnail: v.thumbnail,
-          owner: { 
-            _id: v.owner?._id,
-            name: v.owner?.name || 'Unknown', 
-            channelName: v.owner?.channelName,
-            avatar: v.owner?.avatar || '',
-            isVerified: Boolean(v.owner?.isVerified),
-          },
-          title: v.title,
-          likes: v.likes || [],
-          commentsCount: v.commentsCount || 0,
-          isLiked: v.isLiked ?? (isAuthenticated && v.likes?.includes(user?._id)),
-          isFollowing: v.isFollowing || false,
-          createdAt: v.createdAt,
-        }));
+        .map((v: any) => formatShortItem(v, user?._id, isAuthenticated));
       
       let randomizedShorts: any[] = shuffleArray(onlyShorts);
 
-      if (initialShortId) {
-        const targetIndex = randomizedShorts.findIndex((s: any) => s._id === initialShortId);
-        if (targetIndex > 0) {
+      if (targetId) {
+        const targetIndex = randomizedShorts.findIndex((s: any) => s._id === targetId);
+        if (targetIndex !== -1) {
           const [targetShort] = randomizedShorts.splice(targetIndex, 1);
           randomizedShorts.unshift(targetShort);
+        } else {
+          // Fetch target short directly if not included in random 50
+          try {
+            const targetRes = await api.get(`/videos/${targetId}`);
+            if (targetRes.data?.success && targetRes.data?.data) {
+              const targetShort = formatShortItem(targetRes.data.data, user?._id, isAuthenticated);
+              randomizedShorts.unshift(targetShort);
+            }
+          } catch (e) {
+            console.error('Error fetching target short:', e);
+          }
         }
       }
       
@@ -126,14 +166,13 @@ export default function ShortsScreen() {
       }
       setShorts(withAds);
 
-      if (initialShortId && withAds.length > 0) {
-        const index = withAds.findIndex(s => s._id === initialShortId);
-        if (index !== -1) {
-          setTimeout(() => {
-            flatListRef.current?.scrollToIndex({ index, animated: false });
-            setActiveVideoIndex(index);
-          }, 100);
-        }
+      if (targetId && withAds.length > 0) {
+        const index = withAds.findIndex((s) => s._id === targetId);
+        const finalIdx = index !== -1 ? index : 0;
+        setActiveVideoIndex(finalIdx);
+        setTimeout(() => {
+          flatListRef.current?.scrollToIndex({ index: finalIdx, animated: false });
+        }, 100);
       }
     } catch (e) {
       console.log('Failed to load shorts', e);
@@ -688,7 +727,12 @@ const ShortItem = ({ item, index, activeVideoIndex, containerHeight, isFocused, 
               </TouchableOpacity>
             )}
           </View>
-          <Text style={styles.shortTitle} numberOfLines={2}>{item.title}</Text>
+          <HashtagText
+            text={item.title}
+            style={styles.shortTitle}
+            hashtagStyle={styles.shortHashtag}
+            numberOfLines={3}
+          />
         </View>
       </View>
     </View>
@@ -815,6 +859,10 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontSize: 14,
     lineHeight: 20,
+  },
+  shortHashtag: {
+    color: '#38BDF8',
+    fontWeight: '700',
   },
   topHeader: {
     position: 'absolute',

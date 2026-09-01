@@ -14,6 +14,7 @@ import { RootState } from '../redux/store';
 import api, { resolveMediaUrl } from '../services/api';
 import AuthModal from './AuthModal';
 import VerifiedBadge from './VerifiedBadge';
+import HashtagText from './HashtagText';
 
 const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
 
@@ -134,7 +135,7 @@ const PostCard = ({ post, onDelete }: PostCardProps) => {
         </TouchableOpacity>
       </View>
 
-      {!!post.text && <Text style={styles.text}>{post.text}</Text>}
+      {!!post.text && <HashtagText text={post.text} style={styles.text} />}
       {!!post.imageUrl && (
         <Image
           source={{ uri: resolveMediaUrl(post.imageUrl) }}

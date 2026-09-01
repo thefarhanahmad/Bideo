@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import { useSelector } from 'react-redux';
 import Colors from '../constants/Colors';
@@ -87,15 +87,21 @@ function ChannelSearchResultCard({ channel }: { channel: any }) {
 
 export default function SearchScreen() {
   const router = useRouter();
-  const [query, setQuery] = useState('');
+  const params = useLocalSearchParams<{ q?: string; query?: string; tag?: string }>();
+  const initialQuery = (params.q || params.query || params.tag || '').trim();
+
+  const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
-  const [showResults, setShowResults] = useState(false);
+  const [showResults, setShowResults] = useState(Boolean(initialQuery));
 
   useEffect(() => {
     loadHistory();
-  }, []);
+    if (initialQuery) {
+      handleSearch(initialQuery);
+    }
+  }, [initialQuery]);
 
   const loadHistory = async () => {
     try {
@@ -151,7 +157,7 @@ export default function SearchScreen() {
             placeholderTextColor={Colors.textGray}
             value={query}
             onChangeText={onQueryChange}
-            autoFocus
+            autoFocus={!initialQuery}
             onSubmitEditing={() => handleSearch()}
             returnKeyType="search"
           />

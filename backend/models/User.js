@@ -102,6 +102,18 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  isBlocked: {
+    type: Boolean,
+    default: false,
+  },
+  blockedAt: {
+    type: Date,
+    default: null,
+  },
+  blockReason: {
+    type: String,
+    default: null,
+  },
   walletBalance: {
     type: Number,
     default: 0,

@@ -273,6 +273,48 @@ const Users = () => {
     });
   };
 
+  const promptToggleBlock = (u) => {
+    const isBlocking = !u.isBlocked;
+    setConfirmDialog({
+      title: isBlocking ? "Block User Account & Hide Content" : "Unblock User Account",
+      message: isBlocking
+        ? `Are you sure you want to block user "${u.name || "this user"}" (@${u.channelName || u.name || "user"})? When blocked, all their videos, reels/shorts, posts, and channel profile will immediately be hidden from the app feed, search results, and public views.`
+        : `Are you sure you want to unblock user "${u.name || "this user"}"? Their account, channel, and videos will become visible again on the app.`,
+      confirmText: isBlocking ? "Block User" : "Unblock User",
+      confirmClass: isBlocking
+        ? "bg-rose-600 hover:bg-rose-700 text-white"
+        : "bg-emerald-600 hover:bg-emerald-700 text-white",
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          const token = localStorage.getItem("admin_token");
+          const res = await fetch(`${API_URL}/api/users/${u._id}/block`, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              reason: isBlocking ? "Blocked by administrator" : null,
+            }),
+            credentials: "include",
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.message || "Failed to update user block status");
+          await fetchUsers();
+        } catch (err) {
+          setConfirmDialog({
+            title: "Error",
+            message: err.message,
+            confirmText: "OK",
+            confirmClass: "bg-brand hover:bg-brand-dark text-white",
+            onConfirm: () => setConfirmDialog(null),
+          });
+        }
+      },
+    });
+  };
+
   const calculateDaysRemaining = (scheduledDateStr) => {
     if (!scheduledDateStr) return "Pending";
     const diff = new Date(scheduledDateStr).getTime() - Date.now();
@@ -286,6 +328,7 @@ const Users = () => {
       all: users.length,
       admins: 0,
       monetized: 0,
+      blocked: 0,
       scheduled: 0,
       recovery: 0,
     };
@@ -293,6 +336,7 @@ const Users = () => {
     users.forEach((u) => {
       if (u.role === "admin") counts.admins += 1;
       if (u.isMonetized || u.monetizationApproved || (u.totalEarnings && u.totalEarnings > 0)) counts.monetized += 1;
+      if (u.isBlocked) counts.blocked += 1;
       if (u.deletionScheduled) counts.scheduled += 1;
       if (u.recoveryRequested || u.deletionStatus === "recovery_requested") counts.recovery += 1;
     });
@@ -308,6 +352,7 @@ const Users = () => {
     const tabFiltered = users.filter((u) => {
       if (filter === "admins" && u.role !== "admin") return false;
       if (filter === "monetized" && !(u.isMonetized || u.monetizationApproved || (u.totalEarnings && u.totalEarnings > 0))) return false;
+      if (filter === "blocked" && !u.isBlocked) return false;
       if (filter === "scheduled" && !u.deletionScheduled) return false;
       if (filter === "recovery" && !(u.recoveryRequested || u.deletionStatus === "recovery_requested")) return false;
       return true;
@@ -403,6 +448,7 @@ const Users = () => {
     { label: "All Users", value: "all", count: filterCounts.all },
     { label: "Admins", value: "admins", count: filterCounts.admins },
     { label: "Monetized", value: "monetized", count: filterCounts.monetized },
+    { label: "Blocked Users", value: "blocked", count: filterCounts.blocked },
     { label: "Scheduled Deletions", value: "scheduled", count: filterCounts.scheduled },
     { label: "Recovery Requests", value: "recovery", count: filterCounts.recovery },
   ];
@@ -566,6 +612,11 @@ const Users = () => {
                           >
                             {u.role}
                           </span>
+                          {u.isBlocked ? (
+                            <span className="rounded-full bg-rose-100 border border-rose-300 px-2 py-0.5 text-[10px] font-bold text-rose-800">
+                              🚫 Blocked
+                            </span>
+                          ) : null}
                           {u.isMonetized ? (
                             <span className="rounded-full bg-emerald-100 border border-emerald-300 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
                               💰 Monetized
@@ -655,6 +706,19 @@ const Users = () => {
                             )
                           ) : (
                             <>
+                              {u.role !== "admin" && (
+                                <button
+                                  onClick={() => promptToggleBlock(u)}
+                                  className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
+                                    u.isBlocked
+                                      ? "bg-emerald-50 border border-emerald-300 text-emerald-700 hover:bg-emerald-100"
+                                      : "bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100"
+                                  }`}
+                                  title={u.isBlocked ? "Unblock user and restore content visibility" : "Block user and hide all their videos/shorts"}
+                                >
+                                  {u.isBlocked ? "Unblock" : "Block"}
+                                </button>
+                              )}
                               <button
                                 onClick={() => {
                                   setEditUser(u);

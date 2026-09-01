@@ -87,6 +87,11 @@ const getSort = (sort) => {
   return { isPinned: -1, createdAt: -1 };
 };
 
+const getBlockedUserIds = async () => {
+  const blockedUsers = await User.find({ isBlocked: true }).select("_id").lean();
+  return blockedUsers.map((u) => u._id);
+};
+
 const formatMediaUrl = (url, req) => {
   if (!url) return url;
   if (
@@ -323,6 +328,7 @@ exports.searchVideos = async (req, res, next) => {
     const { phrase, terms, regexes, phraseRegex } = parseSearchKeywords(q);
     const isObjectId = mongoose.Types.ObjectId.isValid(q);
     const isAdmin = req.user && req.user.role === "admin";
+    const blockedUserIds = isAdmin ? [] : await getBlockedUserIds();
 
     // 1. Search channels (users with a channelName or matching name/email/phone)
     const channelOrClauses = [];
@@ -342,7 +348,12 @@ exports.searchVideos = async (req, res, next) => {
       channelOrClauses.push({ _id: q });
     }
 
-    const channels = await User.find({ $or: channelOrClauses })
+    const channelFindQuery = { $or: channelOrClauses };
+    if (!isAdmin) {
+      channelFindQuery.isBlocked = { $ne: true };
+    }
+
+    const channels = await User.find(channelFindQuery)
       .select("name avatar channelName followersCount about isVerified role")
       .limit(30)
       .lean();
@@ -374,6 +385,9 @@ exports.searchVideos = async (req, res, next) => {
 
     if (!isAdmin) {
       videoQuery.visibility = "public";
+      if (blockedUserIds.length > 0) {
+        videoQuery.owner = { ...(videoQuery.owner || {}), $nin: blockedUserIds };
+      }
     }
 
     const videos = await Video.find(videoQuery)
@@ -523,6 +537,26 @@ exports.getVideos = async (req, res, next) => {
       }
     }
 
+    if (!isAdmin) {
+      const blockedUserIds = await getBlockedUserIds();
+      if (blockedUserIds.length > 0) {
+        if (query.owner) {
+          if (blockedUserIds.some((bId) => bId.toString() === query.owner.toString())) {
+            return res.status(200).json({
+              success: true,
+              count: 0,
+              total: 0,
+              page,
+              pages: 0,
+              data: [],
+            });
+          }
+        } else {
+          query.owner = { ...(query.owner || {}), $nin: blockedUserIds };
+        }
+      }
+    }
+
     const sortOption = req.query.sort;
     const [videos, total] = await Promise.all([
       Video.find(query)
@@ -563,20 +597,28 @@ exports.getVideos = async (req, res, next) => {
 exports.getVideo = async (req, res, next) => {
   try {
     const video = await Video.findById(req.params.id)
-      .populate("owner", "name avatar channelName followersCount isVerified")
+      .populate("owner", "name avatar channelName followersCount isVerified isBlocked")
       .populate("category", "name");
 
     if (!video)
       return res
         .status(404)
         .json({ success: false, message: "Video not found" });
+
+    const isOwner =
+      req.user &&
+      video.owner &&
+      video.owner._id &&
+      video.owner._id.toString() === req.user.id.toString();
+    const isAdmin = req.user && req.user.role === "admin";
+
+    if (video.owner?.isBlocked && !isOwner && !isAdmin) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Video not found" });
+    }
+
     if (video.visibility !== "public") {
-      const isOwner =
-        req.user &&
-        video.owner &&
-        video.owner._id &&
-        video.owner._id.toString() === req.user.id.toString();
-      const isAdmin = req.user && req.user.role === "admin";
       if (!isOwner && !isAdmin) {
         return res
           .status(404)

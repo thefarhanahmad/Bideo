@@ -13,6 +13,7 @@ import api, { resolveMediaUrl } from '../services/api';
 import { useSelector } from 'react-redux';
 import { RootState } from '../redux/store';
 import VerifiedBadge from './VerifiedBadge';
+import HashtagText from './HashtagText';
 
 const FALLBACK_IMAGE = 'https://via.placeholder.com/640x360?text=No+Image';
 const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
@@ -166,9 +167,11 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, onMenuPress, onPlaylistPre
           />
         </TouchableOpacity>
         <View style={styles.textContainer}>
-          <Text style={styles.title} numberOfLines={2}>
-            {video?.title || 'Untitled'}
-          </Text>
+          <HashtagText
+            text={video?.title || 'Untitled'}
+            style={styles.title}
+            numberOfLines={2}
+          />
           <View style={styles.channelRow}>
             <Text
               style={styles.metadataChannel}
