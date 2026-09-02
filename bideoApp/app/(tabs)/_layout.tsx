@@ -1,6 +1,6 @@
 import { Tabs, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { TouchableOpacity } from 'react-native';
+import { TouchableOpacity, DeviceEventEmitter } from 'react-native';
 import { Image } from 'expo-image';
 import Colors from '../../constants/Colors';
 
@@ -29,11 +29,17 @@ export default function TabsLayout() {
         options={{
           title: 'Home',
           headerTitle: () => (
-            <Image
-              source={require('../../assets/app-logo.png')}
-              style={{ width: 120, height: 40 }}
-              contentFit="contain"
-            />          ),
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => DeviceEventEmitter.emit('scrollHomeToTop')}
+            >
+              <Image
+                source={require('../../assets/app-logo.png')}
+                style={{ width: 120, height: 40 }}
+                contentFit="contain"
+              />
+            </TouchableOpacity>
+          ),
           headerTitleAlign: 'left',
           headerRight: () => (
             <>
@@ -49,6 +55,11 @@ export default function TabsLayout() {
             <Ionicons name="home-outline" size={size} color={color} />
           ),
         }}
+        listeners={() => ({
+          tabPress: () => {
+            DeviceEventEmitter.emit('scrollHomeToTop');
+          },
+        })}
       />
       <Tabs.Screen
         name="shorts"

@@ -51,7 +51,7 @@ eas build -p android --profile preview
 
 Users authenticate by **phone + password** (bcrypt) or **Google**. The admin dashboard logs in through `POST /api/admin/login`, which is just a normal user whose `role === 'admin'`. Password reset uses a **hardcoded dummy OTP `1234`** (`controllers/auth.js`) — not real SMS.
 
-**Media.** All images/videos go to **Cloudinary**, not local disk. `middlewares/multer.js` uses empty `diskStorage` (temp files) with a 100MB limit and field-name-based MIME filtering (`video`, `thumbnail`, `image`, `avatar`, `coverImage`). `utils/cloudinary.js` handles deletion by parsing `public_id` out of stored URLs — call `deleteFromCloudinary(url, 'image'|'video')` whenever a record owning media is deleted/replaced.
+**Media.** All images/videos are stored on **local disk** under `backend/uploads/` (`videos/` and `images/`) via `utils/localUpload.js` (`saveLocalFile` and `deleteLocalFile`). `middlewares/multer.js` uses empty `diskStorage` (temp files) with a 500MB limit and field-name-based MIME filtering (`video`, `thumbnail`, `image`, `avatar`, `coverImage`). Static files are served via Express at `/uploads` and `/api/uploads`.
 
 **Mobile app (bideoApp).** Navigation is **Expo Router** (file-based, `app/` dir): `app/(tabs)/` are the bottom tabs (home `index`, shorts, upload, followings, library); other files/folders are stack screens (`video/[id]`, `channel/[id]`, `settings/`, `earnings`, etc.). Root `app/_layout.tsx` bootstraps auth from `AsyncStorage` behind a full-screen branded splash (`components/AppSplash.tsx`) before rendering. State is **Redux Toolkit** (`redux/store.ts`, slices: `auth`, `video`). All HTTP goes through `services/api.ts` (axios instance; base URL from `EXPO_PUBLIC_API_URL`; `setAuthToken` sets the Bearer header globally).
 
@@ -61,7 +61,7 @@ Mobile conventions (follow these — don't regress to the old way):
 - **Gradients:** `expo-linear-gradient`. **Haptics:** helpers in `utils/haptics.ts` (call on like/follow-style actions).
 - **Theme:** `constants/Colors.ts` tokens only (orange/white).
 - **Env/builds:** dev API URL comes from `bideoApp/.env` (LAN IP); standalone builds inject `EXPO_PUBLIC_API_URL` (hosted) per-profile via `eas.json`. Google login is gated by `EXPO_PUBLIC_GOOGLE_LOGIN_ENABLED` (`AuthModal`).
-- **Uploads:** backend compresses media via Cloudinary transforms (`utils/cloudinary.js` presets); client validates video size (~100MB) before upload.
+- **Uploads:** client validates video/image size before upload; backend saves media locally via `utils/localUpload.js`.
 - **Shared UI:** content lists use the card pattern from `components/VideoCard`/`PostCard` (white rounded card + shadow on a gray screen bg); for list screens reuse `EmptyState` and `VideoListSkeleton` from `components/ListStates.tsx`. Active controls use brand orange (not `Colors.text`).
 
 **adminDashboard (public site + admin panel).** One Vite + React app serving two things (`src/App.jsx`): the **public marketing landing page** at `/` (`src/pages/Landing.jsx` + `src/components/landing/*`) and the **admin panel** at `/admin/*` (gated by a `localStorage` `admin_token` `PrivateRoute`), with admin login at `/login`. Shared config lives in `src/config.js` (`API_URL`, `APP_DOWNLOAD_URL`). Theme tokens are in `tailwind.config.js` (`brand`, `ink`, `muted`, `line`, `surface` + `fade-up`/`float`/`gradient-pan` animations); landing scroll-reveal uses `src/hooks/useScrollReveal.js` (`.reveal` → `.is-visible`). Data access is raw `fetch` with `credentials: 'include'`. The dashboard authenticates via the `token` cookie that `protect` reads (Reports/Stats also send the `Authorization` header). Dashboard overview stats come from `GET /api/admin/stats`. Env: `VITE_API_URL` (API base, default `http://localhost:5000`) and `VITE_APP_DOWNLOAD_URL` (Android APK link for the landing "Download App" buttons; button is disabled when unset) — see `adminDashboard/.env.example`; `.env` is gitignored.
@@ -73,7 +73,7 @@ Orange + white, defined in `bideoApp/constants/Colors.ts`. Use these tokens, nev
 
 ## Environment & secrets
 
-Config is `.env`-driven; never hardcode secrets. See `backend/.env.example` for the full list (Mongo, JWT, Google OAuth, Cloudinary, `ADMIN_EMAIL`/`ADMIN_PASSWORD`). `EXPO_PUBLIC_*` vars are intentionally client-exposed; `GOOGLE_CLIENT_SECRET` and Cloudinary secrets stay backend-only. Google OAuth setup steps live in `google_login.txt`.
+Config is `.env`-driven; never hardcode secrets. See `backend/.env.example` for the full list (Mongo, JWT, Google OAuth, `ADMIN_EMAIL`/`ADMIN_PASSWORD`). `EXPO_PUBLIC_*` vars are intentionally client-exposed; `GOOGLE_CLIENT_SECRET` stays backend-only. Google OAuth setup steps live in `google_login.txt`.
 
 **CORS is an allowlist** hardcoded in `backend/app.js` (`allowedOrigins` — localhost:5173, a LAN IP, an `exp://` origin). When the dev machine's LAN IP changes, update this list **and** `EXPO_PUBLIC_API_URL` / the api.ts fallback, or requests silently fail.
 

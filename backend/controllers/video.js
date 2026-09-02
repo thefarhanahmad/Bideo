@@ -10,6 +10,7 @@ const VideoMonetizationReview = require("../models/VideoMonetizationReview");
 const MonetizationApplication = require("../models/MonetizationApplication");
 const fs = require("fs");
 const { saveLocalFile, deleteLocalFile } = require("../utils/localUpload");
+const { getUserInterestProfile, rankAndShuffleVideos } = require("../utils/recommendation");
 
 const createNotification = async ({ recipient, actor, type, video, post, comment, message }) => {
   if (!recipient || !actor || recipient.toString() === actor.toString()) return;
@@ -579,6 +580,10 @@ exports.getVideos = async (req, res, next) => {
       results = results
         .map((v) => ({ ...v, _score: scoreVideoRelevance(v, searchKeywords) }))
         .sort((a, b) => b._score - a._score);
+    } else if (!searchKeywords && !req.query.owner && !fetchAll && (sortOption === "algorithm" || !sortOption || sortOption === "latest")) {
+      // Algorithmic feed: ranks by last 5 watched videos (category/title/description matching) & tier-shuffles
+      const profile = await getUserInterestProfile(req.user);
+      results = rankAndShuffleVideos(results, profile);
     }
 
     res.status(200).json({

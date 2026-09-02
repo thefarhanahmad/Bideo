@@ -1,6 +1,7 @@
 import { showAlert } from '../../components/AppAlert';
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { View, FlatList, StyleSheet, ActivityIndicator, Text, Modal, TouchableOpacity, TextInput, Alert, Platform } from 'react-native';
+import { View, FlatList, StyleSheet, ActivityIndicator, Text, Modal, TouchableOpacity, TextInput, Alert, Platform, DeviceEventEmitter } from 'react-native';
+import { useScrollToTop, useNavigation } from '@react-navigation/native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -81,11 +82,33 @@ export default function HomeScreen() {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [categoriesList, setCategoriesList] = useState<string[]>(['All']);
   const [posts, setPosts] = useState<any[]>([]);
+  const [postsLoading, setPostsLoading] = useState(false);
 
   const [page, setPage] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
   const isFetchingMore = useRef(false);
   const hasMore = useRef(true);
+
+  const flatListRef = useRef<FlatList>(null);
+  useScrollToTop(flatListRef);
+  const navigation = useNavigation();
+
+  useEffect(() => {
+    // 1. Listen for tabPress on bottom tab
+    const unsubscribeTab = navigation.addListener('tabPress' as any, () => {
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    });
+
+    // 2. Listen for global scrollHomeToTop event (header logo or tab click)
+    const subEvent = DeviceEventEmitter.addListener('scrollHomeToTop', () => {
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    });
+
+    return () => {
+      unsubscribeTab();
+      subEvent.remove();
+    };
+  }, [navigation]);
 
   const [selectedVideo, setSelectedVideo] = useState<any>(null);
   const [reportModalVisible, setReportModalVisible] = useState(false);
@@ -114,8 +137,7 @@ export default function HomeScreen() {
         }));
         const pinned = normalized.filter((v: any) => v.isPinned);
         const regular = normalized.filter((v: any) => !v.isPinned);
-        const randomized = [...pinned, ...shuffleArray(regular)];
-        dispatch(fetchVideosSuccess(randomized));
+        dispatch(fetchVideosSuccess([...pinned, ...regular]));
         if (data.length < 50) hasMore.current = false;
       } else {
         dispatch(fetchVideosSuccess(shuffleArray(SAMPLE_VIDEOS)));
@@ -129,6 +151,7 @@ export default function HomeScreen() {
   };
 
   const loadMoreVideos = async () => {
+    if (selectedCategory === 'Posts') return;
     if (isFetchingMore.current || !hasMore.current || loading || loadingMore) return;
     isFetchingMore.current = true;
     setLoadingMore(true);
@@ -181,60 +204,91 @@ export default function HomeScreen() {
 
   const loadPosts = async () => {
     try {
+      setPostsLoading(true);
       const res = await api.get('/posts');
-      if (res.data.success) setPosts(res.data.data || []);
+      if (res.data && res.data.success && Array.isArray(res.data.data)) {
+        setPosts(res.data.data);
+      } else {
+        setPosts([]);
+      }
     } catch (err) {
       setPosts([]);
+    } finally {
+      setPostsLoading(false);
     }
+  };
+
+  const handleSelectCategory = (cat: string) => {
+    if (cat === 'Posts') {
+      if (posts.length === 0 || selectedCategory === 'Posts') {
+        loadPosts();
+      }
+    }
+    setSelectedCategory(cat);
+  };
+
+  const handleDeletePost = (postId: string) => {
+    setPosts((prev) => prev.filter((p) => p._id !== postId));
   };
 
   const filteredVideos = selectedCategory === 'All'
     ? videos
     : selectedCategory === 'Posts'
       ? []
-      : videos.filter(v => v.category === selectedCategory);
-
-  const filteredPosts = (selectedCategory === 'All' || selectedCategory === 'Posts')
-    ? posts
-    : [];
+      : videos.filter((v: any) => v.category === selectedCategory);
 
   const pinnedVideos = filteredVideos
-    .filter((v: any) => v.isPinned === true || v.isPinned === 'true')
+    .filter((v: any) => (v.isPinned === true || v.isPinned === 'true') && !v.isShort)
     .map((item: any) => ({ ...item, itemType: 'video' }));
 
   const regularLong = filteredVideos
     .filter((v: any) => !v.isPinned && v.isPinned !== 'true' && !v.isShort)
     .map((item: any) => ({ ...item, itemType: 'video' }));
 
-  const postItems = filteredPosts.map((item: any) => ({ ...item, itemType: 'post' }));
+  const postItems = posts.map((item: any) => ({ ...item, itemType: 'post' }));
 
-  const longVideosAndPosts = selectedCategory === 'All'
-    ? [...pinnedVideos, ...regularLong, ...postItems]
-    : [...pinnedVideos, ...[...regularLong, ...postItems].sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())];
-
-  const shortsItems = filteredVideos.filter(v => v.isShort);
+  const shortsItems = filteredVideos.filter((v: any) => v.isShort);
 
   const baseItems: any[] = [];
   if (selectedCategory === 'All') {
-    baseItems.push(...longVideosAndPosts.slice(0, 2));
+    const longVideos = [...pinnedVideos, ...regularLong];
+    let postIndex = 0;
+    let videoCount = 0;
 
-    if (shortsItems.length > 0) {
+    for (let i = 0; i < longVideos.length; i++) {
+      baseItems.push(longVideos[i]);
+      videoCount++;
+
+      // Insert shorts shelf after the 2nd video (if shorts exist)
+      if (i === 1 && shortsItems.length > 0) {
+        baseItems.push({
+          _id: 'shorts_shelf',
+          itemType: 'shorts_shelf',
+          data: shortsItems.slice(0, 4),
+        });
+      }
+
+      // After every 6 videos, insert 1 post (if available)
+      if (videoCount % 6 === 0 && postIndex < postItems.length) {
+        baseItems.push(postItems[postIndex]);
+        postIndex++;
+      }
+    }
+
+    // If there were fewer than 2 videos, ensure shorts shelf still appears if available
+    if (longVideos.length < 2 && shortsItems.length > 0) {
       baseItems.push({
         _id: 'shorts_shelf',
         itemType: 'shorts_shelf',
         data: shortsItems.slice(0, 4),
       });
     }
-
-    baseItems.push(...longVideosAndPosts.slice(2));
   } else if (selectedCategory === 'Posts') {
-    baseItems.push(...filteredPosts.map((p) => ({ ...p, itemType: 'post' })));
+    // Shuffled posts feed only
+    baseItems.push(...postItems);
   } else {
-    baseItems.push(
-      ...filteredVideos
-        .filter((v) => !v.isShort)
-        .map((v) => ({ ...v, itemType: 'video' }))
-    );
+    // Specific category: videos only
+    baseItems.push(...pinnedVideos, ...regularLong);
   }
 
   const feedData: any[] = [];
@@ -291,14 +345,15 @@ export default function HomeScreen() {
       <CategoryList
         categories={categoriesList}
         selectedCategory={selectedCategory}
-        onSelectCategory={setSelectedCategory}
+        onSelectCategory={handleSelectCategory}
       />
-      {loading && videos.length === 0 ? (
+      {(selectedCategory === 'Posts' ? (postsLoading && posts.length === 0) : (loading && videos.length === 0)) ? (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
         </View>
       ) : (
         <FlatList
+          ref={flatListRef}
           data={feedData}
           keyExtractor={(item) => item._id}
           renderItem={({ item }) => {
@@ -309,7 +364,7 @@ export default function HomeScreen() {
               return renderShortsShelf(item.data);
             }
             if (item.itemType === 'post') {
-              return <PostCard post={item} />;
+              return <PostCard post={item} onDelete={handleDeletePost} />;
             }
             return (
               <VideoCard
@@ -329,16 +384,16 @@ export default function HomeScreen() {
           }}
           contentContainerStyle={styles.listContainer}
           showsVerticalScrollIndicator={false}
-          refreshing={loading}
+          refreshing={selectedCategory === 'Posts' ? postsLoading : loading}
           onRefresh={handleRefresh}
-          onEndReached={loadMoreVideos}
+          onEndReached={selectedCategory === 'Posts' ? undefined : loadMoreVideos}
           onEndReachedThreshold={0.5}
           removeClippedSubviews={false}
           initialNumToRender={6}
           maxToRenderPerBatch={6}
           windowSize={9}
           ListFooterComponent={
-            loadingMore ? (
+            loadingMore && selectedCategory !== 'Posts' ? (
               <View style={{ paddingVertical: 18, alignItems: 'center' }}>
                 <ActivityIndicator size="small" color={Colors.primary} />
               </View>
@@ -346,7 +401,9 @@ export default function HomeScreen() {
           }
           ListEmptyComponent={
             <View style={styles.centerContainer}>
-              <Text style={styles.emptyText}>No videos found</Text>
+              <Text style={styles.emptyText}>
+                {selectedCategory === 'Posts' ? 'No posts found' : 'No videos found'}
+              </Text>
             </View>
           }
         />

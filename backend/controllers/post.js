@@ -3,6 +3,7 @@ const User = require('../models/User');
 const Follower = require('../models/Follower');
 const Notification = require('../models/Notification');
 const { saveLocalFile, deleteLocalFile } = require('../utils/localUpload');
+const { getUserInterestProfile, rankAndShufflePosts } = require('../utils/recommendation');
 
 const createNotification = async ({ recipient, actor, type, video, post, comment, message }) => {
   if (!recipient || !actor || recipient.toString() === actor.toString()) return;
@@ -103,7 +104,13 @@ exports.getPosts = async (req, res, next) => {
       .sort('-createdAt')
       .limit(limit)
       .lean();
-    res.status(200).json({ success: true, count: posts.length, data: posts });
+
+    let results = posts;
+    if (!req.query.owner && !isAdmin) {
+      const profile = await getUserInterestProfile(req.user);
+      results = rankAndShufflePosts(posts, profile);
+    }
+    res.status(200).json({ success: true, count: results.length, data: results });
   } catch (err) {
     next(err);
   }

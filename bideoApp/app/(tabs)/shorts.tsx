@@ -59,6 +59,8 @@ export default function ShortsScreen() {
   const { initialShortId, fromChannelId } = useLocalSearchParams<{ initialShortId?: string; fromChannelId?: string }>();
   const isFocused = useIsFocused();
   const [shorts, setShorts] = useState<any[]>([]);
+  const shortsRef = useRef(shorts);
+  shortsRef.current = shorts;
   const flatListRef = useRef<FlatList>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -158,7 +160,7 @@ export default function ShortsScreen() {
         .filter((v: any) => v.isShort === true)
         .map((v: any) => formatShortItem(v, user?._id, isAuthenticated));
       
-      let randomizedShorts: any[] = shuffleArray(onlyShorts);
+      let randomizedShorts: any[] = onlyShorts;
 
       if (targetId) {
         const targetIndex = randomizedShorts.findIndex((s: any) => s._id === targetId);
@@ -406,7 +408,15 @@ export default function ShortsScreen() {
 
   const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
     if (viewableItems.length > 0) {
-      setActiveVideoIndex(viewableItems[0].index);
+      const idx = viewableItems[0].index;
+      setActiveVideoIndex(idx);
+      const cur = shortsRef.current[idx];
+      if (cur && cur._id && !cur.isAd) {
+        videoService.recordView(cur._id).catch(() => {});
+        if (isAuthenticated) {
+          api.post('/users/history', { videoId: cur._id }).catch(() => {});
+        }
+      }
     }
   }).current;
 
