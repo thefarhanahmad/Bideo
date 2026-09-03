@@ -7,24 +7,31 @@ interface HashtagTextProps {
   style?: StyleProp<TextStyle>;
   hashtagStyle?: StyleProp<TextStyle>;
   linkStyle?: StyleProp<TextStyle>;
+  mentionStyle?: StyleProp<TextStyle>;
   numberOfLines?: number;
   onHashtagPress?: (tag: string) => void;
   onLinkPress?: (url: string) => void;
+  onMentionPress?: (mention: string) => void;
 }
 
 /**
- * Parses and renders text with YouTube-style clickable blue hashtags and clickable web links.
- * When a hashtag is tapped, redirects to the Search page filtering videos by the clicked hashtag.
- * When a link is tapped, opens the URL in the system browser or registered deep link.
+ * Parses and renders text with:
+ * - YouTube-style clickable blue hashtags (#tag)
+ * - Clickable blue web links (https://..., http://..., www....)
+ * - Clickable blue user mentions (@username)
+ *
+ * Tapping a mention redirects directly to that user's channel profile detail.
  */
 export const HashtagText: React.FC<HashtagTextProps> = ({
   text = '',
   style,
   hashtagStyle,
   linkStyle,
+  mentionStyle,
   numberOfLines,
   onHashtagPress,
   onLinkPress,
+  onMentionPress,
 }) => {
   const router = useRouter();
 
@@ -61,8 +68,16 @@ export const HashtagText: React.FC<HashtagTextProps> = ({
     }
   };
 
-  // Match URLs (http://, https://, www.) and hashtags (e.g. #trending)
-  const regex = /(https?:\/\/[^\s<>"'{}|\\^`]+|www\.[^\s<>"'{}|\\^`]+|#[a-zA-Z0-9_\u0600-\u06FF\u0900-\u097F]+)/gi;
+  const handleMentionClick = (handleOrName: string) => {
+    if (onMentionPress) {
+      onMentionPress(handleOrName);
+    } else {
+      router.push(`/channel/${handleOrName}`);
+    }
+  };
+
+  // Match URLs, hashtags (#tag), and mentions (@username)
+  const regex = /(https?:\/\/[^\s<>"'{}|\\^`]+|www\.[^\s<>"'{}|\\^`]+|#[a-zA-Z0-9_\u0600-\u06FF\u0900-\u097F]+|@[a-zA-Z0-9_\u0600-\u06FF\u0900-\u097F.-]+)/gi;
   const parts = text.split(regex);
 
   return (
@@ -84,9 +99,33 @@ export const HashtagText: React.FC<HashtagTextProps> = ({
           );
         }
 
+        // Check if mention (@username)
+        if (part.startsWith('@') && part.length > 1) {
+          let mention = part;
+          let trailing = '';
+          const punctMatch = mention.match(/[.,;:!?\)\>\]\}]+$/);
+          if (punctMatch) {
+            trailing = punctMatch[0];
+            mention = mention.slice(0, -trailing.length);
+          }
+          const cleanName = mention.slice(1);
+
+          return (
+            <React.Fragment key={`mention-${index}`}>
+              <Text
+                style={[styles.mention, mentionStyle]}
+                onPress={() => handleMentionClick(cleanName)}
+                suppressHighlighting={false}
+              >
+                {mention}
+              </Text>
+              {trailing ? <Text>{trailing}</Text> : null}
+            </React.Fragment>
+          );
+        }
+
         // Check if URL
         if (/^(https?:\/\/|www\.)/i.test(part)) {
-          // Separate any trailing punctuation so .,!?) isn't included in the clickable link
           let url = part;
           let trailing = '';
           const punctMatch = url.match(/[.,;:!?\)\>\]\}]+$/);
@@ -124,6 +163,10 @@ const styles = StyleSheet.create({
     color: '#065FD4', // Clickable blue link color
     textDecorationLine: 'underline',
     fontWeight: '500',
+  },
+  mention: {
+    color: '#065FD4', // Clickable blue mention color
+    fontWeight: '600',
   },
 });
 

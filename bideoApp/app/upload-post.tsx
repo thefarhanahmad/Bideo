@@ -8,6 +8,7 @@ import Colors from '../constants/Colors';
 import api from '../services/api';
 import { showAlert } from '../components/AppAlert';
 import Constants from 'expo-constants';
+import MentionSuggestions from '../components/MentionSuggestions';
 
 export default function UploadPostScreen() {
   const router = useRouter();
@@ -20,6 +21,29 @@ export default function UploadPostScreen() {
   const [uploading, setUploading] = useState(false);
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+
+  // @mention autocomplete states
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionActive, setMentionActive] = useState(false);
+
+  const handleTextChange = (newText: string) => {
+    setPostText(newText);
+    const match = newText.match(/@([a-zA-Z0-9_\u0600-\u06FF\u0900-\u097F.-]*)$/);
+    if (match) {
+      setMentionActive(true);
+      setMentionQuery(match[1] || '');
+    } else {
+      setMentionActive(false);
+    }
+  };
+
+  const handleSelectMention = (selectedUser: any) => {
+    const handle = selectedUser.channelName || selectedUser.name || 'user';
+    const replaced = postText.replace(/@([a-zA-Z0-9_\u0600-\u06FF\u0900-\u097F.-]*)$/, `@${handle} `);
+    setPostText(replaced);
+    setMentionActive(false);
+    setMentionQuery('');
+  };
 
   useEffect(() => {
     if (editPostId) {
@@ -216,11 +240,17 @@ export default function UploadPostScreen() {
         <Text style={styles.label}>Post Text</Text>
         <TextInput
           style={[styles.input, styles.textArea]}
-          placeholder="Share an update..."
+          placeholder="Share an update... (type @ to mention a creator)"
           placeholderTextColor={Colors.textGray}
           multiline
           value={postText}
-          onChangeText={setPostText}
+          onChangeText={handleTextChange}
+        />
+        <MentionSuggestions
+          visible={mentionActive}
+          query={mentionQuery}
+          onSelectUser={handleSelectMention}
+          onClose={() => setMentionActive(false)}
         />
 
         <Text style={styles.label}>Image</Text>

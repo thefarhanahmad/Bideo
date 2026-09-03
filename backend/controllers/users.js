@@ -161,9 +161,70 @@ exports.updateChannel = async (req, res, next) => {
   }
 };
 
+// @desc    Search users for @mention autocomplete
+// @route   GET /api/users/search
+// @access  Public
+exports.searchUsers = async (req, res, next) => {
+  try {
+    const rawQ = req.query.q || req.query.search || '';
+    const q = rawQ.replace(/^@/, '').trim();
+
+    const query = { isBlocked: { $ne: true } };
+
+    if (q) {
+      const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escaped, 'i');
+      const isObjectId = mongoose.Types.ObjectId.isValid(q);
+
+      const orClauses = [
+        { channelName: regex },
+        { name: regex },
+      ];
+      if (isObjectId) {
+        orClauses.push({ _id: q });
+      }
+      query.$or = orClauses;
+    }
+
+    const users = await User.find(query)
+      .select('name channelName avatar isVerified followersCount')
+      .sort({ followersCount: -1, createdAt: -1 })
+      .limit(15)
+      .lean();
+
+    res.status(200).json({
+      success: true,
+      count: users.length,
+      data: users,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 exports.getChannelProfile = async (req, res, next) => {
   try {
-    const channelObj = await User.findById(req.params.id).select('name avatar coverImage channelName about followersCount isVerified isBlocked blockedAt blockReason createdAt');
+    const rawId = req.params.id;
+    const cleanId = rawId ? rawId.replace(/^@/, '').trim() : '';
+    const isObjectId = mongoose.Types.ObjectId.isValid(cleanId);
+
+    let channelObj = null;
+    if (isObjectId) {
+      channelObj = await User.findById(cleanId).select('name avatar coverImage channelName about followersCount isVerified isBlocked blockedAt blockReason createdAt');
+    }
+
+    if (!channelObj && cleanId) {
+      const escaped = cleanId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`^${escaped}$`, 'i');
+      channelObj = await User.findOne({
+        $or: [
+          { channelName: regex },
+          { name: regex },
+          { email: regex },
+        ],
+      }).select('name avatar coverImage channelName about followersCount isVerified isBlocked blockedAt blockReason createdAt');
+    }
+
     if (!channelObj) return res.status(404).json({ success: false, message: 'Channel not found' });
 
     const channel = channelObj.toObject();
@@ -177,7 +238,7 @@ exports.getChannelProfile = async (req, res, next) => {
     if (req.user) {
       const isFollowing = await Follower.findOne({
         follower: req.user.id,
-        channel: req.params.id,
+        channel: channel._id,
       });
       channel.isFollowing = !!isFollowing;
     } else {

@@ -10,6 +10,7 @@ import { showAlert } from '../components/AppAlert';
 import { hapticSelection } from '../utils/haptics';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import Constants from 'expo-constants';
+import MentionSuggestions from '../components/MentionSuggestions';
 
 const FALLBACK_THUMBNAIL = 'https://via.placeholder.com/640x360.png?text=Tube+India';
 
@@ -30,6 +31,45 @@ export default function UploadVideoScreen() {
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [thumbnailChanged, setThumbnailChanged] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+
+  // @mention autocomplete states
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionActiveField, setMentionActiveField] = useState<'title' | 'description' | null>(null);
+
+  const checkMention = (text: string, field: 'title' | 'description') => {
+    const match = text.match(/@([a-zA-Z0-9_\u0600-\u06FF\u0900-\u097F.-]*)$/);
+    if (match) {
+      setMentionActiveField(field);
+      setMentionQuery(match[1] || '');
+    } else {
+      if (mentionActiveField === field) {
+        setMentionActiveField(null);
+      }
+    }
+  };
+
+  const handleTitleChange = (newText: string) => {
+    setTitle(newText);
+    checkMention(newText, 'title');
+  };
+
+  const handleDescriptionChange = (newText: string) => {
+    setDescription(newText);
+    checkMention(newText, 'description');
+  };
+
+  const handleSelectMention = (selectedUser: any) => {
+    const handle = selectedUser.channelName || selectedUser.name || 'user';
+    if (mentionActiveField === 'title') {
+      const replaced = title.replace(/@([a-zA-Z0-9_\u0600-\u06FF\u0900-\u097F.-]*)$/, `@${handle} `);
+      setTitle(replaced);
+    } else if (mentionActiveField === 'description') {
+      const replaced = description.replace(/@([a-zA-Z0-9_\u0600-\u06FF\u0900-\u097F.-]*)$/, `@${handle} `);
+      setDescription(replaced);
+    }
+    setMentionActiveField(null);
+    setMentionQuery('');
+  };
 
   const uploadType = type || (editId ? 'video' : 'video');
 
@@ -393,21 +433,33 @@ export default function UploadVideoScreen() {
         <Text style={styles.label}>Title</Text>
         <TextInput
           style={styles.input}
-          placeholder="Enter video title"
+          placeholder="Enter video title (type @ to mention a creator)"
           placeholderTextColor={Colors.textGray}
           value={title}
-          onChangeText={setTitle}
+          onChangeText={handleTitleChange}
+        />
+        <MentionSuggestions
+          visible={mentionActiveField === 'title'}
+          query={mentionQuery}
+          onSelectUser={handleSelectMention}
+          onClose={() => setMentionActiveField(null)}
         />
 
         <Text style={styles.label}>Description</Text>
         <TextInput
           style={[styles.input, styles.textArea]}
-          placeholder="Enter video description"
+          placeholder="Enter video description (type @ to mention a creator)"
           placeholderTextColor={Colors.textGray}
           multiline
           numberOfLines={4}
           value={description}
-          onChangeText={setDescription}
+          onChangeText={handleDescriptionChange}
+        />
+        <MentionSuggestions
+          visible={mentionActiveField === 'description'}
+          query={mentionQuery}
+          onSelectUser={handleSelectMention}
+          onClose={() => setMentionActiveField(null)}
         />
 
         <Text style={styles.label}>Category</Text>
