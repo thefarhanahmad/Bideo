@@ -296,6 +296,40 @@ export default function ShortsScreen() {
     }
   };
 
+  const handleDoubleTapLike = async (shortId: string) => {
+    if (!isAuthenticated) {
+      setAuthModalVisible(true);
+      return;
+    }
+    hapticLight();
+
+    const targetShort = shortsRef.current.find((s) => s._id === shortId);
+    const alreadyLiked = targetShort?.isLiked || targetShort?.likes?.includes(user?._id);
+
+    if (alreadyLiked) {
+      return;
+    }
+
+    setShorts((prev) =>
+      prev.map((s) => {
+        if (s._id === shortId) {
+          const currentLikes = s.likes || [];
+          const newLikes = currentLikes.includes(user?._id)
+            ? currentLikes
+            : [...currentLikes, user?._id];
+          return { ...s, likes: newLikes, isLiked: true };
+        }
+        return s;
+      })
+    );
+
+    try {
+      await api.post(`/videos/${shortId}/like`);
+    } catch (err) {
+      loadShorts();
+    }
+  };
+
   const handleFollow = async (channelId: string) => {
     if (!isAuthenticated) {
       setAuthModalVisible(true);
@@ -580,6 +614,7 @@ export default function ShortsScreen() {
               showBackButton={Boolean(fromChannelId || initialShortId)}
               onBack={handleBack}
               onLike={handleLike}
+              onDoubleTapLike={handleDoubleTapLike}
               onCommentClick={handleCommentClick}
               onShare={handleShare}
               onMenuClick={handleMenuClick}
@@ -617,7 +652,7 @@ const ShortAdItem = ({ containerHeight, insets, isActive, onComplete, showBackBu
   );
 };
 
-const ShortItem = ({ item, index, activeVideoIndex, containerHeight, isFocused, insets, user, showBackButton, onBack, onLike, onCommentClick, onShare, onMenuClick, onFollow }: any) => {
+const ShortItem = ({ item, index, activeVideoIndex, containerHeight, isFocused, insets, user, showBackButton, onBack, onLike, onDoubleTapLike, onCommentClick, onShare, onMenuClick, onFollow }: any) => {
   const router = useRouter();
   const player = useVideoPlayer(item.videoUrl, (p) => {
     p.loop = true;
@@ -627,11 +662,30 @@ const ShortItem = ({ item, index, activeVideoIndex, containerHeight, isFocused, 
   const [iconName, setIconName] = useState<'play' | 'pause'>('play');
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.7)).current;
+
+  // Double-tap floating heart animation
+  const [showHeart, setShowHeart] = useState(false);
+  const heartScale = useRef(new Animated.Value(0)).current;
+  const heartOpacity = useRef(new Animated.Value(0)).current;
+  const heartTranslateY = useRef(new Animated.Value(0)).current;
+
+  // Gesture double-tap detection refs
+  const lastTapRef = useRef<number>(0);
+  const singleTapTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const isActive = isFocused && activeVideoIndex === index;
 
   const SHORT_WATCH_THRESHOLD = 3; // 3 seconds minimum watch time to count a view
   const viewRecordedRef = useRef(false);
   const watchTimeRef = useRef(0);
+
+  useEffect(() => {
+    return () => {
+      if (singleTapTimerRef.current) {
+        clearTimeout(singleTapTimerRef.current);
+      }
+    };
+  }, []);
 
   // Reset the manual pause state and view tracking whenever this short leaves the viewport.
   useEffect(() => {
@@ -690,7 +744,6 @@ const ShortItem = ({ item, index, activeVideoIndex, containerHeight, isFocused, 
     const newPausedState = !isPaused;
     setIsPaused(newPausedState);
     setIconName(newPausedState ? 'pause' : 'play');
-    // Actual play/pause is driven by the effect above.
 
     // Show animation
     setShowIcon(true);
@@ -711,9 +764,64 @@ const ShortItem = ({ item, index, activeVideoIndex, containerHeight, isFocused, 
     ]).start(() => setShowIcon(false));
   };
 
+  const triggerHeartAnimation = () => {
+    setShowHeart(true);
+    heartScale.setValue(0);
+    heartOpacity.setValue(1);
+    heartTranslateY.setValue(0);
+
+    Animated.parallel([
+      Animated.spring(heartScale, {
+        toValue: 1.25,
+        friction: 4,
+        tension: 50,
+        useNativeDriver: true,
+      }),
+      Animated.timing(heartTranslateY, {
+        toValue: -24,
+        duration: 650,
+        useNativeDriver: true,
+      }),
+      Animated.sequence([
+        Animated.delay(350),
+        Animated.timing(heartOpacity, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start(() => {
+      setShowHeart(false);
+    });
+  };
+
+  const handlePress = () => {
+    const now = Date.now();
+    const DOUBLE_TAP_DELAY = 280;
+
+    if (now - lastTapRef.current < DOUBLE_TAP_DELAY) {
+      // Double tap detected!
+      if (singleTapTimerRef.current) {
+        clearTimeout(singleTapTimerRef.current);
+        singleTapTimerRef.current = null;
+      }
+      lastTapRef.current = 0;
+      triggerHeartAnimation();
+      if (onDoubleTapLike) {
+        onDoubleTapLike(item._id);
+      }
+    } else {
+      lastTapRef.current = now;
+      singleTapTimerRef.current = setTimeout(() => {
+        togglePlayPause();
+        singleTapTimerRef.current = null;
+      }, DOUBLE_TAP_DELAY);
+    }
+  };
+
   return (
     <View style={[styles.shortItem, { height: containerHeight }]}>
-      <Pressable style={styles.videoContainer} onPress={togglePlayPause}>
+      <Pressable style={styles.videoContainer} onPress={handlePress}>
         {/* Thumbnail underlay shows instantly while the video buffers */}
         <Image
           source={{ uri: item.thumbnail }}
@@ -727,6 +835,28 @@ const ShortItem = ({ item, index, activeVideoIndex, containerHeight, isFocused, 
           contentFit="cover"
           nativeControls={false}
         />
+
+        {showHeart && (
+          <View style={[StyleSheet.absoluteFill, styles.heartOverlay]} pointerEvents="none">
+            <Animated.View
+              style={{
+                opacity: heartOpacity,
+                transform: [
+                  { scale: heartScale },
+                  { translateY: heartTranslateY },
+                  { rotate: '-8deg' },
+                ],
+              }}
+            >
+              <Ionicons
+                name="heart"
+                size={110}
+                color="#FF2D55"
+                style={styles.heartShadow}
+              />
+            </Animated.View>
+          </View>
+        )}
 
         {showIcon && (
           <View style={StyleSheet.absoluteFill}>
@@ -758,7 +888,7 @@ const ShortItem = ({ item, index, activeVideoIndex, containerHeight, isFocused, 
 
         <View style={styles.rightActions}>
           <TouchableOpacity style={styles.actionButton} onPress={() => onLike(item._id)}>
-            <Ionicons name={item.isLiked ? "thumbs-up" : "thumbs-up-outline"} size={32} color={item.isLiked ? Colors.primary : Colors.white} />
+            <Ionicons name={item.isLiked ? "heart" : "heart-outline"} size={32} color={item.isLiked ? "#FF2D55" : Colors.white} />
             <Text style={styles.actionText}>{formatViews(item.likes.length)}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.actionButton} onPress={() => onCommentClick(item._id)}>
@@ -830,6 +960,18 @@ const styles = StyleSheet.create({
   },
   videoContainer: {
     flex: 1,
+  },
+  heartOverlay: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 25,
+  },
+  heartShadow: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
+    elevation: 12,
   },
   iconOverlay: {
     flex: 1,
