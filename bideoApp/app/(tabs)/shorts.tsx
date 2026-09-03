@@ -320,8 +320,11 @@ export default function ShortsScreen() {
 
   const handleShare = async (short: any) => {
     try {
+      const shareUrl = `https://bideo.in/v/${short._id}`;
       await Share.share({
-        message: `Check out this short on Bideo: ${short.title}\n${short.videoUrl}`,
+        title: short.title,
+        message: `Watch this short on Bideo: ${short.title}\n${shareUrl}`,
+        url: shareUrl,
       });
     } catch (err) {
       console.error('Share failed', err);

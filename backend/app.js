@@ -26,6 +26,7 @@ const notifications = require("./routes/notifications");
 const posts = require("./routes/posts");
 const channels = require("./routes/channels");
 const ads = require("./routes/ads");
+const seo = require("./routes/seo");
 
 // Middlewares
 app.use(express.json({ limit: "500mb" }));
@@ -82,6 +83,8 @@ app.use("/api/notifications", notifications);
 app.use("/api/posts", posts);
 app.use("/api/channels", channels);
 app.use("/api/ads", ads);
+app.use("/", seo);
+app.use("/api", seo);
 
 // Basic route
 app.get("/api/health", (req, res) => {

@@ -69,8 +69,11 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, onMenuPress, onPlaylistPre
   const handleShare = async () => {
     setMenuVisible(false);
     try {
+      const shareUrl = `https://bideo.in/v/${video._id}`;
       await Share.share({
-        message: `Check out this video on Bideo: ${video.title}\n${video.videoUrl || ''}`,
+        title: video.title,
+        message: `Watch "${video.title}" on Bideo:\n${shareUrl}`,
+        url: shareUrl,
       });
     } catch (err) {
       console.error('Share failed', err);

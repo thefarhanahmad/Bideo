@@ -484,8 +484,8 @@ const Monetization = () => {
                           <div>{app.phone}</div>
                           <div className="text-muted mt-0.5">{app.user?.email}</div>
                         </td>
-                        <td className="p-4 font-mono text-ink whitespace-nowrap text-xs">{app.adharNumber}</td>
-                        <td className="p-4 font-mono text-brand whitespace-nowrap text-xs">{app.upiId}</td>
+                        <td className="p-4 font-mono text-ink whitespace-nowrap text-xs">{app.adharNumber || "-"}</td>
+                        <td className="p-4 font-mono text-brand whitespace-nowrap text-xs">{app.upiId || "-"}</td>
                         <td className="p-4 text-xs text-muted">
                           <div className="font-semibold text-ink">{app.bankDetails?.bankName}</div>
                           <div>A/C: {app.bankDetails?.accountNumber}</div>
@@ -651,10 +651,10 @@ const Monetization = () => {
             </p>
             <div className="rounded-xl border border-line bg-surface/50 p-4 space-y-2 text-xs">
               <div>
-                <strong>Aadhaar:</strong> {selectedApp.adharNumber}
+                <strong>Aadhaar:</strong> {selectedApp.adharNumber || "Not Provided"}
               </div>
               <div>
-                <strong>UPI ID:</strong> {selectedApp.upiId}
+                <strong>UPI ID:</strong> {selectedApp.upiId || "Not Provided"}
               </div>
               <div>
                 <strong>Bank:</strong> {selectedApp.bankDetails?.bankName} ({selectedApp.bankDetails?.accountNumber})

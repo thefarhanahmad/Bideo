@@ -87,8 +87,11 @@ export default function YourVideosScreen() {
     if (!selectedVideo) return;
     setMenuVisible(false);
     try {
+      const shareUrl = `https://bideo.in/v/${selectedVideo._id}`;
       await Share.share({
-        message: `Check out this video on Bideo: ${selectedVideo.title}\n${selectedVideo.videoUrl || ''}`,
+        title: selectedVideo.title,
+        message: `Watch "${selectedVideo.title}" on Bideo:\n${shareUrl}`,
+        url: shareUrl,
       });
     } catch (err) {
       console.error('Share failed', err);

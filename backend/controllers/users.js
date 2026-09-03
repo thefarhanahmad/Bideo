@@ -184,6 +184,13 @@ exports.getChannelProfile = async (req, res, next) => {
       channel.isFollowing = false;
     }
 
+    const [followersCount, followingCount] = await Promise.all([
+      Follower.countDocuments({ channel: channel._id }),
+      Follower.countDocuments({ follower: channel._id }),
+    ]);
+    channel.followersCount = followersCount;
+    channel.followingCount = followingCount;
+
     const filter = (req.query.filter || 'videos').toLowerCase();
     const sort = (req.query.sort || 'latest').toLowerCase();
     const visibilityQuery = isOwner || isAdmin
@@ -829,6 +836,14 @@ exports.getMonetizationStatus = async (req, res, next) => {
     const walletBalance = userDoc?.walletBalance || 0;
     const totalEarnings = userDoc?.totalEarnings || 0;
 
+    const defaultRate = Number(process.env.VIEW_REWARD_RATE) || 0.15;
+    const longRate = !isNaN(Number(process.env.LONG_VIDEO_REWARD_RATE))
+      ? Number(process.env.LONG_VIDEO_REWARD_RATE)
+      : defaultRate;
+    const shortRate = !isNaN(Number(process.env.SHORT_VIDEO_REWARD_RATE))
+      ? Number(process.env.SHORT_VIDEO_REWARD_RATE)
+      : 0.05;
+
     res.status(200).json({
       success: true,
       data: {
@@ -840,8 +855,12 @@ exports.getMonetizationStatus = async (req, res, next) => {
         walletBalance: Math.round((walletBalance || 0) * 100) / 100,
         totalEarnings: Math.round((totalEarnings || 0) * 100) / 100,
         totalViews,
-        ratePerThousandViews: Math.round((Number(process.env.VIEW_REWARD_RATE) || 0.15) * 1000),
-        ratePerView: Number(process.env.VIEW_REWARD_RATE) || 0.15,
+        ratePerThousandViews: Math.round(longRate * 1000),
+        ratePerView: longRate,
+        longVideoRatePerView: longRate,
+        longVideoRatePerThousandViews: Math.round(longRate * 1000),
+        shortVideoRatePerView: shortRate,
+        shortVideoRatePerThousandViews: Math.round(shortRate * 1000),
         minWithdrawal: 1000,
       }
     });
@@ -953,9 +972,9 @@ exports.applyMonetization = async (req, res, next) => {
     const userId = req.user.id;
     const { name, phone, adharNumber, upiId, bankDetails } = req.body;
 
-    // Validation: Require all fields
-    if (!name || !phone || !adharNumber || !upiId || !bankDetails || !bankDetails.bankName || !bankDetails.accountNumber || !bankDetails.ifscCode) {
-      return res.status(400).json({ success: false, message: 'Please fill all fields, including bank details' });
+    // Validation: Require essential fields (adharNumber & upiId are optional)
+    if (!name || !phone || !bankDetails || !bankDetails.bankName || !bankDetails.accountNumber || !bankDetails.ifscCode) {
+      return res.status(400).json({ success: false, message: 'Please fill all required fields, including bank details' });
     }
 
     // Eligibility check: Check if they have at least 3 passed videos
@@ -964,13 +983,16 @@ exports.applyMonetization = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'You must have at least 3 approved videos to apply for monetization' });
     }
 
+    const cleanAdhar = adharNumber ? String(adharNumber).trim() : '';
+    const cleanUpi = upiId ? String(upiId).trim() : '';
+
     // Insert or update the application
     let application = await MonetizationApplication.findOne({ user: userId });
     if (application) {
       application.name = name;
       application.phone = phone;
-      application.adharNumber = adharNumber;
-      application.upiId = upiId;
+      application.adharNumber = cleanAdhar;
+      application.upiId = cleanUpi;
       application.bankDetails = bankDetails;
       application.status = 'pending'; // Reset status to pending upon edit/re-submission
       application.reviewMessage = ''; // Clear past rejection messages
@@ -981,8 +1003,8 @@ exports.applyMonetization = async (req, res, next) => {
         user: userId,
         name,
         phone,
-        adharNumber,
-        upiId,
+        adharNumber: cleanAdhar,
+        upiId: cleanUpi,
         bankDetails,
         status: 'pending'
       });

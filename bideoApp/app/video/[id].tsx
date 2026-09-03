@@ -299,8 +299,11 @@ export default function VideoScreen() {
 
   const handleShare = async () => {
     try {
+      const shareUrl = `https://bideo.in/v/${video._id || id}`;
       await Share.share({
-        message: `Check out this video on Bideo: ${video.title}\n${video.videoUrl}`,
+        title: video.title,
+        message: `Watch "${video.title}" on Bideo:\n${shareUrl}`,
+        url: shareUrl,
       });
     } catch (err) {
       console.error('Share failed', err);

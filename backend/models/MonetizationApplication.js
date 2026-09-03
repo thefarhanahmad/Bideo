@@ -22,11 +22,15 @@ const monetizationApplicationSchema = new mongoose.Schema({
   },
   adharNumber: {
     type: String,
-    required: true
+    required: false,
+    default: '',
+    trim: true,
   },
   upiId: {
     type: String,
-    required: true
+    required: false,
+    default: '',
+    trim: true,
   },
   bankDetails: {
     bankName: { type: String, required: true },

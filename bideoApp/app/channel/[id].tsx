@@ -121,8 +121,11 @@ export default function ChannelScreen() {
     if (!selectedVideo) return;
     setMenuVisible(false);
     try {
+      const shareUrl = `https://bideo.in/v/${selectedVideo._id}`;
       await Share.share({
-        message: `Check out this video on Bideo: ${selectedVideo.title}\n${selectedVideo.videoUrl || ''}`,
+        title: selectedVideo.title,
+        message: `Watch "${selectedVideo.title}" on Bideo:\n${shareUrl}`,
+        url: shareUrl,
       });
     } catch (err) {
       console.error('Share failed', err);
@@ -311,7 +314,45 @@ export default function ChannelScreen() {
                   )}
                 </View>
                 <Text style={styles.handle}>@{channel?.name || 'user'}</Text>
-                <Text style={styles.subscribers}>{channel?.followersCount || 0} followers</Text>
+                <View style={styles.connectionsRow}>
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/channel-connections',
+                        params: {
+                          channelId: channel?._id || id,
+                          channelName: channel?.channelName || channel?.name || 'Channel',
+                          initialTab: 'followers',
+                        },
+                      })
+                    }
+                  >
+                    <Text style={styles.connectionText}>
+                      <Text style={styles.connectionCount}>{formatViews(channel?.followersCount || 0)}</Text> followers
+                    </Text>
+                  </TouchableOpacity>
+
+                  <Text style={styles.connectionDot}>•</Text>
+
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/channel-connections',
+                        params: {
+                          channelId: channel?._id || id,
+                          channelName: channel?.channelName || channel?.name || 'Channel',
+                          initialTab: 'followings',
+                        },
+                      })
+                    }
+                  >
+                    <Text style={styles.connectionText}>
+                      <Text style={styles.connectionCount}>{formatViews(channel?.followingCount || 0)}</Text> following
+                    </Text>
+                  </TouchableOpacity>
+                </View>
                 {Boolean(channel?.leaderboardRank && channel.leaderboardRank <= 3) && (
                   <View style={[
                     styles.leaderboardBadge,
@@ -877,5 +918,24 @@ const styles = StyleSheet.create({
   leaderboardBadgeText: {
     fontSize: 12,
     fontWeight: '700',
+  },
+  connectionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    marginBottom: 2,
+    gap: 8,
+  },
+  connectionText: {
+    fontSize: 13,
+    color: Colors.textGray,
+  },
+  connectionCount: {
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  connectionDot: {
+    color: Colors.border,
+    fontSize: 14,
   },
 });

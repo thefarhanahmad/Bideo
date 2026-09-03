@@ -194,10 +194,12 @@ export default function LibraryScreen() {
           )}
           <View style={styles.profileInfo}>
             <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
-              <Text style={styles.profileName}>{user?.name}</Text>
+              <Text style={styles.profileName}>
+                {user?.channelName || user?.name || 'Channel'}
+              </Text>
               {Boolean(user?.isVerified) && <VerifiedBadge size={16} style={{ marginLeft: 4 }} />}
             </View>
-            <Text style={styles.channelName}>{user?.channelName || 'No channel name'}</Text>
+            <Text style={styles.handle}>@{user?.name || 'user'}</Text>
           </View>
         </View>
         
@@ -478,6 +480,11 @@ const styles = StyleSheet.create({
   profileEmail: {
     fontSize: 14,
     color: Colors.textGray,
+  },
+  handle: {
+    fontSize: 13,
+    color: Colors.textGray,
+    marginTop: 2,
   },
   channelName: {
     fontSize: 12,

@@ -156,8 +156,8 @@ export default function EarningsScreen() {
   }, []);
 
   const handleApply = async () => {
-    if (!name.trim() || !phone.trim() || !adharNumber.trim() || !upiId.trim() || !bankName.trim() || !accountNumber.trim() || !ifscCode.trim()) {
-      showAlert('Required Fields', 'Please fill in all the details to submit your application.');
+    if (!name.trim() || !phone.trim() || !bankName.trim() || !accountNumber.trim() || !ifscCode.trim()) {
+      showAlert('Required Fields', 'Please fill in all the required details to submit your application.');
       return;
     }
 
@@ -492,15 +492,15 @@ export default function EarningsScreen() {
                 <Text style={styles.inputLabel}>Registered Phone Number</Text>
                 <TextInput style={styles.input} value={phone} onChangeText={(v) => setPhone(v.replace(/\D/g, '').slice(0, 10))} placeholder="e.g. 9876543210" keyboardType="phone-pad" maxLength={10} placeholderTextColor="#999" />
 
-                <Text style={styles.inputLabel}>Aadhaar Number</Text>
-                <TextInput style={styles.input} value={adharNumber} onChangeText={setAdharNumber} placeholder="12-digit Aadhaar UID" keyboardType="numeric" maxLength={12} placeholderTextColor="#999" />
+                <Text style={styles.inputLabel}>Aadhaar Number <Text style={{ color: Colors.textGray, fontSize: 12 }}>(Optional)</Text></Text>
+                <TextInput style={styles.input} value={adharNumber} onChangeText={setAdharNumber} placeholder="12-digit Aadhaar UID (Optional)" keyboardType="numeric" maxLength={12} placeholderTextColor="#999" />
 
                 <View style={styles.formSectionDivider}>
                   <Text style={styles.formSectionTitle}>Direct Payout Details</Text>
                 </View>
 
-                <Text style={styles.inputLabel}>Primary UPI ID (for instant payouts)</Text>
-                <TextInput style={styles.input} value={upiId} onChangeText={setUpiId} placeholder="e.g. user@okhdfcbank" autoCapitalize="none" placeholderTextColor="#999" />
+                <Text style={styles.inputLabel}>Primary UPI ID <Text style={{ color: Colors.textGray, fontSize: 12 }}>(Optional)</Text></Text>
+                <TextInput style={styles.input} value={upiId} onChangeText={setUpiId} placeholder="e.g. user@okhdfcbank (Optional)" autoCapitalize="none" placeholderTextColor="#999" />
 
                 <Text style={styles.inputLabel}>Bank Name</Text>
                 <TextInput style={styles.input} value={bankName} onChangeText={setBankName} placeholder="e.g. State Bank of India" placeholderTextColor="#999" />
@@ -527,11 +527,11 @@ export default function EarningsScreen() {
                 </View>
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Aadhaar UID</Text>
-                  <Text style={styles.detailValue}>XXXX XXXX {adharNumber.slice(-4)}</Text>
+                  <Text style={styles.detailValue}>{adharNumber ? `XXXX XXXX ${adharNumber.slice(-4)}` : 'Not Provided'}</Text>
                 </View>
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>UPI ID</Text>
-                  <Text style={styles.detailValue}>{upiId}</Text>
+                  <Text style={styles.detailValue}>{upiId ? upiId : 'Not Provided'}</Text>
                 </View>
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Bank Name</Text>

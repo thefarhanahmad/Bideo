@@ -698,7 +698,7 @@ exports.recordView = async (req, res, next) => {
       { new: true },
     );
 
-    // Real-time earnings: credit ₹0.15 per view (₹150 per 1,000 views) ONLY when a real viewer (not the creator) watches
+    // Real-time earnings: credit distinct long video vs short video rates ONLY when a real viewer (not the creator) watches
     const isSelfView =
       userId && video.owner && userId.toString() === video.owner.toString();
     if (video.owner && !isSelfView) {
@@ -708,13 +708,25 @@ exports.recordView = async (req, res, next) => {
           status: "approved",
         });
         if (isMonetized) {
-          const rewardPerView = Number(process.env.VIEW_REWARD_RATE) || 0.15;
-          await User.findByIdAndUpdate(video.owner, {
-            $inc: {
-              walletBalance: rewardPerView,
-              totalEarnings: rewardPerView,
-            },
-          });
+          const isShortVideo = video.isShort === true || video.isShort === "true";
+          const defaultRate = Number(process.env.VIEW_REWARD_RATE) || 0.15;
+          const longRate = !isNaN(Number(process.env.LONG_VIDEO_REWARD_RATE))
+            ? Number(process.env.LONG_VIDEO_REWARD_RATE)
+            : defaultRate;
+          const shortRate = !isNaN(Number(process.env.SHORT_VIDEO_REWARD_RATE))
+            ? Number(process.env.SHORT_VIDEO_REWARD_RATE)
+            : 0.05;
+
+          const rewardPerView = isShortVideo ? shortRate : longRate;
+
+          if (rewardPerView > 0) {
+            await User.findByIdAndUpdate(video.owner, {
+              $inc: {
+                walletBalance: rewardPerView,
+                totalEarnings: rewardPerView,
+              },
+            });
+          }
         }
       } catch (earnErr) {
         console.error("Failed to credit view earnings:", earnErr);
