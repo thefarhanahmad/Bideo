@@ -851,7 +851,7 @@ const ShortItem = ({ item, index, activeVideoIndex, containerHeight, isFocused, 
               <Ionicons
                 name="heart"
                 size={110}
-                color="#FF2D55"
+                color={Colors.primary}
                 style={styles.heartShadow}
               />
             </Animated.View>
@@ -888,7 +888,7 @@ const ShortItem = ({ item, index, activeVideoIndex, containerHeight, isFocused, 
 
         <View style={styles.rightActions}>
           <TouchableOpacity style={styles.actionButton} onPress={() => onLike(item._id)}>
-            <Ionicons name={item.isLiked ? "heart" : "heart-outline"} size={32} color={item.isLiked ? "#FF2D55" : Colors.white} />
+            <Ionicons name={item.isLiked ? "heart" : "heart-outline"} size={32} color={item.isLiked ? Colors.primary : Colors.white} />
             <Text style={styles.actionText}>{formatViews(item.likes.length)}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.actionButton} onPress={() => onCommentClick(item._id)}>
