@@ -464,11 +464,93 @@ exports.getLeaderboard = async (req, res, next) => {
       };
     });
 
+    // 2. Aggregate top creators by new followers gained this week or highest followers
+    const weeklyFollowersAgg = await Follower.aggregate([
+      { $match: { createdAt: { $gte: oneWeekAgo } } },
+      {
+        $group: {
+          _id: '$channel',
+          weeklyGain: { $sum: 1 },
+        },
+      },
+      {
+        $lookup: {
+          from: 'users',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'user',
+        },
+      },
+      { $unwind: '$user' },
+      {
+        $match: {
+          'user.role': 'user',
+          'user.isBlocked': { $ne: true },
+        },
+      },
+      { $sort: { weeklyGain: -1, 'user.followersCount': -1 } },
+      { $limit: 10 },
+      {
+        $project: {
+          _id: '$user._id',
+          name: '$user.name',
+          channelName: '$user.channelName',
+          avatar: '$user.avatar',
+          isVerified: '$user.isVerified',
+          followersCount: '$user.followersCount',
+          about: '$user.about',
+          weeklyGain: '$weeklyGain',
+        },
+      },
+    ]);
+
+    let topFollowers = [...weeklyFollowersAgg];
+    if (topFollowers.length < 10) {
+      const existingIds = topFollowers.map((u) => u._id);
+      const remainingNeeded = 10 - topFollowers.length;
+      const extraCreators = await User.find({
+        _id: { $nin: existingIds },
+        role: 'user',
+        isBlocked: { $ne: true },
+      })
+        .select('_id name channelName avatar isVerified followersCount about')
+        .sort({ followersCount: -1, createdAt: -1 })
+        .limit(remainingNeeded)
+        .lean();
+
+      for (const u of extraCreators) {
+        topFollowers.push({
+          _id: u._id,
+          name: u.name,
+          channelName: u.channelName,
+          avatar: u.avatar,
+          isVerified: u.isVerified,
+          followersCount: u.followersCount || 0,
+          about: u.about,
+          weeklyGain: 0,
+        });
+      }
+    }
+
+    topFollowers.sort((a, b) => (b.followersCount || 0) - (a.followersCount || 0));
+
+    const topFollowersResults = topFollowers.slice(0, 10).map((item, idx) => ({
+      ...item,
+      rank: idx + 1,
+      isFollowing: userFollowings.has(item._id.toString()),
+      isCurrentUser: req.user ? req.user.id.toString() === item._id.toString() : false,
+    }));
+
     res.status(200).json({
       success: true,
-      count: results.length,
       timeframe: 'this_week',
-      data: results,
+      count: results.length,
+      topFollowers: topFollowersResults,
+      topViews: results,
+      data: {
+        topFollowers: topFollowersResults,
+        topViews: results,
+      },
     });
   } catch (err) {
     next(err);

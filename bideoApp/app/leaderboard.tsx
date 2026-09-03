@@ -31,7 +31,22 @@ interface LeaderboardUser {
   followersCount?: number;
   about?: string;
   totalViews: number;
+  weeklyViews?: number;
   videoCount: number;
+  rank: number;
+  isFollowing?: boolean;
+  isCurrentUser?: boolean;
+}
+
+interface FollowerLeaderboardUser {
+  _id: string;
+  name: string;
+  channelName?: string;
+  avatar?: string;
+  isVerified?: boolean;
+  followersCount?: number;
+  about?: string;
+  weeklyGain?: number;
   rank: number;
   isFollowing?: boolean;
   isCurrentUser?: boolean;
@@ -40,7 +55,8 @@ interface LeaderboardUser {
 export default function LeaderboardScreen() {
   const router = useRouter();
   const { user: currentUser } = useSelector((state: RootState) => state.auth);
-  const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
+  const [viewLeaderboard, setViewLeaderboard] = useState<LeaderboardUser[]>([]);
+  const [followerLeaderboard, setFollowerLeaderboard] = useState<FollowerLeaderboardUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -51,14 +67,23 @@ export default function LeaderboardScreen() {
   const fetchLeaderboard = async () => {
     try {
       const res = await api.get('/users/leaderboard');
-      if (res.data && res.data.success && Array.isArray(res.data.data)) {
-        setLeaderboard(res.data.data);
+      if (res.data && res.data.success) {
+        const payload = res.data.data;
+        if (payload && Array.isArray(payload.topViews)) {
+          setViewLeaderboard(payload.topViews);
+          setFollowerLeaderboard(payload.topFollowers || []);
+        } else if (Array.isArray(payload)) {
+          setViewLeaderboard(payload);
+          setFollowerLeaderboard(res.data.topFollowers || []);
+        }
       } else {
-        setLeaderboard([]);
+        setViewLeaderboard([]);
+        setFollowerLeaderboard([]);
       }
     } catch (err) {
       console.error('Failed to fetch leaderboard:', err);
-      setLeaderboard([]);
+      setViewLeaderboard([]);
+      setFollowerLeaderboard([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -70,140 +95,105 @@ export default function LeaderboardScreen() {
     fetchLeaderboard();
   }, []);
 
-  const topThree = leaderboard.slice(0, 3);
-  const rankFirst = topThree.find((u) => u.rank === 1);
-  const rankSecond = topThree.find((u) => u.rank === 2);
-  const rankThird = topThree.find((u) => u.rank === 3);
-  const remainingUsers = leaderboard.slice(3);
-
-  const renderPodiumCard = (item?: LeaderboardUser, rank?: number) => {
-    if (!item) {
-      return (
-        <View style={[styles.podiumCol, rank === 1 ? styles.podiumColFirst : null]}>
-          <View
-            style={[
-              styles.emptyPodiumAvatar,
-              rank === 1 ? styles.avatarGold : rank === 2 ? styles.avatarSilver : styles.avatarBronze,
-            ]}
-          >
-            <Ionicons name="person-outline" size={22} color={Colors.textGray} />
-          </View>
-          <Text style={styles.emptyPodiumText}>--</Text>
-        </View>
-      );
-    }
-
+  const renderFollowerCard = (item: FollowerLeaderboardUser, rank: number) => {
     const isFirst = rank === 1;
     const isSecond = rank === 2;
+    const isThird = rank === 3;
 
-    const medalBorderColor = isFirst ? '#F59E0B' : isSecond ? '#9CA3AF' : '#D97706';
-    const medalBgColor = isFirst ? '#FEF3C7' : isSecond ? '#F3F4F6' : '#FFEDD5';
-    const medalTextColor = isFirst ? '#92400E' : isSecond ? '#374151' : '#78350F';
-    const medalIcon = isFirst ? 'trophy' : 'medal';
+    const medalColor = isFirst ? '#F59E0B' : isSecond ? '#9CA3AF' : isThird ? '#D97706' : '#6B7280';
+    const medalBg = isFirst ? '#FEF3C7' : isSecond ? '#F3F4F6' : isThird ? '#FFEDD5' : '#F3F4F6';
 
     return (
       <TouchableOpacity
-        key={item._id}
-        activeOpacity={0.85}
-        style={[styles.podiumCol, isFirst ? styles.podiumColFirst : null]}
+        key={`f-${item._id}`}
+        activeOpacity={0.8}
+        style={styles.followerCard}
         onPress={() => router.push(`/channel/${item._id}`)}
       >
         {/* Crown on 1st place */}
         {isFirst && (
-          <View style={styles.crownContainer}>
-            <Text style={styles.crownIcon}>👑</Text>
+          <View style={styles.followerCrown}>
+            <Text style={{ fontSize: 13 }}>👑</Text>
           </View>
         )}
 
         {/* Avatar with rank ring */}
-        <View style={[styles.podiumAvatarWrap, { borderColor: medalBorderColor }]}>
+        <View style={[styles.followerAvatarWrap, { borderColor: medalColor }]}>
           <Image
             source={{ uri: item.avatar || FALLBACK_AVATAR }}
-            style={isFirst ? styles.podiumAvatarFirst : styles.podiumAvatar}
+            style={styles.followerAvatar}
             contentFit="cover"
             transition={150}
           />
-          <View style={[styles.podiumRankBadge, { backgroundColor: medalBorderColor }]}>
-            <Text style={styles.podiumRankText}>#{rank}</Text>
+          <View style={[styles.followerRankBadge, { backgroundColor: medalColor }]}>
+            <Text style={styles.followerRankText}>#{rank}</Text>
           </View>
         </View>
 
-        {/* Creator Channel Name only */}
-        <View style={styles.podiumInfo}>
-          <View style={styles.nameRow}>
-            <Text style={[styles.podiumName, isFirst && styles.podiumNameFirst]} numberOfLines={1}>
-              {item.channelName || item.name}
-            </Text>
-            {Boolean(item.isVerified) && <VerifiedBadge size={12} style={{ marginLeft: 2 }} />}
-          </View>
+        {/* Channel Name */}
+        <View style={styles.followerNameRow}>
+          <Text style={styles.followerName} numberOfLines={1}>
+            {item.channelName || item.name}
+          </Text>
+          {Boolean(item.isVerified) && (
+            <VerifiedBadge size={11} style={{ marginLeft: 2 }} />
+          )}
+        </View>
 
-          {/* Top Rank Badge */}
-          <View style={[styles.podiumPill, { backgroundColor: medalBgColor, borderColor: medalBorderColor }]}>
-            <Ionicons name={medalIcon} size={10} color={medalTextColor} />
-            <Text style={[styles.podiumPillText, { color: medalTextColor }]}>
-              {isFirst ? 'Gold #1' : isSecond ? 'Silver #2' : 'Bronze #3'}
-            </Text>
-          </View>
-
-          {/* Views count */}
-          <View style={styles.viewsBadge}>
-            <Ionicons name="flame" size={12} color={Colors.primary} />
-            <Text style={styles.viewsText}>{formatViews(item.totalViews || 0)} views</Text>
-          </View>
+        {/* Followers count pill */}
+        <View style={[styles.followerPill, { backgroundColor: medalBg }]}>
+          <Ionicons name="people" size={10} color={medalColor} />
+          <Text style={[styles.followerPillText, { color: medalColor }]} numberOfLines={1}>
+            {formatViews(item.followersCount || 0)}
+          </Text>
         </View>
       </TouchableOpacity>
     );
   };
 
-  const renderHeader = () => (
-    <View>
-      {/* Sleek Compact Banner */}
-      <View style={styles.banner}>
-        <View style={styles.bannerIconCircle}>
-          <Ionicons name="podium" size={20} color={Colors.white} />
-        </View>
-        <View style={styles.bannerTextWrap}>
-          <Text style={styles.bannerTitle}>Weekly Creator Rankings</Text>
-          <Text style={styles.bannerSubtitle}>Top creators with the highest views this week</Text>
-        </View>
-      </View>
-
-      {/* Compact Podium Section */}
-      {topThree.length > 0 && (
-        <View style={styles.podiumSection}>
-          <Text style={styles.sectionHeaderTitle}>🏆 Top 3 This Week</Text>
-          <View style={styles.podiumRow}>
-            {renderPodiumCard(rankSecond, 2)}
-            {renderPodiumCard(rankFirst, 1)}
-            {renderPodiumCard(rankThird, 3)}
-          </View>
-        </View>
-      )}
-
-      {remainingUsers.length > 0 && (
-        <View style={styles.remainingHeaderRow}>
-          <Text style={styles.sectionHeaderTitle}>Rank 4 - 20</Text>
-        </View>
-      )}
-    </View>
-  );
-
   const renderItem = ({ item }: { item: LeaderboardUser }) => {
     const isMe = item._id === currentUser?._id;
+    const rank = item.rank;
+    const isFirst = rank === 1;
+    const isSecond = rank === 2;
+    const isThird = rank === 3;
+
+    const medalColor = isFirst ? '#F59E0B' : isSecond ? '#9CA3AF' : isThird ? '#D97706' : '#6B7280';
+    const medalBg = isFirst ? '#FEF3C7' : isSecond ? '#F3F4F6' : isThird ? '#FFEDD5' : '#F9FAFB';
 
     return (
       <TouchableOpacity
-        style={[styles.userCard, isMe && styles.userCardMe]}
+        style={[
+          styles.userCard,
+          isFirst && styles.userCardFirst,
+          isMe && styles.userCardMe,
+        ]}
         activeOpacity={0.7}
         onPress={() => router.push(`/channel/${item._id}`)}
       >
         {/* Rank Number Badge */}
-        <View style={styles.rankBadge}>
-          <Text style={styles.rankBadgeText}>#{item.rank}</Text>
+        <View
+          style={[
+            styles.rankBadge,
+            (isFirst || isSecond || isThird) && { backgroundColor: medalBg, borderWidth: 1, borderColor: medalColor },
+          ]}
+        >
+          {isFirst ? (
+            <Text style={{ fontSize: 13 }}>👑</Text>
+          ) : (
+            <Text
+              style={[
+                styles.rankBadgeText,
+                (isFirst || isSecond || isThird) && { color: medalColor, fontWeight: '900' },
+              ]}
+            >
+              #{rank}
+            </Text>
+          )}
         </View>
 
         {/* Avatar */}
-        <View style={styles.cardAvatarWrap}>
+        <View style={[styles.cardAvatarWrap, (isFirst || isSecond || isThird) && { borderColor: medalColor, borderWidth: 1.5 }]}>
           <Image
             source={{ uri: item.avatar || FALLBACK_AVATAR }}
             style={styles.cardAvatar}
@@ -212,10 +202,10 @@ export default function LeaderboardScreen() {
           />
         </View>
 
-        {/* User Channel Name Only */}
+        {/* User Channel Name */}
         <View style={styles.userInfo}>
           <View style={styles.userNameRow}>
-            <Text style={styles.userName} numberOfLines={1}>
+            <Text style={[styles.userName, isFirst && { fontWeight: '800' }]} numberOfLines={1}>
               {item.channelName || item.name}
             </Text>
             {Boolean(item.isVerified) && <VerifiedBadge size={13} style={{ marginLeft: 3 }} />}
@@ -225,12 +215,17 @@ export default function LeaderboardScreen() {
               </View>
             )}
           </View>
+          {(isFirst || isSecond || isThird) && (
+            <Text style={[styles.topRankSub, { color: medalColor }]}>
+              {isFirst ? '🏆 1st Place' : isSecond ? '🥈 2nd Place' : '🥉 3rd Place'}
+            </Text>
+          )}
         </View>
 
         {/* Views Count Pill with flame icon */}
         <View style={styles.viewsPill}>
           <Ionicons name="flame" size={13} color={Colors.primary} />
-          <Text style={styles.viewsPillText}>{formatViews(item.totalViews || 0)} views</Text>
+          <Text style={styles.viewsPillText}>{formatViews(item.totalViews || item.weeklyViews || 0)} views</Text>
         </View>
       </TouchableOpacity>
     );
@@ -240,7 +235,7 @@ export default function LeaderboardScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.white} />
 
-      {/* Sleek Navigation Top Header */}
+      {/* Navigation Top Header */}
       <View style={styles.navHeader}>
         <TouchableOpacity
           style={styles.backButton}
@@ -259,29 +254,83 @@ export default function LeaderboardScreen() {
           <ActivityIndicator size="small" color={Colors.primary} />
           <Text style={styles.loadingText}>Loading weekly rankings...</Text>
         </View>
-      ) : leaderboard.length === 0 ? (
+      ) : viewLeaderboard.length === 0 && followerLeaderboard.length === 0 ? (
         <View style={styles.centerContainer}>
           <Ionicons name="podium-outline" size={48} color={Colors.border} />
           <Text style={styles.emptyTitle}>No rankings yet</Text>
-          <Text style={styles.emptySubtitle}>Weekly public views will appear here.</Text>
+          <Text style={styles.emptySubtitle}>Weekly public creator rankings will appear here.</Text>
         </View>
       ) : (
-        <FlatList
-          data={remainingUsers}
-          keyExtractor={(item) => item._id}
-          renderItem={renderItem}
-          ListHeaderComponent={renderHeader}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={[Colors.primary]}
-              tintColor={Colors.primary}
+        <View style={styles.mainContent}>
+          {/* Pinned Top Section (Banner + Followers Slider + Views Section Header) */}
+          <View style={styles.fixedTopSection}>
+            {/* Sleek Banner */}
+            <View style={styles.banner}>
+              <View style={styles.bannerIconCircle}>
+                <Ionicons name="podium" size={20} color={Colors.white} />
+              </View>
+              <View style={styles.bannerTextWrap}>
+                <Text style={styles.bannerTitle}>Weekly Creator Rankings</Text>
+                <Text style={styles.bannerSubtitle}>Top creators with the highest followers & views this week</Text>
+              </View>
+            </View>
+
+            {/* Top 10 Creators by Followers (Horizontal Slider - always pinned & visible) */}
+            {followerLeaderboard.length > 0 && (
+              <View style={styles.followersSection}>
+                <View style={styles.sectionHeaderRow}>
+                  <View style={styles.sectionHeaderLeft}>
+                    <Ionicons name="people" size={15} color={Colors.primary} />
+                    <Text style={styles.sectionHeaderTitle}>Top 10 Creators By Followers</Text>
+                  </View>
+                  <View style={styles.sliderHint}>
+                    <Text style={styles.sliderHintText}>Slide</Text>
+                    <Ionicons name="chevron-forward" size={12} color={Colors.textGray} />
+                  </View>
+                </View>
+
+                <FlatList
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  data={followerLeaderboard}
+                  keyExtractor={(item) => `follower-${item._id}`}
+                  renderItem={({ item, index }) => renderFollowerCard(item, index + 1)}
+                  contentContainerStyle={styles.horizontalListContent}
+                />
+              </View>
+            )}
+
+            {/* Top 20 by Views Section Header (Fixed right above the scrollable views area) */}
+            {viewLeaderboard.length > 0 && (
+              <View style={styles.viewsHeaderRow}>
+                <View style={styles.sectionHeaderLeft}>
+                  <Ionicons name="flame" size={15} color={Colors.primary} />
+                  <Text style={styles.sectionHeaderTitle}>Top 20 Creators By Views</Text>
+                </View>
+                <Text style={styles.viewsHeaderSubtitle}>This week</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Scrollable Views Column Area (ONLY this area scrolls!) */}
+          <View style={styles.viewsListContainer}>
+            <FlatList
+              data={viewLeaderboard}
+              keyExtractor={(item) => item._id}
+              renderItem={renderItem}
+              contentContainerStyle={styles.listContent}
+              showsVerticalScrollIndicator={false}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  colors={[Colors.primary]}
+                  tintColor={Colors.primary}
+                />
+              }
             />
-          }
-        />
+          </View>
+        </View>
       )}
     </SafeAreaView>
   );
@@ -291,6 +340,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  mainContent: {
+    flex: 1,
+  },
+  fixedTopSection: {
+    backgroundColor: Colors.background,
+    zIndex: 10,
+  },
+  viewsListContainer: {
+    flex: 1,
   },
   navHeader: {
     height: 46,
@@ -313,7 +372,7 @@ const styles = StyleSheet.create({
     color: Colors.text,
   },
   listContent: {
-    paddingBottom: 20,
+    paddingBottom: 24,
   },
   centerContainer: {
     flex: 1,
@@ -370,154 +429,149 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.9)',
     marginTop: 1,
   },
-  podiumSection: {
-    marginHorizontal: 12,
-    marginTop: 8,
+
+  // Followers Slider Section
+  followersSection: {
+    marginTop: 10,
     backgroundColor: Colors.white,
     paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#F0F0F0',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    marginBottom: 8,
+  },
+  sectionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   sectionHeaderTitle: {
     fontSize: 13,
     fontWeight: '800',
     color: Colors.text,
-    marginBottom: 6,
-    marginLeft: 4,
   },
-  podiumRow: {
+  sliderHint: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    paddingTop: 4,
-  },
-  podiumCol: {
-    flex: 1,
     alignItems: 'center',
-    paddingHorizontal: 2,
+    gap: 2,
   },
-  podiumColFirst: {
-    transform: [{ translateY: -6 }],
+  sliderHintText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.textGray,
   },
-  crownContainer: {
-    marginBottom: 1,
+  horizontalListContent: {
+    paddingHorizontal: 12,
+    paddingBottom: 2,
   },
-  crownIcon: {
-    fontSize: 18,
+  followerCard: {
+    width: 100,
+    alignItems: 'center',
+    backgroundColor: '#FAFAFA',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#ECECEC',
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    marginRight: 8,
+    position: 'relative',
   },
-  podiumAvatarWrap: {
-    borderWidth: 2.5,
+  followerCrown: {
+    position: 'absolute',
+    top: -8,
+    alignSelf: 'center',
+    zIndex: 5,
+  },
+  followerAvatarWrap: {
+    borderWidth: 2,
     borderRadius: 999,
-    padding: 2,
+    padding: 1.5,
     position: 'relative',
     backgroundColor: Colors.white,
   },
-  podiumAvatarFirst: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-  },
-  podiumAvatar: {
+  followerAvatar: {
     width: 44,
     height: 44,
     borderRadius: 22,
+    backgroundColor: '#E5E7EB',
   },
-  emptyPodiumAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 1.5,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F3F4F6',
-  },
-  avatarGold: { borderColor: '#F59E0B' },
-  avatarSilver: { borderColor: '#9CA3AF' },
-  avatarBronze: { borderColor: '#D97706' },
-  emptyPodiumText: {
-    marginTop: 4,
-    color: Colors.textGray,
-    fontWeight: '600',
-    fontSize: 11,
-  },
-  podiumRankBadge: {
+  followerRankBadge: {
     position: 'absolute',
-    bottom: -5,
+    bottom: -4,
     alignSelf: 'center',
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 8,
+    paddingHorizontal: 4,
+    paddingVertical: 0.5,
+    borderRadius: 6,
     borderWidth: 1.5,
     borderColor: Colors.white,
   },
-  podiumRankText: {
+  followerRankText: {
     color: Colors.white,
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '800',
   },
-  podiumInfo: {
+  followerNameRow: {
+    flexDirection: 'row',
     alignItems: 'center',
     marginTop: 6,
-    width: '100%',
+    maxWidth: 90,
   },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    maxWidth: '92%',
-  },
-  podiumName: {
+  followerName: {
     fontSize: 11,
     fontWeight: '700',
     color: Colors.text,
+    textAlign: 'center',
   },
-  podiumNameFirst: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: Colors.text,
-  },
-  podiumPill: {
+  followerPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 5,
-    paddingVertical: 1.5,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     borderRadius: 6,
-    borderWidth: 1,
-    marginTop: 3,
-    gap: 2,
-  },
-  podiumPillText: {
-    fontSize: 9,
-    fontWeight: '700',
-  },
-  viewsBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 3,
+    marginTop: 4,
     gap: 3,
   },
-  viewsText: {
-    fontSize: 11,
+  followerPillText: {
+    fontSize: 10,
     fontWeight: '700',
-    color: Colors.primary,
   },
-  remainingHeaderRow: {
-    marginHorizontal: 12,
-    marginTop: 10,
-    marginBottom: 4,
+
+  // Views Section Header
+  viewsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    marginTop: 12,
+    marginBottom: 6,
   },
+  viewsHeaderSubtitle: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.textGray,
+  },
+
+  // Views List Item
   userCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.white,
     marginHorizontal: 12,
-    marginBottom: 5,
+    marginBottom: 6,
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#EFEFEF',
+  },
+  userCardFirst: {
+    borderColor: '#FDE68A',
+    backgroundColor: '#FFFDF5',
   },
   userCardMe: {
     borderColor: Colors.primary,
@@ -539,6 +593,7 @@ const styles = StyleSheet.create({
   },
   cardAvatarWrap: {
     marginRight: 10,
+    borderRadius: 18,
   },
   cardAvatar: {
     width: 36,
@@ -559,6 +614,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.text,
     maxWidth: '85%',
+  },
+  topRankSub: {
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 1,
   },
   youBadge: {
     backgroundColor: Colors.primary,
