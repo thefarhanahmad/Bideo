@@ -41,10 +41,35 @@ const CommentList: React.FC<CommentListProps> = ({ videoId, postId, contentOwner
   const [replySubmitting, setReplySubmitting] = useState(false);
   const replyInputRef = useRef<TextInput>(null);
 
+  const getCleanId = (val: any): string => {
+    if (!val) return '';
+    if (typeof val === 'string') return val;
+    if (typeof val === 'object') {
+      if (val._id) return String(val._id);
+      if (val.id) return String(val.id);
+    }
+    return String(val);
+  };
+
+  const [resolvedOwnerId, setResolvedOwnerId] = useState<string>(getCleanId(contentOwnerId));
+
+  useEffect(() => {
+    const clean = getCleanId(contentOwnerId);
+    if (clean) {
+      setResolvedOwnerId(clean);
+    } else if (videoId) {
+      api.get(`/videos/${videoId}`).then((res) => {
+        const owner = res.data?.data?.owner;
+        const id = getCleanId(owner);
+        if (id) setResolvedOwnerId(id);
+      }).catch(() => {});
+    }
+  }, [contentOwnerId, videoId]);
+
   const isCreator = Boolean(
     user?._id &&
-    contentOwnerId &&
-    user._id.toString() === contentOwnerId.toString()
+    resolvedOwnerId &&
+    getCleanId(user._id) === resolvedOwnerId
   );
   const isAdmin = user?.role === 'admin';
   const canManagePin = isCreator || isAdmin;
@@ -404,42 +429,14 @@ const CommentItem = ({
 }: any) => {
   const liked = item.likes?.some((id: string) => id === userId);
   const isOwner = item.user?._id === userId;
+  const [showMenu, setShowMenu] = useState(false);
 
-  const showOptions = () => {
-    const options: any[] = [{ text: 'Cancel', style: 'cancel' }];
-
-    if (canManagePin) {
-      options.push({
-        text: item.isPinned ? 'Unpin comment' : 'Pin comment',
-        onPress: onPin,
-      });
-    }
-
-    if (isOwner) {
-      options.push({ text: 'Edit', onPress: onEdit });
-    }
-
-    if (isOwner || canManagePin) {
-      options.push({
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => {
-          showAlert('Delete', 'Are you sure you want to delete this comment?', [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Delete', style: 'destructive', onPress: onDelete },
-          ]);
-        },
-      });
-    }
-
-    if (Platform.OS === 'web') {
-      if (confirm(item.isPinned ? 'Unpin this comment?' : 'Pin this comment?')) {
-        if (canManagePin) onPin();
-      }
-      return;
-    }
-
-    showAlert('Comment Options', 'What would you like to do?', options);
+  const handleDeletePress = () => {
+    setShowMenu(false);
+    showAlert('Delete', 'Are you sure you want to delete this comment?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: onDelete },
+    ]);
   };
 
   return (
@@ -465,11 +462,59 @@ const CommentItem = ({
             <Text style={styles.time}> • {formatTimeAgo(item.createdAt)}</Text>
           </View>
           {(isOwner || canManagePin) && (
-            <TouchableOpacity onPress={showOptions} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Ionicons name="ellipsis-vertical" size={14} color={Colors.textGray} />
+            <TouchableOpacity onPress={() => setShowMenu(!showMenu)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="ellipsis-vertical" size={14} color={showMenu ? Colors.primary : Colors.textGray} />
             </TouchableOpacity>
           )}
         </View>
+
+        {showMenu && (
+          <View style={styles.inlineOptionsMenu}>
+            {canManagePin && (
+              <TouchableOpacity
+                style={styles.inlineOptionBtn}
+                onPress={() => {
+                  setShowMenu(false);
+                  onPin();
+                }}
+              >
+                <Ionicons name={item.isPinned ? "pin-outline" : "pin"} size={13} color={Colors.primary} />
+                <Text style={[styles.inlineOptionText, { color: Colors.primary }]}>
+                  {item.isPinned ? 'Unpin' : 'Pin'}
+                </Text>
+              </TouchableOpacity>
+            )}
+            {isOwner && (
+              <TouchableOpacity
+                style={styles.inlineOptionBtn}
+                onPress={() => {
+                  setShowMenu(false);
+                  onEdit();
+                }}
+              >
+                <Ionicons name="pencil-outline" size={13} color={Colors.text} />
+                <Text style={styles.inlineOptionText}>Edit</Text>
+              </TouchableOpacity>
+            )}
+            {(isOwner || canManagePin) && (
+              <TouchableOpacity
+                style={styles.inlineOptionBtn}
+                onPress={handleDeletePress}
+              >
+                <Ionicons name="trash-outline" size={13} color="#EF4444" />
+                <Text style={[styles.inlineOptionText, { color: '#EF4444' }]}>Delete</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={styles.inlineOptionBtn}
+              onPress={() => setShowMenu(false)}
+            >
+              <Ionicons name="close" size={13} color={Colors.textGray} />
+              <Text style={[styles.inlineOptionText, { color: Colors.textGray }]}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         <HashtagText text={item.text} style={styles.commentText} />
         <View style={styles.commentActions}>
           <TouchableOpacity style={styles.actionItem} onPress={onLike}>
@@ -541,6 +586,33 @@ const styles = StyleSheet.create({
   time: { fontSize: 11, color: Colors.textGray },
   commentText: { fontSize: 14, color: Colors.text, lineHeight: 20 },
   commentActions: { flexDirection: 'row', marginTop: 8, alignItems: 'center' },
+  inlineOptionsMenu: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    marginVertical: 6,
+    gap: 6,
+  },
+  inlineOptionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: Colors.white,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  inlineOptionText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.text,
+    marginLeft: 4,
+  },
   actionItem: { flexDirection: 'row', alignItems: 'center', marginRight: 20 },
   actionText: { fontSize: 12, color: Colors.textGray, marginLeft: 4 },
   replyBtnText: { fontSize: 12, fontWeight: 'bold', color: Colors.textGray },

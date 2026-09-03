@@ -365,14 +365,20 @@ export default function ShortsScreen() {
     }
   };
 
-  const handleCommentClick = (shortId: string) => {
-    if (!isAuthenticated) {
-      setAuthModalVisible(true);
-      return;
+  const handleCommentClick = (shortOrId: any) => {
+    let target = typeof shortOrId === 'object' ? shortOrId : null;
+    const shortId = typeof shortOrId === 'string' ? shortOrId : shortOrId?._id;
+
+    if (!target && shortId) {
+      target = shortsRef.current.find((s) => s._id === shortId) || shorts.find((s) => s._id === shortId);
     }
-    const foundShort = shorts.find((s) => s._id === shortId);
-    if (foundShort) setSelectedShort(foundShort);
-    setSelectedShortId(shortId);
+
+    if (target) {
+      setSelectedShort(target);
+      setSelectedShortId(target._id);
+    } else if (shortId) {
+      setSelectedShortId(shortId);
+    }
     setCommentModalVisible(true);
   };
 
@@ -891,7 +897,7 @@ const ShortItem = ({ item, index, activeVideoIndex, containerHeight, isFocused, 
             <Ionicons name={item.isLiked ? "heart" : "heart-outline"} size={32} color={item.isLiked ? Colors.primary : Colors.white} />
             <Text style={styles.actionText}>{formatViews(item.likes.length)}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton} onPress={() => onCommentClick(item._id)}>
+          <TouchableOpacity style={styles.actionButton} onPress={() => onCommentClick(item)}>
             <Ionicons name="chatbubble-ellipses" size={32} color={Colors.white} />
             <Text style={styles.actionText}>{formatViews(item.commentsCount)}</Text>
           </TouchableOpacity>
