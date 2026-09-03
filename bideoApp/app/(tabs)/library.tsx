@@ -197,7 +197,6 @@ export default function LibraryScreen() {
               <Text style={styles.profileName}>{user?.name}</Text>
               {Boolean(user?.isVerified) && <VerifiedBadge size={16} style={{ marginLeft: 4 }} />}
             </View>
-            <Text style={styles.profileEmail}>{user?.email || user?.phone}</Text>
             <Text style={styles.channelName}>{user?.channelName || 'No channel name'}</Text>
           </View>
         </View>

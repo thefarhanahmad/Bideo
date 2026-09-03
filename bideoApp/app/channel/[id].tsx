@@ -312,6 +312,33 @@ export default function ChannelScreen() {
                 </View>
                 <Text style={styles.handle}>@{channel?.name || 'user'}</Text>
                 <Text style={styles.subscribers}>{channel?.followersCount || 0} followers</Text>
+                {Boolean(channel?.leaderboardRank && channel.leaderboardRank <= 3) && (
+                  <View style={[
+                    styles.leaderboardBadge,
+                    channel.leaderboardRank === 1 ? styles.goldBadge :
+                    channel.leaderboardRank === 2 ? styles.silverBadge : styles.bronzeBadge
+                  ]}>
+                    <Ionicons 
+                      name="trophy" 
+                      size={12} 
+                      color={
+                        channel.leaderboardRank === 1 ? '#D97706' :
+                        channel.leaderboardRank === 2 ? '#4B5563' : '#B45309'
+                      } 
+                    />
+                    <Text style={[
+                      styles.leaderboardBadgeText,
+                      {
+                        color:
+                          channel.leaderboardRank === 1 ? '#92400E' :
+                          channel.leaderboardRank === 2 ? '#374151' : '#78350F'
+                      }
+                    ]}>
+                      {channel.leaderboardRank === 1 ? '#1 Top Creator' :
+                       channel.leaderboardRank === 2 ? '#2 Top Creator' : '#3 Top Creator'}
+                    </Text>
+                  </View>
+                )}
                 
                 {!!channel?.about && (
                   <TouchableOpacity activeOpacity={0.7} style={styles.aboutContainer} onPress={() => showAlert('About', channel.about)}>
@@ -820,5 +847,35 @@ const styles = StyleSheet.create({
     top: 4,
     right: 0,
     padding: 6,
+  },
+  leaderboardBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    marginTop: 5,
+    marginBottom: 2,
+    gap: 4,
+  },
+  goldBadge: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+  },
+  silverBadge: {
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  bronzeBadge: {
+    backgroundColor: '#FFEDD5',
+    borderWidth: 1,
+    borderColor: '#FDBA74',
+  },
+  leaderboardBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

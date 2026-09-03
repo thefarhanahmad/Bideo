@@ -1,6 +1,6 @@
 import { Tabs, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { TouchableOpacity, DeviceEventEmitter } from 'react-native';
+import { TouchableOpacity, DeviceEventEmitter, View, Text } from 'react-native';
 import { Image } from 'expo-image';
 import Colors from '../../constants/Colors';
 
@@ -42,14 +42,47 @@ export default function TabsLayout() {
           ),
           headerTitleAlign: 'left',
           headerRight: () => (
-            <>
-              <TouchableOpacity style={{ marginRight: 15 }} onPress={() => router.push('/search')}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <TouchableOpacity style={{ marginRight: 12 }} onPress={() => router.push('/search')}>
                 <Ionicons name="search" size={24} color={Colors.text} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ marginRight: 12, position: 'relative' }}
+                onPress={() => router.push('/leaderboard')}
+                activeOpacity={0.8}
+              >
+                <View
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 17,
+                    backgroundColor: '#FFF4EB',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    borderWidth: 1.5,
+                    borderColor: '#FFD7B2',
+                  }}
+                >
+                  <Ionicons name="podium" size={18} color={Colors.primary} />
+                </View>
+                <View
+                  style={{
+                    position: 'absolute',
+                    top: -1,
+                    right: -1,
+                    width: 9,
+                    height: 9,
+                    borderRadius: 4.5,
+                    backgroundColor: '#FF3B30',
+                    borderWidth: 1.5,
+                    borderColor: Colors.white,
+                  }}
+                />
               </TouchableOpacity>
               <TouchableOpacity style={{ marginRight: 15 }} onPress={() => router.push('/notifications')}>
                 <Ionicons name="notifications-outline" size={24} color={Colors.text} />
               </TouchableOpacity>
-            </>
+            </View>
           ),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="home-outline" size={size} color={color} />

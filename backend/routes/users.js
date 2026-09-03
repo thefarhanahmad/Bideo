@@ -12,6 +12,7 @@ const {
   getSearchHistory,
   clearSearchHistory,
   getChannelProfile,
+  getLeaderboard,
   getMonetizationStatus,
   applyMonetization,
   requestWithdrawal,
@@ -31,6 +32,7 @@ const { protect, authorize, softProtect } = require('../middlewares/auth');
 const router = express.Router();
 
 router.get('/channels/:id', softProtect, getChannelProfile);
+router.get('/leaderboard', softProtect, getLeaderboard);
 router.post('/web-deletion-request', requestWebDeletion);
 
 router.use(protect);

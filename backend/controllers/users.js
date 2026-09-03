@@ -8,6 +8,7 @@ const { deleteLocalFile } = require('../utils/localUpload');
 const VideoMonetizationReview = require('../models/VideoMonetizationReview');
 const MonetizationApplication = require('../models/MonetizationApplication');
 const WithdrawalRequest = require('../models/WithdrawalRequest');
+const VideoView = require('../models/VideoView');
 
 const escapeRegex = (str) => {
   if (!str || typeof str !== 'string') return '';
@@ -219,7 +220,188 @@ exports.getChannelProfile = async (req, res, next) => {
         .lean();
     }
 
+    // Calculate channel views for this week (last 7 days) and check if in Top 3 weekly leaderboard
+    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const channelWeeklyViews = await VideoView.aggregate([
+      { $match: { createdAt: { $gte: oneWeekAgo } } },
+      {
+        $lookup: {
+          from: 'videos',
+          localField: 'video',
+          foreignField: '_id',
+          as: 'videoDoc',
+        },
+      },
+      { $unwind: '$videoDoc' },
+      { $match: { 'videoDoc.owner': channel._id, 'videoDoc.visibility': 'public' } },
+      { $count: 'weeklyViews' },
+    ]);
+    const myWeeklyViews = channelWeeklyViews[0]?.weeklyViews || 0;
+    channel.weeklyViews = myWeeklyViews;
+
+    let leaderboardRank = null;
+    if (channelObj.role === 'user' && myWeeklyViews > 0) {
+      const higherCount = await VideoView.aggregate([
+        { $match: { createdAt: { $gte: oneWeekAgo } } },
+        {
+          $lookup: {
+            from: 'videos',
+            localField: 'video',
+            foreignField: '_id',
+            as: 'videoDoc',
+          },
+        },
+        { $unwind: '$videoDoc' },
+        { $match: { 'videoDoc.visibility': 'public' } },
+        { $group: { _id: '$videoDoc.owner', total: { $sum: 1 } } },
+        { $match: { total: { $gt: myWeeklyViews } } },
+        {
+          $lookup: {
+            from: 'users',
+            localField: '_id',
+            foreignField: '_id',
+            as: 'user',
+          },
+        },
+        { $unwind: '$user' },
+        { $match: { 'user.role': 'user', 'user.isBlocked': { $ne: true } } },
+        { $count: 'higher' },
+      ]);
+      const rank = (higherCount[0]?.higher || 0) + 1;
+      if (rank <= 3) {
+        leaderboardRank = rank;
+      }
+    }
+    channel.leaderboardRank = leaderboardRank;
+
     res.status(200).json({ success: true, data: { channel, videos, posts } });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Get top 20 creators by views for this week (Weekly Leaderboard)
+// @route   GET /api/users/leaderboard
+// @access  Public
+exports.getLeaderboard = async (req, res, next) => {
+  try {
+    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    const aggregated = await VideoView.aggregate([
+      // 1. Only views from this week (last 7 days)
+      { $match: { createdAt: { $gte: oneWeekAgo } } },
+      // 2. Lookup video
+      {
+        $lookup: {
+          from: 'videos',
+          localField: 'video',
+          foreignField: '_id',
+          as: 'videoDoc',
+        },
+      },
+      { $unwind: '$videoDoc' },
+      // 3. Only public videos
+      { $match: { 'videoDoc.visibility': 'public' } },
+      // 4. Group by creator
+      {
+        $group: {
+          _id: '$videoDoc.owner',
+          weeklyViews: { $sum: 1 },
+          videoCount: { $addToSet: '$videoDoc._id' },
+        },
+      },
+      // 5. Lookup user details
+      {
+        $lookup: {
+          from: 'users',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'user',
+        },
+      },
+      { $unwind: '$user' },
+      // 6. Filter strictly non-admin user accounts and non-blocked accounts
+      {
+        $match: {
+          'user.role': 'user',
+          'user.isBlocked': { $ne: true },
+        },
+      },
+      // 7. Sort by this week's views descending
+      { $sort: { weeklyViews: -1 } },
+      { $limit: 20 },
+      {
+        $project: {
+          _id: '$user._id',
+          name: '$user.name',
+          channelName: '$user.channelName',
+          avatar: '$user.avatar',
+          isVerified: '$user.isVerified',
+          followersCount: '$user.followersCount',
+          about: '$user.about',
+          totalViews: '$weeklyViews',
+          weeklyViews: '$weeklyViews',
+          videoCount: { $size: '$videoCount' },
+        },
+      },
+    ]);
+
+    let leaderboard = [...aggregated];
+
+    // If fewer than 20 creators have views this week, fill remaining slots up to 20 with other active user accounts
+    if (leaderboard.length < 20) {
+      const existingIds = leaderboard.map((item) => item._id);
+      const remainingCount = 20 - leaderboard.length;
+      const additionalUsers = await User.find({
+        _id: { $nin: existingIds },
+        role: 'user',
+        isBlocked: { $ne: true },
+      })
+        .select('_id name channelName avatar isVerified followersCount about')
+        .sort({ followersCount: -1, createdAt: -1 })
+        .limit(remainingCount)
+        .lean();
+
+      for (const u of additionalUsers) {
+        leaderboard.push({
+          _id: u._id,
+          name: u.name,
+          channelName: u.channelName,
+          avatar: u.avatar,
+          isVerified: u.isVerified,
+          followersCount: u.followersCount || 0,
+          about: u.about,
+          totalViews: 0,
+          weeklyViews: 0,
+          videoCount: 0,
+        });
+      }
+    }
+
+    leaderboard.sort((a, b) => (b.totalViews || 0) - (a.totalViews || 0));
+
+    let userFollowings = new Set();
+    if (req.user) {
+      const followings = await Follower.find({ follower: req.user.id }).select('channel').lean();
+      userFollowings = new Set(followings.map((f) => f.channel.toString()));
+    }
+
+    const results = leaderboard.slice(0, 20).map((item, idx) => {
+      const rank = idx + 1;
+      return {
+        ...item,
+        rank,
+        isFollowing: userFollowings.has(item._id.toString()),
+        isCurrentUser: req.user ? req.user.id.toString() === item._id.toString() : false,
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      count: results.length,
+      timeframe: 'this_week',
+      data: results,
+    });
   } catch (err) {
     next(err);
   }
