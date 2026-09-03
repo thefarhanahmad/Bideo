@@ -300,12 +300,12 @@ export default function LeaderboardScreen() {
               </View>
             )}
 
-            {/* Top 20 by Views Section Header (Fixed right above the scrollable views area) */}
+            {/* Top 50 by Views Section Header (Fixed right above the scrollable views area) */}
             {viewLeaderboard.length > 0 && (
               <View style={styles.viewsHeaderRow}>
                 <View style={styles.sectionHeaderLeft}>
                   <Ionicons name="flame" size={15} color={Colors.primary} />
-                  <Text style={styles.sectionHeaderTitle}>Top 20 Creators By Views</Text>
+                  <Text style={styles.sectionHeaderTitle}>Top 50 Creators By Views</Text>
                 </View>
                 <Text style={styles.viewsHeaderSubtitle}>This week</Text>
               </View>

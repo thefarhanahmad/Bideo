@@ -397,7 +397,7 @@ exports.getLeaderboard = async (req, res, next) => {
       },
       // 7. Sort by this week's views descending
       { $sort: { weeklyViews: -1 } },
-      { $limit: 20 },
+      { $limit: 50 },
       {
         $project: {
           _id: '$user._id',
@@ -416,10 +416,10 @@ exports.getLeaderboard = async (req, res, next) => {
 
     let leaderboard = [...aggregated];
 
-    // If fewer than 20 creators have views this week, fill remaining slots up to 20 with other active user accounts
-    if (leaderboard.length < 20) {
+    // If fewer than 50 creators have views this week, fill remaining slots up to 50 with other active user accounts
+    if (leaderboard.length < 50) {
       const existingIds = leaderboard.map((item) => item._id);
-      const remainingCount = 20 - leaderboard.length;
+      const remainingCount = 50 - leaderboard.length;
       const additionalUsers = await User.find({
         _id: { $nin: existingIds },
         role: 'user',
@@ -454,7 +454,7 @@ exports.getLeaderboard = async (req, res, next) => {
       userFollowings = new Set(followings.map((f) => f.channel.toString()));
     }
 
-    const results = leaderboard.slice(0, 20).map((item, idx) => {
+    const results = leaderboard.slice(0, 50).map((item, idx) => {
       const rank = idx + 1;
       return {
         ...item,
