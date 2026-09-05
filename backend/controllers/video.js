@@ -877,6 +877,8 @@ exports.toggleDislike = async (req, res, next) => {
 
 exports.uploadVideo = async (req, res, next) => {
   const tempFiles = [];
+  let savedVideoUrl = null;
+  let savedThumbnailUrl = null;
   try {
     if (!req.files || !req.files.video || !req.files.video[0]) {
       return res
@@ -893,6 +895,7 @@ exports.uploadVideo = async (req, res, next) => {
 
     // Save video locally
     const videoResult = await saveLocalFile(req, req.files.video[0], "video");
+    savedVideoUrl = videoResult.url;
     const videoIdx = tempFiles.indexOf(req.files.video[0].path);
     if (videoIdx !== -1) tempFiles.splice(videoIdx, 1);
 
@@ -930,6 +933,7 @@ exports.uploadVideo = async (req, res, next) => {
         "image",
       );
       thumbnail = thumbnailResult.url;
+      savedThumbnailUrl = thumbnailResult.url;
       const thumbIdx = tempFiles.indexOf(req.files.thumbnail[0].path);
       if (thumbIdx !== -1) tempFiles.splice(thumbIdx, 1);
     }
@@ -978,6 +982,12 @@ exports.uploadVideo = async (req, res, next) => {
 
     res.status(201).json({ success: true, data: video });
   } catch (err) {
+    if (savedVideoUrl) {
+      await deleteLocalFile(savedVideoUrl);
+    }
+    if (savedThumbnailUrl) {
+      await deleteLocalFile(savedThumbnailUrl);
+    }
     next(err);
   } finally {
     for (const filePath of tempFiles) {

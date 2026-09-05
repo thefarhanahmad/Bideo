@@ -1,8 +1,16 @@
+const fs = require('fs');
 const { body, validationResult } = require('express-validator');
 
 const videoValidationRules = () => [
-  body('title').optional().isLength({ max: 200 }),
-  body('description').optional().isLength({ max: 2000 }),
+  body('title')
+    .optional()
+    .trim()
+    .isLength({ max: 100 })
+    .withMessage('Title cannot be more than 100 characters'),
+  body('description')
+    .optional()
+    .isLength({ max: 1000 })
+    .withMessage('Description cannot be more than 1000 characters'),
   body('category').optional().isString(),
   body('owner').optional().isString(),
   body('isPinned').optional(),
@@ -74,6 +82,21 @@ const phoneLoginValidationRules = () => [
 const validate = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
+    // If multer created temporary files, clean them up to avoid storage leaks
+    if (req.file && req.file.path) {
+      fs.unlink(req.file.path, () => {});
+    }
+    if (req.files) {
+      const filesList = Array.isArray(req.files)
+        ? req.files
+        : Object.values(req.files).flat();
+      filesList.forEach((f) => {
+        if (f && f.path) {
+          fs.unlink(f.path, () => {});
+        }
+      });
+    }
+
     const errArray = errors.array();
     const firstError = errArray[0];
     const message = firstError?.msg || firstError?.message || 'Invalid input data';

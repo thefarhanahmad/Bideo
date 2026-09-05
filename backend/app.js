@@ -98,14 +98,33 @@ app.get("/api/health", (req, res) => {
 const ErrorLog = require("./models/ErrorLog");
 
 app.use((err, req, res, next) => {
+  // Mongoose validation error handling (return 400 Bad Request instead of 500)
+  if (err.name === 'ValidationError') {
+    const messages = Object.values(err.errors || {}).map((e) => e.message);
+    const message = messages[0] || 'Validation error';
+    return res.status(400).json({
+      success: false,
+      message,
+      errors: messages,
+    });
+  }
+
+  // Mongoose bad ObjectId (CastError)
+  if (err.name === 'CastError') {
+    return res.status(400).json({
+      success: false,
+      message: `Invalid ID: ${err.value}`,
+    });
+  }
+
   const statusCode = err.statusCode || (err.name === "MulterError" ? 413 : 500);
   const message = err.message || "Internal Server Error";
   const endpoint = req.originalUrl || req.url || "Unknown";
   const method = req.method || "GET";
   const stack = err.stack || "";
 
-  // Asynchronously record server-side errors (5xx and critical failures) without blocking response
-  if (statusCode >= 400) {
+  // Asynchronously record genuine server-side errors (5xx) without blocking response
+  if (statusCode >= 500) {
     (async () => {
       try {
         const existing = await ErrorLog.findOne({

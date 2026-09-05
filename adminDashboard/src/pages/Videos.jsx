@@ -717,8 +717,8 @@ const UploadForm = ({ categories = [], users = [], onSubmit, onCancel }) => {
       const fd = new FormData();
       fd.append("video", videoFile);
       fd.append("thumbnail", thumbnailFile);
-      fd.append("title", title);
-      fd.append("description", description);
+      fd.append("title", title.trim().slice(0, 100));
+      fd.append("description", description.trim().slice(0, 1000));
       fd.append("category", category);
       fd.append("visibility", visibility);
       fd.append("isPinned", isPinned);
@@ -747,11 +747,17 @@ const UploadForm = ({ categories = [], users = [], onSubmit, onCancel }) => {
       )}
 
       <div>
-        <label className="block text-sm font-medium text-ink">Title</label>
+        <div className="flex justify-between items-center">
+          <label className="block text-sm font-medium text-ink">Title</label>
+          <span className={`text-[11px] font-medium ${title.length >= 100 ? "text-red-500 font-bold" : "text-muted"}`}>
+            {title.length}/100
+          </span>
+        </div>
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Video title"
+          maxLength={100}
           className={inputClass}
           required
           disabled={uploading}
@@ -759,11 +765,17 @@ const UploadForm = ({ categories = [], users = [], onSubmit, onCancel }) => {
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-ink">Description</label>
+        <div className="flex justify-between items-center">
+          <label className="block text-sm font-medium text-ink">Description</label>
+          <span className={`text-[11px] font-medium ${description.length >= 1000 ? "text-red-500 font-bold" : "text-muted"}`}>
+            {description.length}/1000
+          </span>
+        </div>
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="What is this video about?"
+          maxLength={1000}
           className={inputClass}
           rows={3}
           disabled={uploading}
@@ -934,11 +946,14 @@ const EditForm = ({ initial = {}, categories = [], users = [], onSubmit, onCance
     setSaveError("");
 
     try {
+      const safeTitle = title.trim().slice(0, 100);
+      const safeDescription = description.trim().slice(0, 1000);
+
       if (thumbnailFile) {
         const fd = new FormData();
         fd.append("thumbnail", thumbnailFile);
-        fd.append("title", title);
-        fd.append("description", description);
+        fd.append("title", safeTitle);
+        fd.append("description", safeDescription);
         fd.append("category", category);
         fd.append("visibility", visibility);
         fd.append("isPinned", isPinned);
@@ -946,8 +961,8 @@ const EditForm = ({ initial = {}, categories = [], users = [], onSubmit, onCance
         await onSubmit(fd);
       } else {
         await onSubmit({
-          title,
-          description,
+          title: safeTitle,
+          description: safeDescription,
           category,
           visibility,
           owner,
@@ -969,11 +984,17 @@ const EditForm = ({ initial = {}, categories = [], users = [], onSubmit, onCance
       )}
 
       <div>
-        <label className="block text-sm font-medium text-ink">Title</label>
+        <div className="flex justify-between items-center">
+          <label className="block text-sm font-medium text-ink">Title</label>
+          <span className={`text-[11px] font-medium ${title.length >= 100 ? "text-red-500 font-bold" : "text-muted"}`}>
+            {title.length}/100
+          </span>
+        </div>
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Video title"
+          maxLength={100}
           className={inputClass}
           required
           disabled={saving}
@@ -981,11 +1002,17 @@ const EditForm = ({ initial = {}, categories = [], users = [], onSubmit, onCance
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-ink">Description</label>
+        <div className="flex justify-between items-center">
+          <label className="block text-sm font-medium text-ink">Description</label>
+          <span className={`text-[11px] font-medium ${description.length >= 1000 ? "text-red-500 font-bold" : "text-muted"}`}>
+            {description.length}/1000
+          </span>
+        </div>
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="What is this video about?"
+          maxLength={1000}
           className={inputClass}
           rows={3}
           disabled={saving}

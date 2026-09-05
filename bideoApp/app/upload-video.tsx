@@ -207,8 +207,10 @@ export default function UploadVideoScreen() {
 
       const formData = new FormData();
       formData.append('uploadType', uploadType);
-      if (title.trim()) formData.append('title', title.trim());
-      if (description.trim()) formData.append('description', description.trim());
+      const safeTitle = title.trim().slice(0, 100);
+      const safeDescription = description.trim().slice(0, 1000);
+      if (safeTitle) formData.append('title', safeTitle);
+      if (safeDescription) formData.append('description', safeDescription);
       if (category) formData.append('category', category);
       if (tags.trim()) formData.append('tags', tags.trim());
       formData.append('visibility', visibility);
@@ -314,6 +316,9 @@ export default function UploadVideoScreen() {
     setUploading(true);
     setUploadProgress(0);
     try {
+      const safeTitle = title.trim().slice(0, 100);
+      const safeDescription = description.trim().slice(0, 1000);
+
       if (thumbnailChanged && thumbnail) {
         let finalThumbnailUri = thumbnail.uri;
         const isExpoGo = Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
@@ -332,8 +337,8 @@ export default function UploadVideoScreen() {
         }
 
         const formData = new FormData();
-        formData.append('title', title);
-        formData.append('description', description);
+        formData.append('title', safeTitle);
+        formData.append('description', safeDescription);
         formData.append('category', category);
         formData.append('tags', tags);
         formData.append('visibility', visibility);
@@ -355,7 +360,13 @@ export default function UploadVideoScreen() {
           },
         });
       } else {
-        await api.put(`/videos/${editId}`, { title, description, category, tags, visibility });
+        await api.put(`/videos/${editId}`, {
+          title: safeTitle,
+          description: safeDescription,
+          category,
+          tags,
+          visibility,
+        });
       }
       showAlert('Success', 'Video updated successfully!');
       router.replace('/');
@@ -430,12 +441,18 @@ export default function UploadVideoScreen() {
           )}
         </TouchableOpacity>
 
-        <Text style={styles.label}>Title</Text>
+        <View style={styles.labelRow}>
+          <Text style={styles.labelInRow}>Title</Text>
+          <Text style={[styles.charCount, title.length >= 100 && styles.charCountOver]}>
+            {title.length}/100
+          </Text>
+        </View>
         <TextInput
           style={styles.input}
           placeholder="Enter video title (type @ to mention a creator)"
           placeholderTextColor={Colors.textGray}
           value={title}
+          maxLength={100}
           onChangeText={handleTitleChange}
         />
         <MentionSuggestions
@@ -445,13 +462,19 @@ export default function UploadVideoScreen() {
           onClose={() => setMentionActiveField(null)}
         />
 
-        <Text style={styles.label}>Description</Text>
+        <View style={styles.labelRow}>
+          <Text style={styles.labelInRow}>Description</Text>
+          <Text style={[styles.charCount, description.length >= 1000 && styles.charCountOver]}>
+            {description.length}/1000
+          </Text>
+        </View>
         <TextInput
           style={[styles.input, styles.textArea]}
           placeholder="Enter video description (type @ to mention a creator)"
           placeholderTextColor={Colors.textGray}
           multiline
           numberOfLines={4}
+          maxLength={1000}
           value={description}
           onChangeText={handleDescriptionChange}
         />
@@ -630,6 +653,26 @@ const styles = StyleSheet.create({
     color: Colors.text,
     marginBottom: 8,
     marginTop: 18,
+  },
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+    marginTop: 18,
+  },
+  labelInRow: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  charCount: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textGray,
+  },
+  charCountOver: {
+    color: '#EF4444',
   },
   picker: {
     height: 130,
