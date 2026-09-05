@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Video = require('../models/Video');
 const User = require('../models/User');
 
@@ -49,6 +50,31 @@ let sitemapCache = {
 exports.getVideoPage = async (req, res, next) => {
   try {
     const { id } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(404).send(`
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Video Unavailable - Bideo</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0F0F0F; color: #FFF; text-align: center; padding: 60px 20px; }
+            h1 { font-size: 24px; margin-bottom: 12px; }
+            p { color: #888; font-size: 14px; margin-bottom: 24px; }
+            a { display: inline-block; background: #FF7A00; color: #FFF; text-decoration: none; padding: 12px 28px; border-radius: 25px; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <h1>Video Unavailable</h1>
+          <p>This video may have been removed or is not publicly accessible.</p>
+          <a href="${PLAY_STORE_URL}">Watch on Bideo App</a>
+        </body>
+        </html>
+      `);
+    }
+
     const video = await Video.findById(id).populate(
       'owner',
       'name channelName avatar isVerified followersCount about'
@@ -407,6 +433,19 @@ exports.getVideoPage = async (req, res, next) => {
 exports.getChannelPage = async (req, res, next) => {
   try {
     const { id } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(404).send(`
+        <!DOCTYPE html>
+        <html lang="en"><head><title>Channel Not Found - Bideo</title></head>
+        <body style="background:#0F0F0F;color:#FFF;font-family:sans-serif;text-align:center;padding:60px 20px;">
+          <h2>Channel Unavailable</h2>
+          <p style="color:#888;">This channel may have been removed or suspended.</p>
+          <a href="${PLAY_STORE_URL}" style="display:inline-block;margin-top:20px;background:#FF7A00;color:#FFF;padding:10px 20px;border-radius:20px;text-decoration:none;">Explore Bideo</a>
+        </body></html>
+      `);
+    }
+
     const channel = await User.findById(id).select(
       'name channelName avatar about followersCount isVerified isBlocked'
     );

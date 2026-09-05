@@ -601,6 +601,12 @@ exports.getVideos = async (req, res, next) => {
 
 exports.getVideo = async (req, res, next) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Video not found" });
+    }
+
     const video = await Video.findById(req.params.id)
       .populate("owner", "name avatar channelName followersCount isVerified isBlocked")
       .populate("category", "name");
@@ -640,6 +646,12 @@ exports.getVideo = async (req, res, next) => {
 
 exports.recordView = async (req, res, next) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Video not found" });
+    }
+
     const video = await Video.findById(req.params.id);
     if (!video)
       return res
@@ -780,6 +792,12 @@ exports.getMyVideos = async (req, res, next) => {
 
 exports.toggleLike = async (req, res, next) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Video not found" });
+    }
+
     const video = await Video.findById(req.params.id);
     if (!video)
       return res
@@ -834,6 +852,12 @@ exports.toggleLike = async (req, res, next) => {
 
 exports.toggleDislike = async (req, res, next) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Video not found" });
+    }
+
     const video = await Video.findById(req.params.id);
     if (!video)
       return res
@@ -1003,6 +1027,12 @@ exports.uploadVideo = async (req, res, next) => {
 exports.updateVideo = async (req, res, next) => {
   const tempFiles = [];
   try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Video not found" });
+    }
+
     let video = await Video.findById(req.params.id);
     if (!video)
       return res
@@ -1084,6 +1114,12 @@ exports.updateVideo = async (req, res, next) => {
 
 exports.reportVideo = async (req, res, next) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Video not found" });
+    }
+
     const video = await Video.findById(req.params.id);
     if (!video)
       return res
@@ -1113,6 +1149,12 @@ exports.reportVideo = async (req, res, next) => {
 
 exports.deleteVideo = async (req, res, next) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Video not found" });
+    }
+
     const video = await Video.findById(req.params.id);
     if (!video)
       return res

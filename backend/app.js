@@ -98,7 +98,7 @@ app.get("/api/health", (req, res) => {
 const ErrorLog = require("./models/ErrorLog");
 
 app.use((err, req, res, next) => {
-  // Mongoose validation error handling (return 400 Bad Request instead of 500)
+  // 1. Mongoose validation error handling (return 400 Bad Request)
   if (err.name === 'ValidationError') {
     const messages = Object.values(err.errors || {}).map((e) => e.message);
     const message = messages[0] || 'Validation error';
@@ -109,15 +109,67 @@ app.use((err, req, res, next) => {
     });
   }
 
-  // Mongoose bad ObjectId (CastError)
+  // 2. Mongoose bad ObjectId (CastError - return 404 Resource Not Found)
   if (err.name === 'CastError') {
-    return res.status(400).json({
+    return res.status(404).json({
       success: false,
-      message: `Invalid ID: ${err.value}`,
+      message: 'Resource not found',
     });
   }
 
-  const statusCode = err.statusCode || (err.name === "MulterError" ? 413 : 500);
+  // 3. Duplicate key error handling (E11000 - return 400 Bad Request)
+  if (err && (err.code === 11000 || (err.name === 'MongoServerError' && err.code === 11000))) {
+    let duplicateMessage = 'Duplicate value entered';
+    if (err.keyPattern) {
+      if (err.keyPattern.channelName) {
+        duplicateMessage = 'Channel name already exists. Please choose a different channel name.';
+      } else if (err.keyPattern.name) {
+        duplicateMessage = 'Username already exists. Please choose another username.';
+      } else if (err.keyPattern.phone) {
+        duplicateMessage = 'This phone number is already registered. Please login instead.';
+      } else if (err.keyPattern.email) {
+        duplicateMessage = 'This email is already registered.';
+      }
+    } else if (err.message) {
+      if (err.message.includes('channelName')) {
+        duplicateMessage = 'Channel name already exists. Please choose a different channel name.';
+      } else if (err.message.includes('name')) {
+        duplicateMessage = 'Username already exists. Please choose another username.';
+      } else if (err.message.includes('phone')) {
+        duplicateMessage = 'This phone number is already registered. Please login instead.';
+      } else if (err.message.includes('email')) {
+        duplicateMessage = 'This email is already registered.';
+      }
+    }
+
+    return res.status(400).json({
+      success: false,
+      message: duplicateMessage,
+    });
+  }
+
+  // 4. Video Streaming Range Not Satisfiable (HTTP 416)
+  if (err.status === 416 || err.statusCode === 416 || err.name === 'RangeNotSatisfiableError') {
+    return res.status(416).json({
+      success: false,
+      message: 'Range Not Satisfiable',
+    });
+  }
+
+  // 5. Friendly messages for file-upload (multer) errors (HTTP 413)
+  if (err && err.name === "MulterError") {
+    const messages = {
+      LIMIT_FILE_SIZE:
+        "This file is too large. Please upload a video or media file under 500MB.",
+      LIMIT_UNEXPECTED_FILE: "Unexpected file field in upload.",
+    };
+    return res.status(413).json({
+      success: false,
+      message: messages[err.code] || "Upload error. Please try a smaller file.",
+    });
+  }
+
+  const statusCode = err.statusCode || err.status || 500;
   const message = err.message || "Internal Server Error";
   const endpoint = req.originalUrl || req.url || "Unknown";
   const method = req.method || "GET";
@@ -156,50 +208,6 @@ app.use((err, req, res, next) => {
         console.error("Error logging to database:", logErr.message);
       }
     })();
-  }
-
-  // Duplicate key error handling (E11000)
-  if (err && (err.code === 11000 || (err.name === 'MongoServerError' && err.code === 11000))) {
-    let duplicateMessage = 'Duplicate value entered';
-    if (err.keyPattern) {
-      if (err.keyPattern.channelName) {
-        duplicateMessage = 'Channel name already exists. Please choose a different channel name.';
-      } else if (err.keyPattern.name) {
-        duplicateMessage = 'Username already exists. Please choose another username.';
-      } else if (err.keyPattern.phone) {
-        duplicateMessage = 'This phone number is already registered. Please login instead.';
-      } else if (err.keyPattern.email) {
-        duplicateMessage = 'This email is already registered.';
-      }
-    } else if (err.message) {
-      if (err.message.includes('channelName')) {
-        duplicateMessage = 'Channel name already exists. Please choose a different channel name.';
-      } else if (err.message.includes('name')) {
-        duplicateMessage = 'Username already exists. Please choose another username.';
-      } else if (err.message.includes('phone')) {
-        duplicateMessage = 'This phone number is already registered. Please login instead.';
-      } else if (err.message.includes('email')) {
-        duplicateMessage = 'This email is already registered.';
-      }
-    }
-
-    return res.status(400).json({
-      success: false,
-      message: duplicateMessage,
-    });
-  }
-
-  // Friendly messages for file-upload (multer) errors instead of a generic 500.
-  if (err && err.name === "MulterError") {
-    const messages = {
-      LIMIT_FILE_SIZE:
-        "This file is too large. Please upload a video or media file under 500MB.",
-      LIMIT_UNEXPECTED_FILE: "Unexpected file field in upload.",
-    };
-    return res.status(413).json({
-      success: false,
-      message: messages[err.code] || "Upload error. Please try a smaller file.",
-    });
   }
 
   res.status(statusCode).json({

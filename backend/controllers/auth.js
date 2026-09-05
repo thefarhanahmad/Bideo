@@ -269,6 +269,16 @@ exports.updateChannel = async (req, res, next) => {
       data: updatedUser,
     });
   } catch (err) {
+    if (err.code === 11000 || (err.name === 'MongoServerError' && err.code === 11000)) {
+      let duplicateMessage = 'Channel name already exists. Please choose a different channel name.';
+      if (err.message && err.message.includes('name_1')) {
+        duplicateMessage = 'Username already exists. Please choose another username.';
+      }
+      return res.status(400).json({
+        success: false,
+        message: duplicateMessage,
+      });
+    }
     next(err);
   }
 };
