@@ -15,7 +15,7 @@ const normalizeAvatar = (avatar) => {
 
 exports.signupWithPhone = async (req, res, next) => {
   try {
-    const { password } = req.body;
+    const password = (req.body.password || '').trim();
     const name = (req.body.name || '').trim();
     const phone = cleanPhone(req.body.phone);
 
@@ -39,7 +39,12 @@ exports.signupWithPhone = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Please provide a valid 10-digit phone number' });
     }
 
-    const existingPhone = await User.findOne({ phone });
+    const existingPhone = await User.findOne({
+      $or: [
+        { phone },
+        { phone: { $regex: new RegExp(`${phone}$`) } },
+      ],
+    });
     if (existingPhone) {
       return res.status(400).json({ success: false, message: 'This phone number is already registered. Please login instead.' });
     }
@@ -68,15 +73,62 @@ exports.signupWithPhone = async (req, res, next) => {
 
 exports.loginWithPhone = async (req, res, next) => {
   try {
-    const phone = cleanPhone(req.body.phone);
-    const { password } = req.body;
-    if (!phone || !password) {
-      return res.status(400).json({ success: false, message: 'Phone number and password are required' });
+    const rawIdentifier = String(req.body.phone || req.body.username || req.body.email || req.body.identifier || '').trim();
+    const password = req.body.password;
+
+    if (!rawIdentifier || !password) {
+      return res.status(400).json({ success: false, message: 'Phone number or username and password are required' });
     }
-    const user = await User.findOne({ phone }).select('+password');
-    if (!user || !(await user.matchPassword(password))) {
+
+    const cleanedPhone = cleanPhone(rawIdentifier);
+
+    // Build flexible query matching phone (with any prefix variations), username, or email
+    const orConditions = [];
+
+    if (cleanedPhone && cleanedPhone.length === 10) {
+      orConditions.push({ phone: cleanedPhone });
+      orConditions.push({ phone: { $regex: new RegExp(`${cleanedPhone}$`) } });
+    }
+
+    if (rawIdentifier) {
+      orConditions.push({ phone: rawIdentifier });
+      orConditions.push({ name: { $regex: new RegExp(`^${escapeRegex(rawIdentifier)}$`, 'i') } });
+      if (rawIdentifier.includes('@')) {
+        orConditions.push({ email: rawIdentifier.toLowerCase() });
+      }
+    }
+
+    const user = await User.findOne({ $or: orConditions }).select('+password');
+
+    if (!user) {
       return res.status(401).json({ success: false, message: 'Incorrect phone number or password' });
     }
+
+    // Match password with trimming fallback
+    const passwordStr = String(password);
+    let isMatch = await user.matchPassword(passwordStr.trim());
+    if (!isMatch && passwordStr !== passwordStr.trim()) {
+      isMatch = await user.matchPassword(passwordStr);
+    }
+
+    if (!isMatch) {
+      return res.status(401).json({ success: false, message: 'Incorrect phone number or password' });
+    }
+
+    if (user.isBlocked) {
+      return res.status(403).json({
+        success: false,
+        message: user.blockReason || 'Your account has been suspended by an administrator.',
+        isBlocked: true,
+      });
+    }
+
+    // Self-healing: if user has a legacy non-standard phone format, normalize it
+    if (cleanedPhone && cleanedPhone.length === 10 && user.phone !== cleanedPhone) {
+      user.phone = cleanedPhone;
+      await user.save().catch(() => {});
+    }
+
     sendTokenResponse(user, 200, res);
   } catch (err) {
     next(err);

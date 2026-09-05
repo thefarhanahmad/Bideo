@@ -34,6 +34,8 @@ const cleanPhone = (val) => {
     digits = digits.slice(2);
   } else if (digits.length === 11 && digits.startsWith('0')) {
     digits = digits.slice(1);
+  } else if (digits.length > 10) {
+    digits = digits.slice(-10);
   }
   return digits;
 };
@@ -71,11 +73,9 @@ const phoneSignupValidationRules = () => [
 
 const phoneLoginValidationRules = () => [
   body('phone')
-    .customSanitizer(cleanPhone)
+    .trim()
     .notEmpty()
-    .withMessage('Phone number is required')
-    .isLength({ min: 10, max: 10 })
-    .withMessage('Phone number must be a valid 10-digit number'),
+    .withMessage('Phone number or username is required'),
   body('password').notEmpty().withMessage('Password is required'),
 ];
 
