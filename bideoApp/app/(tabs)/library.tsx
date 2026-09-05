@@ -210,7 +210,7 @@ export default function LibraryScreen() {
         <View style={styles.headerButtons}>
           {user?._id && (
             <TouchableOpacity style={styles.viewChannelBtn} onPress={() => router.push(`/channel/${user._id}`)}>
-              <Ionicons name="tv-outline" size={16} color={Colors.white} />
+              <Ionicons name="person-outline" size={16} color={Colors.white} />
               <Text style={styles.viewChannelBtnText}>View Channel</Text>
             </TouchableOpacity>
           )}
