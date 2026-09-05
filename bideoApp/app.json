@@ -37,6 +37,16 @@
               "scheme": "https",
               "host": "bideo.in",
               "pathPrefix": "/c"
+            },
+            {
+              "scheme": "https",
+              "host": "bideo.in",
+              "pathPrefix": "/video"
+            },
+            {
+              "scheme": "https",
+              "host": "bideo.in",
+              "pathPrefix": "/channel"
             }
           ],
           "category": [

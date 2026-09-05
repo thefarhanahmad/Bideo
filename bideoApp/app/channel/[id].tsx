@@ -96,7 +96,7 @@ export default function ChannelScreen() {
   const handleShare = async () => {
     if (!channel) return;
     try {
-      const url = `https://bideo.in/channel/${channel._id}`;
+      const url = `https://bideo.in/c/${channel._id}`;
       await Share.share({
         message: `Check out ${channel.channelName || channel.name} on Bideo!\n${url}`,
         url: url,
