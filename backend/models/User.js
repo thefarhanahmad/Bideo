@@ -161,6 +161,13 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: null,
   },
+  pushToken: {
+    type: String,
+    default: null,
+  },
+  pushTokens: [{
+    type: String,
+  }],
   createdAt: {
     type: Date,
     default: Date.now,

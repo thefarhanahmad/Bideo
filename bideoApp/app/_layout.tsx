@@ -10,6 +10,7 @@ import api, { clearAuthSession, setAuthToken } from '../services/api';
 import { loginSuccess, loginStart, loginFailure, logout } from '../redux/slices/authSlice';
 import { AlertHost, showAlert } from '../components/AppAlert';
 import Constants from 'expo-constants';
+import { registerForPushNotificationsAsync, setupNotificationListeners } from '../services/notifications';
 
 // Keep native splash screen visible while app initializes
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -155,6 +156,25 @@ function DeletionGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function NotificationManager({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const { isAuthenticated } = useSelector((state: RootState) => state.auth);
+
+  useEffect(() => {
+    const cleanup = setupNotificationListeners(router);
+
+    if (isAuthenticated) {
+      registerForPushNotificationsAsync();
+    }
+
+    return () => {
+      cleanup();
+    };
+  }, [isAuthenticated, router]);
+
+  return <>{children}</>;
+}
+
 export default function RootLayout() {
   const handleAppReady = useCallback(async () => {
     try {
@@ -169,18 +189,20 @@ export default function RootLayout() {
       <Provider store={store}>
         <Startup onReady={handleAppReady} />
         <DeletionGuard>
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="video/[id]" options={{ presentation: 'modal' }} />
-            <Stack.Screen name="channel/[id]" />
-            <Stack.Screen name="notifications" />
-            <Stack.Screen name="upload-video" />
-            <Stack.Screen name="upload-post" />
-            <Stack.Screen name="settings/privacy" />
-            <Stack.Screen name="settings/delete-profile" />
-            <Stack.Screen name="account-recovery" />
-          </Stack>
-          <AlertHost />
+          <NotificationManager>
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="video/[id]" options={{ presentation: 'modal' }} />
+              <Stack.Screen name="channel/[id]" />
+              <Stack.Screen name="notifications" />
+              <Stack.Screen name="upload-video" />
+              <Stack.Screen name="upload-post" />
+              <Stack.Screen name="settings/privacy" />
+              <Stack.Screen name="settings/delete-profile" />
+              <Stack.Screen name="account-recovery" />
+            </Stack>
+            <AlertHost />
+          </NotificationManager>
         </DeletionGuard>
       </Provider>
     </GestureHandlerRootView>

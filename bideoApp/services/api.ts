@@ -70,7 +70,11 @@ export const setAuthToken = (token?: string | null) => {
 
 export const clearAuthSession = async () => {
   try {
-    await AsyncStorage.multiRemove(['token', 'cached_user']);
+    const pushToken = await AsyncStorage.getItem('push_token');
+    if (pushToken) {
+      await api.delete('/auth/push-token', { data: { pushToken } }).catch(() => {});
+    }
+    await AsyncStorage.multiRemove(['token', 'cached_user', 'push_token']);
   } catch {
     // ignore
   }

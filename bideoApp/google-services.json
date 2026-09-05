@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "770493777356",
+    "project_id": "bideo-29165",
+    "storage_bucket": "bideo-29165.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:770493777356:android:a34a2d259d052d06f20969",
+        "android_client_info": {
+          "package_name": "com.farhan.bideoapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDntfLKlfzz3UMB1kyjfOpsdTQ2fowAWGc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

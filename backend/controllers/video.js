@@ -11,11 +11,13 @@ const MonetizationApplication = require("../models/MonetizationApplication");
 const fs = require("fs");
 const { saveLocalFile, deleteLocalFile } = require("../utils/localUpload");
 const { getUserInterestProfile, rankAndShuffleVideos } = require("../utils/recommendation");
+const { sendPushForEvent } = require("../utils/pushNotification");
 
 const createNotification = async ({ recipient, actor, type, video, post, comment, message }) => {
   if (!recipient || !actor || recipient.toString() === actor.toString()) return;
   try {
     await Notification.create({ recipient, actor, type, video, post, comment, message });
+    sendPushForEvent({ recipient, actor, type, video, post, comment, message }).catch(() => {});
   } catch (err) {
     console.error("Failed to create notification:", err);
   }

@@ -2,10 +2,16 @@ const Comment = require('../models/Comment');
 const Video = require('../models/Video');
 const Post = require('../models/Post');
 const Notification = require('../models/Notification');
+const { sendPushForEvent } = require('../utils/pushNotification');
 
 const createNotification = async ({ recipient, actor, type, video, post, comment, message }) => {
   if (!recipient || !actor || recipient.toString() === actor.toString()) return;
-  await Notification.create({ recipient, actor, type, video, post, comment, message });
+  try {
+    await Notification.create({ recipient, actor, type, video, post, comment, message });
+    sendPushForEvent({ recipient, actor, type, video, post, comment, message }).catch(() => {});
+  } catch (err) {
+    console.error("Failed to create notification:", err);
+  }
 };
 
 // @desc    Get comments for a video or post

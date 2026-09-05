@@ -1,5 +1,5 @@
 const express = require('express');
-const { googleLogin, getMe, signupWithPhone, loginWithPhone, updateChannel, forgotPassword, resetPassword } = require('../controllers/auth');
+const { googleLogin, getMe, signupWithPhone, loginWithPhone, updateChannel, forgotPassword, resetPassword, updatePushToken, removePushToken } = require('../controllers/auth');
 const { protect } = require('../middlewares/auth');
 const { authValidationRules, phoneSignupValidationRules, phoneLoginValidationRules, validate } = require('../validators');
 
@@ -14,5 +14,7 @@ router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPassword);
 router.get('/me', protect, getMe);
 router.put('/channel', protect, upload.fields([{ name: 'avatar', maxCount: 1 }, { name: 'coverImage', maxCount: 1 }]), updateChannel);
+router.put('/push-token', protect, updatePushToken);
+router.delete('/push-token', protect, removePushToken);
 
 module.exports = router;

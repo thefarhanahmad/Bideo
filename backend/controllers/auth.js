@@ -384,3 +384,45 @@ const sendTokenResponse = (user, statusCode, res) => {
     }
   });
 };
+
+// @desc    Update device push notification token
+// @route   PUT /api/auth/push-token
+// @access  Private
+exports.updatePushToken = async (req, res, next) => {
+  try {
+    const { pushToken } = req.body;
+    if (!pushToken || typeof pushToken !== 'string') {
+      return res.status(400).json({ success: false, message: 'Valid pushToken is required' });
+    }
+
+    await User.findByIdAndUpdate(req.user.id, {
+      pushToken,
+      $addToSet: { pushTokens: pushToken },
+    });
+
+    res.status(200).json({ success: true, data: {} });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Remove device push notification token on logout
+// @route   DELETE /api/auth/push-token
+// @access  Private
+exports.removePushToken = async (req, res, next) => {
+  try {
+    const { pushToken } = req.body;
+    const update = {};
+    if (pushToken) {
+      update.$pull = { pushTokens: pushToken };
+    }
+
+    await User.findByIdAndUpdate(req.user.id, {
+      ...(pushToken ? update : { pushToken: null, pushTokens: [] }),
+    });
+
+    res.status(200).json({ success: true, data: {} });
+  } catch (err) {
+    next(err);
+  }
+};

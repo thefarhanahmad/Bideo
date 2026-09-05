@@ -4,10 +4,16 @@ const Follower = require('../models/Follower');
 const Notification = require('../models/Notification');
 const { saveLocalFile, deleteLocalFile } = require('../utils/localUpload');
 const { getUserInterestProfile, rankAndShufflePosts } = require('../utils/recommendation');
+const { sendPushForEvent } = require('../utils/pushNotification');
 
 const createNotification = async ({ recipient, actor, type, video, post, comment, message }) => {
   if (!recipient || !actor || recipient.toString() === actor.toString()) return;
-  await Notification.create({ recipient, actor, type, video, post, comment, message });
+  try {
+    await Notification.create({ recipient, actor, type, video, post, comment, message });
+    sendPushForEvent({ recipient, actor, type, video, post, comment, message }).catch(() => {});
+  } catch (err) {
+    console.error("Failed to create notification:", err);
+  }
 };
 
 exports.createPost = async (req, res, next) => {
