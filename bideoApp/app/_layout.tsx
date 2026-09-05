@@ -7,8 +7,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SplashScreen from 'expo-splash-screen';
 import api, { clearAuthSession, setAuthToken } from '../services/api';
-import { loginSuccess, loginStart, loginFailure } from '../redux/slices/authSlice';
-import { AlertHost } from '../components/AppAlert';
+import { loginSuccess, loginStart, loginFailure, logout } from '../redux/slices/authSlice';
+import { AlertHost, showAlert } from '../components/AppAlert';
 import Constants from 'expo-constants';
 
 // Keep native splash screen visible while app initializes
@@ -67,7 +67,12 @@ function Startup({ onReady }: { onReady: () => void }) {
           }
 
           if (initialUser) {
-            dispatch(loginSuccess({ user: initialUser, token } as any));
+            if (initialUser.isBlocked) {
+              clearAuthSession().catch(() => {});
+              dispatch(logout());
+            } else {
+              dispatch(loginSuccess({ user: initialUser, token } as any));
+            }
           } else {
             dispatch(loginStart());
           }
@@ -82,11 +87,31 @@ function Startup({ onReady }: { onReady: () => void }) {
             .then((res) => {
               const freshUser = res.data && res.data.data ? res.data.data : res.data;
               if (freshUser) {
+                if (freshUser.isBlocked) {
+                  console.log('User account is suspended by administrator. Logging out.');
+                  clearAuthSession().catch(() => {});
+                  dispatch(logout());
+                  showAlert(
+                    'Account Suspended',
+                    freshUser.blockReason || 'Your account has been suspended by an administrator. Please contact support if you believe this was an error.'
+                  );
+                  return;
+                }
                 dispatch(loginSuccess({ user: freshUser, token } as any));
                 AsyncStorage.setItem('cached_user', JSON.stringify(freshUser)).catch(() => {});
               }
             })
             .catch((err) => {
+              if (err?.response?.status === 403 && err?.response?.data?.isBlocked) {
+                console.log('User is blocked on server. Logging out.');
+                clearAuthSession().catch(() => {});
+                dispatch(logout());
+                showAlert(
+                  'Account Suspended',
+                  err.response.data.message || 'Your account has been suspended by an administrator.'
+                );
+                return;
+              }
               // Only clear token if server explicitly rejected with HTTP 401
               if (err?.response?.status === 401) {
                 console.log('Token expired or invalid on server. Logging out.');

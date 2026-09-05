@@ -47,6 +47,17 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// Response interceptor: automatically clear session if server indicates user account is blocked or revoked
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (error?.response?.status === 403 && error?.response?.data?.isBlocked) {
+      await clearAuthSession().catch(() => {});
+    }
+    return Promise.reject(error);
+  }
+);
+
 export const setAuthToken = (token?: string | null) => {
   if (token) {
     api.defaults.headers.common.Authorization = `Bearer ${token}`;
