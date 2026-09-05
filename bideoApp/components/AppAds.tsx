@@ -58,13 +58,16 @@ export const AppAdBanner: React.FC<AppAdBannerProps> = ({ size }: AppAdBannerPro
     Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
   if (isExpoGo) return null;
 
-  const [useTestFallback, setUseTestFallback] = useState(isTestingAds);
+  const [adFailed, setAdFailed] = useState(false);
+
+  // If live ad failed or no-fill, hide the banner completely! Never show test ad in production.
+  if (adFailed) return null;
 
   try {
     const { BannerAd, BannerAdSize, TestIds } = require('react-native-google-mobile-ads');
     if (!BannerAd) return null;
 
-    const unitId = useTestFallback ? (TestIds?.BANNER || TEST_BANNER_ID) : ADMOB_IDS.BANNER;
+    const unitId = isTestingAds ? (TestIds?.BANNER || TEST_BANNER_ID) : ADMOB_IDS.BANNER;
 
     return (
       <View style={styles.container}>
@@ -74,11 +77,9 @@ export const AppAdBanner: React.FC<AppAdBannerProps> = ({ size }: AppAdBannerPro
           size={size || BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
           requestOptions={{ requestNonPersonalizedAdsOnly: true }}
           onAdFailedToLoad={(error: any) => {
-            console.log(`Banner Ad failed with unit ${unitId}:`, error);
-            // If live production ad has NO_FILL or error, immediately fall back to Google Test Banner ID
-            if (!useTestFallback) {
-              setUseTestFallback(true);
-            }
+            console.log(`Banner Ad failed with unit ${unitId}:`, error?.message || error);
+            // Hide the banner completely if it fails or has NO_FILL. Never show test ad!
+            setAdFailed(true);
           }}
         />
       </View>
@@ -165,11 +166,9 @@ export const AppInterstitialAd: React.FC<AppInterstitialAdProps> = ({ visible, o
 
     try {
       const { InterstitialAd, AdEventType, TestIds } = require('react-native-google-mobile-ads');
-      const primaryUnitId = ADMOB_IDS.INTERSTITIAL;
-      const testUnitId = TestIds?.INTERSTITIAL || TEST_INTERSTITIAL_ID;
+      const unitId = isTestingAds ? (TestIds?.INTERSTITIAL || TEST_INTERSTITIAL_ID) : ADMOB_IDS.INTERSTITIAL;
 
       let hasResponded = false;
-      let hasTriedTestFallback = isTestingAds;
 
       const triggerFallback = () => {
         if (!hasResponded) {
@@ -185,9 +184,9 @@ export const AppInterstitialAd: React.FC<AppInterstitialAdProps> = ({ visible, o
         }
       };
 
-      const loadAd = (unitId: string) => {
+      const loadAd = (idToLoad: string) => {
         try {
-          const interstitial = InterstitialAd.createForAdRequest(unitId, {
+          const interstitial = InterstitialAd.createForAdRequest(idToLoad, {
             requestNonPersonalizedAdsOnly: true,
           });
 
@@ -206,14 +205,9 @@ export const AppInterstitialAd: React.FC<AppInterstitialAdProps> = ({ visible, o
           });
 
           const unsubscribeError = interstitial.addAdEventListener(AdEventType.ERROR, (error: any) => {
-            console.log(`Interstitial load error on unit ${unitId}:`, error);
-            if (!hasTriedTestFallback) {
-              hasTriedTestFallback = true;
-              console.log('Retrying interstitial with Google Test ID...');
-              loadAd(testUnitId);
-            } else {
-              triggerFallback();
-            }
+            console.log(`Interstitial load error on unit ${idToLoad}:`, error?.message || error);
+            // In production, never fall back to test ads! Trigger fallback immediately.
+            triggerFallback();
           });
 
           interstitial.load();
@@ -223,12 +217,12 @@ export const AppInterstitialAd: React.FC<AppInterstitialAdProps> = ({ visible, o
         }
       };
 
-      loadAd(primaryUnitId);
+      loadAd(unitId);
 
-      // 6-second safety timeout for loading the real ad. Fallback to manual ad if network is slow.
+      // 4-second safety timeout for loading the real ad. Fallback to video if AdMob has no fill.
       const loadTimeout = setTimeout(() => {
         triggerFallback();
-      }, 6000);
+      }, 4000);
 
       return () => {
         clearTimeout(loadTimeout);

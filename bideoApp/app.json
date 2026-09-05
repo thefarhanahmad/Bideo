@@ -100,7 +100,8 @@
       "expo-web-browser",
       "expo-video",
       "expo-font",
-      "react-native-compressor"
+      "react-native-compressor",
+      "./plugins/withAdmobMediation"
     ],
     "experiments": {
       "reactCompiler": false
