@@ -11,7 +11,10 @@ const path = require("path");
 dotenv.config();
 
 const app = express();
-app.set('trust proxy', true);
+app.set('trust proxy', 1);
+
+// Security middlewares
+const { apiLimiter, authLimiter, noSqlSanitizer } = require("./middlewares/security");
 
 // Route files
 const auth = require("./routes/auth");
@@ -29,9 +32,10 @@ const ads = require("./routes/ads");
 const seo = require("./routes/seo");
 
 // Middlewares
-app.use(express.json({ limit: "500mb" }));
-app.use(express.urlencoded({ extended: true, limit: "500mb" }));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
+app.use(noSqlSanitizer);
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use("/api/uploads", express.static(path.join(__dirname, "uploads")));
 
@@ -41,6 +45,7 @@ const allowedOrigins = [
   "exp://192.168.3.107:8081",
   "https://bideo-t.netlify.app",
   "https://bideo.in",
+  "https://www.bideo.in",
 ];
 
 app.use(
@@ -70,8 +75,12 @@ app.get(["/app-ads.txt", "/api/app-ads.txt"], (req, res) => {
   res.status(200).send(APP_ADS_TXT_CONTENT);
 });
 
+// Apply rate limiting
+app.use("/api", apiLimiter);
+app.use("/api/admin/login", authLimiter);
+
 // Mount routers
-app.use("/api/auth", auth);
+app.use("/api/auth", authLimiter, auth);
 app.use("/api/admin", admin);
 app.use("/api/users", users);
 app.use("/api/categories", categories);

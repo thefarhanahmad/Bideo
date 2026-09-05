@@ -83,17 +83,15 @@ exports.loginWithPhone = async (req, res, next) => {
   }
 };
 
-// @desc    Forgot Password - Request OTP (Dummy 1234)
+// @desc    Forgot Password - Request instructions
 // @route   POST /api/auth/forgot-password
 // @access  Public
 exports.forgotPassword = async (req, res, next) => {
   try {
-    const phone = cleanPhone(req.body.phone);
-    const user = await User.findOne({ phone });
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'No account found with this phone number' });
-    }
-    res.status(200).json({ success: true, message: 'OTP sent to phone' });
+    return res.status(200).json({
+      success: true,
+      message: 'To reset your password, please contact official support at bideoapps@gmail.com with your registered details.',
+    });
   } catch (err) {
     next(err);
   }
@@ -104,18 +102,10 @@ exports.forgotPassword = async (req, res, next) => {
 // @access  Public
 exports.resetPassword = async (req, res, next) => {
   try {
-    const phone = cleanPhone(req.body.phone);
-    const { otp, password } = req.body;
-    if (otp !== '1234') {
-      return res.status(400).json({ success: false, message: 'Invalid OTP. Please enter 1234' });
-    }
-    const user = await User.findOne({ phone });
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'No account found with this phone number' });
-    }
-    user.password = password;
-    await user.save();
-    res.status(200).json({ success: true, message: 'Password reset successfully' });
+    return res.status(403).json({
+      success: false,
+      message: 'Direct password reset via API is disabled for account security. Please contact official Bideo support at bideoapps@gmail.com.',
+    });
   } catch (err) {
     next(err);
   }

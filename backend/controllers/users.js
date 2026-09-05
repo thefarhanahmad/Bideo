@@ -1043,21 +1043,13 @@ exports.requestWithdrawal = async (req, res, next) => {
       });
     }
 
-    const user = await User.findById(userId);
-    if (!user || (user.walletBalance || 0) < withdrawAmount) {
-      return res.status(400).json({
-        success: false,
-        message: `Insufficient wallet balance. Available: ₹${(user?.walletBalance || 0).toFixed(2)}`,
-      });
-    }
-
     // Prepare details with fallback to approved application details
     const finalPayoutDetails = {
       upiId: payoutMethod === 'upi' ? (payoutDetails?.upiId || application.upiId) : null,
       bankName: payoutMethod === 'bank' ? (payoutDetails?.bankName || application.bankDetails?.bankName) : null,
       accountNumber: payoutMethod === 'bank' ? (payoutDetails?.accountNumber || application.bankDetails?.accountNumber) : null,
       ifscCode: payoutMethod === 'bank' ? (payoutDetails?.ifscCode || application.bankDetails?.ifscCode) : null,
-      holderName: application.name || user.name,
+      holderName: application.name || req.user.name,
     };
 
     if (payoutMethod === 'upi' && !finalPayoutDetails.upiId) {
@@ -1067,23 +1059,41 @@ exports.requestWithdrawal = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Please provide valid Bank Account & IFSC code' });
     }
 
-    // Deduct balance and create withdrawal request
-    user.walletBalance = Math.max(0, (user.walletBalance || 0) - withdrawAmount);
-    await user.save();
+    // Atomically deduct wallet balance only if sufficient balance is available (prevents race condition / double-spending)
+    const updatedUser = await User.findOneAndUpdate(
+      { _id: userId, walletBalance: { $gte: withdrawAmount } },
+      { $inc: { walletBalance: -withdrawAmount } },
+      { new: true }
+    );
 
-    const withdrawal = await WithdrawalRequest.create({
-      user: userId,
-      amount: withdrawAmount,
-      payoutMethod,
-      payoutDetails: finalPayoutDetails,
-      status: 'pending',
-    });
+    if (!updatedUser) {
+      const currentUser = await User.findById(userId).select('walletBalance');
+      return res.status(400).json({
+        success: false,
+        message: `Insufficient wallet balance. Available: ₹${(currentUser?.walletBalance || 0).toFixed(2)}`,
+      });
+    }
+
+    let withdrawal;
+    try {
+      withdrawal = await WithdrawalRequest.create({
+        user: userId,
+        amount: withdrawAmount,
+        payoutMethod,
+        payoutDetails: finalPayoutDetails,
+        status: 'pending',
+      });
+    } catch (createErr) {
+      // Rollback deducted balance if withdrawal creation fails
+      await User.findByIdAndUpdate(userId, { $inc: { walletBalance: withdrawAmount } });
+      throw createErr;
+    }
 
     res.status(201).json({
       success: true,
       message: 'Withdrawal request submitted successfully! Funds will be transferred within 24-48 hours.',
       data: withdrawal,
-      walletBalance: user.walletBalance,
+      walletBalance: updatedUser.walletBalance,
     });
   } catch (err) {
     next(err);

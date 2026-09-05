@@ -1,6 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 
+const ALLOWED_VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.mkv', '.webm', '.avi']);
+const ALLOWED_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+
 /**
  * Saves a uploaded file locally under the uploads directory.
  * Videos go to 'uploads/videos' and images go to 'uploads/images'.
@@ -18,7 +21,6 @@ const saveLocalFile = (req, file, type) => {
   const isVideo = type === 'video' || (file.mimetype && file.mimetype.startsWith('video/'));
   const folderName = isVideo ? 'videos' : 'images';
   
-  // Target folder: C:\Users\farha\OneDrive\Desktop\TubeIndia\backend\uploads\videos or \images
   const targetDir = path.join(__dirname, '../uploads', folderName);
 
   // Auto create folder if not exist
@@ -26,10 +28,17 @@ const saveLocalFile = (req, file, type) => {
     fs.mkdirSync(targetDir, { recursive: true });
   }
 
-  // Generate unique file name
+  // Generate unique file name with strictly whitelisted extension
   const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-  const ext = path.extname(file.originalname) || (isVideo ? '.mp4' : '.jpg');
-  const filename = `${uniqueSuffix}${ext}`;
+  const rawExt = path.extname(file.originalname || '').toLowerCase();
+  let safeExt = isVideo ? '.mp4' : '.jpg';
+  if (isVideo && ALLOWED_VIDEO_EXTENSIONS.has(rawExt)) {
+    safeExt = rawExt;
+  } else if (!isVideo && ALLOWED_IMAGE_EXTENSIONS.has(rawExt)) {
+    safeExt = rawExt;
+  }
+
+  const filename = `${uniqueSuffix}${safeExt}`;
   const targetPath = path.join(targetDir, filename);
 
   try {
@@ -56,6 +65,7 @@ const saveLocalFile = (req, file, type) => {
 
 /**
  * Deletes a local file based on its public URL.
+ * Strictly verifies the path stays inside the uploads directory to prevent traversal.
  *
  * @param {string} url The public URL of the file to delete
  */
@@ -68,7 +78,14 @@ const deleteLocalFile = (url) => {
 
     // Extract relative path like 'uploads/images/filename.jpg'
     const relativePath = url.substring(uploadsIdx + 1);
-    const absolutePath = path.join(__dirname, '..', relativePath);
+    const uploadsBaseDir = path.resolve(__dirname, '../uploads');
+    const absolutePath = path.resolve(path.join(__dirname, '..', relativePath));
+
+    // Security check: Target path must be strictly within uploads directory
+    if (!absolutePath.startsWith(uploadsBaseDir)) {
+      console.warn(`Security alert: Path traversal attempt blocked: ${url}`);
+      return;
+    }
 
     if (fs.existsSync(absolutePath)) {
       fs.unlinkSync(absolutePath);
