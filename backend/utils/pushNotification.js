@@ -1,4 +1,3 @@
-const axios = require('axios');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const Video = require('../models/Video');
@@ -45,17 +44,21 @@ async function sendPushNotification({ recipientId, title, body, data = {} }) {
       channelId: 'default',
     }));
 
-    const response = await axios.post(EXPO_PUSH_URL, messages, {
+    const response = await fetch(EXPO_PUSH_URL, {
+      method: 'POST',
       headers: {
         Accept: 'application/json',
         'Accept-Encoding': 'gzip, deflate',
         'Content-Type': 'application/json',
       },
-      timeout: 8000,
+      body: JSON.stringify(messages),
+      signal: AbortSignal.timeout(8000),
     });
 
+    const resJson = await response.json().catch(() => null);
+
     // Cleanup expired tokens if Expo reports DeviceNotRegistered
-    const tickets = response.data?.data;
+    const tickets = resJson?.data;
     if (Array.isArray(tickets)) {
       const tokensToRemove = [];
       tickets.forEach((ticket, idx) => {
