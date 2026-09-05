@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import Modal from "../components/Modal";
 import ConfirmModal from "../components/ConfirmModal";
 import DataTableToolbar from "../components/DataTableToolbar";
@@ -48,6 +48,16 @@ const getVideoMetadata = (file) => {
 
 const Videos = () => {
   const [videos, setVideos] = useState([]);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [filterCounts, setFilterCounts] = useState({
+    all: 0,
+    long: 0,
+    shorts: 0,
+    public: 0,
+    private: 0,
+    pinned: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -74,12 +84,21 @@ const Videos = () => {
 
   const API = API_URL;
 
-  const fetchVideos = async () => {
+  const fetchVideos = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const token = localStorage.getItem("admin_token");
-      const res = await fetch(API + "/api/videos?all=true&limit=3000&sort=latest", {
+      const url = new URL(`${API}/api/videos`);
+      url.searchParams.set("page", page);
+      url.searchParams.set("limit", limit);
+      url.searchParams.set("filter", filter);
+      url.searchParams.set("sort", "latest");
+      if (search && search.trim()) {
+        url.searchParams.set("search", search.trim());
+      }
+
+      const res = await fetch(url.toString(), {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -88,11 +107,23 @@ const Videos = () => {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to fetch videos");
       setVideos(data.data || []);
+      setTotalItems(data.total || 0);
+      setTotalPages(data.pages || 1);
+      if (data.filterCounts) {
+        setFilterCounts(data.filterCounts);
+      }
     } catch (err) {
       setError(err.message);
     }
     setLoading(false);
-  };
+  }, [API, page, limit, filter, search]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchVideos();
+    }, search ? 300 : 0);
+    return () => clearTimeout(timer);
+  }, [fetchVideos, search]);
 
   const fetchCategories = async () => {
     try {
@@ -111,9 +142,10 @@ const Videos = () => {
   };
 
   const fetchUsers = async () => {
+    if (users.length > 0) return;
     try {
       const token = localStorage.getItem("admin_token");
-      const res = await fetch(API + "/api/users?simple=true", {
+      const res = await fetch(API + "/api/users?simple=true&limit=100", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -127,10 +159,14 @@ const Videos = () => {
   };
 
   useEffect(() => {
-    fetchVideos();
     fetchCategories();
-    fetchUsers();
   }, []);
+
+  useEffect(() => {
+    if (showAdd || showEdit) {
+      fetchUsers();
+    }
+  }, [showAdd, showEdit]);
 
   const handleUpload = async (formData) => {
     const token = localStorage.getItem("admin_token");
@@ -232,141 +268,6 @@ const Videos = () => {
     return `${formatSize(orig)} → ${formatSize(comp)} (${pct}% saved)`;
   };
 
-  // Search & Filter Logic
-  const { filteredVideos, filterCounts } = useMemo(() => {
-    const counts = {
-      all: videos.length,
-      long: 0,
-      shorts: 0,
-      public: 0,
-      private: 0,
-      pinned: 0,
-    };
-
-    videos.forEach((v) => {
-      if (v.isShort) counts.shorts += 1;
-      else counts.long += 1;
-      if (v.visibility === "public" || !v.visibility) counts.public += 1;
-      if (v.visibility === "private" || v.visibility === "unlisted") counts.private += 1;
-      if (v.isPinned) counts.pinned += 1;
-    });
-
-    const searchTrimmed = (search || "").trim().toLowerCase();
-    const rawTerms = searchTrimmed
-      ? searchTrimmed.split(/[\s,+#|/]+/).map((t) => t.replace(/^[#@]+/, "").trim()).filter(Boolean)
-      : [];
-    const searchTerms = Array.from(new Set(rawTerms));
-    const phrase = searchTrimmed.replace(/^[#@]+/, "").trim();
-
-    // 1. Tab / Category Filter
-    const tabFiltered = videos.filter((v) => {
-      if (filter === "long" && v.isShort) return false;
-      if (filter === "shorts" && !v.isShort) return false;
-      if (filter === "public" && v.visibility !== "public" && v.visibility) return false;
-      if (filter === "private" && v.visibility !== "private" && v.visibility !== "unlisted") return false;
-      if (filter === "pinned" && !v.isPinned) return false;
-      return true;
-    });
-
-    if (searchTerms.length === 0 && !phrase) {
-      return { filteredVideos: tabFiltered, filterCounts: counts };
-    }
-
-    // 2. Score every video against phrase and keyword terms
-    const scored = [];
-    for (const v of tabFiltered) {
-      const title = (v.title || "").toLowerCase();
-      const desc = (v.description || "").toLowerCase();
-      const ownerName = (v.owner?.name || "").toLowerCase();
-      const channel = (v.owner?.channelName || "").toLowerCase();
-      const ownerEmail = (v.owner?.email || "").toLowerCase();
-      const ownerPhone = (v.owner?.phone || "").toLowerCase();
-      const catName = (v.category?.name || v.category || "").toLowerCase();
-      const id = (v._id || v.id || "").toLowerCase();
-
-      const rawTags = Array.isArray(v.tags) ? v.tags : (v.tags || "").split(",");
-      const tags = rawTags.map((t) => (typeof t === "string" ? t.trim().toLowerCase() : "")).filter(Boolean);
-      const tagsStr = tags.join(" ");
-
-      let score = 0;
-
-      // Exact ID
-      if (id && id === phrase) score += 10000;
-
-      // Title match
-      if (title === phrase) score += 3000;
-      else if (title.startsWith(phrase)) score += 1500;
-      else if (title.includes(phrase)) score += 800;
-
-      // Tags match
-      if (tags.includes(phrase)) score += 1200;
-      else if (tagsStr.includes(phrase)) score += 600;
-
-      // Channel / Creator match
-      if (channel === phrase || ownerName === phrase) score += 1000;
-      else if (channel.includes(phrase) || ownerName.includes(phrase)) score += 500;
-
-      // Description match
-      if (desc.includes(phrase)) score += 200;
-
-      // Category match
-      if (catName.includes(phrase)) score += 150;
-
-      // Check individual keyword terms
-      let termsMatched = 0;
-      for (const term of searchTerms) {
-        let matched = false;
-        if (title.includes(term)) {
-          score += 250;
-          matched = true;
-        }
-        if (tags.some((t) => t.includes(term) || term.includes(t))) {
-          score += 200;
-          matched = true;
-        }
-        if (channel.includes(term) || ownerName.includes(term)) {
-          score += 180;
-          matched = true;
-        }
-        if (ownerEmail.includes(term) || ownerPhone.includes(term)) {
-          score += 150;
-          matched = true;
-        }
-        if (desc.includes(term)) {
-          score += 50;
-          matched = true;
-        }
-        if (catName.includes(term)) {
-          score += 40;
-          matched = true;
-        }
-        if (matched) termsMatched++;
-      }
-
-      // Bonus if all terms matched
-      if (searchTerms.length > 1 && termsMatched === searchTerms.length) {
-        score += 500;
-      }
-
-      if (score > 0) {
-        scored.push({ video: v, score });
-      }
-    }
-
-    // Sort descending by relevance score
-    scored.sort((a, b) => b.score - a.score);
-    const resultVideos = scored.map((s) => s.video);
-
-    return { filteredVideos: resultVideos, filterCounts: counts };
-  }, [videos, filter, search]);
-
-  // Paginate filtered results
-  const totalPages = Math.max(1, Math.ceil(filteredVideos.length / limit));
-  const paginatedVideos = useMemo(() => {
-    const startIndex = (page - 1) * limit;
-    return filteredVideos.slice(startIndex, startIndex + limit);
-  }, [filteredVideos, page, limit]);
-
   const filterOptions = [
     { label: "All Videos", value: "all", count: filterCounts.all },
     { label: "Long Form", value: "long", count: filterCounts.long },
@@ -396,13 +297,13 @@ const Videos = () => {
         filter={filter}
         onFilterChange={setFilter}
         filters={filterOptions}
-        totalCount={videos.length}
-        filteredCount={filteredVideos.length}
+        totalCount={filterCounts.all || totalItems}
+        filteredCount={totalItems}
         actions={
           <div className="flex items-center gap-2">
             <button
               onClick={() => openBoostModal(null)}
-              disabled={videos.length === 0}
+              disabled={totalItems === 0}
               className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 px-3.5 py-2 text-xs sm:text-sm font-semibold text-white shadow-xs transition-all hover:-translate-y-0.5 hover:bg-purple-700 disabled:opacity-50"
               title="Add +100 to +300 random views and matching ~7% likes to all uploaded videos"
             >
@@ -443,7 +344,7 @@ const Videos = () => {
                 </tr>
               </thead>
               <tbody>
-                {paginatedVideos.map((v) => (
+                {videos.map((v) => (
                   <tr key={v._id} className="border-t border-line align-middle hover:bg-surface/50 transition-colors">
                     <td className="p-4">
                       <div className="flex items-center gap-3">
@@ -566,7 +467,7 @@ const Videos = () => {
                     </td>
                   </tr>
                 ))}
-                {paginatedVideos.length === 0 && (
+                {videos.length === 0 && (
                   <tr>
                     <td colSpan="8" className="p-8 text-center text-muted">
                       No matching videos found.
@@ -581,7 +482,7 @@ const Videos = () => {
           <Pagination
             currentPage={page}
             totalPages={totalPages}
-            totalItems={filteredVideos.length}
+            totalItems={totalItems}
             pageSize={limit}
             onPageChange={setPage}
             onPageSizeChange={setLimit}
@@ -597,7 +498,7 @@ const Videos = () => {
         >
           <BoostModalForm
             target={boostTarget}
-            totalVideosCount={videos.length}
+            totalVideosCount={filterCounts.all || totalItems}
             onSuccess={() => {
               fetchVideos();
             }}

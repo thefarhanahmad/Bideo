@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import DataTableToolbar from "../components/DataTableToolbar";
 import Pagination from "../components/Pagination";
 import LoadingSkeleton from "../components/LoadingSkeleton";
@@ -14,33 +14,58 @@ const resolveMediaUrl = (url) => {
 const Reports = () => {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [filterCounts, setFilterCounts] = useState({
+    all: 0,
+    open: 0,
+    reviewed: 0,
+    actioned: 0,
+    dismissed: 0,
+  });
   const API = API_URL;
 
   // URL-synced search, filter, and pagination
   const { search, setSearch, filter, setFilter, page, setPage, limit, setLimit } =
     useTableParams({ defaultFilter: "all", defaultLimit: 10 });
 
-  const fetchReports = async () => {
-    setLoading(true);
-    try {
-      const token = localStorage.getItem("admin_token");
-      const res = await fetch(API + "/api/admin/reports/videos", {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        credentials: "include",
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to load reports");
-      setReports(data.data || []);
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const fetchReports = useCallback(
+    async (currentPage = page, currentLimit = limit, currentFilter = filter, currentSearch = search) => {
+      setLoading(true);
+      try {
+        const token = localStorage.getItem("admin_token");
+        const params = new URLSearchParams({
+          page: currentPage,
+          limit: currentLimit,
+        });
+        if (currentFilter && currentFilter !== "all") params.append("status", currentFilter);
+        if (currentSearch && currentSearch.trim()) params.append("search", currentSearch.trim());
+
+        const res = await fetch(`${API}/api/admin/reports/videos?${params.toString()}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          credentials: "include",
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || "Failed to load reports");
+        setReports(data.data || []);
+        setTotalItems(data.total || 0);
+        setTotalPages(data.pages || 1);
+        if (data.filterCounts) setFilterCounts(data.filterCounts);
+      } catch (err) {
+        alert(err.message);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [API, page, limit, filter, search]
+  );
 
   useEffect(() => {
-    fetchReports();
-  }, []);
+    const timer = setTimeout(() => {
+      fetchReports(page, limit, filter, search);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [fetchReports, page, limit, filter, search]);
 
   const updateStatus = async (id, nextStatus) => {
     try {
@@ -56,7 +81,7 @@ const Reports = () => {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Update failed");
-      fetchReports();
+      fetchReports(page, limit, filter, search);
     } catch (err) {
       alert(err.message);
     }
@@ -73,7 +98,7 @@ const Reports = () => {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Delete failed");
-      fetchReports();
+      fetchReports(page, limit, filter, search);
     } catch (err) {
       alert(err.message);
     }
@@ -88,51 +113,6 @@ const Reports = () => {
     };
     return map[s] || "bg-surface text-muted border border-line";
   };
-
-  // Search & Filter Logic
-  const { filteredReports, filterCounts } = useMemo(() => {
-    const counts = {
-      all: reports.length,
-      open: 0,
-      reviewed: 0,
-      actioned: 0,
-      dismissed: 0,
-    };
-
-    reports.forEach((r) => {
-      if (counts[r.status] !== undefined) counts[r.status] += 1;
-    });
-
-    const searchTrimmed = (search || "").trim().toLowerCase();
-    const searchTerms = searchTrimmed ? searchTrimmed.split(/\s+/).filter(Boolean) : [];
-
-    const filtered = reports.filter((r) => {
-      // 1. Filter status
-      if (filter !== "all" && r.status !== filter) return false;
-
-      // 2. Search
-      if (searchTerms.length === 0) return true;
-      const title = (r.video?.title || "").toLowerCase();
-      const owner = (r.video?.owner?.name || r.video?.owner?.channelName || "").toLowerCase();
-      const reporter = (r.reporter?.name || r.reporter?.channelName || r.reporter?.email || r.reporter?.phone || "").toLowerCase();
-      const reason = (r.reason || "").toLowerCase();
-      const adminNote = (r.adminNote || "").toLowerCase();
-      const status = (r.status || "").toLowerCase();
-      const id = (r._id || r.id || "").toLowerCase();
-      const videoId = (r.video?._id || r.video?.id || "").toLowerCase();
-
-      const fullText = `${title} ${owner} ${reporter} ${reason} ${adminNote} ${status} ${id} ${videoId}`;
-      return searchTerms.every((term) => fullText.includes(term.replace(/^@/, "")));
-    });
-
-    return { filteredReports: filtered, filterCounts: counts };
-  }, [reports, filter, search]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredReports.length / limit));
-  const paginatedReports = useMemo(() => {
-    const startIndex = (page - 1) * limit;
-    return filteredReports.slice(startIndex, startIndex + limit);
-  }, [filteredReports, page, limit]);
 
   const filterOptions = [
     { label: "All Reports", value: "all", count: filterCounts.all },
@@ -162,8 +142,8 @@ const Reports = () => {
         filter={filter}
         onFilterChange={setFilter}
         filters={filterOptions}
-        totalCount={reports.length}
-        filteredCount={filteredReports.length}
+        totalCount={filterCounts.all || totalItems}
+        filteredCount={totalItems}
       />
 
       {loading ? (
@@ -182,7 +162,7 @@ const Reports = () => {
                 </tr>
               </thead>
               <tbody>
-                {paginatedReports.map((report) => (
+                {reports.map((report) => (
                   <tr
                     key={report._id}
                     className="border-t border-line align-top hover:bg-surface/50 transition-colors"
@@ -258,7 +238,7 @@ const Reports = () => {
                     </td>
                   </tr>
                 ))}
-                {paginatedReports.length === 0 && (
+                {reports.length === 0 && (
                   <tr>
                     <td className="p-8 text-center text-muted" colSpan="5">
                       No matching reports found.
@@ -273,7 +253,7 @@ const Reports = () => {
           <Pagination
             currentPage={page}
             totalPages={totalPages}
-            totalItems={filteredReports.length}
+            totalItems={totalItems}
             pageSize={limit}
             onPageChange={setPage}
             onPageSizeChange={setLimit}

@@ -145,11 +145,24 @@ const calculateAnalyticsTrends = async () => {
   };
 };
 
+let cachedStats = null;
+let cachedStatsTime = 0;
+const STATS_CACHE_TTL_MS = 60 * 1000; // 60s cache
+
 // @desc    Aggregated stats for the admin dashboard overview
 // @route   GET /api/admin/stats
 // @access  Private/Admin
 exports.getStats = async (req, res, next) => {
   try {
+    const forceRefresh = req.query.refresh === 'true';
+    if (!forceRefresh && cachedStats && Date.now() - cachedStatsTime < STATS_CACHE_TTL_MS) {
+      return res.status(200).json({
+        success: true,
+        cached: true,
+        data: cachedStats,
+      });
+    }
+
     const [
       usersTotal,
       adminsTotal,
@@ -194,31 +207,36 @@ exports.getStats = async (req, res, next) => {
     const totalViews = viewsAgg[0] ? viewsAgg[0].total : 0;
     const longVideosTotal = Math.max(0, videosTotal - shortsTotal);
 
+    const statsPayload = {
+      users: {
+        total: usersTotal,
+        admins: adminsTotal,
+        monetized: monetizedTotal,
+        scheduledDeletions: scheduledDeletionsTotal,
+        regular: Math.max(0, usersTotal - adminsTotal - monetizedTotal),
+      },
+      videos: {
+        total: videosTotal,
+        longVideos: longVideosTotal,
+        shorts: shortsTotal,
+        ...visibility,
+      },
+      categories: { total: categoriesTotal },
+      reports: { total: reportsTotal, open: reportsOpen },
+      totalViews,
+      avgViewsPerVideo: videosTotal > 0 ? Math.round(totalViews / videosTotal) : 0,
+      userTrends: trends.userTrends,
+      videoTrends: trends.videoTrends,
+      recentVideos,
+      recentUsers,
+    };
+
+    cachedStats = statsPayload;
+    cachedStatsTime = Date.now();
+
     res.status(200).json({
       success: true,
-      data: {
-        users: {
-          total: usersTotal,
-          admins: adminsTotal,
-          monetized: monetizedTotal,
-          scheduledDeletions: scheduledDeletionsTotal,
-          regular: Math.max(0, usersTotal - adminsTotal - monetizedTotal)
-        },
-        videos: {
-          total: videosTotal,
-          longVideos: longVideosTotal,
-          shorts: shortsTotal,
-          ...visibility
-        },
-        categories: { total: categoriesTotal },
-        reports: { total: reportsTotal, open: reportsOpen },
-        totalViews,
-        avgViewsPerVideo: videosTotal > 0 ? Math.round(totalViews / videosTotal) : 0,
-        userTrends: trends.userTrends,
-        videoTrends: trends.videoTrends,
-        recentVideos,
-        recentUsers,
-      },
+      data: statsPayload,
     });
   } catch (err) {
     next(err);
@@ -261,17 +279,74 @@ exports.loginAdmin = async (req, res, next) => {
 exports.getVideoReports = async (req, res, next) => {
   try {
     const query = {};
-    if (req.query.status) query.status = req.query.status;
-    const reports = await VideoReport.find(query)
-      .populate({
-        path: 'video',
-        select: 'title thumbnail videoUrl views visibility owner',
-        populate: { path: 'owner', select: 'name channelName avatar' },
-      })
-      .populate('reporter', 'name channelName avatar phone email')
-      .sort('-createdAt')
-      .lean();
-    res.status(200).json({ success: true, count: reports.length, data: reports });
+    if (req.query.status && req.query.status !== 'all') {
+      query.status = req.query.status;
+    }
+
+    const search = (req.query.search || '').trim();
+    if (search) {
+      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escaped, 'i');
+
+      const [matchingVideos, matchingUsers] = await Promise.all([
+        Video.find({ title: regex }).select('_id').limit(50),
+        User.find({
+          $or: [{ name: regex }, { channelName: regex }, { phone: regex }, { email: regex }],
+        })
+          .select('_id')
+          .limit(50),
+      ]);
+
+      query.$or = [
+        { reason: regex },
+        { adminNote: regex },
+        { video: { $in: matchingVideos.map((v) => v._id) } },
+        { reporter: { $in: matchingUsers.map((u) => u._id) } },
+      ];
+    }
+
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const fetchAll = req.query.all === 'true';
+    const limit = fetchAll ? 10000 : Math.max(1, Math.min(parseInt(req.query.limit, 10) || 10, 100));
+    const skip = (page - 1) * limit;
+
+    const [reports, total, countsAgg] = await Promise.all([
+      VideoReport.find(query)
+        .populate({
+          path: 'video',
+          select: 'title thumbnail videoUrl views visibility owner',
+          populate: { path: 'owner', select: 'name channelName avatar' },
+        })
+        .populate('reporter', 'name channelName avatar phone email')
+        .sort('-createdAt')
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      VideoReport.countDocuments(query),
+      Promise.all([
+        VideoReport.countDocuments({}),
+        VideoReport.countDocuments({ status: 'open' }),
+        VideoReport.countDocuments({ status: 'reviewed' }),
+        VideoReport.countDocuments({ status: 'actioned' }),
+        VideoReport.countDocuments({ status: 'dismissed' }),
+      ]),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      count: reports.length,
+      total,
+      page,
+      pages: Math.ceil(total / limit) || 1,
+      filterCounts: {
+        all: countsAgg[0],
+        open: countsAgg[1],
+        reviewed: countsAgg[2],
+        actioned: countsAgg[3],
+        dismissed: countsAgg[4],
+      },
+      data: reports,
+    });
   } catch (err) {
     next(err);
   }
@@ -303,28 +378,156 @@ exports.updateVideoReport = async (req, res, next) => {
 // @access  Private/Admin
 exports.getPendingVideoReviews = async (req, res, next) => {
   try {
-    const reviews = await VideoMonetizationReview.find({ status: 'pending' })
-      .populate('video', 'title thumbnail videoUrl views duration isShort createdAt')
-      .populate('user', 'name channelName avatar email phone')
-      .sort('-createdAt')
-      .lean();
+    const search = (req.query.search || '').trim();
 
-    // Group reviews by user ID
+    // 1. Find all users who currently have at least one pending review
+    const pendingUserIds = await VideoMonetizationReview.distinct('user', { status: 'pending' });
+
+    if (!pendingUserIds || pendingUserIds.length === 0) {
+      const [pendingAppsCount, approvedMonetizedCount] = await Promise.all([
+        MonetizationApplication.countDocuments({ status: 'pending' }),
+        MonetizationApplication.countDocuments({ status: 'approved' }),
+      ]);
+      return res.status(200).json({
+        success: true,
+        count: 0,
+        data: [],
+        counts: {
+          videos: 0,
+          applications: pendingAppsCount,
+          monetized: approvedMonetizedCount,
+        },
+      });
+    }
+
+    // 2. Count passed reviews for each of these users
+    const passedCountsByUser = await VideoMonetizationReview.aggregate([
+      {
+        $match: {
+          user: { $in: pendingUserIds },
+          status: 'passed',
+        },
+      },
+      {
+        $group: {
+          _id: '$user',
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const passedMap = new Map();
+    passedCountsByUser.forEach((item) => {
+      passedMap.set(item._id.toString(), item.count);
+    });
+
+    // 3. Filter out creators who already have 3 or more passed videos (Step 1 complete)
+    const activeUserIds = pendingUserIds.filter((uid) => {
+      const passed = passedMap.get(uid.toString()) || 0;
+      return passed < 3;
+    });
+
+    if (activeUserIds.length === 0) {
+      const [pendingAppsCount, approvedMonetizedCount] = await Promise.all([
+        MonetizationApplication.countDocuments({ status: 'pending' }),
+        MonetizationApplication.countDocuments({ status: 'approved' }),
+      ]);
+      return res.status(200).json({
+        success: true,
+        count: 0,
+        data: [],
+        counts: {
+          videos: 0,
+          applications: pendingAppsCount,
+          monetized: approvedMonetizedCount,
+        },
+      });
+    }
+
+    // 4. Build query for active users (include both pending and passed so admin sees already passed videos on top)
+    const reviewQuery = {
+      user: { $in: activeUserIds },
+      status: { $in: ['pending', 'passed'] },
+    };
+
+    if (search) {
+      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escaped, 'i');
+
+      const [matchingVideos, matchingUsers] = await Promise.all([
+        Video.find({ title: regex }).select('_id').limit(50),
+        User.find({
+          $or: [{ name: regex }, { channelName: regex }, { phone: regex }, { email: regex }],
+        })
+          .select('_id')
+          .limit(50),
+      ]);
+
+      reviewQuery.$or = [
+        { video: { $in: matchingVideos.map((v) => v._id) } },
+        { user: { $in: matchingUsers.map((u) => u._id) } },
+      ];
+    }
+
+    const [reviews, pendingAppsCount, approvedMonetizedCount] = await Promise.all([
+      VideoMonetizationReview.find(reviewQuery)
+        .populate('video', 'title thumbnail videoUrl views duration isShort createdAt')
+        .populate('user', 'name channelName avatar email phone')
+        .lean(),
+      MonetizationApplication.countDocuments({ status: 'pending' }),
+      MonetizationApplication.countDocuments({ status: 'approved' }),
+    ]);
+
+    // 5. Group reviews by user ID
     const userGroupsMap = {};
     for (const r of reviews) {
       if (!r.user) continue;
+      // If the referenced video was deleted, clean up this orphan review
+      if (!r.video) {
+        VideoMonetizationReview.findByIdAndDelete(r._id).exec();
+        continue;
+      }
       const userId = (r.user._id || r.user.id || r.user).toString();
       if (!userGroupsMap[userId]) {
         userGroupsMap[userId] = {
           user: r.user,
-          reviews: []
+          passedCount: 0,
+          pendingCount: 0,
+          reviews: [],
         };
+      }
+      if (r.status === 'passed') {
+        userGroupsMap[userId].passedCount += 1;
+      } else if (r.status === 'pending') {
+        userGroupsMap[userId].pendingCount += 1;
       }
       userGroupsMap[userId].reviews.push(r);
     }
 
+    // 6. Sort reviews for each user: 'passed' ON TOP, then 'pending', then newest first
+    const statusRank = { passed: 0, pending: 1 };
+    let totalPendingInQueue = 0;
+    for (const userId in userGroupsMap) {
+      userGroupsMap[userId].reviews.sort((a, b) => {
+        const rankA = statusRank[a.status] !== undefined ? statusRank[a.status] : 2;
+        const rankB = statusRank[b.status] !== undefined ? statusRank[b.status] : 2;
+        if (rankA !== rankB) return rankA - rankB;
+        return new Date(b.createdAt) - new Date(a.createdAt);
+      });
+      totalPendingInQueue += userGroupsMap[userId].pendingCount;
+    }
+
     const groupedData = Object.values(userGroupsMap);
-    res.status(200).json({ success: true, count: groupedData.length, data: groupedData });
+    res.status(200).json({
+      success: true,
+      count: groupedData.length,
+      data: groupedData,
+      counts: {
+        videos: totalPendingInQueue,
+        applications: pendingAppsCount,
+        monetized: approvedMonetizedCount,
+      },
+    });
   } catch (err) {
     next(err);
   }
@@ -360,11 +563,62 @@ exports.getMonetizationApplications = async (req, res, next) => {
   try {
     const status = req.query.status || 'pending';
     const query = status === 'all' ? {} : { status };
-    const applications = await MonetizationApplication.find(query)
-      .populate('user', 'name channelName avatar email phone followersCount createdAt')
-      .sort(status === 'approved' ? '-updatedAt' : '-createdAt')
-      .lean();
-    res.status(200).json({ success: true, count: applications.length, data: applications });
+
+    const search = (req.query.search || '').trim();
+    if (search) {
+      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escaped, 'i');
+
+      const matchingUsers = await User.find({
+        $or: [{ name: regex }, { channelName: regex }, { email: regex }, { phone: regex }],
+      })
+        .select('_id')
+        .limit(100);
+
+      query.$or = [
+        { user: { $in: matchingUsers.map((u) => u._id) } },
+        { name: regex },
+        { phone: regex },
+        { upiId: regex },
+        { adharNumber: regex },
+        { 'bankDetails.bankName': regex },
+        { 'bankDetails.accountNumber': regex },
+        { 'bankDetails.ifscCode': regex },
+      ];
+    }
+
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const fetchAll = req.query.all === 'true';
+    const limit = fetchAll ? 10000 : Math.max(1, Math.min(parseInt(req.query.limit, 10) || 10, 100));
+    const skip = (page - 1) * limit;
+
+    const [applications, total, pendingAppsCount, approvedMonetizedCount, pendingReviewsCount] =
+      await Promise.all([
+        MonetizationApplication.find(query)
+          .populate('user', 'name channelName avatar email phone followersCount createdAt')
+          .sort(status === 'approved' ? '-updatedAt' : '-createdAt')
+          .skip(skip)
+          .limit(limit)
+          .lean(),
+        MonetizationApplication.countDocuments(query),
+        MonetizationApplication.countDocuments({ status: 'pending' }),
+        MonetizationApplication.countDocuments({ status: 'approved' }),
+        VideoMonetizationReview.countDocuments({ status: 'pending' }),
+      ]);
+
+    res.status(200).json({
+      success: true,
+      count: applications.length,
+      total,
+      page,
+      pages: Math.ceil(total / limit) || 1,
+      counts: {
+        videos: pendingReviewsCount,
+        applications: pendingAppsCount,
+        monetized: approvedMonetizedCount,
+      },
+      data: applications,
+    });
   } catch (err) {
     next(err);
   }
@@ -400,11 +654,88 @@ exports.getWithdrawals = async (req, res, next) => {
   try {
     const status = req.query.status || 'all';
     const query = status === 'all' ? {} : { status };
-    const withdrawals = await WithdrawalRequest.find(query)
-      .populate('user', 'name channelName avatar email phone walletBalance')
-      .sort('-createdAt')
-      .lean();
-    res.status(200).json({ success: true, count: withdrawals.length, data: withdrawals });
+
+    const search = (req.query.search || '').trim();
+    if (search) {
+      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escaped, 'i');
+
+      const matchingUsers = await User.find({
+        $or: [
+          { name: regex },
+          { email: regex },
+          { phone: regex },
+          { channelName: regex },
+        ],
+      })
+        .select('_id')
+        .limit(100);
+
+      const userIds = matchingUsers.map((u) => u._id);
+      query.$or = [
+        { user: { $in: userIds } },
+        { 'payoutDetails.holderName': regex },
+        { 'payoutDetails.upiId': regex },
+        { 'payoutDetails.bankName': regex },
+        { 'payoutDetails.accountNumber': regex },
+        { transactionId: regex },
+      ];
+    }
+
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const fetchAll = req.query.all === 'true';
+    const limit = fetchAll ? 10000 : Math.max(1, Math.min(parseInt(req.query.limit, 10) || 10, 100));
+    const skip = (page - 1) * limit;
+
+    const [withdrawals, total, countsAgg, amountAgg] = await Promise.all([
+      WithdrawalRequest.find(query)
+        .populate('user', 'name channelName avatar email phone walletBalance')
+        .sort('-createdAt')
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      WithdrawalRequest.countDocuments(query),
+      Promise.all([
+        WithdrawalRequest.countDocuments({}),
+        WithdrawalRequest.countDocuments({ status: 'pending' }),
+        WithdrawalRequest.countDocuments({ status: 'approved' }),
+        WithdrawalRequest.countDocuments({ status: 'rejected' }),
+      ]),
+      WithdrawalRequest.aggregate([
+        {
+          $group: {
+            _id: '$status',
+            totalAmount: { $sum: '$amount' },
+          },
+        },
+      ]),
+    ]);
+
+    let totalPendingAmount = 0;
+    let totalPaidAmount = 0;
+    amountAgg.forEach((a) => {
+      if (a._id === 'pending') totalPendingAmount = a.totalAmount;
+      if (a._id === 'approved') totalPaidAmount = a.totalAmount;
+    });
+
+    res.status(200).json({
+      success: true,
+      count: withdrawals.length,
+      total,
+      page,
+      pages: Math.ceil(total / limit) || 1,
+      filterCounts: {
+        all: countsAgg[0],
+        pending: countsAgg[1],
+        approved: countsAgg[2],
+        rejected: countsAgg[3],
+      },
+      meta: {
+        totalPendingAmount,
+        totalPaidAmount,
+      },
+      data: withdrawals,
+    });
   } catch (err) {
     next(err);
   }

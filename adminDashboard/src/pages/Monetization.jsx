@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import Modal from "../components/Modal";
 import DataTableToolbar from "../components/DataTableToolbar";
 import Pagination from "../components/Pagination";
@@ -16,6 +16,9 @@ const Monetization = () => {
   const [applications, setApplications] = useState([]);
   const [videoReviews, setVideoReviews] = useState([]);
   const [monetizedUsers, setMonetizedUsers] = useState([]);
+  const [counts, setCounts] = useState({ videos: 0, applications: 0, monetized: 0 });
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -43,44 +46,82 @@ const Monetization = () => {
 
   const API = API_URL;
 
-  const fetchData = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const token = localStorage.getItem("admin_token");
+  const fetchData = useCallback(
+    async (
+      currentTab = activeTab,
+      currentPage = page,
+      currentLimit = limit,
+      currentSearch = search
+    ) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const token = localStorage.getItem("admin_token");
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-      const [appsRes, vidsRes, monetizedRes] = await Promise.all([
-        fetch(API + "/api/admin/monetization-applications?status=pending", {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch(API + "/api/admin/videos/pending-reviews", {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch(API + "/api/admin/monetization-applications?status=approved", {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-      ]);
-
-      const appsData = await appsRes.json();
-      const vidsData = await vidsRes.json();
-      const monetizedData = await monetizedRes.json();
-
-      if (!appsRes.ok) throw new Error(appsData.message || "Failed to load applications");
-      if (!vidsRes.ok) throw new Error(vidsData.message || "Failed to load video reviews");
-      if (!monetizedRes.ok) throw new Error(monetizedData.message || "Failed to load monetized creators");
-
-      setApplications(appsData.data || []);
-      setVideoReviews(vidsData.data || []);
-      setMonetizedUsers(monetizedData.data || []);
-    } catch (err) {
-      setError(err.message);
-    }
-    setLoading(false);
-  };
+        if (currentTab === "videos") {
+          const params = new URLSearchParams();
+          if (currentSearch && currentSearch.trim()) params.append("search", currentSearch.trim());
+          const res = await fetch(`${API}/api/admin/videos/pending-reviews?${params.toString()}`, {
+            headers,
+            credentials: "include",
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.message || "Failed to load video reviews");
+          setVideoReviews(data.data || []);
+          if (data.counts) setCounts(data.counts);
+          setTotalItems(data.count || 0);
+          setTotalPages(1);
+        } else if (currentTab === "applications") {
+          const params = new URLSearchParams({
+            status: "pending",
+            page: currentPage,
+            limit: currentLimit,
+          });
+          if (currentSearch && currentSearch.trim()) params.append("search", currentSearch.trim());
+          const res = await fetch(`${API}/api/admin/monetization-applications?${params.toString()}`, {
+            headers,
+            credentials: "include",
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.message || "Failed to load applications");
+          setApplications(data.data || []);
+          if (data.counts) setCounts(data.counts);
+          setTotalItems(data.total || 0);
+          setTotalPages(data.pages || 1);
+        } else if (currentTab === "monetized") {
+          const params = new URLSearchParams({
+            status: "approved",
+            page: currentPage,
+            limit: currentLimit,
+          });
+          if (currentSearch && currentSearch.trim()) params.append("search", currentSearch.trim());
+          const res = await fetch(`${API}/api/admin/monetization-applications?${params.toString()}`, {
+            headers,
+            credentials: "include",
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.message || "Failed to load monetized creators");
+          setMonetizedUsers(data.data || []);
+          if (data.counts) setCounts(data.counts);
+          setTotalItems(data.total || 0);
+          setTotalPages(data.pages || 1);
+        }
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [API, activeTab, page, limit, search]
+  );
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    const timer = setTimeout(() => {
+      fetchData(activeTab, page, limit, search);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [fetchData, activeTab, page, limit, search]);
 
   const formatDate = (date) => {
     if (!date) return "-";
@@ -116,7 +157,7 @@ const Monetization = () => {
 
       setShowApproveApp(false);
       setSelectedApp(null);
-      await fetchData();
+      await fetchData(activeTab, page, limit, search);
     } catch (err) {
       alert(err.message);
     }
@@ -143,7 +184,7 @@ const Monetization = () => {
       setShowRejectApp(false);
       setSelectedApp(null);
       setRejectReason("");
-      await fetchData();
+      await fetchData(activeTab, page, limit, search);
     } catch (err) {
       alert(err.message);
     }
@@ -165,7 +206,7 @@ const Monetization = () => {
 
       setShowPassVideo(false);
       setSelectedVideoReview(null);
-      await fetchData();
+      await fetchData(activeTab, page, limit, search);
     } catch (err) {
       alert(err.message);
     }
@@ -192,93 +233,16 @@ const Monetization = () => {
       setShowRejectVideo(false);
       setSelectedVideoReview(null);
       setVideoRejectReason("");
-      await fetchData();
+      await fetchData(activeTab, page, limit, search);
     } catch (err) {
       alert(err.message);
     }
   };
 
-  const searchTrimmed = (search || "").trim().toLowerCase();
-  const searchTerms = useMemo(
-    () => (searchTrimmed ? searchTrimmed.split(/\s+/).filter(Boolean) : []),
-    [searchTrimmed]
-  );
-
-  // 1. Filtered Video Reviews
-  const filteredVideoReviews = useMemo(() => {
-    if (searchTerms.length === 0) return videoReviews;
-    return videoReviews.filter((group) => {
-      const userName = (group.user?.name || "").toLowerCase();
-      const channel = (group.user?.channelName || "").toLowerCase();
-      const email = (group.user?.email || "").toLowerCase();
-      const phone = (group.user?.phone || "").toLowerCase();
-      const userId = (group.user?._id || group.user?.id || "").toLowerCase();
-      const videoTitles = group.reviews.map((r) => (r.video?.title || "").toLowerCase()).join(" ");
-      const videoIds = group.reviews.map((r) => (r.video?._id || r._id || "").toLowerCase()).join(" ");
-
-      const fullText = `${userName} ${channel} ${email} ${phone} ${userId} ${videoTitles} ${videoIds}`;
-      return searchTerms.every((term) => fullText.includes(term.replace(/^@/, "")));
-    });
-  }, [videoReviews, searchTerms]);
-
-  // 2. Filtered Applications
-  const filteredApplications = useMemo(() => {
-    if (searchTerms.length === 0) return applications;
-    return applications.filter((app) => {
-      const name = (app.name || "").toLowerCase();
-      const channel = (app.user?.channelName || "").toLowerCase();
-      const email = (app.user?.email || "").toLowerCase();
-      const phone = (app.phone || "").toLowerCase();
-      const upi = (app.upiId || "").toLowerCase();
-      const adhar = (app.adharNumber || "").toLowerCase();
-      const status = (app.status || "").toLowerCase();
-      const id = (app._id || app.id || "").toLowerCase();
-
-      const fullText = `${name} ${channel} ${email} ${phone} ${upi} ${adhar} ${status} ${id}`;
-      return searchTerms.every((term) => fullText.includes(term.replace(/^@/, "")));
-    });
-  }, [applications, searchTerms]);
-
-  // 3. Filtered Monetized Users
-  const filteredMonetizedUsers = useMemo(() => {
-    if (searchTerms.length === 0) return monetizedUsers;
-    return monetizedUsers.filter((u) => {
-      const name = (u.name || "").toLowerCase();
-      const channel = (u.user?.channelName || "").toLowerCase();
-      const email = (u.user?.email || "").toLowerCase();
-      const phone = (u.phone || u.user?.phone || "").toLowerCase();
-      const upi = (u.upiId || "").toLowerCase();
-      const adhar = (u.adharNumber || "").toLowerCase();
-      const bank = (u.bankDetails?.bankName || "").toLowerCase();
-      const acc = (u.bankDetails?.accountNumber || "").toLowerCase();
-      const ifsc = (u.bankDetails?.ifscCode || "").toLowerCase();
-      const id = (u._id || u.id || u.user?._id || "").toLowerCase();
-
-      const fullText = `${name} ${channel} ${email} ${phone} ${upi} ${adhar} ${bank} ${acc} ${ifsc} ${id}`;
-      return searchTerms.every((term) => fullText.includes(term.replace(/^@/, "")));
-    });
-  }, [monetizedUsers, searchTerms]);
-
-  // Pagination for Applications
-  const totalAppPages = Math.max(1, Math.ceil(filteredApplications.length / limit));
-  const paginatedApplications = useMemo(() => {
-    const start = (page - 1) * limit;
-    return filteredApplications.slice(start, start + limit);
-  }, [filteredApplications, page, limit]);
-
-  // Pagination for Monetized Users
-  const totalMonetizedPages = Math.max(1, Math.ceil(filteredMonetizedUsers.length / limit));
-  const paginatedMonetizedUsers = useMemo(() => {
-    const start = (page - 1) * limit;
-    return filteredMonetizedUsers.slice(start, start + limit);
-  }, [filteredMonetizedUsers, page, limit]);
-
-  const totalPendingVideoCount = videoReviews.reduce((sum, g) => sum + g.reviews.length, 0);
-
   const filterOptions = [
-    { label: "Video Audits", value: "videos", count: totalPendingVideoCount },
-    { label: "Monetization Apps", value: "applications", count: applications.length },
-    { label: "Monetized Creators", value: "monetized", count: monetizedUsers.length },
+    { label: "Video Audits", value: "videos", count: counts.videos },
+    { label: "Monetization Apps", value: "applications", count: counts.applications },
+    { label: "Monetized Creators", value: "monetized", count: counts.monetized },
   ];
 
   return (
@@ -303,18 +267,12 @@ const Monetization = () => {
         filters={filterOptions}
         totalCount={
           activeTab === "videos"
-            ? totalPendingVideoCount
+            ? counts.videos
             : activeTab === "applications"
-            ? applications.length
-            : monetizedUsers.length
+            ? counts.applications
+            : counts.monetized
         }
-        filteredCount={
-          activeTab === "videos"
-            ? filteredVideoReviews.reduce((sum, g) => sum + g.reviews.length, 0)
-            : activeTab === "applications"
-            ? filteredApplications.length
-            : filteredMonetizedUsers.length
-        }
+        filteredCount={totalItems}
       />
 
       {loading ? (
@@ -326,13 +284,13 @@ const Monetization = () => {
           {/* TAB 1: Video Audits */}
           {activeTab === "videos" && (
             <div className="space-y-6">
-              {filteredVideoReviews.map((group) => (
+              {videoReviews.map((group) => (
                 <div
                   key={group.user._id}
-                  className="overflow-hidden rounded-2xl border border-line bg-white shadow-card p-4 sm:p-5"
+                  className="overflow-hidden rounded-2xl border-2 border-brand-dark bg-white shadow-card p-4 sm:p-5"
                 >
                   {/* Creator Header */}
-                  <div className="flex items-center gap-3 border-b border-line pb-4 mb-4">
+                  <div className="flex items-center gap-3 border-b border-gray-200 pb-4 mb-4">
                     <img
                       src={resolveMediaUrl(group.user?.avatar)}
                       alt="avatar"
@@ -347,8 +305,15 @@ const Monetization = () => {
                         @{group.user?.channelName || "No channel"} • {group.user?.phone || "No phone"} • {group.user?.email || "No email"}
                       </p>
                     </div>
-                    <div className="ml-auto bg-brand-50 text-brand px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border border-brand/20 shrink-0">
-                      {group.reviews.length} Pending
+                    <div className="ml-auto flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                      {group.passedCount > 0 && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 border border-emerald-200">
+                          ✓ {group.passedCount} / 3 Passed
+                        </span>
+                      )}
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-800 px-3 py-1 text-xs font-bold border border-amber-200">
+                        {group.pendingCount || group.reviews.length} In Review
+                      </span>
                     </div>
                   </div>
 
@@ -357,7 +322,11 @@ const Monetization = () => {
                     {group.reviews.map((rev) => (
                       <div
                         key={rev._id}
-                        className="flex flex-col sm:flex-row sm:items-center gap-4 rounded-xl border border-line bg-surface/30 p-3 hover:bg-surface/50 transition-colors"
+                        className={`flex flex-col sm:flex-row sm:items-center gap-4 rounded-xl border p-3 transition-colors ${
+                          rev.status === "passed"
+                            ? "border-emerald-200 bg-emerald-50/40 hover:bg-emerald-50/60"
+                            : "border-line bg-surface/30 hover:bg-surface/50"
+                        }`}
                       >
                         {rev.video ? (
                           <>
@@ -404,24 +373,32 @@ const Monetization = () => {
                               >
                                 Play Video
                               </a>
-                              <button
-                                onClick={() => {
-                                  setSelectedVideoReview(rev);
-                                  setShowPassVideo(true);
-                                }}
-                                className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors"
-                              >
-                                Pass
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setSelectedVideoReview(rev);
-                                  setShowRejectVideo(true);
-                                }}
-                                className="rounded-lg bg-red-50 border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 transition-colors"
-                              >
-                                Reject
-                              </button>
+                              {rev.status === "passed" ? (
+                                <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-100 px-3 py-1.5 text-xs font-bold text-emerald-800 border border-emerald-300">
+                                  ✓ Passed
+                                </span>
+                              ) : (
+                                <>
+                                  <button
+                                    onClick={() => {
+                                      setSelectedVideoReview(rev);
+                                      setShowPassVideo(true);
+                                    }}
+                                    className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors"
+                                  >
+                                    Pass
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setSelectedVideoReview(rev);
+                                      setShowRejectVideo(true);
+                                    }}
+                                    className="rounded-lg bg-red-50 border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 transition-colors"
+                                  >
+                                    Reject
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </>
                         ) : (
@@ -433,7 +410,7 @@ const Monetization = () => {
                 </div>
               ))}
 
-              {filteredVideoReviews.length === 0 && (
+              {videoReviews.length === 0 && (
                 <div className="rounded-2xl border border-line bg-white p-12 text-center text-muted shadow-card">
                   <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-full bg-emerald-50 text-emerald-600">
                     ✓
@@ -462,7 +439,7 @@ const Monetization = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedApplications.map((app) => (
+                    {applications.map((app) => (
                       <tr key={app._id} className="border-t border-line align-top hover:bg-surface/50 transition-colors">
                         <td className="p-4">
                           <div className="flex items-center gap-3">
@@ -517,7 +494,7 @@ const Monetization = () => {
                         </td>
                       </tr>
                     ))}
-                    {paginatedApplications.length === 0 && (
+                    {applications.length === 0 && (
                       <tr>
                         <td colSpan="7" className="p-8 text-center text-muted">
                           No pending monetization applications.
@@ -531,8 +508,8 @@ const Monetization = () => {
               {/* Pagination */}
               <Pagination
                 currentPage={page}
-                totalPages={totalAppPages}
-                totalItems={filteredApplications.length}
+                totalPages={totalPages}
+                totalItems={totalItems}
                 pageSize={limit}
                 onPageChange={setPage}
                 onPageSizeChange={setLimit}
@@ -557,7 +534,7 @@ const Monetization = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedMonetizedUsers.map((app) => (
+                    {monetizedUsers.map((app) => (
                       <tr key={app._id} className="border-t border-line align-top hover:bg-surface/50 transition-colors">
                         <td className="p-4">
                           <div className="flex items-center gap-3">
@@ -610,7 +587,7 @@ const Monetization = () => {
                         </td>
                       </tr>
                     ))}
-                    {paginatedMonetizedUsers.length === 0 && (
+                    {monetizedUsers.length === 0 && (
                       <tr>
                         <td colSpan="7" className="p-8 text-center text-muted">
                           No monetized creators found.
@@ -624,8 +601,8 @@ const Monetization = () => {
               {/* Pagination */}
               <Pagination
                 currentPage={page}
-                totalPages={totalMonetizedPages}
-                totalItems={filteredMonetizedUsers.length}
+                totalPages={totalPages}
+                totalItems={totalItems}
                 pageSize={limit}
                 onPageChange={setPage}
                 onPageSizeChange={setLimit}

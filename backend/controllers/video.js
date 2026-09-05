@@ -67,10 +67,23 @@ const getVideoQuery = (req) => {
   const query = {};
   const isAdmin = req.user && req.user.role === "admin";
 
+  const filter = (req.query.filter || "").toLowerCase();
+  if (filter === "long") {
+    query.isShort = { $ne: true };
+  } else if (filter === "shorts") {
+    query.isShort = true;
+  } else if (filter === "public") {
+    query.visibility = "public";
+  } else if (filter === "private") {
+    query.visibility = { $in: ["private", "unlisted"] };
+  } else if (filter === "pinned") {
+    query.isPinned = true;
+  }
+
   // Admin can view all or specific visibility; public users only see public videos
   if (req.query.visibility && req.query.visibility !== "all") {
     query.visibility = req.query.visibility;
-  } else if (!isAdmin) {
+  } else if (!isAdmin && !query.visibility) {
     query.visibility = "public";
   }
 
@@ -136,7 +149,7 @@ const decorateVideos = async (videos, req) => {
     return obj;
   });
 
-  if (!req.user) return results;
+  if (!req.user || req.user.role === "admin") return results;
 
   const user = await User.findById(req.user.id);
   results = results.map((v) => ({
@@ -559,7 +572,18 @@ exports.getVideos = async (req, res, next) => {
     }
 
     const sortOption = req.query.sort;
-    const [videos, total] = await Promise.all([
+    const countsPromise = isAdmin
+      ? Promise.all([
+          Video.countDocuments({}),
+          Video.countDocuments({ isShort: { $ne: true } }),
+          Video.countDocuments({ isShort: true }),
+          Video.countDocuments({ $or: [{ visibility: "public" }, { visibility: { $exists: false } }] }),
+          Video.countDocuments({ visibility: { $in: ["private", "unlisted"] } }),
+          Video.countDocuments({ isPinned: true }),
+        ])
+      : Promise.resolve(null);
+
+    const [videos, total, countsAgg] = await Promise.all([
       Video.find(query)
         .populate(
           "owner",
@@ -571,16 +595,29 @@ exports.getVideos = async (req, res, next) => {
         .limit(limit)
         .lean(),
       Video.countDocuments(query),
+      countsPromise,
     ]);
 
     let results = await decorateVideos(videos, req);
+
+    let filterCounts = null;
+    if (countsAgg) {
+      filterCounts = {
+        all: countsAgg[0],
+        long: countsAgg[1],
+        shorts: countsAgg[2],
+        public: countsAgg[3],
+        private: countsAgg[4],
+        pinned: countsAgg[5],
+      };
+    }
 
     // If searching and no explicit custom sort requested, rank by keyword relevance
     if (searchKeywords && (!sortOption || sortOption === "latest")) {
       results = results
         .map((v) => ({ ...v, _score: scoreVideoRelevance(v, searchKeywords) }))
         .sort((a, b) => b._score - a._score);
-    } else if (!searchKeywords && !req.query.owner && !fetchAll && (sortOption === "algorithm" || !sortOption || sortOption === "latest")) {
+    } else if (!isAdmin && !searchKeywords && !req.query.owner && !fetchAll && (sortOption === "algorithm" || !sortOption || sortOption === "latest")) {
       // Algorithmic feed: ranks by last 5 watched videos (category/title/description matching) & tier-shuffles
       const profile = await getUserInterestProfile(req.user);
       results = rankAndShuffleVideos(results, profile);
@@ -591,7 +628,8 @@ exports.getVideos = async (req, res, next) => {
       count: results.length,
       total,
       page,
-      pages: Math.ceil(total / limit),
+      pages: Math.ceil(total / limit) || 1,
+      filterCounts,
       data: results,
     });
   } catch (err) {
@@ -1171,6 +1209,10 @@ exports.deleteVideo = async (req, res, next) => {
     if (video.thumbnail) await deleteLocalFile(video.thumbnail);
 
     await video.deleteOne();
+    await Promise.all([
+      VideoMonetizationReview.deleteMany({ video: video._id }),
+      VideoReport.deleteMany({ video: video._id }),
+    ]);
     res.status(200).json({ success: true, data: {} });
   } catch (err) {
     next(err);

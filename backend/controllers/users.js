@@ -557,24 +557,42 @@ exports.getLeaderboard = async (req, res, next) => {
   }
 };
 
-// @desc Get all users
+// @desc Get users with server-side pagination, search, and tab filters
 // @route GET /api/users
 // @access Private/Admin
 exports.getUsers = async (req, res, next) => {
   try {
-    const rawSearch = req.query.search || req.query.q || '';
-    const search = rawSearch.trim();
+    const rawSearch = (req.query.search || req.query.q || '').trim();
+    const filter = (req.query.filter || 'all').toLowerCase();
+    const role = req.query.role;
 
     let query = {};
-    if (req.query.role) {
-      query.role = req.query.role;
+    if (role) {
+      query.role = role;
     }
 
-    if (search) {
-      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (filter === 'admins') {
+      query.role = 'admin';
+    } else if (filter === 'blocked') {
+      query.isBlocked = true;
+    } else if (filter === 'scheduled') {
+      query.deletionScheduled = true;
+    } else if (filter === 'recovery') {
+      query.$or = [{ recoveryRequested: true }, { deletionStatus: 'recovery_requested' }];
+    } else if (filter === 'monetized') {
+      const approvedApps = await MonetizationApplication.find({ status: 'approved' }).select('user').lean();
+      const approvedIds = approvedApps.filter((a) => a.user).map((a) => a.user);
+      query.$or = [
+        { _id: { $in: approvedIds } },
+        { totalEarnings: { $gt: 0 } },
+      ];
+    }
+
+    if (rawSearch) {
+      const escaped = rawSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const regex = new RegExp(escaped, 'i');
-      const isObjectId = mongoose.Types.ObjectId.isValid(search);
-      const orList = [
+      const isObjectId = mongoose.Types.ObjectId.isValid(rawSearch);
+      const searchOr = [
         { name: regex },
         { channelName: regex },
         { email: regex },
@@ -582,36 +600,81 @@ exports.getUsers = async (req, res, next) => {
         { about: regex },
       ];
       if (isObjectId) {
-        orList.push({ _id: search });
+        searchOr.push({ _id: rawSearch });
       }
-      query.$or = orList;
+
+      if (query.$or) {
+        query.$and = [{ $or: query.$or }, { $or: searchOr }];
+        delete query.$or;
+      } else {
+        query.$or = searchOr;
+      }
     }
 
     if (req.query.simple === 'true') {
+      const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
       const simpleUsers = await User.find(query)
         .select('name channelName avatar isVerified email phone role')
         .sort('channelName name')
+        .limit(limit)
         .lean();
       return res.status(200).json({ success: true, count: simpleUsers.length, data: simpleUsers });
     }
 
-    const [users, approvedApps] = await Promise.all([
-      User.find(query).sort('-createdAt').select('-password -__v').lean(),
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const fetchAll = req.query.all === 'true';
+    const limit = fetchAll ? 10000 : Math.max(1, Math.min(parseInt(req.query.limit, 10) || 10, 100));
+    const skip = (page - 1) * limit;
+
+    const USER_PROJECTION =
+      'name channelName avatar email phone role isVerified isBlocked blockedAt blockReason deletionScheduled scheduledDeletionDate deletionStatus recoveryRequested walletBalance totalEarnings followersCount createdAt';
+
+    const [users, total, countsAgg, approvedApps] = await Promise.all([
+      User.find(query)
+        .select(USER_PROJECTION)
+        .sort('-createdAt')
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      User.countDocuments(query),
+      Promise.all([
+        User.countDocuments(),
+        User.countDocuments({ role: 'admin' }),
+        User.countDocuments({ isBlocked: true }),
+        User.countDocuments({ deletionScheduled: true }),
+        User.countDocuments({ $or: [{ recoveryRequested: true }, { deletionStatus: 'recovery_requested' }] }),
+        MonetizationApplication.countDocuments({ status: 'approved' }),
+      ]),
       MonetizationApplication.find({ status: 'approved' }).select('user').lean(),
     ]);
 
+    const [allCount, adminsCount, blockedCount, scheduledCount, recoveryCount, monetizedCount] = countsAgg;
+
     const approvedUserIds = new Set(
-      approvedApps
-        .filter((a) => a.user)
-        .map((a) => a.user.toString())
+      approvedApps.filter((a) => a.user).map((a) => a.user.toString())
     );
 
     const usersWithMonetization = users.map((u) => ({
       ...u,
-      isMonetized: approvedUserIds.has(u._id.toString()),
+      isMonetized: approvedUserIds.has(u._id.toString()) || Boolean(u.totalEarnings && u.totalEarnings > 0),
     }));
 
-    res.status(200).json({ success: true, count: usersWithMonetization.length, data: usersWithMonetization });
+    res.status(200).json({
+      success: true,
+      count: usersWithMonetization.length,
+      total,
+      page,
+      pages: Math.ceil(total / limit) || 1,
+      filterCounts: {
+        all: allCount,
+        admins: adminsCount,
+        monetized: monetizedCount,
+        blocked: blockedCount,
+        scheduled: scheduledCount,
+        recovery: recoveryCount,
+      },
+      data: usersWithMonetization,
+    });
   } catch (err) {
     next(err);
   }
@@ -965,8 +1028,27 @@ exports.getMonetizationStatus = async (req, res, next) => {
     const userId = req.user.id;
 
     // 1. Fetch only review statuses that exist
-    const reviews = await VideoMonetizationReview.find({ user: userId }).populate('video', 'title thumbnail createdAt');
+    const rawReviews = await VideoMonetizationReview.find({ user: userId }).populate('video', 'title thumbnail createdAt');
     
+    // Filter and clean up orphaned reviews (where video was deleted)
+    const reviews = [];
+    for (const r of rawReviews) {
+      if (!r.video) {
+        VideoMonetizationReview.findByIdAndDelete(r._id).exec();
+      } else {
+        reviews.push(r);
+      }
+    }
+    
+    // Sort passed reviews ON TOP, followed by pending, then failed, newest first
+    const statusOrder = { passed: 0, pending: 1, failed: 2 };
+    reviews.sort((a, b) => {
+      const orderA = statusOrder[a.status] !== undefined ? statusOrder[a.status] : 3;
+      const orderB = statusOrder[b.status] !== undefined ? statusOrder[b.status] : 3;
+      if (orderA !== orderB) return orderA - orderB;
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
+
     // 2. Count passed videos
     const passedVideosCount = reviews.filter(r => r.status === 'passed').length;
     const step1Completed = passedVideosCount >= 3;

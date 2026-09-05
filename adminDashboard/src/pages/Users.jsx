@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import Modal from "../components/Modal";
 import ConfirmModal from "../components/ConfirmModal";
 import DataTableToolbar from "../components/DataTableToolbar";
@@ -15,6 +15,16 @@ const resolveMediaUrl = (url) => {
 
 const Users = () => {
   const [users, setUsers] = useState([]);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [filterCounts, setFilterCounts] = useState({
+    all: 0,
+    admins: 0,
+    monetized: 0,
+    blocked: 0,
+    scheduled: 0,
+    recovery: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -37,12 +47,20 @@ const Users = () => {
     setLimit,
   } = useTableParams({ defaultFilter: "all", defaultLimit: 10 });
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const token = localStorage.getItem("admin_token");
-      const res = await fetch(API_URL + "/api/users", {
+      const url = new URL(`${API_URL}/api/users`);
+      url.searchParams.set("page", page);
+      url.searchParams.set("limit", limit);
+      url.searchParams.set("filter", filter);
+      if (search && search.trim()) {
+        url.searchParams.set("search", search.trim());
+      }
+
+      const res = await fetch(url.toString(), {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -51,15 +69,23 @@ const Users = () => {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to fetch users");
       setUsers(data.data || []);
+      setTotalItems(data.total || 0);
+      setTotalPages(data.pages || 1);
+      if (data.filterCounts) {
+        setFilterCounts(data.filterCounts);
+      }
     } catch (err) {
       setError(err.message);
     }
     setLoading(false);
-  };
+  }, [page, limit, filter, search]);
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    const timer = setTimeout(() => {
+      fetchUsers();
+    }, search ? 300 : 0);
+    return () => clearTimeout(timer);
+  }, [fetchUsers, search]);
 
   const formatJoinedDate = (date) => {
     if (!date) return "-";
@@ -322,128 +348,6 @@ const Users = () => {
     return days > 0 ? `${days} day(s) left` : "Expiring soon";
   };
 
-  // Filter and Search
-  const { filteredUsers, filterCounts } = useMemo(() => {
-    const counts = {
-      all: users.length,
-      admins: 0,
-      monetized: 0,
-      blocked: 0,
-      scheduled: 0,
-      recovery: 0,
-    };
-
-    users.forEach((u) => {
-      if (u.role === "admin") counts.admins += 1;
-      if (u.isMonetized || u.monetizationApproved || (u.totalEarnings && u.totalEarnings > 0)) counts.monetized += 1;
-      if (u.isBlocked) counts.blocked += 1;
-      if (u.deletionScheduled) counts.scheduled += 1;
-      if (u.recoveryRequested || u.deletionStatus === "recovery_requested") counts.recovery += 1;
-    });
-
-    const searchTrimmed = (search || "").trim().toLowerCase();
-    const rawTerms = searchTrimmed
-      ? searchTrimmed.split(/[\s,+#|/]+/).map((t) => t.replace(/^[#@]+/, "").trim()).filter(Boolean)
-      : [];
-    const searchTerms = Array.from(new Set(rawTerms));
-    const phrase = searchTrimmed.replace(/^[#@]+/, "").trim();
-
-    // 1. Tab / Category Filter
-    const tabFiltered = users.filter((u) => {
-      if (filter === "admins" && u.role !== "admin") return false;
-      if (filter === "monetized" && !(u.isMonetized || u.monetizationApproved || (u.totalEarnings && u.totalEarnings > 0))) return false;
-      if (filter === "blocked" && !u.isBlocked) return false;
-      if (filter === "scheduled" && !u.deletionScheduled) return false;
-      if (filter === "recovery" && !(u.recoveryRequested || u.deletionStatus === "recovery_requested")) return false;
-      return true;
-    });
-
-    if (searchTerms.length === 0 && !phrase) {
-      return { filteredUsers: tabFiltered, filterCounts: counts };
-    }
-
-    // 2. Score every user against phrase and keyword terms
-    const scored = [];
-    for (const u of tabFiltered) {
-      const name = (u.name || "").toLowerCase();
-      const email = (u.email || "").toLowerCase();
-      const phone = (u.phone || "").toLowerCase();
-      const channel = (u.channelName || "").toLowerCase();
-      const about = (u.about || "").toLowerCase();
-      const id = (u._id || u.id || "").toLowerCase();
-
-      let score = 0;
-
-      // Exact User ID
-      if (id && id === phrase) score += 10000;
-
-      // Channel match
-      if (channel === phrase) score += 3000;
-      else if (channel.startsWith(phrase)) score += 1500;
-      else if (channel.includes(phrase)) score += 800;
-
-      // Name match
-      if (name === phrase) score += 2000;
-      else if (name.startsWith(phrase)) score += 1000;
-      else if (name.includes(phrase)) score += 600;
-
-      // Email / Phone match
-      if (email === phrase || phone === phrase) score += 1500;
-      else if (email.includes(phrase) || phone.includes(phrase)) score += 700;
-
-      // About match
-      if (about.includes(phrase)) score += 150;
-
-      // Individual keyword terms
-      let termsMatched = 0;
-      for (const term of searchTerms) {
-        let matched = false;
-        if (channel.includes(term)) {
-          score += 300;
-          matched = true;
-        }
-        if (name.includes(term)) {
-          score += 250;
-          matched = true;
-        }
-        if (email.includes(term) || phone.includes(term)) {
-          score += 200;
-          matched = true;
-        }
-        if (about.includes(term)) {
-          score += 50;
-          matched = true;
-        }
-        if (matched) termsMatched++;
-      }
-
-      // Bonus if all terms matched
-      if (searchTerms.length > 1 && termsMatched === searchTerms.length) {
-        score += 500;
-      }
-
-      if (u.isVerified) score += 50;
-      if (u.isMonetized) score += 30;
-
-      if (score > 0) {
-        scored.push({ user: u, score });
-      }
-    }
-
-    // Sort descending by relevance score
-    scored.sort((a, b) => b.score - a.score);
-    const resultUsers = scored.map((s) => s.user);
-
-    return { filteredUsers: resultUsers, filterCounts: counts };
-  }, [users, filter, search]);
-
-  // Paginate filtered results
-  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / limit));
-  const paginatedUsers = useMemo(() => {
-    const startIndex = (page - 1) * limit;
-    return filteredUsers.slice(startIndex, startIndex + limit);
-  }, [filteredUsers, page, limit]);
-
   const filterOptions = [
     { label: "All Users", value: "all", count: filterCounts.all },
     { label: "Admins", value: "admins", count: filterCounts.admins },
@@ -473,8 +377,8 @@ const Users = () => {
         filter={filter}
         onFilterChange={setFilter}
         filters={filterOptions}
-        totalCount={users.length}
-        filteredCount={filteredUsers.length}
+        totalCount={filterCounts.all || totalItems}
+        filteredCount={totalItems}
         actions={
           <button
             onClick={() => setShowAdd(true)}
@@ -506,7 +410,7 @@ const Users = () => {
                 </tr>
               </thead>
               <tbody>
-                {paginatedUsers.map((u) => {
+                {users.map((u) => {
                   const isScheduled = u.deletionScheduled;
                   const isRecoveryRequested =
                     u.recoveryRequested || u.deletionStatus === "recovery_requested";
@@ -741,7 +645,7 @@ const Users = () => {
                     </tr>
                   );
                 })}
-                {paginatedUsers.length === 0 && (
+                {users.length === 0 && (
                   <tr>
                     <td colSpan="7" className="p-8 text-center text-muted">
                       No matching users found.
@@ -756,7 +660,7 @@ const Users = () => {
           <Pagination
             currentPage={page}
             totalPages={totalPages}
-            totalItems={filteredUsers.length}
+            totalItems={totalItems}
             pageSize={limit}
             onPageChange={setPage}
             onPageSizeChange={setLimit}

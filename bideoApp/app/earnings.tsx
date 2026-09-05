@@ -400,7 +400,15 @@ export default function EarningsScreen() {
 
             {monetizationData?.reviews && monetizationData.reviews.length > 0 && (
               <View style={styles.videoList}>
-                {monetizationData.reviews.map((rev: any) => (
+                {monetizationData.reviews
+                  .slice()
+                  .sort((a: any, b: any) => {
+                    const order: Record<string, number> = { passed: 0, pending: 1, failed: 2 };
+                    const diff = (order[a.status] ?? 3) - (order[b.status] ?? 3);
+                    if (diff !== 0) return diff;
+                    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                  })
+                  .map((rev: any) => (
                   <View key={rev._id} style={styles.videoItem}>
                     {rev.video && (
                       <Image source={{ uri: rev.video.thumbnail }} style={styles.videoThumb} contentFit="cover" />

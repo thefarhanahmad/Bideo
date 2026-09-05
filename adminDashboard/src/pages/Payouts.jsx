@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import Modal from "../components/Modal";
 import DataTableToolbar from "../components/DataTableToolbar";
 import Pagination from "../components/Pagination";
@@ -16,6 +16,11 @@ const Payouts = () => {
   const [withdrawals, setWithdrawals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [filterCounts, setFilterCounts] = useState({ all: 0, pending: 0, approved: 0, rejected: 0 });
+  const [totalPendingAmount, setTotalPendingAmount] = useState(0);
+  const [totalPaidAmount, setTotalPaidAmount] = useState(0);
 
   // Modal states
   const [selectedWithdrawal, setSelectedWithdrawal] = useState(null);
@@ -32,29 +37,50 @@ const Payouts = () => {
 
   const API = API_URL;
 
-  const fetchWithdrawals = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const token = localStorage.getItem("admin_token");
-      const res = await fetch(API + "/api/admin/withdrawals", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        credentials: "include",
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to fetch payouts");
-      setWithdrawals(data.data || []);
-    } catch (err) {
-      setError(err.message);
-    }
-    setLoading(false);
-  };
+  const fetchWithdrawals = useCallback(
+    async (currentPage = page, currentLimit = limit, currentFilter = filter, currentSearch = search) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const token = localStorage.getItem("admin_token");
+        const params = new URLSearchParams({
+          page: currentPage,
+          limit: currentLimit,
+        });
+        if (currentFilter && currentFilter !== "all") params.append("status", currentFilter);
+        if (currentSearch && currentSearch.trim()) params.append("search", currentSearch.trim());
+
+        const res = await fetch(`${API}/api/admin/withdrawals?${params.toString()}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          credentials: "include",
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || "Failed to fetch payouts");
+        setWithdrawals(data.data || []);
+        setTotalItems(data.total || 0);
+        setTotalPages(data.pages || 1);
+        if (data.filterCounts) setFilterCounts(data.filterCounts);
+        if (data.meta) {
+          setTotalPendingAmount(data.meta.totalPendingAmount || 0);
+          setTotalPaidAmount(data.meta.totalPaidAmount || 0);
+        }
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [API, page, limit, filter, search]
+  );
 
   useEffect(() => {
-    fetchWithdrawals();
-  }, []);
+    const timer = setTimeout(() => {
+      fetchWithdrawals(page, limit, filter, search);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [fetchWithdrawals, page, limit, filter, search]);
 
   const formatDate = (date) => {
     if (!date) return "-";
@@ -96,7 +122,7 @@ const Payouts = () => {
       setShowApproveModal(false);
       setSelectedWithdrawal(null);
       setTransactionId("");
-      await fetchWithdrawals();
+      await fetchWithdrawals(page, limit, filter, search);
     } catch (err) {
       alert("Error: " + err.message);
     } finally {
@@ -126,7 +152,7 @@ const Payouts = () => {
       setShowRejectModal(false);
       setSelectedWithdrawal(null);
       setRejectReason("");
-      await fetchWithdrawals();
+      await fetchWithdrawals(page, limit, filter, search);
     } catch (err) {
       alert("Error: " + err.message);
     } finally {
@@ -134,68 +160,12 @@ const Payouts = () => {
     }
   };
 
-  // Filter & Search Logic
-  const { filteredWithdrawals, filterCounts } = useMemo(() => {
-    const counts = {
-      all: withdrawals.length,
-      pending: 0,
-      approved: 0,
-      rejected: 0,
-    };
-
-    withdrawals.forEach((w) => {
-      if (counts[w.status] !== undefined) counts[w.status] += 1;
-    });
-
-    const searchTrimmed = (search || "").trim().toLowerCase();
-    const searchTerms = searchTrimmed ? searchTrimmed.split(/\s+/).filter(Boolean) : [];
-
-    const filtered = withdrawals.filter((w) => {
-      // 1. Status Filter
-      if (filter !== "all" && w.status !== filter) return false;
-
-      // 2. Search query
-      if (searchTerms.length === 0) return true;
-      const name = (w.payoutDetails?.holderName || w.user?.name || "").toLowerCase();
-      const channel = (w.user?.channelName || "").toLowerCase();
-      const email = (w.user?.email || "").toLowerCase();
-      const phone = (w.user?.phone || "").toLowerCase();
-      const upi = (w.payoutDetails?.upiId || "").toLowerCase();
-      const bank = (w.payoutDetails?.bankName || "").toLowerCase();
-      const acc = (w.payoutDetails?.accountNumber || "").toLowerCase();
-      const ifsc = (w.payoutDetails?.ifscCode || "").toLowerCase();
-      const txn = (w.transactionId || "").toLowerCase();
-      const amount = String(w.amount || "");
-      const adminNote = (w.adminNote || "").toLowerCase();
-      const id = (w._id || w.id || "").toLowerCase();
-
-      const fullText = `${name} ${channel} ${email} ${phone} ${upi} ${bank} ${acc} ${ifsc} ${txn} ${amount} ${adminNote} ${id}`;
-      return searchTerms.every((term) => fullText.includes(term.replace(/^@/, "")));
-    });
-
-    return { filteredWithdrawals: filtered, filterCounts: counts };
-  }, [withdrawals, filter, search]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredWithdrawals.length / limit));
-  const paginatedWithdrawals = useMemo(() => {
-    const startIndex = (page - 1) * limit;
-    return filteredWithdrawals.slice(startIndex, startIndex + limit);
-  }, [filteredWithdrawals, page, limit]);
-
   const filterOptions = [
     { label: "All Requests", value: "all", count: filterCounts.all },
     { label: "Pending", value: "pending", count: filterCounts.pending },
     { label: "Paid / Approved", value: "approved", count: filterCounts.approved },
     { label: "Rejected", value: "rejected", count: filterCounts.rejected },
   ];
-
-  const totalPaidAmount = withdrawals
-    .filter((w) => w.status === "approved")
-    .reduce((sum, w) => sum + (Number(w.amount) || 0), 0);
-
-  const totalPendingAmount = withdrawals
-    .filter((w) => w.status === "pending")
-    .reduce((sum, w) => sum + (Number(w.amount) || 0), 0);
 
   return (
     <div className="space-y-5 min-w-0 max-w-full">
@@ -233,8 +203,8 @@ const Payouts = () => {
         filter={filter}
         onFilterChange={setFilter}
         filters={filterOptions}
-        totalCount={withdrawals.length}
-        filteredCount={filteredWithdrawals.length}
+        totalCount={filterCounts.all || totalItems}
+        filteredCount={totalItems}
       />
 
       {loading ? (
@@ -256,7 +226,7 @@ const Payouts = () => {
                 </tr>
               </thead>
               <tbody>
-                {paginatedWithdrawals.map((w) => (
+                {withdrawals.map((w) => (
                   <tr key={w._id} className="border-t border-line align-top hover:bg-surface/50 transition-colors">
                     <td className="p-4">
                       <div className="flex items-center gap-3">
@@ -395,7 +365,7 @@ const Payouts = () => {
                   </tr>
                 ))}
 
-                {paginatedWithdrawals.length === 0 && (
+                {withdrawals.length === 0 && (
                   <tr>
                     <td colSpan="6" className="p-8 text-center text-muted">
                       No payout requests found.
@@ -410,7 +380,7 @@ const Payouts = () => {
           <Pagination
             currentPage={page}
             totalPages={totalPages}
-            totalItems={filteredWithdrawals.length}
+            totalItems={totalItems}
             pageSize={limit}
             onPageChange={setPage}
             onPageSizeChange={setLimit}
