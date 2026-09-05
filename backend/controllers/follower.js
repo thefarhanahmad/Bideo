@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Follower = require('../models/Follower');
 const User = require('../models/User');
 
@@ -13,7 +14,11 @@ exports.follow = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'You cannot follow yourself' });
     }
 
-    const channel = await User.findById(channelId);
+    if (!mongoose.isValidObjectId(channelId)) {
+      return res.status(404).json({ success: false, message: 'Channel not found' });
+    }
+
+    const channel = await User.findById(channelId).select('_id');
     if (!channel) {
       return res.status(404).json({ success: false, message: 'Channel not found' });
     }
@@ -27,9 +32,14 @@ exports.follow = async (req, res, next) => {
       // Unfollow
       await follow.deleteOne();
       
-      // Update counts and arrays
-      channel.followersCount -= 1;
-      await channel.save();
+      // Update counts atomically without triggering full document schema validation
+      await User.findByIdAndUpdate(channelId, {
+        $inc: { followersCount: -1 }
+      });
+      await User.updateOne(
+        { _id: channelId, followersCount: { $lt: 0 } },
+        { $set: { followersCount: 0 } }
+      );
 
       await User.findByIdAndUpdate(followerId, {
         $pull: { followingChannels: channelId }
@@ -44,8 +54,10 @@ exports.follow = async (req, res, next) => {
       channel: channelId,
     });
 
-    channel.followersCount += 1;
-    await channel.save();
+    // Update counts atomically without triggering full document schema validation
+    await User.findByIdAndUpdate(channelId, {
+      $inc: { followersCount: 1 }
+    });
 
     await User.findByIdAndUpdate(followerId, {
       $addToSet: { followingChannels: channelId }
@@ -83,6 +95,11 @@ exports.getFollowings = async (req, res, next) => {
 exports.getChannelFollowers = async (req, res, next) => {
   try {
     const { channelId } = req.params;
+
+    if (!mongoose.isValidObjectId(channelId)) {
+      return res.status(404).json({ success: false, message: 'Channel not found' });
+    }
+
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 50;
     const skip = (page - 1) * limit;
@@ -138,6 +155,11 @@ exports.getChannelFollowers = async (req, res, next) => {
 exports.getChannelFollowings = async (req, res, next) => {
   try {
     const { channelId } = req.params;
+
+    if (!mongoose.isValidObjectId(channelId)) {
+      return res.status(404).json({ success: false, message: 'Channel not found' });
+    }
+
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 50;
     const skip = (page - 1) * limit;

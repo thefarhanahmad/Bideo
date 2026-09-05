@@ -169,6 +169,15 @@ app.use((err, req, res, next) => {
     });
   }
 
+  // 6. Client aborted upload request (e.g. user canceled upload, lost connection, closed app)
+  if (err.message === 'Request aborted' || req.aborted || err.code === 'ECONNABORTED') {
+    if (res.headersSent) return;
+    return res.status(400).json({
+      success: false,
+      message: 'Upload request was aborted by client',
+    });
+  }
+
   const statusCode = err.statusCode || err.status || 500;
   const message = err.message || "Internal Server Error";
   const endpoint = req.originalUrl || req.url || "Unknown";
