@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import { useSelector } from 'react-redux';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '../constants/Colors';
 import VideoCard from '../components/VideoCard';
 import { EmptyState } from '../components/ListStates';
@@ -85,10 +86,19 @@ function ChannelSearchResultCard({ channel }: { channel: any }) {
   );
 }
 
+const SEARCH_HISTORY_KEY = '@bideo_search_history';
+
+const getTerm = (item: any): string => {
+  if (!item) return '';
+  if (typeof item === 'string') return item.trim();
+  return (item.term || '').toString().trim();
+};
+
 export default function SearchScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ q?: string; query?: string; tag?: string }>();
   const initialQuery = (params.q || params.query || params.tag || '').trim();
+  const { isAuthenticated } = useSelector((state: RootState) => state.auth);
 
   const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<any[]>([]);
@@ -105,21 +115,69 @@ export default function SearchScreen() {
 
   const loadHistory = async () => {
     try {
-      const res = await api.get('/users/search-history');
-      if (res.data.success) setHistory(res.data.data || []);
+      // 1. Immediately load local cached history
+      const cached = await AsyncStorage.getItem(SEARCH_HISTORY_KEY);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed)) {
+            const valid = parsed
+              .map((it: any) => ({
+                _id: it._id || Math.random().toString(36).substring(7),
+                term: getTerm(it),
+              }))
+              .filter((it: any) => it.term.length > 0);
+            setHistory(valid);
+          }
+        } catch {}
+      }
+
+      // 2. Fetch server history if authenticated
+      if (isAuthenticated) {
+        const res = await api.get('/users/search-history');
+        if (res.data?.success && Array.isArray(res.data.data)) {
+          const serverItems: any[] = res.data.data;
+          const validItems = serverItems
+            .map((it: any) => ({
+              _id: it._id || Math.random().toString(36).substring(7),
+              term: getTerm(it),
+            }))
+            .filter((it: any) => it.term.length > 0);
+
+          setHistory(validItems);
+          AsyncStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(validItems)).catch(() => {});
+        }
+      }
     } catch {
-      setHistory([]);
+      // Retain existing local history on failure
+    }
+  };
+
+  const saveToHistory = (termToSave: string) => {
+    const cleanTerm = termToSave.trim();
+    if (!cleanTerm) return;
+
+    setHistory((prev) => {
+      const filtered = prev.filter((item) => getTerm(item).toLowerCase() !== cleanTerm.toLowerCase());
+      const updated = [{ _id: Date.now().toString(), term: cleanTerm }, ...filtered].slice(0, 25);
+      AsyncStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+
+    if (isAuthenticated) {
+      api.post('/users/search-history', { term: cleanTerm }).catch(() => {});
     }
   };
 
   const handleSearch = async (term = query) => {
-    if (!term.trim()) return;
-    setQuery(term);
+    const cleanTerm = term.trim();
+    if (!cleanTerm) return;
+    setQuery(cleanTerm);
+    saveToHistory(cleanTerm);
     setLoading(true);
     setShowResults(true);
     try {
-      api.post('/users/search-history', { term }).then(loadHistory).catch(() => {});
-      const res = await api.get('/videos/search', { params: { q: term } });
+      const res = await api.get('/videos/search', { params: { q: cleanTerm } });
       if (res.data.success) {
         const { channels = [], videos = [] } = res.data.data || {};
         const formattedChannels = channels.map((c: any) => ({ ...c, isChannel: true }));
@@ -132,6 +190,44 @@ export default function SearchScreen() {
     }
   };
 
+  const handleRemoveHistoryItem = (termToRemove: string) => {
+    hapticLight();
+    const cleanTerm = termToRemove.trim();
+    if (!cleanTerm) return;
+
+    setHistory((prev) => {
+      const updated = prev.filter((item) => getTerm(item).toLowerCase() !== cleanTerm.toLowerCase());
+      AsyncStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+
+    if (isAuthenticated) {
+      api.delete('/users/search-history', { params: { term: cleanTerm } }).catch(() => {});
+    }
+  };
+
+  const handleClearAllHistory = () => {
+    Alert.alert(
+      'Clear search history?',
+      'This will remove all your recent searches.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear All',
+          style: 'destructive',
+          onPress: async () => {
+            hapticLight();
+            setHistory([]);
+            await AsyncStorage.removeItem(SEARCH_HISTORY_KEY).catch(() => {});
+            if (isAuthenticated) {
+              api.delete('/users/search-history').catch(() => {});
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const clearSearch = () => {
     setQuery('');
     setResults([]);
@@ -142,6 +238,11 @@ export default function SearchScreen() {
     setQuery(text);
     if (showResults) setShowResults(false);
   };
+
+  const filteredHistory = history.filter((h) => {
+    const t = getTerm(h);
+    return t.length > 0 && (!query.trim() || t.toLowerCase().includes(query.toLowerCase().trim()));
+  });
 
   return (
     <View style={styles.container}>
@@ -178,17 +279,52 @@ export default function SearchScreen() {
         </View>
       ) : (
         <FlatList
-          data={showResults ? results : history.filter(h => h.term.toLowerCase().includes(query.toLowerCase()))}
-          keyExtractor={(item, index) => item._id || `${item.term}-${index}`}
-          renderItem={({ item }) => {
-            if (item.term) {
-              return (
-                <TouchableOpacity style={styles.historyRow} onPress={() => handleSearch(item.term)}>
-                  <Ionicons name="time-outline" size={18} color={Colors.textGray} />
-                  <Text style={styles.historyText}>{item.term}</Text>
+          data={showResults ? results : filteredHistory}
+          keyExtractor={(item, index) => item._id || `${getTerm(item)}-${index}`}
+          ListHeaderComponent={
+            !showResults && filteredHistory.length > 0 ? (
+              <View style={styles.historyHeaderRow}>
+                <Text style={styles.historyHeaderTitle}>Recent searches</Text>
+                <TouchableOpacity
+                  onPress={handleClearAllHistory}
+                  style={styles.clearAllBtn}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 10, right: 10 }}
+                >
+                  <Text style={styles.clearAllText}>Clear all</Text>
                 </TouchableOpacity>
+              </View>
+            ) : null
+          }
+          renderItem={({ item }) => {
+            if (!showResults) {
+              const termStr = getTerm(item);
+              if (!termStr) return null;
+              return (
+                <View style={styles.historyRow}>
+                  <TouchableOpacity
+                    style={styles.historyMainContent}
+                    onPress={() => handleSearch(termStr)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="time-outline" size={19} color={Colors.textGray} />
+                    <Text style={styles.historyText} numberOfLines={1}>
+                      {termStr}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.historyDeleteBtn}
+                    onPress={() => handleRemoveHistoryItem(termStr)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    activeOpacity={0.7}
+                    accessibilityLabel={`Remove ${termStr}`}
+                  >
+                    <Ionicons name="close" size={18} color={Colors.textGray} />
+                  </TouchableOpacity>
+                </View>
               );
             }
+
             if (item.isChannel) {
               return <ChannelSearchResultCard channel={item} />;
             }
@@ -260,18 +396,53 @@ const styles = StyleSheet.create({
     color: Colors.textGray,
     fontSize: 16,
   },
+  historyHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  historyHeaderTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  clearAllBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  clearAllText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
   historyRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 18,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
   },
+  historyMainContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingRight: 12,
+  },
   historyText: {
-    marginLeft: 12,
+    marginLeft: 14,
     fontSize: 15,
     color: Colors.text,
+    flex: 1,
+  },
+  historyDeleteBtn: {
+    padding: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   channelCard: {
     flexDirection: 'row',

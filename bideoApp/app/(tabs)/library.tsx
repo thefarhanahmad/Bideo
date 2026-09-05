@@ -210,11 +210,12 @@ export default function LibraryScreen() {
         <View style={styles.headerButtons}>
           {user?._id && (
             <TouchableOpacity style={styles.viewChannelBtn} onPress={() => router.push(`/channel/${user._id}`)}>
-              <Ionicons name="person-circle-outline" size={17} color={Colors.white} />
+              <Ionicons name="tv-outline" size={16} color={Colors.white} />
               <Text style={styles.viewChannelBtnText}>View Channel</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity style={styles.editBtn} onPress={() => router.push('/edit-channel')}>
+            <Ionicons name="create-outline" size={16} color={Colors.text} />
             <Text style={styles.editBtnText}>{user?.channelName ? 'Edit Channel' : 'Create Channel'}</Text>
           </TouchableOpacity>
         </View>
@@ -526,6 +527,9 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 15,
     alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   editBtnText: {
     fontSize: 13,

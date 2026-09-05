@@ -920,12 +920,16 @@ exports.getSearchHistory = async (req, res, next) => {
 
 exports.clearSearchHistory = async (req, res, next) => {
   try {
-    const term = req.query.term;
-    const update = term
-      ? { $pull: { searchHistory: { term } } }
-      : { $set: { searchHistory: [] } };
+    const term = (req.query.term || (req.body && req.body.term) || '').toString().trim();
+    let update;
+    if (term) {
+      const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      update = { $pull: { searchHistory: { term: new RegExp(`^${escapedTerm}$`, 'i') } } };
+    } else {
+      update = { $set: { searchHistory: [] } };
+    }
     const user = await User.findByIdAndUpdate(req.user.id, update, { new: true }).select('searchHistory');
-    res.status(200).json({ success: true, data: user.searchHistory || [] });
+    res.status(200).json({ success: true, data: user ? user.searchHistory || [] : [] });
   } catch (err) {
     next(err);
   }

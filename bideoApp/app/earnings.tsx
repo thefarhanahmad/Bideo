@@ -415,7 +415,7 @@ export default function EarningsScreen() {
                     </View>
                     <View style={[styles.reviewBadge, { backgroundColor: rev.status === 'passed' ? '#E8F5E9' : rev.status === 'failed' ? '#FFEBEE' : '#FFF8E1' }]}>
                       <Text style={[styles.reviewBadgeText, { color: rev.status === 'passed' ? '#2E7D32' : rev.status === 'failed' ? '#C62828' : '#F57F17' }]}>
-                        {rev.status.toUpperCase()}
+                        {rev.status === 'passed' ? 'PASSED' : rev.status === 'failed' ? 'REJECTED' : 'In Review'}
                       </Text>
                     </View>
                   </View>

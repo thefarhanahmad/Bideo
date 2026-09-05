@@ -34,11 +34,15 @@ exports.protect = async (req, res, next) => {
     }
 
     if (req.user.isBlocked) {
-      return res.status(403).json({
-        success: false,
-        message: req.user.blockReason || 'Your account has been suspended by an administrator.',
-        isBlocked: true,
-      });
+      const allowedPaths = ['/me'];
+      const isAllowed = allowedPaths.some((p) => req.originalUrl && req.originalUrl.includes(p));
+      if (!isAllowed) {
+        return res.status(403).json({
+          success: false,
+          message: req.user.blockReason || 'Your account has been suspended by an administrator.',
+          isBlocked: true,
+        });
+      }
     }
 
     if (req.user.deletionScheduled && req.user.scheduledDeletionDate && new Date(req.user.scheduledDeletionDate) > new Date()) {
