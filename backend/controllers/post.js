@@ -6,6 +6,7 @@ const Comment = require('../models/Comment');
 const { saveLocalFile, deleteLocalFile } = require('../utils/localUpload');
 const { getUserInterestProfile, rankAndShufflePosts } = require('../utils/recommendation');
 const { sendPushForEvent } = require('../utils/pushNotification');
+const { schedulePostModeration } = require('../services/moderationService');
 
 const createNotification = async ({ recipient, actor, type, video, post, comment, message }) => {
   if (!recipient || !actor || recipient.toString() === actor.toString()) return;
@@ -39,6 +40,10 @@ exports.createPost = async (req, res, next) => {
       originalImageSize,
       compressedImageSize,
     });
+
+    // Schedule 10-second automated adult content audit
+    schedulePostModeration(post, 10000);
+
     res.status(201).json({ success: true, data: post });
   } catch (err) {
     next(err);
@@ -78,6 +83,9 @@ exports.updatePost = async (req, res, next) => {
     post.imageUrl = imageUrl;
     if (req.body.visibility) post.visibility = req.body.visibility;
     await post.save();
+
+    // Schedule 10-second automated adult content audit
+    schedulePostModeration(post, 10000);
 
     res.status(200).json({ success: true, data: post });
   } catch (err) {

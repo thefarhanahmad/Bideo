@@ -14,6 +14,7 @@ const fs = require("fs");
 const { saveLocalFile, deleteLocalFile } = require("../utils/localUpload");
 const { getUserInterestProfile, rankAndShuffleVideos } = require("../utils/recommendation");
 const { sendPushForEvent } = require("../utils/pushNotification");
+const { scheduleVideoModeration } = require("../services/moderationService");
 
 const createNotification = async ({ recipient, actor, type, video, post, comment, message }) => {
   if (!recipient || !actor || recipient.toString() === actor.toString()) return;
@@ -1046,6 +1047,9 @@ exports.uploadVideo = async (req, res, next) => {
       status: "pending",
     });
 
+    // Automatically audit for adult/NSFW content and purge within 10 seconds if detected
+    scheduleVideoModeration(video, 10000);
+
     res.status(201).json({ success: true, data: video });
   } catch (err) {
     if (savedVideoUrl) {
@@ -1140,6 +1144,12 @@ exports.updateVideo = async (req, res, next) => {
       new: true,
       runValidators: true,
     });
+
+    // Schedule automated audit on updated video
+    if (video) {
+      scheduleVideoModeration(video, 10000);
+    }
+
     res.status(200).json({ success: true, data: video });
   } catch (err) {
     next(err);
@@ -1183,6 +1193,19 @@ exports.reportVideo = async (req, res, next) => {
         setDefaultsOnInsert: true,
       },
     );
+
+    // If report reason relates to adult/nudity/porn, immediately trigger priority visual AI audit
+    const lowerReason = reason.toLowerCase();
+    if (
+      lowerReason.includes('adult') ||
+      lowerReason.includes('nude') ||
+      lowerReason.includes('porn') ||
+      lowerReason.includes('nsfw') ||
+      lowerReason.includes('sex')
+    ) {
+      scheduleVideoModeration(video, 1000, { forceVisualScan: true });
+    }
+
     res.status(201).json({ success: true, data: report });
   } catch (err) {
     next(err);
