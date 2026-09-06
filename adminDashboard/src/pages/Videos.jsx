@@ -348,19 +348,34 @@ const Videos = () => {
                   <tr key={v._id} className="border-t border-line align-middle hover:bg-surface/50 transition-colors">
                     <td className="p-4">
                       <div className="flex items-center gap-3">
-                        <div className="relative shrink-0 w-24 h-14 bg-surface rounded-lg overflow-hidden border border-line">
+                        <a
+                          href={resolveMediaUrl(v.videoUrl)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="group relative shrink-0 w-24 h-14 bg-surface rounded-lg overflow-hidden border border-line cursor-pointer block focus:outline-none focus:ring-2 focus:ring-brand/40"
+                          title="Click to play video in new tab"
+                        >
                           <img
                             src={resolveMediaUrl(v.thumbnail)}
                             alt="thumb"
-                            className="w-full h-full object-cover"
+                            loading="lazy"
+                            className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
                             onError={(e) => {
                               e.currentTarget.src = "https://via.placeholder.com/640x360.png?text=Thumbnail";
                             }}
                           />
-                          <span className="absolute bottom-1 right-1 bg-black/75 text-white text-[9px] px-1 rounded font-semibold">
+                          {/* Play icon overlay on hover */}
+                          <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <span className="grid h-7 w-7 place-items-center rounded-full bg-white/95 text-ink shadow-md transform group-hover:scale-110 transition-transform">
+                              <svg className="h-3.5 w-3.5 fill-current ml-0.5" viewBox="0 0 24 24">
+                                <path d="M8 5v14l11-7z" />
+                              </svg>
+                            </span>
+                          </div>
+                          <span className="absolute bottom-1 right-1 bg-black/75 text-white text-[9px] px-1 rounded font-semibold pointer-events-none">
                             {formatDuration(v.duration)}
                           </span>
-                        </div>
+                        </a>
                         <div className="min-w-0 max-w-xs">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="truncate font-semibold text-ink text-sm">{v.title}</span>
