@@ -84,6 +84,10 @@ const Videos = () => {
 
   const API = API_URL;
 
+  // Selected channel filter for the main videos table
+  const [selectedChannel, setSelectedChannel] = useState("");
+  const [selectedChannelUser, setSelectedChannelUser] = useState(null);
+
   const fetchVideos = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -96,6 +100,9 @@ const Videos = () => {
       url.searchParams.set("sort", "latest");
       if (search && search.trim()) {
         url.searchParams.set("search", search.trim());
+      }
+      if (selectedChannel) {
+        url.searchParams.set("owner", selectedChannel);
       }
 
       const res = await fetch(url.toString(), {
@@ -116,7 +123,7 @@ const Videos = () => {
       setError(err.message);
     }
     setLoading(false);
-  }, [API, page, limit, filter, search]);
+  }, [API, page, limit, filter, search, selectedChannel]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -141,11 +148,10 @@ const Videos = () => {
     }
   };
 
-  const fetchUsers = async () => {
-    if (users.length > 0) return;
+  const fetchUsers = useCallback(async () => {
     try {
       const token = localStorage.getItem("admin_token");
-      const res = await fetch(API + "/api/users?simple=true&limit=100", {
+      const res = await fetch(API + "/api/users?simple=true&limit=200", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -156,17 +162,18 @@ const Videos = () => {
     } catch (e) {
       /* ignore */
     }
-  };
+  }, [API]);
 
   useEffect(() => {
     fetchCategories();
-  }, []);
+    fetchUsers();
+  }, [fetchUsers]);
 
   useEffect(() => {
     if (showAdd || showEdit) {
       fetchUsers();
     }
-  }, [showAdd, showEdit]);
+  }, [showAdd, showEdit, fetchUsers]);
 
   const handleUpload = async (formData) => {
     const token = localStorage.getItem("admin_token");
@@ -187,13 +194,17 @@ const Videos = () => {
   const handleUpdate = async (id, payload) => {
     try {
       const token = localStorage.getItem("admin_token");
+      const isFormData = payload instanceof FormData;
+      const headers = {
+        Authorization: `Bearer ${token}`,
+      };
+      if (!isFormData) {
+        headers["Content-Type"] = "application/json";
+      }
       const res = await fetch(API + "/api/videos/" + id, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
+        headers,
+        body: isFormData ? payload : JSON.stringify(payload),
         credentials: "include",
       });
       const data = await res.json();
@@ -322,6 +333,52 @@ const Videos = () => {
           </div>
         }
       />
+
+      {/* Quick Channel / Creator Filter Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface/40 p-3 shadow-xs">
+        <div className="flex flex-wrap items-center gap-2.5 min-w-0 flex-1">
+          <span className="text-xs font-bold text-ink shrink-0 flex items-center gap-1.5">
+            <span>📺</span> Filter by Channel:
+          </span>
+          <div className="w-80 max-w-full">
+            <ChannelSelect
+              users={users}
+              value={selectedChannel}
+              onChange={(channelId, userObj) => {
+                setSelectedChannel(channelId);
+                setSelectedChannelUser(userObj);
+                setPage(1);
+              }}
+              placeholder="All Channels (Click to filter)"
+              allowClear={true}
+            />
+          </div>
+        </div>
+
+        {selectedChannel && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-ink">
+              Showing videos by:{" "}
+              <strong className="text-brand font-bold">
+                {selectedChannelUser?.channelName
+                  ? `@${selectedChannelUser.channelName.replace(/^@+/, "")}`
+                  : selectedChannelUser?.name || "Selected Channel"}
+              </strong>
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedChannel("");
+                setSelectedChannelUser(null);
+                setPage(1);
+              }}
+              className="rounded-xl bg-red-50 border border-red-200 px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-100 transition-colors shadow-xs"
+            >
+              ✕ Clear Filter
+            </button>
+          </div>
+        )}
+      </div>
 
       {loading ? (
         <LoadingSkeleton type="table" rows={8} cols={8} />
@@ -702,7 +759,7 @@ const UploadForm = ({ categories = [], users = [], onSubmit, onCancel }) => {
       <div>
         <div className="flex justify-between items-center mb-1">
           <label className="block text-sm font-medium text-ink">Target Channel / Creator</label>
-          <span className="text-[11px] text-muted font-medium">{users.length} channels available</span>
+          <span className="text-[11px] text-muted font-medium">Search and select creator</span>
         </div>
         <ChannelSelect
           users={users}
@@ -873,7 +930,7 @@ const EditForm = ({ initial = {}, categories = [], users = [], onSubmit, onCance
         fd.append("category", category);
         fd.append("visibility", visibility);
         fd.append("isPinned", isPinned);
-        if (owner) fd.append("owner", owner);
+        fd.append("owner", owner || "");
         await onSubmit(fd);
       } else {
         await onSubmit({
@@ -881,7 +938,7 @@ const EditForm = ({ initial = {}, categories = [], users = [], onSubmit, onCance
           description: safeDescription,
           category,
           visibility,
-          owner,
+          owner: owner || "",
           isPinned,
         });
       }
@@ -939,7 +996,7 @@ const EditForm = ({ initial = {}, categories = [], users = [], onSubmit, onCance
       <div>
         <div className="flex justify-between items-center mb-1">
           <label className="block text-sm font-medium text-ink">Channel / Creator</label>
-          <span className="text-[11px] text-muted font-medium">{users.length} channels available</span>
+          <span className="text-[11px] text-muted font-medium">Search and select creator</span>
         </div>
         <ChannelSelect
           users={users}
@@ -947,6 +1004,7 @@ const EditForm = ({ initial = {}, categories = [], users = [], onSubmit, onCance
           onChange={setOwner}
           disabled={saving}
           placeholder="Default (Admin Account)"
+          initialUser={typeof initial.owner === "object" ? initial.owner : null}
         />
       </div>
 

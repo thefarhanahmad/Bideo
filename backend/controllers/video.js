@@ -1109,10 +1109,19 @@ exports.updateVideo = async (req, res, next) => {
     if (req.body.tags !== undefined)
       updates.tags = normalizeTags(req.body.tags);
 
-    if (isAdmin && req.body.owner) {
-      const targetUser = await User.findById(req.body.owner);
-      if (targetUser) {
-        updates.owner = targetUser._id;
+    if (isAdmin && req.body.owner !== undefined) {
+      if (
+        req.body.owner &&
+        req.body.owner !== "" &&
+        req.body.owner !== "null" &&
+        req.body.owner !== "undefined"
+      ) {
+        const targetUser = await User.findById(req.body.owner);
+        if (targetUser) {
+          updates.owner = targetUser._id;
+        }
+      } else {
+        updates.owner = req.user.id;
       }
     }
 

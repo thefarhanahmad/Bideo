@@ -590,16 +590,23 @@ exports.getUsers = async (req, res, next) => {
     }
 
     if (rawSearch) {
+      const cleanSearch = rawSearch.replace(/^@+/, '').trim();
       const escaped = rawSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const cleanEscaped = cleanSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const regex = new RegExp(escaped, 'i');
+      const cleanRegex = cleanEscaped ? new RegExp(cleanEscaped, 'i') : regex;
       const isObjectId = mongoose.Types.ObjectId.isValid(rawSearch);
       const searchOr = [
-        { name: regex },
-        { channelName: regex },
+        { name: cleanRegex },
+        { channelName: cleanRegex },
         { email: regex },
         { phone: regex },
-        { about: regex },
+        { about: cleanRegex },
       ];
+      const phoneDigits = rawSearch.replace(/\D/g, '');
+      if (phoneDigits.length >= 4) {
+        searchOr.push({ phone: new RegExp(phoneDigits, 'i') });
+      }
       if (isObjectId) {
         searchOr.push({ _id: rawSearch });
       }
@@ -613,7 +620,7 @@ exports.getUsers = async (req, res, next) => {
     }
 
     if (req.query.simple === 'true') {
-      const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
+      const limit = Math.min(parseInt(req.query.limit, 10) || 50, 500);
       const simpleUsers = await User.find(query)
         .select('name channelName avatar isVerified email phone role')
         .sort('channelName name')
