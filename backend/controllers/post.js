@@ -20,15 +20,6 @@ const createNotification = async ({ recipient, actor, type, video, post, comment
 
 exports.createPost = async (req, res, next) => {
   let savedImageUrl = null;
-  let isFinished = false;
-
-  const onClientDisconnect = () => {
-    if (!isFinished && !res.writableEnded && savedImageUrl) {
-      console.warn("[PostUpload] Client connection aborted/closed before completion. Cleaning up saved image...");
-      deleteLocalFile(savedImageUrl);
-    }
-  };
-  req.on("close", onClientDisconnect);
 
   try {
     const text = (req.body.text || '').trim();
@@ -40,8 +31,6 @@ exports.createPost = async (req, res, next) => {
     }
     if (!text && !imageUrl) {
       if (savedImageUrl) await deleteLocalFile(savedImageUrl);
-      isFinished = true;
-      req.removeListener("close", onClientDisconnect);
       return res.status(400).json({ success: false, message: 'Post text or image is required' });
     }
     const originalImageSize = Number(req.body.originalImageSize || 0);
@@ -59,16 +48,12 @@ exports.createPost = async (req, res, next) => {
     // Schedule 10-second automated adult content audit
     schedulePostModeration(post, 10000);
 
-    isFinished = true;
-    req.removeListener("close", onClientDisconnect);
     res.status(201).json({ success: true, data: post });
   } catch (err) {
     if (savedImageUrl) {
       await deleteLocalFile(savedImageUrl);
     }
     next(err);
-  } finally {
-    req.removeListener("close", onClientDisconnect);
   }
 };
 

@@ -946,19 +946,6 @@ exports.uploadVideo = async (req, res, next) => {
   const tempFiles = [];
   let savedVideoUrl = null;
   let savedThumbnailUrl = null;
-  let isFinished = false;
-
-  const onClientDisconnect = () => {
-    if (!isFinished && !res.writableEnded) {
-      console.warn("[VideoUpload] Client connection aborted/closed before completion. Cleaning up partial media...");
-      if (savedVideoUrl) deleteLocalFile(savedVideoUrl);
-      if (savedThumbnailUrl) deleteLocalFile(savedThumbnailUrl);
-      for (const filePath of tempFiles) {
-        fs.unlink(filePath, () => {});
-      }
-    }
-  };
-  req.on("close", onClientDisconnect);
 
   try {
     if (!req.files || !req.files.video || !req.files.video[0]) {
@@ -1065,8 +1052,6 @@ exports.uploadVideo = async (req, res, next) => {
     // Automatically audit for adult/NSFW content and purge within 10 seconds if detected
     scheduleVideoModeration(video, 10000);
 
-    isFinished = true;
-    req.removeListener("close", onClientDisconnect);
     res.status(201).json({ success: true, data: video });
   } catch (err) {
     if (savedVideoUrl) {
@@ -1077,7 +1062,6 @@ exports.uploadVideo = async (req, res, next) => {
     }
     next(err);
   } finally {
-    req.removeListener("close", onClientDisconnect);
     for (const filePath of tempFiles) {
       fs.unlink(filePath, (err) => {
         if (err && err.code !== "ENOENT") {
