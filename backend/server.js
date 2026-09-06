@@ -10,6 +10,7 @@ const app = require("./app");
 const connectDB = require("./config/db");
 const { initDeletionScheduler } = require("./utils/deletionScheduler");
 const { initAutoBoostScheduler } = require("./utils/autoBoostScheduler");
+const { initOrphanMediaScheduler } = require("./utils/orphanMediaScheduler");
 
 // Connect to database
 connectDB();
@@ -19,6 +20,9 @@ initDeletionScheduler();
 
 // Initialize organic 5-day auto-boost scheduler
 initAutoBoostScheduler();
+
+// Initialize automated weekly orphan media garbage collection
+initOrphanMediaScheduler();
 
 const PORT = process.env.PORT || 5000;
 

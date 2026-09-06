@@ -198,6 +198,11 @@ const { saveLocalFile, deleteLocalFile } = require('../utils/localUpload');
 // @route   PUT /api/auth/channel
 // @access  Private
 exports.updateChannel = async (req, res, next) => {
+  let savedAvatarUrl = null;
+  let savedCoverImageUrl = null;
+  let oldAvatarToDelete = null;
+  let oldCoverToDelete = null;
+
   try {
     const { name, channelName, about } = req.body;
     let avatar = req.body.avatar ? normalizeAvatar(req.body.avatar) : undefined;
@@ -212,15 +217,17 @@ exports.updateChannel = async (req, res, next) => {
       if (req.files.avatar && req.files.avatar[0]) {
         const result = await saveLocalFile(req, req.files.avatar[0], 'image');
         avatar = result.url;
+        savedAvatarUrl = result.url;
         if (user.avatar) {
-          deleteLocalFile(user.avatar);
+          oldAvatarToDelete = user.avatar;
         }
       }
       if (req.files.coverImage && req.files.coverImage[0]) {
         const result = await saveLocalFile(req, req.files.coverImage[0], 'image');
         coverImage = result.url;
+        savedCoverImageUrl = result.url;
         if (user.coverImage) {
-          deleteLocalFile(user.coverImage);
+          oldCoverToDelete = user.coverImage;
         }
       }
     }
@@ -230,10 +237,14 @@ exports.updateChannel = async (req, res, next) => {
 
     if (channelName !== undefined) {
       if (typeof channelName !== 'string' || channelName.trim().length === 0) {
+        if (savedAvatarUrl) deleteLocalFile(savedAvatarUrl);
+        if (savedCoverImageUrl) deleteLocalFile(savedCoverImageUrl);
         return res.status(400).json({ success: false, message: 'Channel name cannot be empty' });
       }
       trimmedChannelName = channelName.trim();
       if (trimmedChannelName.length > 25) {
+        if (savedAvatarUrl) deleteLocalFile(savedAvatarUrl);
+        if (savedCoverImageUrl) deleteLocalFile(savedCoverImageUrl);
         return res.status(400).json({ success: false, message: 'Channel name cannot exceed 25 characters' });
       }
 
@@ -248,6 +259,8 @@ exports.updateChannel = async (req, res, next) => {
         });
 
         if (existingChannel) {
+          if (savedAvatarUrl) deleteLocalFile(savedAvatarUrl);
+          if (savedCoverImageUrl) deleteLocalFile(savedCoverImageUrl);
           return res.status(400).json({
             success: false,
             message: 'Channel name already exists. Please choose a different channel name.',
@@ -266,6 +279,8 @@ exports.updateChannel = async (req, res, next) => {
             if (timeSinceLastChange < COOLDOWN_MS) {
               const daysRemaining = Math.max(1, Math.ceil((COOLDOWN_MS - timeSinceLastChange) / (24 * 60 * 60 * 1000)));
               const nextAllowedDate = new Date(new Date(user.channelNameChangedAt).getTime() + COOLDOWN_MS);
+              if (savedAvatarUrl) deleteLocalFile(savedAvatarUrl);
+              if (savedCoverImageUrl) deleteLocalFile(savedCoverImageUrl);
               return res.status(400).json({
                 success: false,
                 message: `You can only change your channel name once every 60 days. You will be able to change it again in ${daysRemaining} day${daysRemaining === 1 ? '' : 's'}.`,
@@ -306,11 +321,19 @@ exports.updateChannel = async (req, res, next) => {
       { new: true, runValidators: true }
     );
 
+    // Only delete old files once database update is 100% successful
+    if (oldAvatarToDelete) deleteLocalFile(oldAvatarToDelete);
+    if (oldCoverToDelete) deleteLocalFile(oldCoverToDelete);
+
     res.status(200).json({
       success: true,
       data: updatedUser,
     });
   } catch (err) {
+    // If DB update fails, clean up new files
+    if (savedAvatarUrl) deleteLocalFile(savedAvatarUrl);
+    if (savedCoverImageUrl) deleteLocalFile(savedCoverImageUrl);
+
     if (err.code === 11000 || (err.name === 'MongoServerError' && err.code === 11000)) {
       let duplicateMessage = 'Channel name already exists. Please choose a different channel name.';
       if (err.message && err.message.includes('name_1')) {

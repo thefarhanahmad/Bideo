@@ -946,6 +946,20 @@ exports.uploadVideo = async (req, res, next) => {
   const tempFiles = [];
   let savedVideoUrl = null;
   let savedThumbnailUrl = null;
+  let isFinished = false;
+
+  const onClientDisconnect = () => {
+    if (!isFinished && !res.writableEnded) {
+      console.warn("[VideoUpload] Client connection aborted/closed before completion. Cleaning up partial media...");
+      if (savedVideoUrl) deleteLocalFile(savedVideoUrl);
+      if (savedThumbnailUrl) deleteLocalFile(savedThumbnailUrl);
+      for (const filePath of tempFiles) {
+        fs.unlink(filePath, () => {});
+      }
+    }
+  };
+  req.on("close", onClientDisconnect);
+
   try {
     if (!req.files || !req.files.video || !req.files.video[0]) {
       return res
@@ -977,6 +991,7 @@ exports.uploadVideo = async (req, res, next) => {
 
     if (uploadType === "short" && !isNineBySixteen(aspectRatio)) {
       await deleteLocalFile(videoResult.url);
+      savedVideoUrl = null;
       return res.status(400).json({
         success: false,
         message: "Shorts must be portrait 9:16 videos",
@@ -1050,6 +1065,8 @@ exports.uploadVideo = async (req, res, next) => {
     // Automatically audit for adult/NSFW content and purge within 10 seconds if detected
     scheduleVideoModeration(video, 10000);
 
+    isFinished = true;
+    req.removeListener("close", onClientDisconnect);
     res.status(201).json({ success: true, data: video });
   } catch (err) {
     if (savedVideoUrl) {
@@ -1060,6 +1077,7 @@ exports.uploadVideo = async (req, res, next) => {
     }
     next(err);
   } finally {
+    req.removeListener("close", onClientDisconnect);
     for (const filePath of tempFiles) {
       fs.unlink(filePath, (err) => {
         if (err && err.code !== "ENOENT") {
@@ -1072,6 +1090,9 @@ exports.uploadVideo = async (req, res, next) => {
 
 exports.updateVideo = async (req, res, next) => {
   const tempFiles = [];
+  let savedThumbnailUrl = null;
+  let oldThumbnailToDelete = null;
+
   try {
     if (!mongoose.isValidObjectId(req.params.id)) {
       return res
@@ -1129,6 +1150,7 @@ exports.updateVideo = async (req, res, next) => {
         req.files.thumbnail[0],
         "image",
       );
+      savedThumbnailUrl = thumbnailResult.url;
       updates.thumbnail = thumbnailResult.url;
       updates.originalThumbnailSize = Number(
         req.body.originalThumbnailSize || 0,
@@ -1137,13 +1159,19 @@ exports.updateVideo = async (req, res, next) => {
       const thumbIdx = tempFiles.indexOf(req.files.thumbnail[0].path);
       if (thumbIdx !== -1) tempFiles.splice(thumbIdx, 1);
 
-      if (video.thumbnail) await deleteLocalFile(video.thumbnail);
+      if (video.thumbnail) {
+        oldThumbnailToDelete = video.thumbnail;
+      }
     }
 
     video = await Video.findByIdAndUpdate(req.params.id, updates, {
       new: true,
       runValidators: true,
     });
+
+    if (oldThumbnailToDelete) {
+      await deleteLocalFile(oldThumbnailToDelete);
+    }
 
     // Schedule automated audit on updated video
     if (video) {
@@ -1152,6 +1180,9 @@ exports.updateVideo = async (req, res, next) => {
 
     res.status(200).json({ success: true, data: video });
   } catch (err) {
+    if (savedThumbnailUrl) {
+      await deleteLocalFile(savedThumbnailUrl);
+    }
     next(err);
   } finally {
     for (const filePath of tempFiles) {

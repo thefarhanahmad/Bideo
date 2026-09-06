@@ -19,14 +19,29 @@ const createNotification = async ({ recipient, actor, type, video, post, comment
 };
 
 exports.createPost = async (req, res, next) => {
+  let savedImageUrl = null;
+  let isFinished = false;
+
+  const onClientDisconnect = () => {
+    if (!isFinished && !res.writableEnded && savedImageUrl) {
+      console.warn("[PostUpload] Client connection aborted/closed before completion. Cleaning up saved image...");
+      deleteLocalFile(savedImageUrl);
+    }
+  };
+  req.on("close", onClientDisconnect);
+
   try {
     const text = (req.body.text || '').trim();
     let imageUrl = req.body.imageUrl;
     if (req.file) {
       const result = await saveLocalFile(req, req.file, 'image');
       imageUrl = result.url;
+      savedImageUrl = result.url;
     }
     if (!text && !imageUrl) {
+      if (savedImageUrl) await deleteLocalFile(savedImageUrl);
+      isFinished = true;
+      req.removeListener("close", onClientDisconnect);
       return res.status(400).json({ success: false, message: 'Post text or image is required' });
     }
     const originalImageSize = Number(req.body.originalImageSize || 0);
@@ -44,13 +59,23 @@ exports.createPost = async (req, res, next) => {
     // Schedule 10-second automated adult content audit
     schedulePostModeration(post, 10000);
 
+    isFinished = true;
+    req.removeListener("close", onClientDisconnect);
     res.status(201).json({ success: true, data: post });
   } catch (err) {
+    if (savedImageUrl) {
+      await deleteLocalFile(savedImageUrl);
+    }
     next(err);
+  } finally {
+    req.removeListener("close", onClientDisconnect);
   }
 };
 
 exports.updatePost = async (req, res, next) => {
+  let savedImageUrl = null;
+  let oldImageToDelete = null;
+
   try {
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ success: false, message: 'Post not found' });
@@ -67,15 +92,21 @@ exports.updatePost = async (req, res, next) => {
 
       const result = await saveLocalFile(req, req.file, 'image');
       imageUrl = result.url;
-      if (post.imageUrl) await deleteLocalFile(post.imageUrl);
+      savedImageUrl = result.url;
+      if (post.imageUrl) {
+        oldImageToDelete = post.imageUrl;
+      }
     } else if (req.body.removeImage === 'true') {
-      if (post.imageUrl) await deleteLocalFile(post.imageUrl);
+      if (post.imageUrl) {
+        oldImageToDelete = post.imageUrl;
+      }
       imageUrl = '';
       post.originalImageSize = 0;
       post.compressedImageSize = 0;
     }
 
     if (!text && !imageUrl) {
+      if (savedImageUrl) await deleteLocalFile(savedImageUrl);
       return res.status(400).json({ success: false, message: 'Post text or image is required' });
     }
 
@@ -84,11 +115,18 @@ exports.updatePost = async (req, res, next) => {
     if (req.body.visibility) post.visibility = req.body.visibility;
     await post.save();
 
+    if (oldImageToDelete) {
+      await deleteLocalFile(oldImageToDelete);
+    }
+
     // Schedule 10-second automated adult content audit
     schedulePostModeration(post, 10000);
 
     res.status(200).json({ success: true, data: post });
   } catch (err) {
+    if (savedImageUrl) {
+      await deleteLocalFile(savedImageUrl);
+    }
     next(err);
   }
 };

@@ -29,6 +29,7 @@ exports.getActiveAds = async (req, res, next) => {
 // @route   POST /api/ads
 // @access  Private/Admin
 exports.createAd = async (req, res, next) => {
+  let savedImageUrl = null;
   try {
     const { title, type, activeStatus, link } = req.body;
     let imageUrl = '';
@@ -36,6 +37,7 @@ exports.createAd = async (req, res, next) => {
     if (req.file) {
       const result = await saveLocalFile(req, req.file, 'image');
       imageUrl = result.url;
+      savedImageUrl = result.url;
     } else {
       return res.status(400).json({ success: false, message: 'Please upload an ad image' });
     }
@@ -55,6 +57,9 @@ exports.createAd = async (req, res, next) => {
 
     res.status(201).json({ success: true, data: ad });
   } catch (err) {
+    if (savedImageUrl) {
+      await deleteLocalFile(savedImageUrl);
+    }
     next(err);
   }
 };
@@ -63,6 +68,9 @@ exports.createAd = async (req, res, next) => {
 // @route   PUT /api/ads/:id
 // @access  Private/Admin
 exports.updateAd = async (req, res, next) => {
+  let savedImageUrl = null;
+  let oldImageToDelete = null;
+
   try {
     const ad = await Ad.findById(req.params.id);
     if (!ad) {
@@ -73,9 +81,8 @@ exports.updateAd = async (req, res, next) => {
     let imageUrl = ad.image;
 
     if (req.file) {
-      // Delete old image
       if (ad.image) {
-        await deleteLocalFile(ad.image);
+        oldImageToDelete = ad.image;
       }
       
       ad.originalImageSize = Number(req.body.originalImageSize || 0);
@@ -83,6 +90,7 @@ exports.updateAd = async (req, res, next) => {
 
       const result = await saveLocalFile(req, req.file, 'image');
       imageUrl = result.url;
+      savedImageUrl = result.url;
     }
 
     ad.title = title || ad.title;
@@ -97,8 +105,15 @@ exports.updateAd = async (req, res, next) => {
 
     await ad.save();
 
+    if (oldImageToDelete) {
+      await deleteLocalFile(oldImageToDelete);
+    }
+
     res.status(200).json({ success: true, data: ad });
   } catch (err) {
+    if (savedImageUrl) {
+      await deleteLocalFile(savedImageUrl);
+    }
     next(err);
   }
 };
