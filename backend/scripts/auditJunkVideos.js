@@ -31,6 +31,7 @@ const Video = require('../models/Video');
 const Comment = require('../models/Comment');
 const VideoReport = require('../models/VideoReport');
 const VideoMonetizationReview = require('../models/VideoMonetizationReview');
+const MonetizationApplication = require('../models/MonetizationApplication');
 
 const shouldDelete = process.argv.includes('--delete');
 const includeDead = process.argv.includes('--include-dead');
@@ -100,9 +101,13 @@ const run = async () => {
   await mongoose.connect(mongoUri);
   console.log('✅ Connected to MongoDB.\n');
 
-  console.log('🔍 Fetching all videos for analysis...');
+  console.log('🔍 Indexing monetized creators and loading videos...');
+  const monetizedUserIds = await MonetizationApplication.find({ status: 'approved' }).distinct('user').catch(() => []);
+  const monetizedUserSet = new Set(monetizedUserIds.map(String));
+  console.log(`   ✔ Approved monetized creators protected: ${monetizedUserSet.size}`);
+
   const videos = await Video.find({}).sort({ createdAt: -1 }).lean();
-  console.log(`📦 Loaded ${videos.length} total videos from database.\n`);
+  console.log(`   ✔ Total videos loaded: ${videos.length}\n`);
 
   const now = Date.now();
   const flaggedVideos = [];
@@ -209,6 +214,78 @@ const run = async () => {
             thumbPath: thumbFile.path,
           });
         }
+      }
+    }
+  }
+
+  // Category 6: Unmonetized Channel Redundant / Junk Shorts (0 comments, max 1-2 per channel)
+  for (const [ownerId, userVideos] of videosByOwner.entries()) {
+    // 1. Skip if channel is approved monetized
+    if (monetizedUserSet.has(ownerId)) continue;
+
+    // 2. Only check channels that have multiple videos (>= 3 videos)
+    // "and channel has more videos then we can delete 1-2 videos, will not cause issue"
+    if (userVideos.length < 3) continue;
+
+    const longVideos = userVideos.filter((v) => (v.duration || 0) > 60);
+    let channelJunkCount = 0;
+
+    for (const v of userVideos) {
+      if (flaggedIds.has(String(v._id))) continue;
+      if (channelJunkCount >= 2) break; // Strict cap: at most 1-2 videos per channel
+
+      const duration = v.duration || 0;
+      const commentsCount = v.commentsCount || 0;
+      const views = v.views || 0;
+      const likesCount = Array.isArray(v.likes) ? v.likes.length : 0;
+      const title = (v.title || '').trim().toLowerCase();
+
+      // Rule: MUST have 0 comments! "and that video has 0 comments on that, we can delete them"
+      if (commentsCount > 0) continue;
+
+      let isJunk = false;
+      let junkReason = '';
+
+      // Case A: Long video was uploaded, and this is its short duplicate/snippet (< 60s) with 0 comments
+      const matchingLong = longVideos.find((lv) => {
+        if (String(lv._id) === String(v._id)) return false;
+        const lvTitle = (lv.title || '').trim().toLowerCase();
+        return (
+          title.includes(lvTitle) ||
+          lvTitle.includes(title) ||
+          (lvTitle.length > 6 && title.slice(0, 12) === lvTitle.slice(0, 12))
+        );
+      });
+
+      if (matchingLong && duration <= 60 && views <= 10) {
+        isJunk = true;
+        junkReason = `Redundant short snippet of "${matchingLong.title}" (0 comments, ${views} views)`;
+      } else if (duration > 0 && duration <= 15 && views <= 2 && likesCount === 0) {
+        // Case B: Ultra-short clip (<= 15s) with 0 comments, 0 likes on multi-video unmonetized channel
+        isJunk = true;
+        junkReason = `Short junk clip (${duration}s) with 0 comments and ${views} views (channel has ${userVideos.length} videos)`;
+      }
+
+      if (isJunk) {
+        flaggedIds.add(String(v._id));
+        channelJunkCount++;
+
+        const videoFile = getFileSize(v.videoUrl);
+        const thumbFile = getFileSize(v.thumbnail);
+        const totalSize = videoFile.size + thumbFile.size;
+
+        flaggedVideos.push({
+          id: v._id,
+          title: v.title,
+          duration: v.duration,
+          views: v.views,
+          createdAt: v.createdAt,
+          category: 'Unmonetized Redundant / Junk Short',
+          reason: junkReason,
+          size: totalSize,
+          videoPath: videoFile.path,
+          thumbPath: thumbFile.path,
+        });
       }
     }
   }
