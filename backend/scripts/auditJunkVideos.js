@@ -102,12 +102,29 @@ const run = async () => {
   console.log('✅ Connected to MongoDB.\n');
 
   console.log('🔍 Indexing monetized creators and loading videos...');
+  // 1. Users with approved channel monetization applications
   const monetizedUserIds = await MonetizationApplication.find({ status: 'approved' }).distinct('user').catch(() => []);
-  const monetizedUserSet = new Set(monetizedUserIds.map(String));
-  console.log(`   ✔ Approved monetized creators protected: ${monetizedUserSet.size}`);
+
+  // 2. Users with at least one video that passed the monetization process
+  const passedReviewUserIds = await VideoMonetizationReview.find({ status: 'passed' }).distinct('user').catch(() => []);
+
+  // 3. Specific videos passed (or in review) for monetization
+  const passedVideoIds = await VideoMonetizationReview.find({ status: { $in: ['passed', 'pending'] } }).distinct('video').catch(() => []);
+  const protectedVideoSet = new Set(passedVideoIds.map(String));
+
+  // Combined set of protected monetization creators
+  const monetizedUserSet = new Set([
+    ...monetizedUserIds.map(String),
+    ...passedReviewUserIds.map(String),
+  ]);
+
+  console.log(`   ✔ Approved monetized channels:            ${monetizedUserIds.length}`);
+  console.log(`   ✔ Users with passed monetization videos:  ${passedReviewUserIds.length}`);
+  console.log(`   ✔ Total protected monetization creators:   ${monetizedUserSet.size}`);
+  console.log(`   ✔ Specific videos passed for monetization: ${protectedVideoSet.size} (100% Protected)`);
 
   const videos = await Video.find({}).sort({ createdAt: -1 }).lean();
-  console.log(`   ✔ Total videos loaded: ${videos.length}\n`);
+  console.log(`   ✔ Total videos loaded:                    ${videos.length}\n`);
 
   const now = Date.now();
   const flaggedVideos = [];
@@ -125,6 +142,8 @@ const run = async () => {
   const flaggedIds = new Set();
 
   for (const v of videos) {
+    // Protection: NEVER touch any video that has passed monetization!
+    if (protectedVideoSet.has(String(v._id))) continue;
     const videoAgeMs = now - new Date(v.createdAt || 0).getTime();
     // In-flight upload grace period: skip any video created in last 2 hours
     if (videoAgeMs < GRACE_PERIOD_MS) continue;
