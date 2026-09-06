@@ -6,6 +6,7 @@ const morgan = require("morgan");
 const dotenv = require("dotenv");
 
 const path = require("path");
+const fs = require("fs");
 
 // Load env vars
 dotenv.config();
@@ -101,6 +102,34 @@ app.get("/api/health", (req, res) => {
     success: true,
     message: "Bideo API Running",
   });
+});
+
+// Direct Android APK Download Endpoint
+app.get(["/api/download/app", "/api/download/apk", "/download/app", "/download/bideo.apk"], (req, res) => {
+  // 1. Check if a custom cloud/drive direct download URL is configured in .env
+  const customUrl = process.env.DIRECT_APK_DOWNLOAD_URL;
+  if (customUrl) {
+    return res.redirect(customUrl);
+  }
+
+  // 2. Check local uploaded APK in backend/uploads/apk/bideo.apk
+  const uploadedApkPath = path.join(__dirname, "uploads", "apk", "bideo.apk");
+  if (fs.existsSync(uploadedApkPath)) {
+    res.setHeader("Content-Type", "application/vnd.android.package-archive");
+    res.setHeader("Content-Disposition", 'attachment; filename="Bideo.apk"');
+    return res.sendFile(uploadedApkPath);
+  }
+
+  // 3. Check workspace Android build release path (local dev fallback)
+  const workspaceApkPath = path.resolve(__dirname, "../bideoApp/android/app/build/outputs/apk/release/app-release.apk");
+  if (fs.existsSync(workspaceApkPath)) {
+    res.setHeader("Content-Type", "application/vnd.android.package-archive");
+    res.setHeader("Content-Disposition", 'attachment; filename="Bideo.apk"');
+    return res.sendFile(workspaceApkPath);
+  }
+
+  // 4. Default fallback to Google Play Store if no APK found
+  res.redirect("https://play.google.com/store/apps/details?id=com.farhan.bideoapp");
 });
 
 // Error handling middleware

@@ -41,7 +41,11 @@ const DownloadButton = ({
   }
 
   return (
-    <a href={APP_DOWNLOAD_URL} target="_blank" rel="noreferrer" className={cls}>
+    <a
+      href={APP_DOWNLOAD_URL}
+      download="Bideo.apk"
+      className={cls}
+    >
       <DownloadIcon className="h-5 w-5" />
       {label}
     </a>

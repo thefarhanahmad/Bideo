@@ -33,7 +33,8 @@ if [ -n "$ENV_PATH" ]; then
 fi
 
 if [ -z "$VITE_APP_DOWNLOAD_URL" ]; then
-    echo "⚠️ VITE_APP_DOWNLOAD_URL is not set or empty. The download button on the landing page will be disabled."
+    VITE_APP_DOWNLOAD_URL="https://bideo.in/api/download/app"
+    echo "ℹ️ VITE_APP_DOWNLOAD_URL not set in env. Defaulting to direct APK download: $VITE_APP_DOWNLOAD_URL"
 else
     echo "ℹ️ Found VITE_APP_DOWNLOAD_URL: $VITE_APP_DOWNLOAD_URL"
 fi
