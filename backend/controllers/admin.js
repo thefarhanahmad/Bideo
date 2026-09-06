@@ -379,21 +379,28 @@ exports.updateVideoReport = async (req, res, next) => {
 exports.getPendingVideoReviews = async (req, res, next) => {
   try {
     const search = (req.query.search || '').trim();
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.max(1, Math.min(parseInt(req.query.limit, 10) || 10, 50));
+    const skip = (page - 1) * limit;
 
-    // 1. Find all users who currently have at least one pending review
-    const pendingUserIds = await VideoMonetizationReview.distinct('user', { status: 'pending' });
+    // 1. Fetch count stats and distinct pending user IDs in parallel using indexes
+    const [pendingReviewsCount, pendingUserIds, pendingAppsCount, approvedMonetizedCount] = await Promise.all([
+      VideoMonetizationReview.countDocuments({ status: 'pending' }),
+      VideoMonetizationReview.distinct('user', { status: 'pending' }),
+      MonetizationApplication.countDocuments({ status: 'pending' }),
+      MonetizationApplication.countDocuments({ status: 'approved' }),
+    ]);
 
     if (!pendingUserIds || pendingUserIds.length === 0) {
-      const [pendingAppsCount, approvedMonetizedCount] = await Promise.all([
-        MonetizationApplication.countDocuments({ status: 'pending' }),
-        MonetizationApplication.countDocuments({ status: 'approved' }),
-      ]);
       return res.status(200).json({
         success: true,
         count: 0,
+        total: 0,
+        page,
+        pages: 1,
         data: [],
         counts: {
-          videos: 0,
+          videos: pendingReviewsCount,
           applications: pendingAppsCount,
           monetized: approvedMonetizedCount,
         },
@@ -422,69 +429,102 @@ exports.getPendingVideoReviews = async (req, res, next) => {
     });
 
     // 3. Filter out creators who already have 3 or more passed videos (Step 1 complete)
-    const activeUserIds = pendingUserIds.filter((uid) => {
+    let activeUserIds = pendingUserIds.filter((uid) => {
       const passed = passedMap.get(uid.toString()) || 0;
       return passed < 3;
     });
 
     if (activeUserIds.length === 0) {
-      const [pendingAppsCount, approvedMonetizedCount] = await Promise.all([
-        MonetizationApplication.countDocuments({ status: 'pending' }),
-        MonetizationApplication.countDocuments({ status: 'approved' }),
-      ]);
       return res.status(200).json({
         success: true,
         count: 0,
+        total: 0,
+        page,
+        pages: 1,
         data: [],
         counts: {
-          videos: 0,
+          videos: pendingReviewsCount,
           applications: pendingAppsCount,
           monetized: approvedMonetizedCount,
         },
       });
     }
 
-    // 4. Build query for active users (include both pending and passed so admin sees already passed videos on top)
-    const reviewQuery = {
-      user: { $in: activeUserIds },
-      status: { $in: ['pending', 'passed'] },
-    };
-
+    // If search is provided, filter creators by creator name/channel/phone/email or video title
     if (search) {
       const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const regex = new RegExp(escaped, 'i');
 
       const [matchingVideos, matchingUsers] = await Promise.all([
-        Video.find({ title: regex }).select('_id').limit(50),
+        Video.find({
+          owner: { $in: activeUserIds },
+          title: regex,
+        })
+          .select('_id owner')
+          .lean(),
         User.find({
+          _id: { $in: activeUserIds },
           $or: [{ name: regex }, { channelName: regex }, { phone: regex }, { email: regex }],
         })
           .select('_id')
-          .limit(50),
+          .lean(),
       ]);
 
-      reviewQuery.$or = [
-        { video: { $in: matchingVideos.map((v) => v._id) } },
-        { user: { $in: matchingUsers.map((u) => u._id) } },
-      ];
+      const matchingUserSet = new Set(matchingUsers.map((u) => u._id.toString()));
+      matchingVideos.forEach((v) => {
+        if (v.owner) matchingUserSet.add(v.owner.toString());
+      });
+
+      activeUserIds = activeUserIds.filter((uid) => matchingUserSet.has(uid.toString()));
     }
 
-    const [reviews, pendingAppsCount, approvedMonetizedCount] = await Promise.all([
-      VideoMonetizationReview.find(reviewQuery)
-        .populate('video', 'title thumbnail videoUrl views duration isShort createdAt')
-        .populate('user', 'name channelName avatar email phone')
-        .lean(),
-      MonetizationApplication.countDocuments({ status: 'pending' }),
-      MonetizationApplication.countDocuments({ status: 'approved' }),
-    ]);
+    const totalCreators = activeUserIds.length;
+    const totalPages = Math.ceil(totalCreators / limit) || 1;
+
+    // Paginate creators for the requested page
+    const pagedUserIds = activeUserIds.slice(skip, skip + limit);
+
+    if (pagedUserIds.length === 0) {
+      return res.status(200).json({
+        success: true,
+        count: 0,
+        total: totalCreators,
+        page,
+        pages: totalPages,
+        data: [],
+        counts: {
+          videos: pendingReviewsCount,
+          applications: pendingAppsCount,
+          monetized: approvedMonetizedCount,
+        },
+      });
+    }
+
+    // 4. Query reviews ONLY for creators on the current page
+    const reviews = await VideoMonetizationReview.find({
+      user: { $in: pagedUserIds },
+      status: { $in: ['pending', 'passed'] },
+    })
+      .populate('video', 'title thumbnail videoUrl views duration isShort createdAt')
+      .populate('user', 'name channelName avatar email phone')
+      .lean();
 
     // 5. Group reviews by user ID
     const userGroupsMap = {};
+    for (const uid of pagedUserIds) {
+      userGroupsMap[uid.toString()] = {
+        user: null,
+        passedCount: passedMap.get(uid.toString()) || 0,
+        pendingCount: 0,
+        reviews: [],
+      };
+    }
+
+    const orphanReviewIds = [];
     for (const r of reviews) {
       if (!r.user) continue;
-      // If the referenced video was deleted, clean up this orphan review
       if (!r.video) {
-        VideoMonetizationReview.findByIdAndDelete(r._id).exec();
+        orphanReviewIds.push(r._id);
         continue;
       }
       const userId = (r.user._id || r.user.id || r.user).toString();
@@ -496,17 +536,35 @@ exports.getPendingVideoReviews = async (req, res, next) => {
           reviews: [],
         };
       }
-      if (r.status === 'passed') {
-        userGroupsMap[userId].passedCount += 1;
-      } else if (r.status === 'pending') {
+      if (!userGroupsMap[userId].user) {
+        userGroupsMap[userId].user = r.user;
+      }
+      if (r.status === 'pending') {
         userGroupsMap[userId].pendingCount += 1;
       }
       userGroupsMap[userId].reviews.push(r);
     }
 
+    // Async batch cleanup for orphans without blocking response
+    if (orphanReviewIds.length > 0) {
+      VideoMonetizationReview.deleteMany({ _id: { $in: orphanReviewIds } }).exec().catch(() => {});
+    }
+
+    // Fill missing user info if any creator had no reviews matching criteria
+    const missingUserIds = Object.keys(userGroupsMap).filter((id) => !userGroupsMap[id].user);
+    if (missingUserIds.length > 0) {
+      const fetchedUsers = await User.find({ _id: { $in: missingUserIds } })
+        .select('name channelName avatar email phone')
+        .lean();
+      fetchedUsers.forEach((u) => {
+        if (userGroupsMap[u._id.toString()]) {
+          userGroupsMap[u._id.toString()].user = u;
+        }
+      });
+    }
+
     // 6. Sort reviews for each user: 'passed' ON TOP, then 'pending', then newest first
     const statusRank = { passed: 0, pending: 1 };
-    let totalPendingInQueue = 0;
     for (const userId in userGroupsMap) {
       userGroupsMap[userId].reviews.sort((a, b) => {
         const rankA = statusRank[a.status] !== undefined ? statusRank[a.status] : 2;
@@ -514,16 +572,19 @@ exports.getPendingVideoReviews = async (req, res, next) => {
         if (rankA !== rankB) return rankA - rankB;
         return new Date(b.createdAt) - new Date(a.createdAt);
       });
-      totalPendingInQueue += userGroupsMap[userId].pendingCount;
     }
 
-    const groupedData = Object.values(userGroupsMap);
+    const groupedData = Object.values(userGroupsMap).filter((g) => g.user && g.reviews.length > 0);
+
     res.status(200).json({
       success: true,
       count: groupedData.length,
+      total: totalCreators,
+      page,
+      pages: totalPages,
       data: groupedData,
       counts: {
-        videos: totalPendingInQueue,
+        videos: pendingReviewsCount,
         applications: pendingAppsCount,
         monetized: approvedMonetizedCount,
       },
@@ -592,19 +653,34 @@ exports.getMonetizationApplications = async (req, res, next) => {
     const limit = fetchAll ? 10000 : Math.max(1, Math.min(parseInt(req.query.limit, 10) || 10, 100));
     const skip = (page - 1) * limit;
 
-    const [applications, total, pendingAppsCount, approvedMonetizedCount, pendingReviewsCount] =
-      await Promise.all([
-        MonetizationApplication.find(query)
-          .populate('user', 'name channelName avatar email phone followersCount createdAt')
-          .sort(status === 'approved' ? '-updatedAt' : '-createdAt')
-          .skip(skip)
-          .limit(limit)
-          .lean(),
-        MonetizationApplication.countDocuments(query),
-        MonetizationApplication.countDocuments({ status: 'pending' }),
-        MonetizationApplication.countDocuments({ status: 'approved' }),
-        VideoMonetizationReview.countDocuments({ status: 'pending' }),
-      ]);
+    const hasSearch = !!search;
+    const isPending = status === 'pending';
+    const isApproved = status === 'approved';
+
+    const tasks = [
+      MonetizationApplication.find(query)
+        .populate('user', 'name channelName avatar email phone followersCount createdAt')
+        .sort(status === 'approved' ? '-updatedAt' : '-createdAt')
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      MonetizationApplication.countDocuments({ status: 'pending' }),
+      MonetizationApplication.countDocuments({ status: 'approved' }),
+      VideoMonetizationReview.countDocuments({ status: 'pending' }),
+    ];
+
+    if (hasSearch || (!isPending && !isApproved)) {
+      tasks.push(MonetizationApplication.countDocuments(query));
+    }
+
+    const results = await Promise.all(tasks);
+    const applications = results[0];
+    const pendingAppsCount = results[1];
+    const approvedMonetizedCount = results[2];
+    const pendingReviewsCount = results[3];
+    const total = hasSearch || (!isPending && !isApproved)
+      ? results[4]
+      : (isPending ? pendingAppsCount : approvedMonetizedCount);
 
     res.status(200).json({
       success: true,

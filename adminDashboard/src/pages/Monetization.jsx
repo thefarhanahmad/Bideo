@@ -60,7 +60,10 @@ const Monetization = () => {
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
         if (currentTab === "videos") {
-          const params = new URLSearchParams();
+          const params = new URLSearchParams({
+            page: currentPage,
+            limit: currentLimit,
+          });
           if (currentSearch && currentSearch.trim()) params.append("search", currentSearch.trim());
           const res = await fetch(`${API}/api/admin/videos/pending-reviews?${params.toString()}`, {
             headers,
@@ -70,8 +73,8 @@ const Monetization = () => {
           if (!res.ok) throw new Error(data.message || "Failed to load video reviews");
           setVideoReviews(data.data || []);
           if (data.counts) setCounts(data.counts);
-          setTotalItems(data.count || 0);
-          setTotalPages(1);
+          setTotalItems(data.total || data.count || 0);
+          setTotalPages(data.pages || 1);
         } else if (currentTab === "applications") {
           const params = new URLSearchParams({
             status: "pending",
@@ -113,13 +116,13 @@ const Monetization = () => {
         setLoading(false);
       }
     },
-    [API, activeTab, page, limit, search]
+    [API]
   );
 
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchData(activeTab, page, limit, search);
-    }, 300);
+    }, search ? 300 : 0);
     return () => clearTimeout(timer);
   }, [fetchData, activeTab, page, limit, search]);
 
@@ -284,9 +287,9 @@ const Monetization = () => {
           {/* TAB 1: Video Audits */}
           {activeTab === "videos" && (
             <div className="space-y-6">
-              {videoReviews.map((group) => (
+              {videoReviews.map((group, index) => (
                 <div
-                  key={group.user._id}
+                  key={group.user?._id || group.user?.id || index}
                   className="overflow-hidden rounded-2xl border-2 border-brand-dark bg-white shadow-card p-4 sm:p-5"
                 >
                   {/* Creator Header */}
@@ -294,6 +297,7 @@ const Monetization = () => {
                     <img
                       src={resolveMediaUrl(group.user?.avatar)}
                       alt="avatar"
+                      loading="lazy"
                       className="h-10 w-10 rounded-full bg-surface object-cover border border-line"
                       onError={(e) => {
                         e.currentTarget.src = "https://via.placeholder.com/80x80.png?text=User";
@@ -335,6 +339,7 @@ const Monetization = () => {
                               <img
                                 src={resolveMediaUrl(rev.video.thumbnail)}
                                 alt="thumb"
+                                loading="lazy"
                                 className="w-full h-full object-cover"
                                 onError={(e) => {
                                   e.currentTarget.src = "https://via.placeholder.com/640x360.png?text=Thumbnail";
@@ -419,6 +424,18 @@ const Monetization = () => {
                   <p className="mt-1 text-sm">All uploaded monetization review videos have been audited.</p>
                 </div>
               )}
+
+              {/* Pagination */}
+              {videoReviews.length > 0 && (
+                <Pagination
+                  currentPage={page}
+                  totalPages={totalPages}
+                  totalItems={totalItems}
+                  pageSize={limit}
+                  onPageChange={setPage}
+                  onPageSizeChange={setLimit}
+                />
+              )}
             </div>
           )}
 
@@ -446,6 +463,7 @@ const Monetization = () => {
                             <img
                               src={resolveMediaUrl(app.user?.avatar)}
                               alt="avatar"
+                              loading="lazy"
                               className="h-10 w-10 shrink-0 rounded-full bg-surface object-cover border border-line"
                               onError={(e) => {
                                 e.currentTarget.src = "https://via.placeholder.com/80x80.png?text=User";
@@ -541,6 +559,7 @@ const Monetization = () => {
                             <img
                               src={resolveMediaUrl(app.user?.avatar)}
                               alt="avatar"
+                              loading="lazy"
                               className="h-10 w-10 shrink-0 rounded-full bg-surface object-cover border border-line"
                               onError={(e) => {
                                 e.currentTarget.src = "https://via.placeholder.com/80x80.png?text=User";

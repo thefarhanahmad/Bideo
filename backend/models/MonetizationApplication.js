@@ -51,4 +51,8 @@ const monetizationApplicationSchema = new mongoose.Schema({
   }
 });
 
+monetizationApplicationSchema.index({ status: 1, createdAt: -1 });
+monetizationApplicationSchema.index({ status: 1, updatedAt: -1 });
+monetizationApplicationSchema.index({ user: 1, status: 1 });
+
 module.exports = mongoose.model('MonetizationApplication', monetizationApplicationSchema);
