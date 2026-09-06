@@ -2,6 +2,7 @@ const Post = require('../models/Post');
 const User = require('../models/User');
 const Follower = require('../models/Follower');
 const Notification = require('../models/Notification');
+const Comment = require('../models/Comment');
 const { saveLocalFile, deleteLocalFile } = require('../utils/localUpload');
 const { getUserInterestProfile, rankAndShufflePosts } = require('../utils/recommendation');
 const { sendPushForEvent } = require('../utils/pushNotification');
@@ -205,6 +206,10 @@ exports.deletePost = async (req, res, next) => {
 
     if (post.imageUrl) await deleteLocalFile(post.imageUrl);
     await post.deleteOne();
+    await Promise.all([
+      Comment.deleteMany({ post: post._id }),
+      Notification.deleteMany({ post: post._id }),
+    ]);
 
     res.status(200).json({ success: true, data: {} });
   } catch (err) {

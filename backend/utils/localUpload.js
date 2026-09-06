@@ -70,14 +70,20 @@ const saveLocalFile = (req, file, type) => {
  * @param {string} url The public URL of the file to delete
  */
 const deleteLocalFile = (url) => {
-  if (!url || url.includes('default-avatar.png') || url.includes('via.placeholder.com')) return;
+  if (!url || typeof url !== 'string' || url.includes('default-avatar.png') || url.includes('via.placeholder.com')) return;
 
   try {
+    let relativePath = '';
     const uploadsIdx = url.indexOf('/uploads/');
-    if (uploadsIdx === -1) return;
+    if (uploadsIdx !== -1) {
+      // Extract relative path like 'uploads/images/filename.jpg'
+      relativePath = url.substring(uploadsIdx + 1);
+    } else if (url.startsWith('uploads/') || url.startsWith('uploads\\')) {
+      relativePath = url.replace(/\\/g, '/');
+    } else {
+      return;
+    }
 
-    // Extract relative path like 'uploads/images/filename.jpg'
-    const relativePath = url.substring(uploadsIdx + 1);
     const uploadsBaseDir = path.resolve(__dirname, '../uploads');
     const absolutePath = path.resolve(path.join(__dirname, '..', relativePath));
 

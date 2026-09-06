@@ -5,6 +5,7 @@ const Video = require('../models/Video');
 const Post = require('../models/Post');
 const Follower = require('../models/Follower');
 const { deleteLocalFile } = require('../utils/localUpload');
+const { permanentlyDeleteUser } = require('../utils/deletionScheduler');
 const VideoMonetizationReview = require('../models/VideoMonetizationReview');
 const MonetizationApplication = require('../models/MonetizationApplication');
 const WithdrawalRequest = require('../models/WithdrawalRequest');
@@ -912,7 +913,8 @@ exports.getHistory = async (req, res, next) => {
       populate: { path: 'owner', select: 'name channelName avatar' }
     });
 
-    res.status(200).json({ success: true, data: user?.watchHistory || [] });
+    const validHistory = (user?.watchHistory || []).filter(Boolean);
+    res.status(200).json({ success: true, data: validHistory });
   } catch (err) {
     next(err);
   }
@@ -927,7 +929,8 @@ exports.getLikedVideos = async (req, res, next) => {
         { path: 'category', select: 'name' },
       ],
     });
-    res.status(200).json({ success: true, data: user?.likedVideos || [] });
+    const validLiked = (user?.likedVideos || []).filter(Boolean);
+    res.status(200).json({ success: true, data: validLiked });
   } catch (err) {
     next(err);
   }
@@ -1005,15 +1008,12 @@ exports.deleteUser = async (req, res, next) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-    // Delete avatar and cover image from local storage
-    if (user.avatar) {
-      deleteLocalFile(user.avatar);
-    }
-    if (user.coverImage) {
-      deleteLocalFile(user.coverImage);
+
+    if (req.user && req.user.id && req.user.id.toString() === user._id.toString()) {
+      return res.status(400).json({ success: false, message: 'Cannot delete your own active admin account' });
     }
 
-    await user.deleteOne();
+    await permanentlyDeleteUser(user._id);
     res.status(200).json({ success: true, data: {} });
   } catch (err) {
     next(err);

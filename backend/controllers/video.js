@@ -8,6 +8,8 @@ const VideoReport = require("../models/VideoReport");
 const Notification = require("../models/Notification");
 const VideoMonetizationReview = require("../models/VideoMonetizationReview");
 const MonetizationApplication = require("../models/MonetizationApplication");
+const Comment = require("../models/Comment");
+const Playlist = require("../models/Playlist");
 const fs = require("fs");
 const { saveLocalFile, deleteLocalFile } = require("../utils/localUpload");
 const { getUserInterestProfile, rankAndShuffleVideos } = require("../utils/recommendation");
@@ -1207,13 +1209,22 @@ exports.deleteVideo = async (req, res, next) => {
       });
     }
 
-    if (video.videoUrl) await deleteLocalFile(video.videoUrl);
+    const videoFileUrl = video.videoUrl || video.url;
+    if (videoFileUrl) await deleteLocalFile(videoFileUrl);
     if (video.thumbnail) await deleteLocalFile(video.thumbnail);
 
     await video.deleteOne();
     await Promise.all([
       VideoMonetizationReview.deleteMany({ video: video._id }),
       VideoReport.deleteMany({ video: video._id }),
+      VideoView.deleteMany({ video: video._id }),
+      Comment.deleteMany({ video: video._id }),
+      Notification.deleteMany({ video: video._id }),
+      Playlist.updateMany({ videos: video._id }, { $pull: { videos: video._id } }),
+      User.updateMany(
+        { $or: [{ watchHistory: video._id }, { likedVideos: video._id }] },
+        { $pull: { watchHistory: video._id, likedVideos: video._id } }
+      ),
     ]);
     res.status(200).json({ success: true, data: {} });
   } catch (err) {
