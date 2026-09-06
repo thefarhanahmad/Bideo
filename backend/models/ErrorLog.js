@@ -53,4 +53,8 @@ const ErrorLogSchema = new mongoose.Schema({
 ErrorLogSchema.index({ status: 1, lastSeenAt: -1 });
 ErrorLogSchema.index({ endpoint: 1, method: 1 });
 
+// TTL index: Automatically purge error logs 60 days after their last occurrence
+const SIXTY_DAYS_IN_SECONDS = 60 * 24 * 60 * 60; // 5,184,000 seconds
+ErrorLogSchema.index({ lastSeenAt: 1 }, { expireAfterSeconds: SIXTY_DAYS_IN_SECONDS });
+
 module.exports = mongoose.model('ErrorLog', ErrorLogSchema);
