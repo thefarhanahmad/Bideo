@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { API_URL } from '../config';
 import StatCard from '../components/StatCard';
-import { UsersIcon, PlayIcon, TagIcon, FlagIcon, EyeIcon, ArrowRightIcon } from '../components/Icons';
+import { UsersIcon, PlayIcon, WalletIcon, FlagIcon, EyeIcon, ArrowRightIcon } from '../components/Icons';
 import {
   UserGrowthChart,
   UserSegmentationChart,
@@ -20,6 +20,14 @@ const resolveMediaUrl = (url) => {
 const fmtExact = (n) => {
   const num = Number(n) || 0;
   return num.toLocaleString('en-IN');
+};
+
+const fmtCurrency = (n) => {
+  const num = Number(n) || 0;
+  return `₹${num.toLocaleString('en-IN', {
+    minimumFractionDigits: num % 1 !== 0 ? 2 : 0,
+    maximumFractionDigits: 2,
+  })}`;
 };
 
 const fmt = fmtExact;
@@ -112,11 +120,34 @@ const DashboardHome = () => {
       tone: 'violet',
     },
     {
-      icon: TagIcon,
-      label: 'Categories',
-      value: fmtExact(stats.categories?.total),
-      hint: 'content categories',
+      icon: WalletIcon,
+      label: 'Total User Earnings',
+      value: fmtCurrency(stats.earnings?.totalEarnings || 0),
       tone: 'green',
+      highlight: (
+        <div className="flex flex-col gap-1 pt-1.5 border-t border-line/60">
+          <div className="flex items-center justify-between gap-1 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 border border-amber-300 px-2 py-0.5 text-[11px] sm:text-xs font-bold text-amber-900 shadow-sm">
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+              </span>
+              <span>Unpaid in Wallets:</span>
+              <span className="font-extrabold text-amber-950 underline decoration-amber-400 decoration-2">
+                {fmtCurrency(stats.earnings?.walletBalance || 0)}
+              </span>
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-muted truncate">
+            <span>{fmtCurrency(stats.earnings?.paidOut || 0)} paid out</span>
+            {(stats.earnings?.pendingPayouts || 0) > 0 && (
+              <span className="text-amber-700 font-semibold">
+                · {fmtCurrency(stats.earnings?.pendingPayouts)} pending req
+              </span>
+            )}
+          </div>
+        </div>
+      ),
     },
   ];
 

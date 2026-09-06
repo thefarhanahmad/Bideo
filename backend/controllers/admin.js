@@ -178,6 +178,8 @@ exports.getStats = async (req, res, next) => {
       recentVideos,
       recentUsers,
       trends,
+      userEarningsAgg,
+      withdrawalsAgg,
     ] = await Promise.all([
       User.countDocuments(),
       User.countDocuments({ role: 'admin' }),
@@ -197,6 +199,29 @@ exports.getStats = async (req, res, next) => {
         .select('title thumbnail views visibility createdAt owner'),
       User.find().sort('-createdAt').limit(5).select('name email phone avatar role createdAt'),
       calculateAnalyticsTrends(),
+      User.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalEarnings: { $sum: '$totalEarnings' },
+            walletBalance: { $sum: '$walletBalance' },
+            earningUsersCount: {
+              $sum: {
+                $cond: [{ $or: [{ $gt: ['$totalEarnings', 0] }, { $gt: ['$walletBalance', 0] }] }, 1, 0],
+              },
+            },
+          },
+        },
+      ]),
+      WithdrawalRequest.aggregate([
+        {
+          $group: {
+            _id: '$status',
+            total: { $sum: '$amount' },
+            count: { $sum: 1 },
+          },
+        },
+      ]),
     ]);
 
     const visibility = { public: 0, unlisted: 0, private: 0 };
@@ -206,6 +231,26 @@ exports.getStats = async (req, res, next) => {
 
     const totalViews = viewsAgg[0] ? viewsAgg[0].total : 0;
     const longVideosTotal = Math.max(0, videosTotal - shortsTotal);
+
+    const totalEarnings = Math.round((userEarningsAgg[0]?.totalEarnings || 0) * 100) / 100;
+    const totalWalletBalance = Math.round((userEarningsAgg[0]?.walletBalance || 0) * 100) / 100;
+    const earningUsersCount = userEarningsAgg[0]?.earningUsersCount || 0;
+
+    let totalPaidOut = 0;
+    let paidWithdrawalsCount = 0;
+    let totalPendingWithdrawals = 0;
+    let pendingWithdrawalsCount = 0;
+    (withdrawalsAgg || []).forEach((w) => {
+      if (w._id === 'approved') {
+        totalPaidOut = Math.round(w.total * 100) / 100;
+        paidWithdrawalsCount = w.count;
+      } else if (w._id === 'pending') {
+        totalPendingWithdrawals = Math.round(w.total * 100) / 100;
+        pendingWithdrawalsCount = w.count;
+      }
+    });
+
+    const totalUnpaid = Math.round((totalWalletBalance + totalPendingWithdrawals) * 100) / 100;
 
     const statsPayload = {
       users: {
@@ -220,6 +265,16 @@ exports.getStats = async (req, res, next) => {
         longVideos: longVideosTotal,
         shorts: shortsTotal,
         ...visibility,
+      },
+      earnings: {
+        totalEarnings,
+        walletBalance: totalWalletBalance,
+        unpaidBalance: totalUnpaid,
+        pendingPayouts: totalPendingWithdrawals,
+        pendingPayoutsCount: pendingWithdrawalsCount,
+        earningUsers: earningUsersCount,
+        paidOut: totalPaidOut,
+        paidCount: paidWithdrawalsCount,
       },
       categories: { total: categoriesTotal },
       reports: { total: reportsTotal, open: reportsOpen },
