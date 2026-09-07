@@ -7,7 +7,7 @@
  * 
  * Strict Safety Protections:
  *   - 100% Monetization Protection: Any creator with an approved monetization application,
- *     any passed (or pending) monetization video review, or verified channel is NEVER touched.
+ *     any PASSED monetization video review, or verified channel is NEVER touched.
  *   - Today's Uploads Protection: NEVER deletes any video or post uploaded today (or last 24h).
  *   - New Account Protection: Users registered within the last 48h are protected.
  *   - Dry Run by Default: Reports exact counts, MB/GB savings, and sample titles without deleting.
@@ -41,13 +41,14 @@ const Category = require('../models/Category');
 const shouldDelete = process.argv.includes('--delete');
 const inactiveOnly = process.argv.includes('--inactive-only');
 const musicOnly = process.argv.includes('--music-only');
+const protectPending = process.argv.includes('--protect-pending');
 
 // Time Thresholds
 const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
-// Regex for detecting music, songs, remix, ringtones, etc.
-const MUSIC_REGEX = /\b(music|song|songs|remix|dj\s*remix|bgm|soundtrack|ringtone|audio\s*track|gaana|gana|geet|mashup|lyrics|official\s*music|album\s*song|punjabi\s*song|bhojpuri\s*song|hindi\s*song|sad\s*song)\b/i;
+// Regex for detecting music, songs, remix, ringtones, bgm, etc.
+const MUSIC_REGEX = /\b(music|song|songs|remix|dj\s*remix|bgm|soundtrack|ringtone|audio\s*track|gaana|gana|geet|mashup|lyrics|official\s*music|album\s*song|punjabi\s*song|bhojpuri\s*song|hindi\s*song|sad\s*song|status\s*song)\b/i;
 
 const formatBytes = (bytes) => {
   if (!bytes || bytes === 0) return '0 B';
@@ -115,14 +116,15 @@ const run = async () => {
   // 1. Approved channel monetization applications
   const monetizedUserIds = await MonetizationApplication.find({ status: 'approved' }).distinct('user').catch(() => []);
 
-  // 2. Users with at least one passed or pending video monetization review
+  // 2. Videos that PASSED monetization review (or pending if --protect-pending is explicitly passed)
+  const reviewStatuses = protectPending ? ['passed', 'pending'] : ['passed'];
   const passedReviewUserIds = await VideoMonetizationReview.find({ 
-    status: { $in: ['passed', 'pending'] } 
+    status: { $in: reviewStatuses } 
   }).distinct('user').catch(() => []);
 
-  // 3. Specific videos passed or in review for monetization
+  // 3. Specific videos that PASSED monetization
   const passedVideoIds = await VideoMonetizationReview.find({ 
-    status: { $in: ['passed', 'pending'] } 
+    status: { $in: reviewStatuses } 
   }).distinct('video').catch(() => []);
   const protectedVideoSet = new Set(passedVideoIds.map(String));
 
@@ -138,8 +140,12 @@ const run = async () => {
     ...verifiedUserIds.map(String),
   ]);
 
+  const totalPendingReviews = await VideoMonetizationReview.countDocuments({ status: 'pending' }).catch(() => 0);
+  const totalPassedReviews = await VideoMonetizationReview.countDocuments({ status: 'passed' }).catch(() => 0);
+
   console.log(`   ✔ Approved Monetized Channels:              ${monetizedUserIds.length}`);
-  console.log(`   ✔ Creators with Passed/Pending Video Reviews: ${passedReviewUserIds.length}`);
+  console.log(`   ✔ Videos with PASSED Monetization Reviews:   ${totalPassedReviews}`);
+  console.log(`   ✔ Videos with Pending Auto-Reviews in DB:    ${totalPendingReviews}`);
   console.log(`   ✔ Verified Users & Admins:                  ${verifiedUserIds.length}`);
   console.log(`   ⭐ Total Protected Monetized Creators:       ${protectedUserSet.size} (NEVER TOUCHED)`);
   console.log(`   ⭐ Total Protected Monetized Videos:         ${protectedVideoSet.size} (NEVER TOUCHED)\n`);
