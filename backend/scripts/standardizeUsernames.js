@@ -94,15 +94,18 @@ async function runMigration() {
 
     const assignedUsernames = new Map(); // username -> userId
     const updates = [];
+    const collidedList = [];
     let unchangedCount = 0;
 
     for (const u of users) {
       const base = cleanToUsername(u.name, u.channelName, u._id);
       let finalUsername = base;
       let counter = 2;
+      let isCollision = false;
 
       // Handle duplicate usernames by appending _2, _3, etc.
       while (assignedUsernames.has(finalUsername)) {
+        isCollision = true;
         const candidate = `${base}_${counter}`.slice(0, 30);
         finalUsername = candidate;
         counter++;
@@ -113,14 +116,19 @@ async function runMigration() {
       const isChanged = u.name !== finalUsername;
 
       if (isChanged) {
-        updates.push({
+        const updateObj = {
           userId: u._id,
           originalName: u.name,
           newUsername: finalUsername,
+          isCollision,
           phone: u.phone || 'N/A',
           channelName: u.channelName || 'N/A',
           createdAt: u.createdAt,
-        });
+        };
+        updates.push(updateObj);
+        if (isCollision) {
+          collidedList.push(updateObj);
+        }
       } else {
         unchangedCount++;
       }
@@ -131,13 +139,31 @@ async function runMigration() {
     console.log('--------------------------------------------------------------------------------');
 
     updates.forEach((item, idx) => {
+      const collisionTag = item.isCollision ? ' [COLLISION -> SUFFIX ADDED]' : '';
       console.log(
-        `${String(idx + 1).padStart(2, ' ')}. [${item.userId}] "${item.originalName}" -> "${item.newUsername}" (Phone: ${item.phone})`
+        `${String(idx + 1).padStart(2, ' ')}. [${item.userId}] "${item.originalName}" -> "${item.newUsername}" (Phone: ${item.phone})${collisionTag}`
       );
     });
 
+    console.log('\n================================================================================');
+    console.log('                          📊 MIGRATION SUMMARY COUNTS                           ');
+    console.log('================================================================================');
+    console.log(`  Total Users Checked          : ${users.length}`);
+    console.log(`  Usernames Requiring Update   : ${updates.length}`);
+    console.log(`  Usernames Already Compliant  : ${unchangedCount}`);
+    console.log(`  Duplicate Collisions Suffix  : ${collidedList.length} (resolved with _2, _3, etc.)`);
+    console.log('================================================================================\n');
+
+    if (collidedList.length > 0) {
+      console.log(`Sample of resolved duplicate collisions (${Math.min(15, collidedList.length)} of ${collidedList.length}):`);
+      collidedList.slice(0, 15).forEach((c, i) => {
+        console.log(`  ${i + 1}. "${c.originalName}" -> "${c.newUsername}" (Phone: ${c.phone})`);
+      });
+      console.log('--------------------------------------------------------------------------------\n');
+    }
+
     if (isApply) {
-      console.log('\n⏳ Applying updates to database in bulk...');
+      console.log('⏳ Applying updates to database in bulk...');
       const bulkOps = updates.map((item) => ({
         updateOne: {
           filter: { _id: item.userId },
@@ -147,13 +173,15 @@ async function runMigration() {
 
       if (bulkOps.length > 0) {
         const result = await User.bulkWrite(bulkOps);
-        console.log(`✅ Successfully updated ${result.modifiedCount} user(s) in MongoDB.`);
+        console.log(`\n================================================================================`);
+        console.log(`✅ SUCCESS: ${result.modifiedCount} user(s) successfully updated in MongoDB!`);
+        console.log(`================================================================================\n`);
       } else {
         console.log('ℹ️ No updates needed.');
       }
     } else {
-      console.log('\n💡 DRY-RUN complete. No changes were made to the database.');
-      console.log('To apply these changes live, run:');
+      console.log('💡 DRY-RUN complete. No changes were made to the database.');
+      console.log(`👉 To apply all ${updates.length} updates live to MongoDB, run:`);
       console.log('   node scripts/standardizeUsernames.js --apply\n');
     }
 

@@ -99,9 +99,14 @@ async function resolveDuplicates(dryRun = true) {
       console.log('No duplicate channel names found.');
     }
 
-    console.log('\n----------------------------------------------------');
-    console.log(`Summary: ${nameUpdatesCount} name(s) and ${channelUpdatesCount} channel(s) ${dryRun ? 'to be updated' : 'successfully updated'}.`);
-    console.log('----------------------------------------------------');
+    console.log('\n================================================================================');
+    console.log('                          📊 RESOLUTION SUMMARY COUNTS                          ');
+    console.log('================================================================================');
+    console.log(`  Total Users in Database      : ${allUsers.length}`);
+    console.log(`  Duplicate Names Resolved     : ${nameUpdatesCount}`);
+    console.log(`  Duplicate Channels Resolved  : ${channelUpdatesCount}`);
+    console.log(`  Execution Mode               : ${dryRun ? 'DRY-RUN (No changes applied)' : 'LIVE (Updated in MongoDB)'}`);
+    console.log('================================================================================\n');
 
     await mongoose.disconnect();
   } catch (err) {

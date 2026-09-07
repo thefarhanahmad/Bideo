@@ -76,7 +76,6 @@ async function analyzeDuplicates() {
       }
     }
     const duplicatePhones = [...phoneMap.entries()].filter(([k, v]) => v.length > 1);
-    console.log(`\n--- DUPLICATE PHONES: ${duplicatePhones.length} groups ---`);
 
     const emailMap = new Map();
     for (const u of allUsers) {
@@ -87,8 +86,16 @@ async function analyzeDuplicates() {
       }
     }
     const duplicateEmails = [...emailMap.entries()].filter(([k, v]) => v.length > 1);
-    console.log(`--- DUPLICATE EMAILS: ${duplicateEmails.length} groups ---`);
 
+    console.log('\n================================================================================');
+    console.log('                          📊 DATABASE SUMMARY COUNTS                            ');
+    console.log('================================================================================');
+    console.log(`  Total Users in Database      : ${allUsers.length}`);
+    console.log(`  Duplicate Name Groups        : ${duplicateNames.length} groups (affecting ${duplicateNames.reduce((a, b) => a + b.count, 0)} users)`);
+    console.log(`  Duplicate Channel Groups     : ${duplicateChannels.length} groups (affecting ${duplicateChannels.reduce((a, b) => a + b.count, 0)} users)`);
+    console.log(`  Duplicate Phone Groups       : ${duplicatePhones.length} groups`);
+    console.log(`  Duplicate Email Groups       : ${duplicateEmails.length} groups`);
+    console.log('================================================================================\n');
 
     await mongoose.disconnect();
   } catch (err) {
