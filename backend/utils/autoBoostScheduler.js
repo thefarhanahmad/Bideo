@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const cron = require('node-cron');
 const Video = require('../models/Video');
 const User = require('../models/User');
+const MonetizationApplication = require('../models/MonetizationApplication');
 
 /**
  * Deterministically generates a unique, persistent target view cap (between 130 and 290)
@@ -20,6 +21,7 @@ const getTargetCap = (videoId) => {
  * Executes one hourly pass of gradual organic boosting:
  * - Only public videos uploaded at least 3 hours ago (createdAt <= 3 hours ago)
  * - Only public videos below their unique deterministic cap (< 290)
+ * - Strictly excludes videos by approved monetized creators
  * - Increments 1-3 views (whole integer, capped at target)
  * - Adds 0-1 natural likes proportionally (no duplicates)
  * - 0 ₹ wallet balance (purely cosmetic)
@@ -29,13 +31,28 @@ const processAutoHourlyBoost = async () => {
     const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
     const threeHoursAgo = new Date(Date.now() - THREE_HOURS_MS);
 
-    // 1. Fetch eligible unpinned public videos uploaded at least 3 hours ago with views under max threshold
-    const videos = await Video.find({
+    // 1. Fetch all approved monetized creator IDs (their videos must never receive auto-boost)
+    const approvedMonetizations = await MonetizationApplication.find({ status: 'approved' })
+      .select('user')
+      .lean();
+    const monetizedUserIds = approvedMonetizations
+      .map((app) => app.user)
+      .filter(Boolean);
+    const monetizedUserSet = new Set(monetizedUserIds.map((id) => id.toString()));
+
+    // 2. Fetch eligible unpinned public videos uploaded at least 3 hours ago with views under max threshold, excluding monetized creators
+    const videoQuery = {
       visibility: 'public',
       isPinned: { $ne: true }, // Only unpinned videos should increase views
       views: { $lt: 290 },
       createdAt: { $lte: threeHoursAgo },
-    });
+    };
+
+    if (monetizedUserIds.length > 0) {
+      videoQuery.owner = { $nin: monetizedUserIds };
+    }
+
+    const videos = await Video.find(videoQuery);
 
     if (!videos.length) {
       return;
@@ -50,8 +67,11 @@ const processAutoHourlyBoost = async () => {
     let totalLikesAdded = 0;
 
     for (const video of videos) {
-      // Strictly skip any pinned video
+      // Strictly skip any pinned video or video owned by an approved monetized creator
       if (video.isPinned === true || video.isPinned === 'true') {
+        continue;
+      }
+      if (video.owner && monetizedUserSet.has(video.owner.toString())) {
         continue;
       }
 
