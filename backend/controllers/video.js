@@ -947,6 +947,14 @@ exports.uploadVideo = async (req, res, next) => {
   let savedVideoUrl = null;
   let savedThumbnailUrl = null;
 
+  if (process.env.UPLOAD_MAINTENANCE_ENABLED !== 'false') {
+    return res.status(503).json({
+      success: false,
+      code: 'UPLOAD_MAINTENANCE',
+      message: 'Video & Shorts upload is temporarily under scheduled maintenance while we upgrade our cloud storage servers. Uploads will be back shortly. Thank you for your patience and support! 🙏',
+    });
+  }
+
   try {
     if (!req.files || !req.files.video || !req.files.video[0]) {
       return res

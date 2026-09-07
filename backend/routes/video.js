@@ -15,6 +15,7 @@ const {
 } = require('../controllers/video');
 const { protect, softProtect } = require('../middlewares/auth');
 const upload = require('../middlewares/multer');
+const uploadMaintenance = require('../middlewares/uploadMaintenance');
 
 const router = express.Router();
 
@@ -32,7 +33,7 @@ router.post('/:id/dislike', protect, toggleDislike);
 router.post('/:id/view', softProtect, recordView);
 router.post('/:id/report', protect, reportVideo);
 
-router.post('/upload', protect, upload.fields([
+router.post('/upload', uploadMaintenance, protect, upload.fields([
   { name: 'video', maxCount: 1 },
   { name: 'thumbnail', maxCount: 1 }
 ]), videoValidationRules(), validate, uploadVideo);
