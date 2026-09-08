@@ -114,7 +114,7 @@ exports.getVideoPage = async (req, res, next) => {
     const channelName = video.owner?.channelName || video.owner?.name || 'Bideo Creator';
     const channelAvatar = resolveMediaUrl(video.owner?.avatar) || 'https://via.placeholder.com/100';
     const deepLink = `bideo://video/${video._id}`;
-    const intentLink = `intent://video/${video._id}#Intent;scheme=bideo;package=${APP_PACKAGE};S.browser_fallback_url=${encodeURIComponent(canonicalUrl)};end`;
+    const intentLink = `intent://video/${video._id}#Intent;scheme=bideo;package=${APP_PACKAGE};S.browser_fallback_url=${encodeURIComponent(PLAY_STORE_URL)};end`;
     const viewsFormatted = Number(video.views || 0).toLocaleString('en-IN');
     const uploadDate = new Date(video.createdAt || Date.now()).toISOString();
 
@@ -406,14 +406,12 @@ exports.getVideoPage = async (req, res, next) => {
   </div>
 
   <script>
-    // Auto-attempt opening Bideo App directly on mobile devices
     (function() {
-      if (/android/i.test(navigator.userAgent)) {
-        setTimeout(function() {
-          try {
-            window.location.href = "${intentLink}";
-          } catch (e) {}
-        }, 50);
+      var ua = navigator.userAgent || '';
+      if (/android/i.test(ua)) {
+        window.location.replace("${intentLink}");
+      } else if (/iphone|ipad|ipod/i.test(ua)) {
+        window.location.replace("${PLAY_STORE_URL}");
       }
     })();
   </script>
@@ -468,7 +466,7 @@ exports.getChannelPage = async (req, res, next) => {
     const avatar = resolveMediaUrl(channel.avatar) || 'https://via.placeholder.com/120';
     const canonicalUrl = `${BASE_URL}/c/${channel._id}`;
     const deepLink = `bideo://channel/${channel._id}`;
-    const intentLink = `intent://channel/${channel._id}#Intent;scheme=bideo;package=${APP_PACKAGE};S.browser_fallback_url=${encodeURIComponent(canonicalUrl)};end`;
+    const intentLink = `intent://channel/${channel._id}#Intent;scheme=bideo;package=${APP_PACKAGE};S.browser_fallback_url=${encodeURIComponent(PLAY_STORE_URL)};end`;
 
     // Fetch latest 6 public videos
     const latestVideos = await Video.find({ owner: channel._id, visibility: 'public' })
@@ -566,14 +564,12 @@ exports.getChannelPage = async (req, res, next) => {
   ${videoCardsHtml ? `<div class="video-grid">${videoCardsHtml}</div>` : ''}
 
   <script>
-    // Auto-attempt opening Bideo App directly on mobile devices
     (function() {
-      if (/android/i.test(navigator.userAgent)) {
-        setTimeout(function() {
-          try {
-            window.location.href = "${intentLink}";
-          } catch (e) {}
-        }, 50);
+      var ua = navigator.userAgent || '';
+      if (/android/i.test(ua)) {
+        window.location.replace("${intentLink}");
+      } else if (/iphone|ipad|ipod/i.test(ua)) {
+        window.location.replace("${PLAY_STORE_URL}");
       }
     })();
   </script>
