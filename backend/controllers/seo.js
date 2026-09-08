@@ -677,7 +677,7 @@ Sitemap: ${BASE_URL}/sitemap.xml
 exports.getAssetLinks = (req, res) => {
   const fingerprints = (
     process.env.ANDROID_SHA256_FINGERPRINTS ||
-    '14:6D:E9:7D:0F:52:AB:F9:EE:4B:E4:36:9C:2C:19:D4:58:62:3B:5A:F3:11:79:2E:39:69:BD:24:D1:D7:9F:DF'
+    '14:6D:E9:7D:0F:52:AB:F9:EE:4B:E4:36:9C:2C:19:D4:58:62:3B:5A:F3:11:79:2E:39:69:BD:24:D1:D7:9F:DF,FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C'
   )
     .split(',')
     .map((s) => s.trim())
