@@ -406,16 +406,16 @@ exports.getVideoPage = async (req, res, next) => {
   </div>
 
   <script>
-    // Auto-attempt opening deep link on mobile devices
-    if (/android/i.test(navigator.userAgent)) {
-      var appOpened = false;
-      var t = setTimeout(function() {
-        if (!appOpened && document.hidden !== true) {
-          // Stay on web page
-        }
-      }, 2500);
-      window.addEventListener('blur', function() { appOpened = true; clearTimeout(t); });
-    }
+    // Auto-attempt opening Bideo App directly on mobile devices
+    (function() {
+      if (/android/i.test(navigator.userAgent)) {
+        setTimeout(function() {
+          try {
+            window.location.href = "${intentLink}";
+          } catch (e) {}
+        }, 50);
+      }
+    })();
   </script>
 </body>
 </html>`;
@@ -564,6 +564,19 @@ exports.getChannelPage = async (req, res, next) => {
   </div>
 
   ${videoCardsHtml ? `<div class="video-grid">${videoCardsHtml}</div>` : ''}
+
+  <script>
+    // Auto-attempt opening Bideo App directly on mobile devices
+    (function() {
+      if (/android/i.test(navigator.userAgent)) {
+        setTimeout(function() {
+          try {
+            window.location.href = "${intentLink}";
+          } catch (e) {}
+        }, 50);
+      }
+    })();
+  </script>
 </body>
 </html>`;
 
