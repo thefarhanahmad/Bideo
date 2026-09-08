@@ -47,8 +47,8 @@ const shuffle = (array) => {
 
 /**
  * Build user interest profile from their last up to 5 watched videos.
- * Handles cases where the user has watched fewer than 5 videos (1, 2, 3, or 4)
- * by dynamically weighting recency and scaling relevance.
+ * Build user interest profile from their last up to 50 watched videos.
+ * Uses a deep history window (up to 50 items) with graduated recency weighting.
  * Returns null if user is not logged in or has empty watch history.
  */
 const getUserInterestProfile = async (user) => {
@@ -57,7 +57,7 @@ const getUserInterestProfile = async (user) => {
   try {
     const userId = user._id || user.id;
     const userDoc = await User.findById(userId)
-      .select({ watchHistory: { $slice: 5 } })
+      .select({ watchHistory: { $slice: 50 } })
       .populate({
         path: 'watchHistory',
         select: 'title description tags category owner',
@@ -73,49 +73,58 @@ const getUserInterestProfile = async (user) => {
     const watchedVideos = userDoc.watchHistory.filter((v) => v && (v._id || v.title));
     if (watchedVideos.length === 0) return null;
 
-    const watchedVideoIds = new Set(watchedVideos.map((v) => (v._id ? v._id.toString() : '')));
+    const watchedVideoRecency = new Map(); // videoId -> index in history (0 = most recent)
     const categoryWeights = new Map(); // categoryId -> weight
     const categoryNames = new Set();
     const creatorIds = new Set();
     const keywordSet = new Set();
 
     watchedVideos.forEach((v, idx) => {
-      // Recency weight: 1st (most recent) = 5, 2nd = 4, 3rd = 3, 4th = 2, 5th = 1
-      // If user has watched fewer than 5, the most recent still gets top weight (5)
-      const recencyWeight = 5 - idx;
+      const vId = (v._id ? v._id.toString() : '');
+      if (vId && !watchedVideoRecency.has(vId)) {
+        watchedVideoRecency.set(vId, idx);
+      }
 
-      // 1. Category extraction
-      if (v.category) {
-        const catId = (v.category._id || v.category).toString();
-        categoryWeights.set(catId, (categoryWeights.get(catId) || 0) + recencyWeight);
-        if (v.category.name) {
-          categoryNames.add(v.category.name.toLowerCase());
+      // Weight active interests heavily from the top 15 most recent videos
+      if (idx < 15) {
+        const recencyWeight = Math.max(1, 15 - idx);
+
+        // 1. Category extraction
+        if (v.category) {
+          const catId = (v.category._id || v.category).toString();
+          categoryWeights.set(catId, (categoryWeights.get(catId) || 0) + recencyWeight);
+          if (v.category.name) {
+            categoryNames.add(v.category.name.toLowerCase());
+          }
         }
+
+        // 2. Creator extraction
+        if (v.owner) {
+          const ownerId = (v.owner._id || v.owner).toString();
+          creatorIds.add(ownerId);
+        }
+
+        // 3. Keywords from title, tags, description
+        const titleKeywords = extractKeywords(v.title);
+        titleKeywords.forEach((k) => keywordSet.add(k));
+
+        const tagKeywords = extractKeywords(Array.isArray(v.tags) ? v.tags.join(' ') : v.tags);
+        tagKeywords.forEach((k) => keywordSet.add(k));
+
+        const descKeywords = extractKeywords(v.description).slice(0, 5);
+        descKeywords.forEach((k) => keywordSet.add(k));
       }
-
-      // 2. Creator extraction
-      if (v.owner) {
-        const ownerId = (v.owner._id || v.owner).toString();
-        creatorIds.add(ownerId);
-      }
-
-      // 3. Keywords from title, tags, description
-      const titleKeywords = extractKeywords(v.title);
-      titleKeywords.forEach((k) => keywordSet.add(k));
-
-      const tagKeywords = extractKeywords(Array.isArray(v.tags) ? v.tags.join(' ') : v.tags);
-      tagKeywords.forEach((k) => keywordSet.add(k));
-
-      const descKeywords = extractKeywords(v.description).slice(0, 8);
-      descKeywords.forEach((k) => keywordSet.add(k));
     });
 
+    const watchedVideoIds = new Set(watchedVideoRecency.keys());
+
     return {
+      watchedVideoRecency,
       watchedVideoIds,
       categoryWeights,
       categoryNames: Array.from(categoryNames),
       creatorIds,
-      keywords: Array.from(keywordSet).slice(0, 40),
+      keywords: Array.from(keywordSet).slice(0, 50),
     };
   } catch (err) {
     console.error('Error constructing user interest profile:', err);
@@ -154,9 +163,22 @@ const rankAndShuffleVideos = (videos, profile) => {
     const ownerId = (v.owner?._id || v.owner || '').toString();
     const vId = (v._id || '').toString();
 
-    // Already-watched video penalty so user is recommended fresh videos
-    if (profile.watchedVideoIds.has(vId)) {
-      score -= 300;
+    // Graduated Already-Watched Penalty (Smooth Frequency Capping):
+    // Recent videos are pushed down heavily so they don't repeat.
+    // Older watched videos receive a softer penalty so they can gently resurface later.
+    if (profile.watchedVideoRecency && profile.watchedVideoRecency.has(vId)) {
+      const recencyIdx = profile.watchedVideoRecency.get(vId);
+      if (recencyIdx < 5) {
+        score -= 1500; // Just watched (1-5): will not repeat in top recommendations
+      } else if (recencyIdx < 15) {
+        score -= 800;  // Watched recently (6-15): pushed down
+      } else if (recencyIdx < 30) {
+        score -= 400;  // Moderate cool-off (16-30)
+      } else {
+        score -= 200;  // Soft penalty (31-50): can gently repeat if highly relevant
+      }
+    } else if (profile.watchedVideoIds && profile.watchedVideoIds.has(vId)) {
+      score -= 500;
     }
 
     // 1. Category Matching (Dominant factor)
