@@ -48,13 +48,13 @@ docker build \
 
 # 5. Clear old live files
 echo "🧹 Cleaning up /var/www/bideo..."
-sudo rm -rf /var/www/bideo/*
+sudo find /var/www/bideo/ -mindepth 1 -delete || sudo rm -rf /var/www/bideo/*
 
 # 6. Extract built files to host Nginx directory
 echo "📤 Extracting built frontend files..."
 sudo docker run --rm \
   -v /var/www/bideo:/host_dist \
-  bideo-frontend sh -c "cp -r /usr/share/nginx/html/* /host_dist/"
+  bideo-frontend sh -c "cp -a /usr/share/nginx/html/. /host_dist/"
 
 # 7. Reload Host Nginx
 echo "⚙️ Reloading host Nginx..."
