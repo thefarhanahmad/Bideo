@@ -1,0 +1,19 @@
+User-agent: *
+Allow: /
+Allow: /v/
+Allow: /c/
+Allow: /about
+Allow: /contact
+Allow: /privacy
+Allow: /terms
+Allow: /guidelines
+Allow: /child-safety
+Allow: /copyright
+Allow: /moderation
+Allow: /cookies
+Allow: /refunds
+Allow: /account-deletion
+Disallow: /admin/
+Disallow: /api/
+
+Sitemap: https://bideo.in/sitemap.xml
