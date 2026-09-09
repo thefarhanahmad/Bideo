@@ -122,6 +122,16 @@ exports.getPosts = async (req, res, next) => {
     const query = { visibility: 'public' };
     if (req.query.owner) query.owner = req.query.owner;
 
+    if (req.query.exclude) {
+      const rawExclude = Array.isArray(req.query.exclude)
+        ? req.query.exclude
+        : String(req.query.exclude).split(',').map((s) => s.trim()).filter(Boolean);
+      const validExcludeIds = rawExclude.filter((id) => mongoose.Types.ObjectId.isValid(id));
+      if (validExcludeIds.length > 0) {
+        query._id = { ...(query._id || {}), $nin: validExcludeIds };
+      }
+    }
+
     if (!isAdmin) {
       const blockedUsers = await User.find({ isBlocked: true }).select('_id').lean();
       const blockedIds = blockedUsers.map((u) => u._id);
@@ -137,18 +147,25 @@ exports.getPosts = async (req, res, next) => {
     }
 
     const limit = Math.min(parseInt(req.query.limit, 10) || 30, 100);
+
+    if (!req.query.owner && !isAdmin) {
+      // Randomized posts feed: sample across public posts rather than only newest 30
+      const allPosts = await Post.find(query)
+        .populate('owner', 'name avatar channelName isVerified')
+        .lean();
+
+      const shuffled = rankAndShufflePosts(allPosts);
+      const results = shuffled.slice(0, limit);
+      return res.status(200).json({ success: true, count: results.length, data: results });
+    }
+
     const posts = await Post.find(query)
       .populate('owner', 'name avatar channelName isVerified')
       .sort('-createdAt')
       .limit(limit)
       .lean();
 
-    let results = posts;
-    if (!req.query.owner && !isAdmin) {
-      const profile = await getUserInterestProfile(req.user);
-      results = rankAndShufflePosts(posts, profile);
-    }
-    res.status(200).json({ success: true, count: results.length, data: results });
+    res.status(200).json({ success: true, count: posts.length, data: posts });
   } catch (err) {
     next(err);
   }

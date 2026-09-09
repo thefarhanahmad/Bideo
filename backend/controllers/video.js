@@ -12,7 +12,7 @@ const Comment = require("../models/Comment");
 const Playlist = require("../models/Playlist");
 const fs = require("fs");
 const { saveLocalFile, deleteLocalFile } = require("../utils/localUpload");
-const { getUserInterestProfile, rankAndShuffleVideos } = require("../utils/recommendation");
+const { getUserInterestProfile, rankAndShuffleVideos, shuffle } = require("../utils/recommendation");
 const { sendPushForEvent } = require("../utils/pushNotification");
 const { scheduleVideoModeration } = require("../services/moderationService");
 
@@ -96,6 +96,15 @@ const getVideoQuery = (req) => {
   if (req.query.category) query.category = req.query.category;
   if (req.query.isPinned !== undefined) {
     query.isPinned = req.query.isPinned === "true";
+  }
+  if (req.query.exclude) {
+    const rawExclude = Array.isArray(req.query.exclude)
+      ? req.query.exclude
+      : String(req.query.exclude).split(',').map((s) => s.trim()).filter(Boolean);
+    const validExcludeIds = rawExclude.filter((id) => mongoose.Types.ObjectId.isValid(id));
+    if (validExcludeIds.length > 0) {
+      query._id = { ...(query._id || {}), $nin: validExcludeIds };
+    }
   }
   return applyVideoTypeFilter(query, req.query.type);
 };
@@ -577,6 +586,97 @@ exports.getVideos = async (req, res, next) => {
     }
 
     const sortOption = req.query.sort;
+
+    const isFeedRequest =
+      !isAdmin &&
+      !searchKeywords &&
+      !req.query.owner &&
+      !fetchAll &&
+      (!sortOption || sortOption === "algorithm" || sortOption === "random" || sortOption === "latest");
+
+    if (isFeedRequest) {
+      // Pure randomized feed across the entire eligible database collection
+      // Query candidate video metadata (IDs, pinned status, short vs long)
+      const candidates = await Video.find(query).select("_id isPinned isShort").lean();
+      const total = candidates.length;
+
+      const pinnedCandidates = candidates.filter(
+        (v) => v.isPinned === true || v.isPinned === "true",
+      );
+      const regularCandidates = candidates.filter(
+        (v) => !v.isPinned && v.isPinned !== "true",
+      );
+
+      let chosenIds = [];
+
+      // If Home feed (no explicit type or filter), ensure a balanced mix of long videos and shorts
+      if (!req.query.type && !req.query.filter) {
+        const longRegular = regularCandidates.filter((v) => !v.isShort);
+        const shortRegular = regularCandidates.filter((v) => v.isShort);
+
+        const shuffledLong = shuffle(longRegular);
+        const shuffledShorts = shuffle(shortRegular);
+
+        // In a batch of limit (e.g. 50): take up to ~15 shorts and the rest long videos
+        const targetShorts = Math.min(
+          shuffledShorts.length,
+          Math.max(8, Math.floor(limit * 0.3)),
+        );
+        const targetLong = Math.max(1, limit - targetShorts);
+
+        const longSkip = (page - 1) * targetLong;
+        const shortSkip = (page - 1) * targetShorts;
+
+        const selectedLong = shuffledLong.slice(longSkip, longSkip + targetLong);
+        const selectedShorts = shuffledShorts.slice(shortSkip, shortSkip + targetShorts);
+
+        // Pinned videos appear on page 1 at the top
+        const pinnedList = page === 1 ? pinnedCandidates.map((v) => v._id) : [];
+
+        chosenIds = [
+          ...pinnedList,
+          ...selectedLong.map((v) => v._id),
+          ...selectedShorts.map((v) => v._id),
+        ];
+      } else {
+        // Targeted feed (e.g. Shorts tab type='short' or category filter)
+        const shuffledRegular = shuffle(regularCandidates);
+        const pinnedList = page === 1 ? pinnedCandidates.map((v) => v._id) : [];
+        const effectiveLimit = Math.max(0, limit - pinnedList.length);
+        const regularSkip = (page - 1) * limit;
+
+        chosenIds = [
+          ...pinnedList,
+          ...shuffledRegular.slice(regularSkip, regularSkip + effectiveLimit).map((v) => v._id),
+        ];
+      }
+
+      const populatedVideos = await Video.find({ _id: { $in: chosenIds } })
+        .populate(
+          "owner",
+          "name avatar channelName followersCount isVerified email phone",
+        )
+        .populate("category", "name")
+        .lean();
+
+      const idMap = new Map(populatedVideos.map((v) => [v._id.toString(), v]));
+      const orderedVideos = chosenIds
+        .map((id) => idMap.get(id.toString()))
+        .filter(Boolean);
+
+      const results = await decorateVideos(orderedVideos, req);
+
+      return res.status(200).json({
+        success: true,
+        count: results.length,
+        total,
+        page,
+        pages: Math.ceil(total / limit) || 1,
+        filterCounts: null,
+        data: results,
+      });
+    }
+
     const countsPromise = isAdmin
       ? Promise.all([
           Video.countDocuments({}),
@@ -622,10 +722,8 @@ exports.getVideos = async (req, res, next) => {
       results = results
         .map((v) => ({ ...v, _score: scoreVideoRelevance(v, searchKeywords) }))
         .sort((a, b) => b._score - a._score);
-    } else if (!isAdmin && !searchKeywords && !req.query.owner && !fetchAll && (sortOption === "algorithm" || !sortOption || sortOption === "latest")) {
-      // Algorithmic feed: ranks by last 5 watched videos (category/title/description matching) & tier-shuffles
-      const profile = await getUserInterestProfile(req.user);
-      results = rankAndShuffleVideos(results, profile);
+    } else if (!isAdmin && !searchKeywords && !req.query.owner && !fetchAll) {
+      results = rankAndShuffleVideos(results);
     }
 
     res.status(200).json({

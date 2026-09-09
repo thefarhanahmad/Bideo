@@ -133,11 +133,10 @@ const getUserInterestProfile = async (user) => {
 };
 
 /**
- * Ranks candidate videos/shorts according to user interest profile and applies
- * tier-based shuffling so recommendations are relevant yet dynamically randomized.
- * Pinned videos always stay at the top.
+ * Ranks candidate videos/shorts: pure randomized feed with pinned videos at top.
+ * Watch history ranking is disabled so refresh always provides a fresh, non-repetitive mix.
  */
-const rankAndShuffleVideos = (videos, profile) => {
+const rankAndShuffleVideos = (videos) => {
   if (!videos || videos.length === 0) return [];
 
   const pinned = [];
@@ -151,158 +150,19 @@ const rankAndShuffleVideos = (videos, profile) => {
     }
   }
 
-  // If no profile (guest or no watch history), return pinned first, then shuffled regular
-  if (!profile) {
-    return [...pinned, ...shuffle(regular)];
-  }
-
-  const scored = regular.map((v) => {
-    let score = 0;
-    const catId = (v.category?._id || v.category || '').toString();
-    const catName = (v.category?.name || '').toLowerCase();
-    const ownerId = (v.owner?._id || v.owner || '').toString();
-    const vId = (v._id || '').toString();
-
-    // Graduated Already-Watched Penalty (Smooth Frequency Capping):
-    // Recent videos are pushed down heavily so they don't repeat.
-    // Older watched videos receive a softer penalty so they can gently resurface later.
-    if (profile.watchedVideoRecency && profile.watchedVideoRecency.has(vId)) {
-      const recencyIdx = profile.watchedVideoRecency.get(vId);
-      if (recencyIdx < 5) {
-        score -= 1500; // Just watched (1-5): will not repeat in top recommendations
-      } else if (recencyIdx < 15) {
-        score -= 800;  // Watched recently (6-15): pushed down
-      } else if (recencyIdx < 30) {
-        score -= 400;  // Moderate cool-off (16-30)
-      } else {
-        score -= 200;  // Soft penalty (31-50): can gently repeat if highly relevant
-      }
-    } else if (profile.watchedVideoIds && profile.watchedVideoIds.has(vId)) {
-      score -= 500;
-    }
-
-    // 1. Category Matching (Dominant factor)
-    if (catId && profile.categoryWeights.has(catId)) {
-      score += profile.categoryWeights.get(catId) * 80;
-    } else if (catName && profile.categoryNames.includes(catName)) {
-      score += 60;
-    }
-
-    // 2. Creator Matching
-    if (ownerId && profile.creatorIds.has(ownerId)) {
-      score += 40;
-    }
-
-    // 3. Title & Tags Keyword Matching
-    const titleLower = (v.title || '').toLowerCase();
-    const rawTags = Array.isArray(v.tags) ? v.tags.join(' ') : (v.tags || '');
-    const tagsLower = rawTags.toLowerCase();
-
-    for (const kw of profile.keywords) {
-      if (titleLower.includes(kw)) {
-        score += 30;
-      }
-      if (tagsLower.includes(kw)) {
-        score += 20;
-      }
-    }
-
-    // 4. Description Keyword Matching
-    const descLower = (v.description || '').toLowerCase();
-    if (descLower) {
-      for (const kw of profile.keywords) {
-        if (descLower.includes(kw)) {
-          score += 10;
-        }
-      }
-    }
-
-    // 5. Engagement baseline
-    const views = Number(v.views) || 0;
-    score += Math.min(15, Math.log10(views + 1) * 3);
-
-    return { video: v, score };
-  });
-
-  // Segregate into High-Relevance (matched interests) vs Discovery
-  const highRelevance = [];
-  const discovery = [];
-
-  for (const item of scored) {
-    if (item.score >= 40) {
-      highRelevance.push(item.video);
-    } else {
-      discovery.push(item.video);
-    }
-  }
-
-  // Tier-based shuffling: High-relevance recommendations are shuffled among themselves
-  // for freshness, followed by discovery videos (also shuffled).
-  const shuffledHigh = shuffle(highRelevance);
-  const shuffledDiscovery = shuffle(discovery);
-
-  return [...pinned, ...shuffledHigh, ...shuffledDiscovery];
+  return [...pinned, ...shuffle(regular)];
 };
 
 /**
- * Ranks candidate posts according to user interest profile and applies tier-based shuffling.
+ * Ranks candidate posts: pure randomized posts feed.
  */
-const rankAndShufflePosts = (posts, profile) => {
+const rankAndShufflePosts = (posts) => {
   if (!posts || posts.length === 0) return [];
-
-  if (!profile) {
-    return shuffle(posts);
-  }
-
-  const scored = posts.map((p) => {
-    let score = 0;
-    const ownerId = (p.owner?._id || p.owner || '').toString();
-    const textLower = (p.text || '').toLowerCase();
-
-    // 1. Creator matching (posts by authors of recently watched videos)
-    if (ownerId && profile.creatorIds.has(ownerId)) {
-      score += 60;
-    }
-
-    // 2. Category name mentioned in post text
-    for (const catName of profile.categoryNames) {
-      if (textLower.includes(catName)) {
-        score += 40;
-      }
-    }
-
-    // 3. Keyword match in post text
-    for (const kw of profile.keywords) {
-      if (textLower.includes(kw)) {
-        score += 25;
-      }
-    }
-
-    // Engagement bonus
-    const likesCount = Array.isArray(p.likes) ? p.likes.length : 0;
-    score += Math.min(10, likesCount);
-
-    return { post: p, score };
-  });
-
-  const highRelevance = [];
-  const discovery = [];
-
-  for (const item of scored) {
-    if (item.score >= 25) {
-      highRelevance.push(item.post);
-    } else {
-      discovery.push(item.post);
-    }
-  }
-
-  const shuffledHigh = shuffle(highRelevance);
-  const shuffledDiscovery = shuffle(discovery);
-
-  return [...shuffledHigh, ...shuffledDiscovery];
+  return shuffle(posts);
 };
 
 module.exports = {
+  shuffle,
   getUserInterestProfile,
   rankAndShuffleVideos,
   rankAndShufflePosts,
