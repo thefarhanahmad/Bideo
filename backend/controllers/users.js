@@ -247,18 +247,31 @@ exports.getChannelProfile = async (req, res, next) => {
       channel.isFollowing = false;
     }
 
-    const [followersCount, followingCount] = await Promise.all([
-      Follower.countDocuments({ channel: channel._id }),
-      Follower.countDocuments({ follower: channel._id }),
-    ]);
-    channel.followersCount = followersCount;
-    channel.followingCount = followingCount;
-
-    const filter = (req.query.filter || 'videos').toLowerCase();
-    const sort = (req.query.sort || 'latest').toLowerCase();
     const visibilityQuery = isOwner || isAdmin
       ? {}
       : { $or: [{ visibility: 'public' }, { visibility: { $exists: false } }] };
+
+    const [followersCount, followingCount, videosCount, shortsCount, postsCount] = await Promise.all([
+      Follower.countDocuments({ channel: channel._id }),
+      Follower.countDocuments({ follower: channel._id }),
+      Video.countDocuments({ owner: channel._id, isShort: { $ne: true }, ...visibilityQuery }),
+      Video.countDocuments({ owner: channel._id, isShort: true, ...visibilityQuery }),
+      Post.countDocuments({ owner: channel._id, ...visibilityQuery }),
+    ]);
+    channel.followersCount = followersCount;
+    channel.followingCount = followingCount;
+    channel.videosCount = videosCount;
+    channel.shortsCount = shortsCount;
+    channel.postsCount = postsCount;
+    channel.contentCounts = {
+      videos: videosCount,
+      shorts: shortsCount,
+      posts: postsCount,
+      total: videosCount + shortsCount + postsCount,
+    };
+
+    const filter = (req.query.filter || 'videos').toLowerCase();
+    const sort = (req.query.sort || 'latest').toLowerCase();
     const videoQuery = { owner: channel._id, ...visibilityQuery };
     const postQuery = { owner: channel._id, ...visibilityQuery };
 

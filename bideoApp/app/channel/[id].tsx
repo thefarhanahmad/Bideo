@@ -353,6 +353,7 @@ export default function ChannelScreen() {
                     </Text>
                   </TouchableOpacity>
                 </View>
+
                 {Boolean(channel?.leaderboardRank && channel.leaderboardRank <= 3) && (
                   <View style={[
                     styles.leaderboardBadge,
@@ -415,17 +416,31 @@ export default function ChannelScreen() {
             {/* Tabs & Filters */}
             <View style={styles.tabsSection}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsScroll}>
-                {tabItems.map((item) => (
-                  <TouchableOpacity
-                    key={item.key}
-                    style={[styles.tabBtn, filter === item.key && styles.tabBtnActive]}
-                    onPress={() => setFilter(item.key)}
-                  >
-                    <Text style={[styles.tabText, filter === item.key && styles.tabTextActive]}>
-                      {item.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                {tabItems.map((item) => {
+                  const count = item.key === 'videos'
+                    ? (channel?.videosCount ?? 0)
+                    : item.key === 'shorts'
+                    ? (channel?.shortsCount ?? 0)
+                    : (channel?.postsCount ?? 0);
+                  return (
+                    <TouchableOpacity
+                      key={item.key}
+                      style={[styles.tabBtn, filter === item.key && styles.tabBtnActive]}
+                      onPress={() => setFilter(item.key)}
+                    >
+                      <View style={styles.tabContentRow}>
+                        <Text style={[styles.tabText, filter === item.key && styles.tabTextActive]}>
+                          {item.label}
+                        </Text>
+                        <View style={[styles.tabBadge, filter === item.key && styles.tabBadgeActive]}>
+                          <Text style={[styles.tabBadgeText, filter === item.key && styles.tabBadgeTextActive]}>
+                            {formatViews(count)}
+                          </Text>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
               </ScrollView>
             </View>
 
@@ -661,9 +676,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   tabBtn: {
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    marginRight: 8,
+    paddingVertical: 13,
+    paddingHorizontal: 10,
+    marginRight: 4,
     borderBottomWidth: 3,
     borderBottomColor: 'transparent',
   },
@@ -937,5 +952,27 @@ const styles = StyleSheet.create({
   connectionDot: {
     color: Colors.border,
     fontSize: 14,
+  },
+  tabContentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  tabBadge: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 8,
+  },
+  tabBadgeActive: {
+    backgroundColor: Colors.primary + '18',
+  },
+  tabBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.textGray,
+  },
+  tabBadgeTextActive: {
+    color: Colors.primary,
   },
 });
