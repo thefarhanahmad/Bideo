@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { Platform, DeviceEventEmitter } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
@@ -19,18 +19,12 @@ Notifications.setNotificationHandler({
 /**
  * Register device with Expo & backend for real mobile push notifications
  */
-export async function registerForPushNotificationsAsync(): Promise<string | null> {
+export async function registerForPushNotificationsAsync(retryCount = 0): Promise<string | null> {
   try {
     const isExpoGo =
       Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
     if (isExpoGo) {
       console.log('Skipping remote push notification registration in Expo Go (only supported in standalone/dev builds)');
-      return null;
-    }
-
-    // Push notifications require a physical device on Android
-    if (!Device.isDevice) {
-      console.log('Push notifications require a physical device');
       return null;
     }
 
@@ -57,6 +51,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
 
     if (finalStatus !== 'granted') {
       console.log('Push notification permissions denied by user');
+      api.post('/auth/push-token-log', { stage: 'permission_denied', status: finalStatus }).catch(() => {});
       return null;
     }
 
@@ -71,24 +66,42 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
     });
 
     const pushToken = tokenData?.data;
-    if (!pushToken) return null;
+    if (!pushToken) {
+      api.post('/auth/push-token-log', { stage: 'token_empty' }).catch(() => {});
+      return null;
+    }
 
     console.log('Device Push Token acquired:', pushToken);
 
     // 5. Save locally and send to backend
-    const cachedToken = await AsyncStorage.getItem('push_token');
-    if (cachedToken !== pushToken) {
-      await AsyncStorage.setItem('push_token', pushToken);
-    }
+    await AsyncStorage.setItem('push_token', pushToken);
 
     // Sync with backend API
     await api.put('/auth/push-token', { pushToken }).catch((err) => {
       console.log('Failed to sync push token with backend:', err?.message || err);
+      api.post('/auth/push-token-log', {
+        stage: 'backend_sync_failed',
+        error: err?.response?.data?.message || err?.message || String(err),
+        token: pushToken,
+      }).catch(() => {});
     });
 
+    api.post('/auth/push-token-log', { stage: 'registered_successfully', token: pushToken }).catch(() => {});
+
     return pushToken;
-  } catch (err) {
+  } catch (err: any) {
     console.warn('Error in registerForPushNotificationsAsync:', err);
+    api.post('/auth/push-token-log', {
+      stage: 'token_fetch_error',
+      error: err?.message || String(err),
+    }).catch(() => {});
+
+    // Retry once after 3 seconds if transient
+    if (retryCount < 1) {
+      setTimeout(() => {
+        registerForPushNotificationsAsync(retryCount + 1).catch(() => {});
+      }, 3000);
+    }
     return null;
   }
 }
@@ -147,7 +160,13 @@ export function setupNotificationListeners(router: any) {
     }
   });
 
+  // Listener for when a notification is received while app is in foreground
+  const receivedSubscription = Notifications.addNotificationReceivedListener(() => {
+    DeviceEventEmitter.emit('refreshNotificationCount');
+  });
+
   return () => {
     responseSubscription.remove();
+    receivedSubscription.remove();
   };
 }

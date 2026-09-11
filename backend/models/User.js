@@ -129,6 +129,10 @@ const userSchema = new mongoose.Schema({
     default: 0,
     min: 0,
   },
+  lastNotificationViewedAt: {
+    type: Date,
+    default: null,
+  },
   deletionScheduled: {
     type: Boolean,
     default: false,

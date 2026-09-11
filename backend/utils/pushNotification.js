@@ -56,14 +56,18 @@ async function sendPushNotification({ recipientId, title, body, data = {} }) {
     });
 
     const resJson = await response.json().catch(() => null);
+    console.log(`[Push Notification] Dispatched to recipient ${recipientId} (${validTokens.length} token(s)). Expo Response:`, JSON.stringify(resJson));
 
     // Cleanup expired tokens if Expo reports DeviceNotRegistered
     const tickets = resJson?.data;
     if (Array.isArray(tickets)) {
       const tokensToRemove = [];
       tickets.forEach((ticket, idx) => {
-        if (ticket.status === 'error' && ticket.details?.error === 'DeviceNotRegistered') {
-          tokensToRemove.push(validTokens[idx]);
+        if (ticket.status === 'error') {
+          console.error(`[Push Notification Error] Token ${validTokens[idx]}:`, ticket.message, ticket.details);
+          if (ticket.details?.error === 'DeviceNotRegistered') {
+            tokensToRemove.push(validTokens[idx]);
+          }
         }
       });
 

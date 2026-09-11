@@ -12,6 +12,7 @@ import { loginStart, loginSuccess, loginFailure } from '../redux/slices/authSlic
 import { authService, setAuthToken } from '../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from "expo-router";
+import { registerForPushNotificationsAsync } from '../services/notifications';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -59,6 +60,9 @@ const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onLoginSuccess 
     dispatch(loginSuccess({ user: userData, token } as any));
     onLoginSuccess?.(userData);
     onClose();
+
+    // Register push token immediately on login
+    registerForPushNotificationsAsync().catch(() => {});
 
     if (userData.deletionScheduled) {
       router.push('/account-recovery');

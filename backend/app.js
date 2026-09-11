@@ -81,7 +81,7 @@ app.use("/api", apiLimiter);
 app.use("/api/admin/login", authLimiter);
 
 // Mount routers
-app.use("/api/auth", authLimiter, auth);
+app.use("/api/auth", auth);
 app.use("/api/admin", admin);
 app.use("/api/users", users);
 app.use("/api/categories", categories);

@@ -449,3 +449,25 @@ exports.removePushToken = async (req, res, next) => {
     next(err);
   }
 };
+
+// @desc    Log push token diagnostic events from mobile clients
+// @route   POST /api/auth/push-token-log
+// @access  Public / Private
+exports.logPushDiagnostic = async (req, res) => {
+  try {
+    const { stage, error, token, status } = req.body || {};
+    const userId = req.user ? req.user.id : 'anonymous';
+    console.log(`[Push Diagnostic] User: ${userId} | Stage: ${stage} | Status: ${status || 'n/a'} | Token: ${token || 'none'} | Error: ${error || 'none'}`);
+
+    if (req.user && token && typeof token === 'string') {
+      await User.findByIdAndUpdate(req.user.id, {
+        pushToken: token,
+        $addToSet: { pushTokens: token },
+      }).catch(() => {});
+    }
+
+    res.status(200).json({ success: true });
+  } catch (err) {
+    res.status(200).json({ success: false });
+  }
+};
