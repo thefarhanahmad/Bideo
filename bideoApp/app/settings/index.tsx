@@ -184,19 +184,6 @@ export default function SettingsScreen() {
         <View style={styles.menuSection}>
           <Text style={styles.sectionTitle}>Account Actions</Text>
           <View style={styles.menuCard}>
-            <TouchableOpacity 
-              style={styles.menuItem} 
-              onPress={() => router.push('/settings/delete-profile')}
-            >
-              <View style={styles.menuItemLeft}>
-                <View style={[styles.iconContainer, { backgroundColor: '#EF444415' }]}>
-                  <Ionicons name="trash-outline" size={22} color="#EF4444" />
-                </View>
-                <Text style={[styles.menuItemTitle, { color: '#EF4444' }]}>Delete Profile</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={Colors.textGray} />
-            </TouchableOpacity>
-
             <TouchableOpacity style={[styles.menuItem, styles.noBorder]} onPress={handleLogout}>
               <View style={styles.menuItemLeft}>
                 <View style={[styles.iconContainer, { backgroundColor: Colors.primary + '15' }]}>

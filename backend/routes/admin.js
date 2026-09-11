@@ -16,6 +16,8 @@ const {
   deleteErrorLog,
   clearResolvedErrorLogs,
   globalAdminSearch,
+  getUserEarnings,
+  getAdminPosts,
 } = require('../controllers/admin');
 const { protect, authorize } = require('../middlewares/auth');
 
@@ -29,6 +31,8 @@ router.use(authorize('admin'));
 
 router.get('/stats', getStats);
 router.get('/search', globalAdminSearch);
+router.get('/earnings', getUserEarnings);
+router.get('/posts', getAdminPosts);
 router.get('/reports/videos', getVideoReports);
 router.put('/reports/videos/:id', updateVideoReport);
 

@@ -126,9 +126,11 @@ export default function HelpScreen() {
           </View>
         </View>
 
-        <View style={styles.footer}>
-          <Ionicons name="time-outline" size={20} color={Colors.textGray} />
-          <Text style={styles.footerText}>Response time: 24-48 hours</Text>
+        <View style={styles.deleteAccountRow}>
+          <Text style={styles.deleteAccountText}>Looking to delete your account? </Text>
+          <TouchableOpacity onPress={() => router.push('/settings/delete-profile')}>
+            <Text style={styles.deleteAccountLink}>Delete Account</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </View>
@@ -283,16 +285,20 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.text,
   },
-  footer: {
-    alignItems: 'center',
-    paddingVertical: 35,
+  deleteAccountRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
+    paddingVertical: 35,
   },
-  footerText: {
+  deleteAccountText: {
+    fontSize: 12,
     color: Colors.textGray,
-    fontSize: 14,
+  },
+  deleteAccountLink: {
+    fontSize: 12,
     fontWeight: '600',
+    color: '#EF4444',
+    textDecorationLine: 'underline',
   },
 });

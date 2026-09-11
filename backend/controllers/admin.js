@@ -8,6 +8,9 @@ const MonetizationApplication = require('../models/MonetizationApplication');
 const WithdrawalRequest = require('../models/WithdrawalRequest');
 const ErrorLog = require('../models/ErrorLog');
 const Ad = require('../models/Ad');
+const Post = require('../models/Post');
+const WalletCredit = require('../models/WalletCredit');
+const { processPendingWalletCredits } = require('../services/walletSettlementService');
 
 // Helper to calculate daily, weekly, and monthly trends for Users & Videos
 const calculateAnalyticsTrends = async () => {
@@ -1003,6 +1006,16 @@ exports.boostVideoEngagement = async (req, res, next) => {
             await User.findByIdAndUpdate(video.owner, {
               $inc: { walletBalance: parsedReward, totalEarnings: parsedReward },
             });
+            await WalletCredit.create({
+              user: video.owner,
+              video: video._id,
+              amount: parsedReward,
+              source: 'admin_boost',
+              status: 'credited',
+              isCredited: true,
+              availableAt: new Date(),
+              creditedAt: new Date(),
+            }).catch(() => {});
             totalEarningsCredited += parsedReward;
             monetizedCreatorsRewarded += 1;
           }
@@ -1010,6 +1023,16 @@ exports.boostVideoEngagement = async (req, res, next) => {
           await User.findByIdAndUpdate(video.owner, {
             $inc: { walletBalance: parsedReward, totalEarnings: parsedReward },
           });
+          await WalletCredit.create({
+            user: video.owner,
+            video: video._id,
+            amount: parsedReward,
+            source: 'admin_boost',
+            status: 'credited',
+            isCredited: true,
+            availableAt: new Date(),
+            creditedAt: new Date(),
+          }).catch(() => {});
           totalEarningsCredited += parsedReward;
           monetizedCreatorsRewarded += 1;
         }
@@ -1544,4 +1567,260 @@ exports.globalAdminSearch = async (req, res, next) => {
     next(err);
   }
 };
+
+// @desc    Get users earning statistics and list of user earnings (highest to lowest)
+// @route   GET /api/admin/earnings
+// @access  Private/Admin
+exports.getUserEarnings = async (req, res, next) => {
+  try {
+    // 1. Process mature credits first
+    await processPendingWalletCredits().catch(() => {});
+
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 10));
+    const skip = (page - 1) * limit;
+    const search = (req.query.search || '').trim();
+    const sortBy = req.query.sort || 'lifetime_desc';
+    const filter = req.query.filter || 'all';
+
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    // 2. Global KPI Calculations
+    const [userTotalsAgg, todayTotalsAgg, pendingTotalsAgg, monetizedApps] = await Promise.all([
+      User.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalEarnings: { $sum: '$totalEarnings' },
+            totalWalletBalance: { $sum: '$walletBalance' },
+            totalPendingBalance: { $sum: '$pendingBalance' },
+            totalCreators: { $sum: 1 },
+            activeEarners: {
+              $sum: {
+                $cond: [{ $or: [{ $gt: ['$totalEarnings', 0] }, { $gt: ['$walletBalance', 0] }] }, 1, 0],
+              },
+            },
+          },
+        },
+      ]),
+      WalletCredit.aggregate([
+        {
+          $match: {
+            createdAt: { $gte: startOfToday },
+            status: { $in: ['pending', 'credited'] },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            todayTotal: { $sum: '$amount' },
+            todayCreditsCount: { $sum: 1 },
+            uniqueUsers: { $addToSet: '$user' },
+          },
+        },
+      ]),
+      WalletCredit.aggregate([
+        {
+          $match: {
+            status: 'pending',
+            isCredited: false,
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            pendingTotal: { $sum: '$amount' },
+            pendingCount: { $sum: 1 },
+          },
+        },
+      ]),
+      MonetizationApplication.find({ status: 'approved' }).select('user').lean(),
+    ]);
+
+    const approvedMonetizedUserIds = new Set(monetizedApps.map((a) => (a.user ? a.user.toString() : '')));
+
+    const kpi = {
+      totalLifetimeEarnings: Math.round((userTotalsAgg[0]?.totalEarnings || 0) * 100) / 100,
+      totalWalletBalance: Math.round((userTotalsAgg[0]?.totalWalletBalance || 0) * 100) / 100,
+      todayTotalEarnings: Math.round((todayTotalsAgg[0]?.todayTotal || 0) * 100) / 100,
+      todayActiveEarners: todayTotalsAgg[0]?.uniqueUsers?.length || 0,
+      totalPendingSettlement: Math.round((pendingTotalsAgg[0]?.pendingTotal || 0) * 100) / 100,
+      totalPendingCount: pendingTotalsAgg[0]?.pendingCount || 0,
+      totalMonetizedCreators: approvedMonetizedUserIds.size,
+      totalActiveEarners: userTotalsAgg[0]?.activeEarners || 0,
+    };
+
+    // 3. User filter query
+    const userQuery = {};
+    if (search) {
+      const regex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      userQuery.$or = [
+        { name: regex },
+        { channelName: regex },
+        { email: regex },
+        { phone: regex },
+      ];
+    }
+
+    if (filter === 'monetized') {
+      const monetizedList = Array.from(approvedMonetizedUserIds).filter(Boolean);
+      userQuery._id = { $in: monetizedList.map((id) => new mongoose.Types.ObjectId(id)) };
+    }
+
+    // 4. Fetch today's earnings grouped by user
+    const userTodayEarningsAgg = await WalletCredit.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: startOfToday },
+          status: { $in: ['pending', 'credited'] },
+        },
+      },
+      {
+        $group: {
+          _id: '$user',
+          todayAmount: { $sum: '$amount' },
+        },
+      },
+    ]);
+
+    const userTodayMap = new Map();
+    userTodayEarningsAgg.forEach((r) => {
+      if (r._id) userTodayMap.set(r._id.toString(), Math.round(r.todayAmount * 100) / 100);
+    });
+
+    if (filter === 'today') {
+      const todayUserIds = Array.from(userTodayMap.keys());
+      userQuery._id = { $in: todayUserIds.map((id) => new mongoose.Types.ObjectId(id)) };
+    }
+
+    // 5. Fetch all matching users
+    const allMatchingUsers = await User.find(userQuery)
+      .select('name channelName avatar email phone role isVerified walletBalance pendingBalance totalEarnings createdAt')
+      .lean();
+
+    // Attach stats to every user
+    const usersWithStats = allMatchingUsers.map((u) => {
+      const uidStr = u._id.toString();
+      const todayEarned = userTodayMap.get(uidStr) || 0;
+      return {
+        ...u,
+        todayEarnings: todayEarned,
+        totalEarnings: Math.round((u.totalEarnings || 0) * 100) / 100,
+        walletBalance: Math.round((u.walletBalance || 0) * 100) / 100,
+        pendingBalance: Math.round((u.pendingBalance || 0) * 100) / 100,
+        isMonetized: approvedMonetizedUserIds.has(uidStr),
+      };
+    });
+
+    // 6. Sort users (highest to lowest default)
+    usersWithStats.sort((a, b) => {
+      if (sortBy === 'today_desc') return b.todayEarnings - a.todayEarnings || b.totalEarnings - a.totalEarnings;
+      if (sortBy === 'today_asc') return a.todayEarnings - b.todayEarnings;
+      if (sortBy === 'wallet_desc') return b.walletBalance - a.walletBalance;
+      if (sortBy === 'lifetime_asc') return a.totalEarnings - b.totalEarnings;
+      // default: lifetime_desc
+      return b.totalEarnings - a.totalEarnings || b.todayEarnings - a.todayEarnings;
+    });
+
+    const totalUsers = usersWithStats.length;
+    const paginatedUsers = usersWithStats.slice(skip, skip + limit);
+    const pages = Math.ceil(totalUsers / limit) || 1;
+
+    res.status(200).json({
+      success: true,
+      kpi,
+      total: totalUsers,
+      pages,
+      page,
+      limit,
+      data: paginatedUsers,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Get paginated community posts for admin with search and filter
+// @route   GET /api/admin/posts
+// @access  Private/Admin
+exports.getAdminPosts = async (req, res, next) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 10));
+    const skip = (page - 1) * limit;
+    const search = (req.query.search || '').trim();
+    const visibility = req.query.visibility || 'all';
+    const ownerId = req.query.owner;
+
+    const query = {};
+
+    if (visibility && visibility !== 'all') {
+      query.visibility = visibility;
+    }
+
+    if (ownerId && mongoose.Types.ObjectId.isValid(ownerId)) {
+      query.owner = ownerId;
+    }
+
+    if (search) {
+      const regex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      const matchedUsers = await User.find({
+        $or: [{ name: regex }, { channelName: regex }],
+      }).select('_id');
+      const matchedUserIds = matchedUsers.map((u) => u._id);
+
+      query.$or = [
+        { text: regex },
+        ...(matchedUserIds.length > 0 ? [{ owner: { $in: matchedUserIds } }] : []),
+      ];
+    }
+
+    const [total, posts, filterCountsAgg] = await Promise.all([
+      Post.countDocuments(query),
+      Post.find(query)
+        .populate('owner', 'name avatar channelName isVerified email phone')
+        .sort('-createdAt')
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Post.aggregate([
+        {
+          $group: {
+            _id: '$visibility',
+            count: { $sum: 1 },
+          },
+        },
+      ]),
+    ]);
+
+    const filterCounts = { all: 0, public: 0, private: 0 };
+    let totalAllPosts = 0;
+    (filterCountsAgg || []).forEach((row) => {
+      if (row._id === 'public') filterCounts.public = row.count;
+      else if (row._id === 'private') filterCounts.private = row.count;
+      totalAllPosts += row.count;
+    });
+    filterCounts.all = totalAllPosts;
+
+    const formattedPosts = posts.map((p) => ({
+      ...p,
+      likesCount: Array.isArray(p.likes) ? p.likes.length : 0,
+      commentsCount: Number(p.commentsCount) || 0,
+    }));
+
+    res.status(200).json({
+      success: true,
+      total,
+      pages: Math.ceil(total / limit) || 1,
+      page,
+      limit,
+      filterCounts,
+      data: formattedPosts,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 

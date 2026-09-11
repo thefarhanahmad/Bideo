@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Modal from "../components/Modal";
 import ConfirmModal from "../components/ConfirmModal";
 import DataTableToolbar from "../components/DataTableToolbar";
@@ -61,6 +61,22 @@ const Videos = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Active top-level content tab: 'videos' | 'shorts' | 'posts'
+  const [activeTab, setActiveTab] = useState("videos");
+
+  // Community Posts State
+  const [posts, setPosts] = useState([]);
+  const [postsTotal, setPostsTotal] = useState(0);
+  const [postsPages, setPostsPages] = useState(1);
+  const [postsFilterCounts, setPostsFilterCounts] = useState({ all: 0, public: 0, private: 0 });
+  const [showViewPost, setShowViewPost] = useState(false);
+  const [viewingPost, setViewingPost] = useState(null);
+  const [showEditPost, setShowEditPost] = useState(false);
+  const [editingPost, setEditingPost] = useState(null);
+  const [showDeletePost, setShowDeletePost] = useState(false);
+  const [deletingPost, setDeletingPost] = useState(null);
+  const [postSubmitting, setPostSubmitting] = useState(false);
+
   const [showAdd, setShowAdd] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [editVideo, setEditVideo] = useState(null);
@@ -84,10 +100,6 @@ const Videos = () => {
 
   const API = API_URL;
 
-  // Selected channel filter for the main videos table
-  const [selectedChannel, setSelectedChannel] = useState("");
-  const [selectedChannelUser, setSelectedChannelUser] = useState(null);
-
   const fetchVideos = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -96,13 +108,26 @@ const Videos = () => {
       const url = new URL(`${API}/api/videos`);
       url.searchParams.set("page", page);
       url.searchParams.set("limit", limit);
-      url.searchParams.set("filter", filter);
       url.searchParams.set("sort", "latest");
+
+      if (activeTab === "shorts") {
+        url.searchParams.set("type", "short");
+        if (filter && filter !== "all") {
+          url.searchParams.set("filter", filter);
+        } else {
+          url.searchParams.set("filter", "shorts");
+        }
+      } else {
+        url.searchParams.set("type", "long");
+        if (filter && filter !== "all") {
+          url.searchParams.set("filter", filter);
+        } else {
+          url.searchParams.set("filter", "long");
+        }
+      }
+
       if (search && search.trim()) {
         url.searchParams.set("search", search.trim());
-      }
-      if (selectedChannel) {
-        url.searchParams.set("owner", selectedChannel);
       }
 
       const res = await fetch(url.toString(), {
@@ -123,14 +148,132 @@ const Videos = () => {
       setError(err.message);
     }
     setLoading(false);
-  }, [API, page, limit, filter, search, selectedChannel]);
+  }, [API, page, limit, filter, search, activeTab]);
+
+  const fetchPosts = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const token = localStorage.getItem("admin_token");
+      const url = new URL(`${API}/api/admin/posts`);
+      url.searchParams.set("page", page);
+      url.searchParams.set("limit", limit);
+      if (filter && filter !== "all") {
+        url.searchParams.set("visibility", filter);
+      }
+      if (search && search.trim()) {
+        url.searchParams.set("search", search.trim());
+      }
+
+      const res = await fetch(url.toString(), {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to fetch posts");
+      setPosts(data.data || []);
+      setPostsTotal(data.total || 0);
+      setPostsPages(data.pages || 1);
+      if (data.filterCounts) {
+        setPostsFilterCounts(data.filterCounts);
+      }
+    } catch (err) {
+      setError(err.message);
+    }
+    setLoading(false);
+  }, [API, page, limit, filter, search]);
+
+  const fetchPostsCount = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("admin_token");
+      const url = new URL(`${API}/api/admin/posts`);
+      url.searchParams.set("page", "1");
+      url.searchParams.set("limit", "1");
+      const res = await fetch(url.toString(), {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        if (data.filterCounts) {
+          setPostsFilterCounts(data.filterCounts);
+        }
+        if (typeof data.total === "number") {
+          setPostsTotal(data.total);
+        }
+      }
+    } catch {
+      // Ignore background count fetch error
+    }
+  }, [API]);
+
+  useEffect(() => {
+    fetchPostsCount();
+  }, [fetchPostsCount]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      fetchVideos();
+      if (activeTab === "posts") {
+        fetchPosts();
+      } else {
+        fetchVideos();
+      }
     }, search ? 300 : 0);
     return () => clearTimeout(timer);
-  }, [fetchVideos, search]);
+  }, [fetchVideos, fetchPosts, search, activeTab]);
+
+  const handleUpdatePost = async (id, payload, isFormData = false) => {
+    setPostSubmitting(true);
+    try {
+      const token = localStorage.getItem("admin_token");
+      const headers = {
+        Authorization: `Bearer ${token}`,
+      };
+      if (!isFormData) {
+        headers["Content-Type"] = "application/json";
+      }
+      const res = await fetch(`${API}/api/posts/${id}`, {
+        method: "PUT",
+        headers,
+        body: isFormData ? payload : JSON.stringify(payload),
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to update post");
+      setShowEditPost(false);
+      setEditingPost(null);
+      await fetchPosts();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setPostSubmitting(false);
+    }
+  };
+
+  const handleDeletePost = async (id) => {
+    try {
+      const token = localStorage.getItem("admin_token");
+      const res = await fetch(`${API}/api/posts/${id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to delete post");
+      setShowDeletePost(false);
+      setDeletingPost(null);
+      await fetchPosts();
+      fetchPostsCount();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
 
   const fetchCategories = async () => {
     try {
@@ -279,111 +422,308 @@ const Videos = () => {
     return `${formatSize(orig)} → ${formatSize(comp)} (${pct}% saved)`;
   };
 
-  const filterOptions = [
-    { label: "All Videos", value: "all", count: filterCounts.all },
-    { label: "Long Form", value: "long", count: filterCounts.long },
-    { label: "Shorts", value: "shorts", count: filterCounts.shorts },
+  const videoFilterOptions = [
+    { label: "All Videos", value: "all", count: filterCounts.long || filterCounts.all },
     { label: "Public", value: "public", count: filterCounts.public },
     { label: "Private / Unlisted", value: "private", count: filterCounts.private },
     { label: "📌 Pinned", value: "pinned", count: filterCounts.pinned },
   ];
+
+  const shortFilterOptions = [
+    { label: "All Shorts", value: "all", count: filterCounts.shorts },
+    { label: "Public", value: "public", count: filterCounts.public },
+    { label: "Private / Unlisted", value: "private", count: filterCounts.private },
+    { label: "📌 Pinned", value: "pinned", count: filterCounts.pinned },
+  ];
+
+  const postFilterOptions = [
+    { label: "All Posts", value: "all", count: postsFilterCounts.all },
+    { label: "Public", value: "public", count: postsFilterCounts.public },
+    { label: "Private", value: "private", count: postsFilterCounts.private },
+  ];
+
+  const currentFilters =
+    activeTab === "posts"
+      ? postFilterOptions
+      : activeTab === "shorts"
+      ? shortFilterOptions
+      : videoFilterOptions;
+
+  const currentTotal = activeTab === "posts" ? postsTotal : totalItems;
 
   return (
     <div className="space-y-5 min-w-0 max-w-full">
       {/* Page Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 min-w-0">
         <div className="min-w-0">
-          <h2 className="font-display text-xl sm:text-2xl font-extrabold text-ink truncate">Videos Management</h2>
+          <h2 className="font-display text-xl sm:text-2xl font-extrabold text-ink truncate">Content Management</h2>
           <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-muted">
-            Manage uploaded videos, reels, compression pipelines, and homepage pin statuses.
+            Manage uploaded videos, short reels, and community posts across all channels.
           </p>
         </div>
       </div>
 
-      {/* Toolbar: Search, Filters, Upload Button */}
+      {/* Top Primary Tabs: Videos | Shorts | Posts */}
+      <div className="flex border-b border-line gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab("videos");
+            setFilter("all");
+            setPage(1);
+          }}
+          className={`flex items-center gap-2 pb-3 px-4 text-sm sm:text-base font-bold transition-all border-b-2 ${
+            activeTab === "videos"
+              ? "border-brand text-brand"
+              : "border-transparent text-muted hover:text-ink"
+          }`}
+        >
+          <span>🎥</span> Videos
+          <span className="ml-1 rounded-full bg-surface px-2 py-0.5 text-xs font-semibold text-muted">
+            {filterCounts.long || 0}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab("shorts");
+            setFilter("all");
+            setPage(1);
+          }}
+          className={`flex items-center gap-2 pb-3 px-4 text-sm sm:text-base font-bold transition-all border-b-2 ${
+            activeTab === "shorts"
+              ? "border-brand text-brand"
+              : "border-transparent text-muted hover:text-ink"
+          }`}
+        >
+          <span>⚡</span> Shorts
+          <span className="ml-1 rounded-full bg-surface px-2 py-0.5 text-xs font-semibold text-muted">
+            {filterCounts.shorts || 0}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab("posts");
+            setFilter("all");
+            setPage(1);
+          }}
+          className={`flex items-center gap-2 pb-3 px-4 text-sm sm:text-base font-bold transition-all border-b-2 ${
+            activeTab === "posts"
+              ? "border-brand text-brand"
+              : "border-transparent text-muted hover:text-ink"
+          }`}
+        >
+          <span>📝</span> Posts
+          <span className="ml-1 rounded-full bg-surface px-2 py-0.5 text-xs font-semibold text-muted">
+            {postsFilterCounts.all || postsTotal || 0}
+          </span>
+        </button>
+      </div>
+
+      {/* Toolbar: Search, Filters, Action Buttons */}
       <DataTableToolbar
         search={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Search by title, owner, channel, or category..."
+        searchPlaceholder={
+          activeTab === "posts"
+            ? "Search community posts by text, author, or channel..."
+            : "Search by title, owner, channel, or category..."
+        }
         filter={filter}
         onFilterChange={setFilter}
-        filters={filterOptions}
-        totalCount={filterCounts.all || totalItems}
-        filteredCount={totalItems}
+        filters={currentFilters}
+        totalCount={currentTotal}
+        filteredCount={currentTotal}
         actions={
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => openBoostModal(null)}
-              disabled={totalItems === 0}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 px-3.5 py-2 text-xs sm:text-sm font-semibold text-white shadow-xs transition-all hover:-translate-y-0.5 hover:bg-purple-700 disabled:opacity-50"
-              title="Add +100 to +300 random views and matching ~7% likes to all uploaded videos"
-            >
-              <span>⚡ Boost All (100-300 Views)</span>
-            </button>
-            <button
-              onClick={() => {
-                fetchUsers();
-                fetchCategories();
-                setShowAdd(true);
-              }}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-brand transition-all hover:-translate-y-0.5 hover:bg-brand-dark"
-            >
-              <span>+ Upload Video</span>
-            </button>
-          </div>
+          activeTab !== "posts" ? (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => openBoostModal(null)}
+                disabled={totalItems === 0}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 px-3.5 py-2 text-xs sm:text-sm font-semibold text-white shadow-xs transition-all hover:-translate-y-0.5 hover:bg-purple-700 disabled:opacity-50"
+                title="Add +100 to +300 random views and matching ~7% likes to all uploaded videos"
+              >
+                <span>⚡ Boost All (100-300 Views)</span>
+              </button>
+              <button
+                onClick={() => {
+                  fetchUsers();
+                  fetchCategories();
+                  setShowAdd(true);
+                }}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-brand transition-all hover:-translate-y-0.5 hover:bg-brand-dark"
+              >
+                <span>+ Upload {activeTab === "shorts" ? "Short" : "Video"}</span>
+              </button>
+            </div>
+          ) : null
         }
       />
-
-      {/* Quick Channel / Creator Filter Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface/40 p-3 shadow-xs">
-        <div className="flex flex-wrap items-center gap-2.5 min-w-0 flex-1">
-          <span className="text-xs font-bold text-ink shrink-0 flex items-center gap-1.5">
-            <span>📺</span> Filter by Channel:
-          </span>
-          <div className="w-80 max-w-full">
-            <ChannelSelect
-              users={users}
-              value={selectedChannel}
-              onChange={(channelId, userObj) => {
-                setSelectedChannel(channelId);
-                setSelectedChannelUser(userObj);
-                setPage(1);
-              }}
-              placeholder="All Channels (Click to filter)"
-              allowClear={true}
-            />
-          </div>
-        </div>
-
-        {selectedChannel && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-ink">
-              Showing videos by:{" "}
-              <strong className="text-brand font-bold">
-                {selectedChannelUser?.channelName
-                  ? `@${selectedChannelUser.channelName.replace(/^@+/, "")}`
-                  : selectedChannelUser?.name || "Selected Channel"}
-              </strong>
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedChannel("");
-                setSelectedChannelUser(null);
-                setPage(1);
-              }}
-              className="rounded-xl bg-red-50 border border-red-200 px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-100 transition-colors shadow-xs"
-            >
-              ✕ Clear Filter
-            </button>
-          </div>
-        )}
-      </div>
 
       {loading ? (
         <LoadingSkeleton type="table" rows={8} cols={8} />
       ) : error ? (
         <div className="rounded-2xl border border-red-100 bg-red-50 p-6 text-red-700">{error}</div>
+      ) : activeTab === "posts" ? (
+        <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-card min-w-0">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[960px] text-sm">
+              <thead>
+                <tr className="border-b border-line bg-surface/60 text-left text-xs uppercase tracking-wider text-muted">
+                  <th className="p-4 font-semibold">Post Media / Preview</th>
+                  <th className="p-4 font-semibold">Creator & Channel</th>
+                  <th className="p-4 text-center font-semibold">Likes</th>
+                  <th className="p-4 text-center font-semibold">Comments</th>
+                  <th className="p-4 text-center font-semibold">Visibility</th>
+                  <th className="p-4 text-center font-semibold">Created</th>
+                  <th className="p-4 text-right font-semibold">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {posts.map((p) => (
+                  <tr key={p._id} className="border-t border-line align-middle hover:bg-surface/50 transition-colors">
+                    {/* Media & Text */}
+                    <td className="p-4">
+                      <div className="flex items-start gap-3 max-w-md">
+                        {p.imageUrl ? (
+                          <div
+                            onClick={() => {
+                              setViewingPost(p);
+                              setShowViewPost(true);
+                            }}
+                            className="group relative shrink-0 w-16 h-16 bg-surface rounded-xl overflow-hidden border border-line cursor-pointer"
+                            title="Click to view full image"
+                          >
+                            <img
+                              src={resolveMediaUrl(p.imageUrl)}
+                              alt="Post"
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-surface border border-line text-2xl">
+                            📝
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="line-clamp-2 text-xs sm:text-sm font-semibold text-ink">
+                            {p.text || <span className="italic text-muted font-normal">(Image only post)</span>}
+                          </p>
+                          {p.originalImageSize > 0 && (
+                            <div className="text-[11px] font-semibold text-indigo-500 mt-1">
+                              🖼️ Image: {getCompressionText(p.originalImageSize, p.compressedImageSize)}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Owner & Channel */}
+                    <td className="p-4 text-muted">
+                      <div className="flex items-center gap-2">
+                        <img
+                          src={resolveMediaUrl(p.owner?.avatar)}
+                          alt={p.owner?.name}
+                          className="h-8 w-8 rounded-full object-cover border border-line shrink-0"
+                        />
+                        <div className="min-w-0">
+                          <div className="font-semibold text-ink text-xs truncate">{p.owner?.name || "Unknown"}</div>
+                          {p.owner?.channelName && (
+                            <div className="text-xs text-brand truncate">@{p.owner.channelName}</div>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Likes */}
+                    <td className="p-4 text-center font-bold text-ink text-xs whitespace-nowrap">
+                      ❤️ {p.likesCount || 0}
+                    </td>
+
+                    {/* Comments */}
+                    <td className="p-4 text-center font-bold text-ink text-xs whitespace-nowrap">
+                      💬 {p.commentsCount || 0}
+                    </td>
+
+                    {/* Visibility */}
+                    <td className="p-4 text-center whitespace-nowrap">
+                      <span
+                        className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold capitalize ${
+                          p.visibility === "public"
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                            : "bg-red-50 text-red-700 border border-red-200"
+                        }`}
+                      >
+                        {p.visibility || "public"}
+                      </span>
+                    </td>
+
+                    {/* Created */}
+                    <td className="p-4 text-muted whitespace-nowrap text-xs text-center">
+                      {formatCreatedDate(p.createdAt)}
+                    </td>
+
+                    {/* Actions */}
+                    <td className="p-4">
+                      <div className="flex justify-end gap-1.5 whitespace-nowrap">
+                        <button
+                          onClick={() => {
+                            setViewingPost(p);
+                            setShowViewPost(true);
+                          }}
+                          className="rounded-lg bg-surface border border-line px-2.5 py-1 text-xs font-semibold text-ink hover:bg-line transition-colors"
+                          title="View post details"
+                        >
+                          View
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditingPost(p);
+                            setShowEditPost(true);
+                          }}
+                          className="rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-100 transition-colors"
+                          title="Edit post"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => {
+                            setDeletingPost(p);
+                            setShowDeletePost(true);
+                          }}
+                          className="rounded-lg bg-red-50 border border-red-200 px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-100 transition-colors"
+                          title="Delete post"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {posts.length === 0 && (
+                  <tr>
+                    <td colSpan="7" className="p-8 text-center text-muted">
+                      No matching community posts found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Bottom Pagination for Posts */}
+          <Pagination
+            currentPage={page}
+            totalPages={postsPages}
+            totalItems={postsTotal}
+            pageSize={limit}
+            onPageChange={setPage}
+            onPageSizeChange={setLimit}
+          />
+        </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-card min-w-0">
           <div className="overflow-x-auto">
@@ -623,7 +963,219 @@ const Videos = () => {
           }}
         />
       )}
+
+      {/* View Community Post Modal */}
+      {showViewPost && viewingPost && (
+        <Modal
+          title="Community Post Details"
+          maxWidth="max-w-lg"
+          onClose={() => {
+            setShowViewPost(false);
+            setViewingPost(null);
+          }}
+        >
+          <div className="space-y-4">
+            {viewingPost.imageUrl && (
+              <div className="overflow-hidden rounded-xl border border-line bg-surface max-h-80 flex items-center justify-center">
+                <img
+                  src={resolveMediaUrl(viewingPost.imageUrl)}
+                  alt="Post media"
+                  className="max-h-80 w-full object-contain"
+                />
+              </div>
+            )}
+            <div className="flex items-center gap-3">
+              <img
+                src={resolveMediaUrl(viewingPost.owner?.avatar)}
+                alt={viewingPost.owner?.name}
+                className="h-10 w-10 rounded-full object-cover border border-line"
+              />
+              <div className="min-w-0">
+                <div className="font-bold text-ink text-sm">{viewingPost.owner?.name || "Unknown"}</div>
+                <div className="text-xs text-brand">@{viewingPost.owner?.channelName || "channel"}</div>
+              </div>
+              <span className={`ml-auto rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                viewingPost.visibility === "public"
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                  : "bg-red-50 text-red-700 border border-red-200"
+              }`}>
+                {viewingPost.visibility}
+              </span>
+            </div>
+            <div className="rounded-xl border border-line bg-surface/40 p-4 text-sm text-ink whitespace-pre-wrap">
+              {viewingPost.text || <span className="italic text-muted font-normal">(No text content)</span>}
+            </div>
+            <div className="flex items-center justify-between text-xs text-muted border-t border-line pt-3">
+              <div className="flex items-center gap-4">
+                <span>❤️ {viewingPost.likesCount || 0} Likes</span>
+                <span>💬 {viewingPost.commentsCount || 0} Comments</span>
+              </div>
+              <span>{formatCreatedDate(viewingPost.createdAt)}</span>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Edit Community Post Modal */}
+      {showEditPost && editingPost && (
+        <Modal
+          title="Edit Community Post"
+          maxWidth="max-w-lg"
+          onClose={() => {
+            setShowEditPost(false);
+            setEditingPost(null);
+          }}
+        >
+          <EditPostForm
+            post={editingPost}
+            onSubmit={(payload, isFormData) => handleUpdatePost(editingPost._id, payload, isFormData)}
+            onCancel={() => {
+              setShowEditPost(false);
+              setEditingPost(null);
+            }}
+            submitting={postSubmitting}
+          />
+        </Modal>
+      )}
+
+      {/* Delete Community Post Modal */}
+      {showDeletePost && deletingPost && (
+        <ConfirmModal
+          title="Delete Community Post"
+          message={`Are you sure you want to permanently delete this post by "${deletingPost.owner?.name || "creator"}"?`}
+          confirmText="Delete Post"
+          confirmClass="bg-red-600 hover:bg-red-700 text-white"
+          onConfirm={() => handleDeletePost(deletingPost._id)}
+          onCancel={() => {
+            setShowDeletePost(false);
+            setDeletingPost(null);
+          }}
+        />
+      )}
     </div>
+  );
+};
+
+const EditPostForm = ({ post, onSubmit, onCancel, submitting }) => {
+  const [text, setText] = useState(post.text || "");
+  const [visibility, setVisibility] = useState(post.visibility || "public");
+  const [removeImage, setRemoveImage] = useState(false);
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(post.imageUrl ? resolveMediaUrl(post.imageUrl) : null);
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setImageFile(file);
+      setImagePreview(URL.createObjectURL(file));
+      setRemoveImage(false);
+    }
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!text.trim() && !imageFile && (!post.imageUrl || removeImage)) {
+      alert("Post must have text or an image.");
+      return;
+    }
+
+    if (imageFile) {
+      const formData = new FormData();
+      formData.append("text", text.trim());
+      formData.append("visibility", visibility);
+      formData.append("image", imageFile);
+      onSubmit(formData, true);
+    } else {
+      onSubmit(
+        {
+          text: text.trim(),
+          visibility,
+          removeImage: removeImage ? "true" : "false",
+        },
+        false
+      );
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="block text-xs font-bold uppercase tracking-wider text-muted mb-1.5">
+          Post Text Content
+        </label>
+        <textarea
+          rows={4}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="What's on your mind?..."
+          className="w-full rounded-xl border border-line p-3 text-sm text-ink focus:border-brand focus:outline-hidden"
+        />
+      </div>
+
+      <div>
+        <label className="block text-xs font-bold uppercase tracking-wider text-muted mb-1.5">
+          Visibility
+        </label>
+        <select
+          value={visibility}
+          onChange={(e) => setVisibility(e.target.value)}
+          className="w-full rounded-xl border border-line p-2.5 text-sm text-ink focus:border-brand focus:outline-hidden"
+        >
+          <option value="public">Public (Visible to everyone)</option>
+          <option value="private">Private (Hidden)</option>
+        </select>
+      </div>
+
+      <div>
+        <label className="block text-xs font-bold uppercase tracking-wider text-muted mb-1.5">
+          Attached Image
+        </label>
+        {imagePreview && !removeImage && (
+          <div className="relative mb-2 inline-block">
+            <img
+              src={imagePreview}
+              alt="Post preview"
+              className="h-32 w-auto max-w-full rounded-xl object-cover border border-line"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                setRemoveImage(true);
+                setImageFile(null);
+                setImagePreview(null);
+              }}
+              className="absolute -top-2 -right-2 rounded-full bg-red-600 text-white p-1 text-xs hover:bg-red-700 shadow-sm"
+              title="Remove image"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+        <input
+          type="file"
+          accept="image/*"
+          onChange={handleFileChange}
+          className="block w-full text-xs text-muted file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-brand-50 file:text-brand hover:file:bg-brand-100"
+        />
+      </div>
+
+      <div className="flex justify-end gap-2 pt-3 border-t border-line">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-full bg-surface px-4 py-2 text-sm font-semibold text-ink hover:bg-line transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={submitting}
+          className="rounded-full bg-brand px-5 py-2 text-sm font-semibold text-white shadow-brand hover:bg-brand-dark transition-colors disabled:opacity-50"
+        >
+          {submitting ? "Saving..." : "Save Changes"}
+        </button>
+      </div>
+    </form>
   );
 };
 

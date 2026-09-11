@@ -11,6 +11,7 @@ const connectDB = require("./config/db");
 const { initDeletionScheduler } = require("./utils/deletionScheduler");
 const { initAutoBoostScheduler } = require("./utils/autoBoostScheduler");
 const { initOrphanMediaScheduler } = require("./utils/orphanMediaScheduler");
+const { initWalletSettlementScheduler } = require("./utils/walletSettlementScheduler");
 
 // Connect to database
 connectDB();
@@ -23,6 +24,9 @@ initAutoBoostScheduler();
 
 // Initialize automated weekly orphan media garbage collection
 initOrphanMediaScheduler();
+
+// Initialize 24-hour wallet credit settlement scheduler
+initWalletSettlementScheduler();
 
 const PORT = process.env.PORT || 5000;
 

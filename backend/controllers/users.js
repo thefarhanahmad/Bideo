@@ -10,6 +10,7 @@ const VideoMonetizationReview = require('../models/VideoMonetizationReview');
 const MonetizationApplication = require('../models/MonetizationApplication');
 const WithdrawalRequest = require('../models/WithdrawalRequest');
 const VideoView = require('../models/VideoView');
+const { getUserEarningsSummary, processPendingWalletCredits } = require('../services/walletSettlementService');
 
 const escapeRegex = (str) => {
   if (!str || typeof str !== 'string') return '';
@@ -1064,13 +1065,17 @@ exports.getMonetizationStatus = async (req, res, next) => {
     const application = await MonetizationApplication.findOne({ user: userId });
     const step2Completed = application ? application.status === 'approved' : false;
 
-    // 4. Fetch user document and calculate total views
-    const userDoc = await User.findById(userId);
+    // 4. Settle any matured credits and fetch user earnings breakdown
+    await processPendingWalletCredits().catch(() => {});
+    const earningsSummary = await getUserEarningsSummary(userId);
+
     const userVideos = await Video.find({ owner: userId });
     const totalViews = userVideos.reduce((acc, v) => acc + (v.views || 0), 0);
 
-    const walletBalance = userDoc?.walletBalance || 0;
-    const totalEarnings = userDoc?.totalEarnings || 0;
+    const walletBalance = earningsSummary?.walletBalance || 0;
+    const pendingBalance = earningsSummary?.pendingBalance || 0;
+    const todayEarnings = earningsSummary?.todayEarnings || 0;
+    const totalEarnings = earningsSummary?.totalEarnings || 0;
 
     const defaultRate = Number(process.env.VIEW_REWARD_RATE) || 0.15;
     const longRate = !isNaN(Number(process.env.LONG_VIDEO_REWARD_RATE))
@@ -1089,6 +1094,8 @@ exports.getMonetizationStatus = async (req, res, next) => {
         reviews,
         application,
         walletBalance: Math.round((walletBalance || 0) * 100) / 100,
+        pendingBalance: Math.round((pendingBalance || 0) * 100) / 100,
+        todayEarnings: Math.round((todayEarnings || 0) * 100) / 100,
         totalEarnings: Math.round((totalEarnings || 0) * 100) / 100,
         totalViews,
         ratePerThousandViews: Math.round(longRate * 1000),

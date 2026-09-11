@@ -15,6 +15,7 @@ const { saveLocalFile, deleteLocalFile } = require("../utils/localUpload");
 const { getUserInterestProfile, rankAndShuffleVideos, shuffle } = require("../utils/recommendation");
 const { sendPushForEvent } = require("../utils/pushNotification");
 const { scheduleVideoModeration } = require("../services/moderationService");
+const { queueWalletCredit } = require("../services/walletSettlementService");
 
 const createNotification = async ({ recipient, actor, type, video, post, comment, message }) => {
   if (!recipient || !actor || recipient.toString() === actor.toString()) return;
@@ -873,11 +874,17 @@ exports.recordView = async (req, res, next) => {
           const rewardPerView = isShortVideo ? shortRate : longRate;
 
           if (rewardPerView > 0) {
-            await User.findByIdAndUpdate(video.owner, {
-              $inc: {
-                walletBalance: rewardPerView,
-                totalEarnings: rewardPerView,
+            await queueWalletCredit({
+              userId: video.owner,
+              videoId: video._id,
+              amount: rewardPerView,
+              source: isShortVideo ? 'short_view' : 'video_view',
+              meta: {
+                isShort: isShortVideo,
+                viewerId: userId || null,
+                deviceId: userId ? null : String(deviceId),
               },
+              delayHours: 24,
             });
           }
         }

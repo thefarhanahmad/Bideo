@@ -180,7 +180,47 @@ const Users = () => {
     });
   };
 
+  const executeApproveRecovery = async (u) => {
+    try {
+      const token = localStorage.getItem("admin_token");
+      const res = await fetch(API_URL + "/api/users/" + u._id + "/cancel-deletion", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to approve recovery");
+      fetchUsers();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const executeRejectRecovery = async (u) => {
+    try {
+      const token = localStorage.getItem("admin_token");
+      const res = await fetch(API_URL + "/api/users/" + u._id + "/reject-recovery", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to reject recovery request");
+      fetchUsers();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   const handleApproveRecovery = (u) => {
+    if (filter === "recovery") {
+      executeApproveRecovery(u);
+      return;
+    }
     setConfirmDialog({
       title: "Approve & Restore Account",
       message: `Are you sure you want to approve the recovery request for "${u.name}" and restore full profile access?`,
@@ -188,21 +228,7 @@ const Users = () => {
       confirmClass: "bg-emerald-600 hover:bg-emerald-700 text-white",
       onConfirm: async () => {
         setConfirmDialog(null);
-        try {
-          const token = localStorage.getItem("admin_token");
-          const res = await fetch(API_URL + "/api/users/" + u._id + "/cancel-deletion", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-            credentials: "include",
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.message || "Failed to approve recovery");
-          fetchUsers();
-        } catch (err) {
-          setError(err.message);
-        }
+        await executeApproveRecovery(u);
       },
     });
   };
@@ -215,26 +241,16 @@ const Users = () => {
       confirmClass: "bg-emerald-600 hover:bg-emerald-700 text-white",
       onConfirm: async () => {
         setConfirmDialog(null);
-        try {
-          const token = localStorage.getItem("admin_token");
-          const res = await fetch(API_URL + "/api/users/" + u._id + "/cancel-deletion", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-            credentials: "include",
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.message || "Failed to stop deletion");
-          fetchUsers();
-        } catch (err) {
-          setError(err.message);
-        }
+        await executeApproveRecovery(u);
       },
     });
   };
 
   const handleRejectRecovery = (u) => {
+    if (filter === "recovery") {
+      executeRejectRecovery(u);
+      return;
+    }
     setConfirmDialog({
       title: "Reject Recovery Request",
       message: `Are you sure you want to reject the recovery request for "${u.name}"? The account will remain scheduled for deletion.`,
@@ -242,21 +258,7 @@ const Users = () => {
       confirmClass: "bg-amber-600 hover:bg-amber-700 text-white",
       onConfirm: async () => {
         setConfirmDialog(null);
-        try {
-          const token = localStorage.getItem("admin_token");
-          const res = await fetch(API_URL + "/api/users/" + u._id + "/reject-recovery", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-            credentials: "include",
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.message || "Failed to reject recovery request");
-          fetchUsers();
-        } catch (err) {
-          setError(err.message);
-        }
+        await executeRejectRecovery(u);
       },
     });
   };

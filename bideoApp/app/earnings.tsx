@@ -21,7 +21,6 @@ import Colors from '../constants/Colors';
 import api from '../services/api';
 import { showAlert } from '../components/AppAlert';
 import { RootState } from '../redux/store';
-import { formatViews } from '../utils/formatDate';
 
 const MIN_WITHDRAWAL = 1000;
 
@@ -300,9 +299,6 @@ export default function EarningsScreen() {
             <View style={styles.lifetimeRow}>
               <Text style={styles.lifetimeLabel}>
                 Lifetime Earned: <Text style={{ fontWeight: '800', color: '#FFF' }}>₹{totalEarnings.toFixed(2)}</Text>
-              </Text>
-              <Text style={styles.lifetimeLabel}>
-                Total Views: <Text style={{ fontWeight: '800', color: '#FFF' }}>{formatViews(monetizationData?.totalViews || 0)}</Text>
               </Text>
             </View>
 

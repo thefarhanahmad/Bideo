@@ -119,6 +119,11 @@ const userSchema = new mongoose.Schema({
     default: 0,
     min: 0,
   },
+  pendingBalance: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
   totalEarnings: {
     type: Number,
     default: 0,

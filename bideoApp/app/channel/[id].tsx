@@ -180,7 +180,7 @@ export default function ChannelScreen() {
         <View style={styles.videoInfo}>
           <Text style={styles.videoTitle} numberOfLines={2}>{item.title}</Text>
           <Text style={styles.videoMeta}>
-            {item.views} views • {formatTimeAgo(item.createdAt)}
+            {formatViews(item.views || 0)} views • {formatTimeAgo(item.createdAt)}
           </Text>
           <TouchableOpacity 
             style={styles.menuDots} 

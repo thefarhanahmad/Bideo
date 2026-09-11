@@ -20,6 +20,7 @@ import Videos from './pages/Videos';
 import Reports from './pages/Reports';
 import Ads from './pages/Ads';
 import Monetization from './pages/Monetization';
+import UserEarnings from './pages/UserEarnings';
 import Payouts from './pages/Payouts';
 import ErrorLogs from './pages/ErrorLogs';
 import './App.css';
@@ -61,6 +62,7 @@ function App() {
           <Route path="reports" element={<Reports />} />
           <Route path="ads" element={<Ads />} />
           <Route path="monetization" element={<Monetization />} />
+          <Route path="earnings" element={<UserEarnings />} />
           <Route path="payouts" element={<Payouts />} />
           <Route path="error-logs" element={<ErrorLogs />} />
         </Route>

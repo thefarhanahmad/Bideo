@@ -15,6 +15,7 @@ import {
   WalletIcon,
   CashIcon,
   AlertOctagonIcon,
+  TrendingUpIcon,
 } from "./Icons";
 
 const nav = [
@@ -25,6 +26,7 @@ const nav = [
   { to: "/admin/reports", label: "Reports", icon: FlagIcon },
   { to: "/admin/ads", label: "Ads", icon: TvIcon },
   { to: "/admin/monetization", label: "Monetization", icon: WalletIcon },
+  { to: "/admin/earnings", label: "User Earnings", icon: TrendingUpIcon },
   { to: "/admin/payouts", label: "Payouts", icon: CashIcon },
   { to: "/admin/error-logs", label: "Error Logs", icon: AlertOctagonIcon },
 ];
