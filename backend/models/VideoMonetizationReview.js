@@ -17,11 +17,50 @@ const videoMonetizationReviewSchema = new mongoose.Schema({
     enum: ['pending', 'passed', 'failed'],
     default: 'pending'
   },
+  adsWatched: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 2
+  },
+  adsRequired: {
+    type: Number,
+    default: 2
+  },
+  passedVia: {
+    type: String,
+    enum: ['admin', 'rewarded_ads', 'auto', null],
+    default: null
+  },
+  passedAt: {
+    type: Date,
+    default: null
+  },
+  adWatchHistory: [
+    {
+      watchedAt: {
+        type: Date,
+        default: Date.now
+      },
+      adNetwork: {
+        type: String,
+        default: 'admob_rewarded'
+      },
+      clientIp: {
+        type: String,
+        default: ''
+      }
+    }
+  ],
   reviewMessage: {
     type: String,
     default: ''
   },
   createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  updatedAt: {
     type: Date,
     default: Date.now
   }

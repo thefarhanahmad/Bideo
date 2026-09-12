@@ -667,7 +667,13 @@ exports.reviewVideoMonetization = async (req, res, next) => {
 
     const review = await VideoMonetizationReview.findByIdAndUpdate(
       req.params.id,
-      { status, reviewMessage: reviewMessage || '', updatedAt: Date.now() },
+      {
+        status,
+        reviewMessage: reviewMessage || '',
+        passedVia: status === 'passed' ? 'admin' : null,
+        passedAt: status === 'passed' ? Date.now() : null,
+        updatedAt: Date.now(),
+      },
       { new: true, runValidators: true }
     );
 

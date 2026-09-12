@@ -16,6 +16,7 @@ const {
   getLeaderboard,
   getMonetizationStatus,
   applyMonetization,
+  watchReviewAd,
   requestWithdrawal,
   getWithdrawalHistory,
   scheduleProfileDeletion,
@@ -47,6 +48,7 @@ router.get('/search-history', getSearchHistory);
 router.delete('/search-history', clearSearchHistory);
 router.get('/monetization/status', getMonetizationStatus);
 router.post('/monetization/apply', applyMonetization);
+router.post('/monetization/watch-review-ad/:reviewId', watchReviewAd);
 router.post('/withdraw', requestWithdrawal);
 router.get('/withdrawals', getWithdrawalHistory);
 router.post('/schedule-deletion', scheduleProfileDeletion);

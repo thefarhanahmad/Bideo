@@ -10,6 +10,7 @@ const VideoMonetizationReview = require('../models/VideoMonetizationReview');
 const MonetizationApplication = require('../models/MonetizationApplication');
 const WithdrawalRequest = require('../models/WithdrawalRequest');
 const VideoView = require('../models/VideoView');
+const Notification = require('../models/Notification');
 const { getUserEarningsSummary, processPendingWalletCredits } = require('../services/walletSettlementService');
 
 const escapeRegex = (str) => {
@@ -1511,4 +1512,142 @@ exports.requestWebDeletion = async (req, res, next) => {
     next(err);
   }
 };
+
+// @desc    Record a completed rewarded ad for a video in monetization review (2 ads to pass)
+// @route   POST /api/users/monetization/watch-review-ad/:reviewId
+// @access  Private
+exports.watchReviewAd = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { reviewId } = req.params;
+
+    if (!reviewId || !mongoose.Types.ObjectId.isValid(reviewId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or missing review ID.',
+      });
+    }
+
+    const review = await VideoMonetizationReview.findOne({
+      _id: reviewId,
+      user: userId,
+    }).populate('video', 'title thumbnail');
+
+    if (!review) {
+      return res.status(404).json({
+        success: false,
+        message: 'Video review not found or you are not authorized.',
+      });
+    }
+
+    // If already passed, return success with status
+    if (review.status === 'passed') {
+      const passedCount = await VideoMonetizationReview.countDocuments({
+        user: userId,
+        status: 'passed',
+      });
+      return res.status(200).json({
+        success: true,
+        message: 'This video is already approved for monetization!',
+        data: {
+          reviewId: review._id,
+          videoId: review.video?._id || review.video,
+          videoTitle: review.video?.title || '',
+          status: review.status,
+          adsWatched: review.adsWatched || 2,
+          adsRequired: review.adsRequired || 2,
+          passedVia: review.passedVia || 'rewarded_ads',
+          step1Completed: passedCount >= 3,
+          passedVideosCount: passedCount,
+        },
+      });
+    }
+
+    const now = new Date();
+
+    // Anti-rapid-spam check: check last ad watch time
+    if (review.adWatchHistory && review.adWatchHistory.length > 0) {
+      const lastWatch = review.adWatchHistory[review.adWatchHistory.length - 1];
+      if (lastWatch && lastWatch.watchedAt) {
+        const timeSinceLastWatch = (now.getTime() - new Date(lastWatch.watchedAt).getTime()) / 1000;
+        // If watched less than 4 seconds ago, prevent spam
+        if (timeSinceLastWatch < 4) {
+          return res.status(429).json({
+            success: false,
+            message: 'Please wait a moment before submitting another ad reward.',
+          });
+        }
+      }
+    }
+
+    const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '';
+    const currentWatched = Number(review.adsWatched || 0);
+    const required = Number(review.adsRequired || 2);
+    const newCount = currentWatched + 1;
+
+    review.adsWatched = Math.min(newCount, required);
+    review.updatedAt = now;
+
+    if (!Array.isArray(review.adWatchHistory)) {
+      review.adWatchHistory = [];
+    }
+    review.adWatchHistory.push({
+      watchedAt: now,
+      adNetwork: 'admob_rewarded',
+      clientIp: String(clientIp).slice(0, 50),
+    });
+
+    let autoPassed = false;
+    if (review.adsWatched >= required) {
+      review.status = 'passed';
+      review.passedVia = 'rewarded_ads';
+      review.passedAt = now;
+      review.reviewMessage = 'Approved automatically via 2 completed rewarded ads.';
+      autoPassed = true;
+    }
+
+    await review.save();
+
+    // Recalculate passed videos count for creator
+    const passedVideosCount = await VideoMonetizationReview.countDocuments({
+      user: userId,
+      status: 'passed',
+    });
+    const step1Completed = passedVideosCount >= 3;
+
+    // Send notification on pass
+    if (autoPassed) {
+      const videoTitle = review.video?.title || 'Your video';
+      const notifMsg = `🎉 "${videoTitle}" has been approved for monetization (2/2 ads completed)! (${passedVideosCount}/3 passed)`;
+      Notification.create({
+        recipient: userId,
+        actor: userId,
+        type: 'system',
+        video: review.video?._id || review.video,
+        message: notifMsg,
+      }).catch(() => {});
+    }
+
+    res.status(200).json({
+      success: true,
+      message: autoPassed
+        ? 'Congratulations! This video has been approved for monetization! 🎉'
+        : `Ad 1 of ${required} completed! Watch 1 more ad to pass this video.`,
+      data: {
+        reviewId: review._id,
+        videoId: review.video?._id || review.video,
+        videoTitle: review.video?.title || '',
+        status: review.status,
+        adsWatched: review.adsWatched,
+        adsRequired: review.adsRequired,
+        passedVia: review.passedVia,
+        step1Completed,
+        passedVideosCount,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 

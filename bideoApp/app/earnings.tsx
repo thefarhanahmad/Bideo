@@ -17,11 +17,12 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSelector } from 'react-redux';
 import { Image } from 'expo-image';
+import Constants from 'expo-constants';
 import Colors from '../constants/Colors';
 import api from '../services/api';
 import { showAlert } from '../components/AppAlert';
 import { RootState } from '../redux/store';
-import { AppInterstitialAd, AppNativeAd } from '../components/AppAds';
+import { AppInterstitialAd, AppNativeAd, loadAndShowRewardedAd } from '../components/AppAds';
 
 const MIN_WITHDRAWAL = 1000;
 
@@ -68,6 +69,112 @@ export default function EarningsScreen() {
   const [customAccountNumber, setCustomAccountNumber] = useState('');
   const [customIfscCode, setCustomIfscCode] = useState('');
   const [withdrawing, setWithdrawing] = useState(false);
+
+  // Fast-track Rewarded Ad states for monetization video reviews
+  const [loadingReviewId, setLoadingReviewId] = useState<string | null>(null);
+  const [demoAdModal, setDemoAdModal] = useState<{
+    visible: boolean;
+    review: any;
+    secondsLeft: number;
+  } | null>(null);
+
+  // Countdown timer for Expo Go rewarded ad preview simulation
+  useEffect(() => {
+    if (!demoAdModal?.visible) return;
+
+    if (demoAdModal.secondsLeft > 0) {
+      const timer = setTimeout(() => {
+        setDemoAdModal((prev) => (prev ? { ...prev, secondsLeft: prev.secondsLeft - 1 } : null));
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [demoAdModal?.visible, demoAdModal?.secondsLeft]);
+
+  const claimReviewAdOnServer = async (reviewId: string) => {
+    setLoadingReviewId(reviewId);
+    try {
+      const res = await api.post(`/users/monetization/watch-review-ad/${reviewId}`);
+      if (res.data?.success) {
+        const data = res.data.data;
+        if (data.justPassed) {
+          showAlert(
+            '🎉 Video Passed!',
+            'Congratulations! You have watched 2 ads. This video has been verified and passed for monetization!'
+          );
+        } else {
+          showAlert(
+            'Ad Completed!',
+            `Ad ${data.adsWatched} of ${data.adsRequired} completed! Watch 1 more ad to pass this video immediately.`
+          );
+        }
+        await fetchStatus();
+      } else {
+        showAlert('Error', res.data?.message || 'Failed to register ad watch. Please try again.');
+      }
+    } catch (error: any) {
+      console.error('Error claiming review ad:', error);
+      const msg = error?.response?.data?.message || 'Failed to register ad watch. Please try again.';
+      showAlert('Notice', msg);
+    } finally {
+      setLoadingReviewId(null);
+      setDemoAdModal(null);
+    }
+  };
+
+  const handleWatchReviewAd = async (rev: any) => {
+    if (loadingReviewId) return;
+
+    // In Expo Go, native Google Mobile Ads binary is not bundled, so show high-fidelity preview simulator
+    const isExpoGo = Constants.appOwnership === 'expo';
+    if (isExpoGo) {
+      setDemoAdModal({
+        visible: true,
+        review: rev,
+        secondsLeft: 5,
+      });
+      return;
+    }
+
+    // In Standalone Production APK / Dev Client:
+    setLoadingReviewId(rev._id);
+    let adRewardEarned = false;
+
+    try {
+      loadAndShowRewardedAd({
+        onLoaded: () => {
+          // Ad loaded, showing to user
+        },
+        onRewardEarned: async () => {
+          adRewardEarned = true;
+          await claimReviewAdOnServer(rev._id);
+        },
+        onDismiss: () => {
+          setLoadingReviewId(null);
+          if (!adRewardEarned) {
+            showAlert(
+              'Ad Incomplete',
+              'Please watch the full rewarded video to get credit towards passing this video.'
+            );
+          }
+        },
+        onError: (err: any) => {
+          setLoadingReviewId(null);
+          console.error('Error showing rewarded ad:', err);
+          showAlert(
+            'Ad Unavailable',
+            err?.message || 'Rewarded ad is currently unavailable. Please try again in a few moments.'
+          );
+        },
+      });
+    } catch (error: any) {
+      setLoadingReviewId(null);
+      console.error('Error initiating rewarded ad:', error);
+      showAlert(
+        'Ad Unavailable',
+        error?.message || 'Rewarded ad is currently unavailable. Please try again in a few moments.'
+      );
+    }
+  };
 
   const fetchStatus = async () => {
     try {
@@ -410,22 +517,125 @@ export default function EarningsScreen() {
                   })
                   .map((rev: any) => (
                   <View key={rev._id} style={styles.videoItem}>
-                    {rev.video && (
-                      <Image source={{ uri: rev.video.thumbnail }} style={styles.videoThumb} contentFit="cover" />
+                    <View style={styles.videoItemTopRow}>
+                      {rev.video ? (
+                        <Image source={{ uri: rev.video.thumbnail }} style={styles.videoThumb} contentFit="cover" />
+                      ) : (
+                        <View style={[styles.videoThumb, { alignItems: 'center', justifyContent: 'center' }]}>
+                          <Ionicons name="videocam-outline" size={18} color="#999" />
+                        </View>
+                      )}
+                      <View style={styles.videoInfo}>
+                        <Text style={styles.videoTitle} numberOfLines={1}>
+                          {rev.video?.title || 'Untitled Video'}
+                        </Text>
+                        <Text style={styles.videoDate}>
+                          Uploaded {new Date(rev.createdAt).toLocaleDateString()}
+                        </Text>
+                      </View>
+                      <View style={[styles.reviewBadge, { backgroundColor: rev.status === 'passed' ? '#E8F5E9' : rev.status === 'failed' ? '#FFEBEE' : '#FFF8E1' }]}>
+                        <Text style={[styles.reviewBadgeText, { color: rev.status === 'passed' ? '#2E7D32' : rev.status === 'failed' ? '#C62828' : '#F57F17' }]}>
+                          {rev.status === 'passed' ? 'PASSED ✓' : rev.status === 'failed' ? 'REJECTED' : 'IN REVIEW'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Passed video details */}
+                    {rev.status === 'passed' && (
+                      <View style={styles.passedNoteRow}>
+                        <Ionicons name="checkmark-circle" size={14} color="#2E7D32" />
+                        <Text style={styles.passedNoteText}>
+                          {rev.passedVia === 'rewarded_ads'
+                            ? 'Passed via 2 Rewarded Ads'
+                            : 'Verified & Approved by Audit Team'}
+                        </Text>
+                      </View>
                     )}
-                    <View style={styles.videoInfo}>
-                      <Text style={styles.videoTitle} numberOfLines={1}>
-                        {rev.video?.title || 'Untitled Video'}
-                      </Text>
-                      <Text style={styles.videoDate}>
-                        {new Date(rev.createdAt).toLocaleDateString()}
-                      </Text>
-                    </View>
-                    <View style={[styles.reviewBadge, { backgroundColor: rev.status === 'passed' ? '#E8F5E9' : rev.status === 'failed' ? '#FFEBEE' : '#FFF8E1' }]}>
-                      <Text style={[styles.reviewBadgeText, { color: rev.status === 'passed' ? '#2E7D32' : rev.status === 'failed' ? '#C62828' : '#F57F17' }]}>
-                        {rev.status === 'passed' ? 'PASSED' : rev.status === 'failed' ? 'REJECTED' : 'In Review'}
-                      </Text>
-                    </View>
+
+                    {/* Failed video rejection notes */}
+                    {rev.status === 'failed' && (
+                      <View style={styles.failedNoteRow}>
+                        <Ionicons name="alert-circle" size={14} color="#C62828" />
+                        <Text style={styles.failedNoteText}>
+                          {rev.adminNotes || 'Video did not pass copyright or originality review.'}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Pending video: Fast-Track pass by watching 2 rewarded ads */}
+                    {rev.status === 'pending' && (
+                      <View style={styles.fastTrackBox}>
+                        <View style={styles.fastTrackHeader}>
+                          <View style={styles.fastTrackBadge}>
+                            <Ionicons name="flash" size={14} color="#E65100" />
+                            <Text style={styles.fastTrackTitle}>Fast-Track Pass via Ads</Text>
+                          </View>
+                          <Text style={styles.fastTrackCounter}>
+                            {rev.adsWatched || 0} of {rev.adsRequired || 2} Ads Watched
+                          </Text>
+                        </View>
+
+                        <Text style={styles.fastTrackSubtitle}>
+                          Pass this video instantly without waiting for audit approval by watching 2 sponsor ads.
+                        </Text>
+
+                        {/* 2-Step Progress Indicator */}
+                        <View style={styles.adStepRow}>
+                          <View style={[styles.adStepPill, (rev.adsWatched || 0) >= 1 && styles.adStepPillActive]}>
+                            <Ionicons
+                              name={(rev.adsWatched || 0) >= 1 ? 'checkmark-circle' : 'ellipse-outline'}
+                              size={13}
+                              color={(rev.adsWatched || 0) >= 1 ? '#2E7D32' : '#999'}
+                            />
+                            <Text style={[styles.adStepPillText, (rev.adsWatched || 0) >= 1 && styles.adStepPillTextActive]}>
+                              Ad 1 {(rev.adsWatched || 0) >= 1 ? 'Watched' : 'Pending'}
+                            </Text>
+                          </View>
+
+                          <View style={[styles.adStepPill, (rev.adsWatched || 0) >= 2 && styles.adStepPillActive]}>
+                            <Ionicons
+                              name={(rev.adsWatched || 0) >= 2 ? 'checkmark-circle' : 'ellipse-outline'}
+                              size={13}
+                              color={(rev.adsWatched || 0) >= 2 ? '#2E7D32' : '#999'}
+                            />
+                            <Text style={[styles.adStepPillText, (rev.adsWatched || 0) >= 2 && styles.adStepPillTextActive]}>
+                              Ad 2 {(rev.adsWatched || 0) >= 2 ? 'Watched' : 'Pending'}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* Watch Ad Action Button */}
+                        <TouchableOpacity
+                          style={[
+                            styles.watchAdBtn,
+                            loadingReviewId === rev._id && { opacity: 0.7 },
+                          ]}
+                          disabled={loadingReviewId === rev._id}
+                          onPress={() => handleWatchReviewAd(rev)}
+                          activeOpacity={0.8}
+                        >
+                          {loadingReviewId === rev._id ? (
+                            <>
+                              <ActivityIndicator size="small" color="#FFFFFF" />
+                              <Text style={styles.watchAdBtnText}>Connecting to Ad Server...</Text>
+                            </>
+                          ) : (
+                            <>
+                              <Ionicons name="play-circle" size={16} color="#FFFFFF" />
+                              <Text style={styles.watchAdBtnText}>
+                                {(rev.adsWatched || 0) === 0
+                                  ? 'Watch Ad 1 of 2 to Pass'
+                                  : 'Watch Final Ad (2 of 2) to Pass'}
+                              </Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+
+                        <Text style={styles.orAuditText}>
+                          Or wait for the audit team manual review.
+                        </Text>
+                      </View>
+                    )}
                   </View>
                 ))}
               </View>
@@ -684,6 +894,106 @@ export default function EarningsScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Demo Rewarded Ad Simulator for Expo Go */}
+      <Modal
+        visible={!!demoAdModal?.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (demoAdModal && demoAdModal.secondsLeft === 0) {
+            setDemoAdModal(null);
+          }
+        }}
+      >
+        <View style={styles.demoAdBackdrop}>
+          <View style={styles.demoAdCard}>
+            <LinearGradient
+              colors={['#1E1E2F', '#0D0D17']}
+              style={styles.demoAdHeader}
+            >
+              <View style={styles.demoAdTopRow}>
+                <View style={styles.demoAdBadge}>
+                  <Text style={styles.demoAdBadgeText}>AD · PREVIEW (EXPO GO)</Text>
+                </View>
+                {demoAdModal && demoAdModal.secondsLeft > 0 ? (
+                  <View style={styles.demoAdTimer}>
+                    <Ionicons name="time-outline" size={13} color="#FFF" />
+                    <Text style={styles.demoAdTimerText}>Reward in {demoAdModal.secondsLeft}s</Text>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.demoAdCloseBtn}
+                    onPress={() => setDemoAdModal(null)}
+                  >
+                    <Ionicons name="close" size={20} color="#FFF" />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <View style={styles.demoAdCenter}>
+                <View style={styles.demoAdIconCircle}>
+                  <Ionicons name="play-circle" size={44} color="#FF6B00" />
+                </View>
+                <Text style={styles.demoAdTitle}>Sponsored Rewarded Video</Text>
+                <Text style={styles.demoAdSubtitle} numberOfLines={1}>
+                  Target: {demoAdModal?.review?.video?.title || 'Review Video'}
+                </Text>
+                <Text style={styles.demoAdNote}>
+                  {demoAdModal && demoAdModal.secondsLeft > 0
+                    ? `Simulating Google Rewarded Ad for Expo Go...\nPlease wait ${demoAdModal.secondsLeft}s to receive credit.`
+                    : 'Ad completed! Claim credit now to pass this video.'}
+                </Text>
+              </View>
+            </LinearGradient>
+
+            <View style={styles.demoAdFooter}>
+              {demoAdModal && demoAdModal.secondsLeft > 0 ? (
+                <View style={styles.demoAdWaitingRow}>
+                  <ActivityIndicator size="small" color={Colors.primary} />
+                  <Text style={styles.demoAdWaitingText}>Watching Ad ({demoAdModal.secondsLeft}s remaining)...</Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.demoAdClaimBtn, loadingReviewId === demoAdModal?.review?._id && { opacity: 0.7 }]}
+                  disabled={loadingReviewId === demoAdModal?.review?._id}
+                  onPress={() => {
+                    if (demoAdModal?.review?._id) {
+                      claimReviewAdOnServer(demoAdModal.review._id);
+                    }
+                  }}
+                >
+                  {loadingReviewId === demoAdModal?.review?._id ? (
+                    <ActivityIndicator size="small" color="#FFF" />
+                  ) : (
+                    <>
+                      <Ionicons name="checkmark-circle" size={18} color="#FFF" />
+                      <Text style={styles.demoAdClaimBtnText}>
+                        Claim Ad Credit (
+                        {(demoAdModal?.review?.adsWatched || 0) + 1}/2
+                        )
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
+
+              {demoAdModal && demoAdModal.secondsLeft > 0 && (
+                <TouchableOpacity
+                  onPress={() => {
+                    showAlert('Cancelled', 'You closed the ad before completion. No credit was granted.');
+                    setDemoAdModal(null);
+                  }}
+                  style={styles.demoAdCancelBtn}
+                >
+                  <Text style={styles.demoAdCancelText}>Cancel & Forfeit Reward</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <AppInterstitialAd visible={showingAd} onClose={() => setShowingAd(false)} />
     </View>
   );
@@ -994,17 +1304,21 @@ const styles = StyleSheet.create({
     paddingTop: 10,
   },
   videoItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
     marginVertical: 6,
     backgroundColor: '#F9F9FA',
-    padding: 8,
-    borderRadius: 8,
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#EAEAEA',
+  },
+  videoItemTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   videoThumb: {
-    width: 50,
-    height: 32,
-    borderRadius: 4,
+    width: 52,
+    height: 34,
+    borderRadius: 6,
     backgroundColor: '#EEE',
   },
   videoInfo: {
@@ -1029,6 +1343,122 @@ const styles = StyleSheet.create({
   reviewBadgeText: {
     fontSize: 11,
     fontWeight: '700',
+  },
+  passedNoteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#E8F5E9',
+  },
+  passedNoteText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#2E7D32',
+  },
+  failedNoteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#FFEBEE',
+  },
+  failedNoteText: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#C62828',
+    flex: 1,
+  },
+  fastTrackBox: {
+    marginTop: 10,
+    backgroundColor: '#FFF9E6',
+    borderRadius: 8,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#FFE082',
+  },
+  fastTrackHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  fastTrackBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  fastTrackTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#E65100',
+  },
+  fastTrackCounter: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#B26A00',
+  },
+  fastTrackSubtitle: {
+    fontSize: 11,
+    color: '#665C4D',
+    lineHeight: 15,
+    marginBottom: 8,
+  },
+  adStepRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 10,
+  },
+  adStepPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  adStepPillActive: {
+    backgroundColor: '#E8F5E9',
+    borderColor: '#A5D6A7',
+  },
+  adStepPillText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#777',
+  },
+  adStepPillTextActive: {
+    color: '#2E7D32',
+    fontWeight: '700',
+  },
+  watchAdBtn: {
+    backgroundColor: '#E65100',
+    borderRadius: 8,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  watchAdBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  orAuditText: {
+    fontSize: 10,
+    color: '#8D7B68',
+    textAlign: 'center',
+    marginTop: 6,
+    fontStyle: 'italic',
   },
   actionBtn: {
     backgroundColor: Colors.primary,
@@ -1274,5 +1704,133 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontSize: 15,
     fontWeight: '800',
+  },
+  demoAdBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  demoAdCard: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+  demoAdHeader: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  demoAdTopRow: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  demoAdBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  demoAdBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  demoAdTimer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(230, 81, 0, 0.85)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  demoAdTimerText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  demoAdCloseBtn: {
+    padding: 4,
+  },
+  demoAdCenter: {
+    alignItems: 'center',
+    marginVertical: 20,
+    paddingHorizontal: 12,
+  },
+  demoAdIconCircle: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: 'rgba(255, 107, 0, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 107, 0, 0.3)',
+  },
+  demoAdTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    textAlign: 'center',
+  },
+  demoAdSubtitle: {
+    fontSize: 12,
+    color: '#BBBBCC',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  demoAdNote: {
+    fontSize: 11,
+    color: '#8E8EA8',
+    marginTop: 8,
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  demoAdFooter: {
+    padding: 16,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+  },
+  demoAdWaitingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 6,
+  },
+  demoAdWaitingText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  demoAdClaimBtn: {
+    width: '100%',
+    backgroundColor: '#2E7D32',
+    paddingVertical: 12,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  demoAdClaimBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  demoAdCancelBtn: {
+    marginTop: 10,
+    paddingVertical: 6,
+  },
+  demoAdCancelText: {
+    color: '#999',
+    fontSize: 12,
+    fontWeight: '500',
   },
 });

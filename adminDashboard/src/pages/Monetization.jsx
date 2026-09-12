@@ -355,7 +355,7 @@ const Monetization = () => {
                               <div className="font-semibold text-ink text-sm truncate" title={rev.video.title}>
                                 {rev.video.title}
                               </div>
-                              <div className="text-xs text-muted mt-1 flex items-center gap-2">
+                              <div className="text-xs text-muted mt-1 flex items-center gap-2 flex-wrap">
                                 <span
                                   className={`inline-block rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${
                                     rev.video.isShort ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-800"
@@ -365,6 +365,18 @@ const Monetization = () => {
                                 </span>
                                 <span>•</span>
                                 <span>Uploaded: {new Date(rev.video.createdAt).toLocaleDateString("en-IN")}</span>
+                                <span>•</span>
+                                {rev.status === "passed" ? (
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700">
+                                    Approved {rev.passedVia === "rewarded_ads" ? "via 2 Rewarded Ads" : "Manually by Admin"}
+                                  </span>
+                                ) : (
+                                  <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                                    (rev.adsWatched || 0) > 0 ? "bg-amber-50 text-amber-700 border border-amber-200" : "bg-gray-100 text-gray-600"
+                                  }`}>
+                                    📺 Ads Watched: {rev.adsWatched || 0} / {rev.adsRequired || 2}
+                                  </span>
+                                )}
                               </div>
                             </div>
 
@@ -380,7 +392,7 @@ const Monetization = () => {
                               </a>
                               {rev.status === "passed" ? (
                                 <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-100 px-3 py-1.5 text-xs font-bold text-emerald-800 border border-emerald-300">
-                                  ✓ Passed
+                                  ✓ Passed {rev.passedVia === "rewarded_ads" ? "(Ads)" : "(Admin)"}
                                 </span>
                               ) : (
                                 <>
