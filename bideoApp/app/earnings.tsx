@@ -567,42 +567,19 @@ export default function EarningsScreen() {
                       <View style={styles.fastTrackBox}>
                         <View style={styles.fastTrackHeader}>
                           <View style={styles.fastTrackBadge}>
-                            <Ionicons name="flash" size={14} color="#E65100" />
-                            <Text style={styles.fastTrackTitle}>Fast-Track Pass via Ads</Text>
+                            <Ionicons name="flash" size={13} color="#E65100" />
+                            <Text style={styles.fastTrackTitle}>Pass via Ads</Text>
                           </View>
-                          <Text style={styles.fastTrackCounter}>
-                            {rev.adsWatched || 0} of {rev.adsRequired || 2} Ads Watched
-                          </Text>
+                          <View style={styles.counterBadge}>
+                            <Text style={styles.fastTrackCounter}>
+                              {rev.adsWatched || 0}/2
+                            </Text>
+                          </View>
                         </View>
 
-                        <Text style={styles.fastTrackSubtitle}>
-                          Pass this video instantly without waiting for audit approval by watching 2 sponsor ads.
+                        <Text style={styles.fastTrackInfoText} numberOfLines={2}>
+                          Watch 2 short ads to pass this video instantly without waiting for audit review.
                         </Text>
-
-                        {/* 2-Step Progress Indicator */}
-                        <View style={styles.adStepRow}>
-                          <View style={[styles.adStepPill, (rev.adsWatched || 0) >= 1 && styles.adStepPillActive]}>
-                            <Ionicons
-                              name={(rev.adsWatched || 0) >= 1 ? 'checkmark-circle' : 'ellipse-outline'}
-                              size={13}
-                              color={(rev.adsWatched || 0) >= 1 ? '#2E7D32' : '#999'}
-                            />
-                            <Text style={[styles.adStepPillText, (rev.adsWatched || 0) >= 1 && styles.adStepPillTextActive]}>
-                              Ad 1 {(rev.adsWatched || 0) >= 1 ? 'Watched' : 'Pending'}
-                            </Text>
-                          </View>
-
-                          <View style={[styles.adStepPill, (rev.adsWatched || 0) >= 2 && styles.adStepPillActive]}>
-                            <Ionicons
-                              name={(rev.adsWatched || 0) >= 2 ? 'checkmark-circle' : 'ellipse-outline'}
-                              size={13}
-                              color={(rev.adsWatched || 0) >= 2 ? '#2E7D32' : '#999'}
-                            />
-                            <Text style={[styles.adStepPillText, (rev.adsWatched || 0) >= 2 && styles.adStepPillTextActive]}>
-                              Ad 2 {(rev.adsWatched || 0) >= 2 ? 'Watched' : 'Pending'}
-                            </Text>
-                          </View>
-                        </View>
 
                         {/* Watch Ad Action Button */}
                         <TouchableOpacity
@@ -617,23 +594,19 @@ export default function EarningsScreen() {
                           {loadingReviewId === rev._id ? (
                             <>
                               <ActivityIndicator size="small" color="#FFFFFF" />
-                              <Text style={styles.watchAdBtnText}>Connecting to Ad Server...</Text>
+                              <Text style={styles.watchAdBtnText}>Loading Ad...</Text>
                             </>
                           ) : (
                             <>
-                              <Ionicons name="play-circle" size={16} color="#FFFFFF" />
+                              <Ionicons name="play-circle" size={15} color="#FFFFFF" />
                               <Text style={styles.watchAdBtnText}>
                                 {(rev.adsWatched || 0) === 0
-                                  ? 'Watch Ad 1 of 2 to Pass'
-                                  : 'Watch Final Ad (2 of 2) to Pass'}
+                                  ? 'Watch Ad (1/2)'
+                                  : 'Watch Final Ad (2/2)'}
                               </Text>
                             </>
                           )}
                         </TouchableOpacity>
-
-                        <Text style={styles.orAuditText}>
-                          Or wait for the audit team manual review.
-                        </Text>
                       </View>
                     )}
                   </View>
@@ -1014,7 +987,8 @@ const styles = StyleSheet.create({
   backBtn: { padding: 4 },
   headerTitle: { fontSize: 17, fontWeight: '700', color: Colors.text },
   scrollContent: {
-    padding: 15,
+    paddingHorizontal: 12,
+    paddingTop: 10,
   },
   hero: {
     margin: 12,
@@ -1231,8 +1205,8 @@ const styles = StyleSheet.create({
   },
   stepCard: {
     backgroundColor: Colors.white,
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 14,
+    padding: 12,
     borderWidth: 1,
     borderColor: '#EAEAEA',
     position: 'relative',
@@ -1280,7 +1254,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   stepTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: Colors.text,
   },
@@ -1291,23 +1265,23 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   stepDescription: {
-    fontSize: 13,
+    fontSize: 12,
     color: Colors.textGray,
-    lineHeight: 18,
-    marginTop: 10,
+    lineHeight: 17,
+    marginTop: 8,
     fontWeight: '500',
   },
   videoList: {
-    marginTop: 14,
+    marginTop: 10,
     borderTopWidth: 1,
     borderTopColor: '#F0F0F0',
-    paddingTop: 10,
+    paddingTop: 8,
   },
   videoItem: {
-    marginVertical: 6,
+    marginVertical: 4,
     backgroundColor: '#F9F9FA',
-    padding: 10,
-    borderRadius: 10,
+    padding: 8,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: '#EAEAEA',
   },
@@ -1316,14 +1290,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   videoThumb: {
-    width: 52,
-    height: 34,
-    borderRadius: 6,
+    width: 48,
+    height: 32,
+    borderRadius: 5,
     backgroundColor: '#EEE',
   },
   videoInfo: {
     flex: 1,
-    marginLeft: 10,
+    marginLeft: 8,
   },
   videoTitle: {
     fontSize: 13,
@@ -1336,20 +1310,20 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   reviewBadge: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 7,
     paddingVertical: 3,
     borderRadius: 99,
   },
   reviewBadgeText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
   },
   passedNoteRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 8,
-    paddingTop: 6,
+    gap: 5,
+    marginTop: 6,
+    paddingTop: 5,
     borderTopWidth: 1,
     borderTopColor: '#E8F5E9',
   },
@@ -1361,9 +1335,9 @@ const styles = StyleSheet.create({
   failedNoteRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 8,
-    paddingTop: 6,
+    gap: 5,
+    marginTop: 6,
+    paddingTop: 5,
     borderTopWidth: 1,
     borderTopColor: '#FFEBEE',
   },
@@ -1374,10 +1348,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   fastTrackBox: {
-    marginTop: 10,
+    marginTop: 6,
     backgroundColor: '#FFF9E6',
-    borderRadius: 8,
-    padding: 10,
+    borderRadius: 6,
+    padding: 8,
     borderWidth: 1,
     borderColor: '#FFE082',
   },
@@ -1397,52 +1371,28 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#E65100',
   },
+  counterBadge: {
+    backgroundColor: '#FFE082',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
   fastTrackCounter: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#B26A00',
   },
-  fastTrackSubtitle: {
+  fastTrackInfoText: {
     fontSize: 11,
-    color: '#665C4D',
+    color: '#6D5B48',
     lineHeight: 15,
-    marginBottom: 8,
-  },
-  adStepRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 10,
-  },
-  adStepPill: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 6,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
-  adStepPillActive: {
-    backgroundColor: '#E8F5E9',
-    borderColor: '#A5D6A7',
-  },
-  adStepPillText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#777',
-  },
-  adStepPillTextActive: {
-    color: '#2E7D32',
-    fontWeight: '700',
+    marginBottom: 7,
   },
   watchAdBtn: {
     backgroundColor: '#E65100',
-    borderRadius: 8,
-    paddingVertical: 9,
-    paddingHorizontal: 12,
+    borderRadius: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1453,13 +1403,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 12,
   },
-  orAuditText: {
-    fontSize: 10,
-    color: '#8D7B68',
-    textAlign: 'center',
-    marginTop: 6,
-    fontStyle: 'italic',
-  },
   actionBtn: {
     backgroundColor: Colors.primary,
     borderRadius: 8,
@@ -1468,7 +1411,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    marginTop: 14,
+    marginTop: 12,
   },
   actionBtnText: {
     color: Colors.white,
@@ -1477,10 +1420,10 @@ const styles = StyleSheet.create({
   },
   stepperLine: {
     width: 2,
-    height: 24,
+    height: 18,
     backgroundColor: '#DDD',
-    marginLeft: 30,
-    marginVertical: 4,
+    marginLeft: 26,
+    marginVertical: 3,
   },
   stepperLineDone: {
     backgroundColor: '#2E7D32',
