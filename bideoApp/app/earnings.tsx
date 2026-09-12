@@ -331,9 +331,7 @@ export default function EarningsScreen() {
             </TouchableOpacity>
           </LinearGradient>
 
-          <View style={{ marginHorizontal: 12, marginBottom: 8 }}>
-            <AppNativeAd />
-          </View>
+          <AppNativeAd style={{ marginHorizontal: 12, marginBottom: 8 }} />
 
           {/* Withdrawal & Payout History */}
           <View style={styles.statsSection}>

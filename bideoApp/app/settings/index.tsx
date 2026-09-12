@@ -161,9 +161,7 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        <View style={{ paddingHorizontal: 15, marginVertical: 4 }}>
-          <AppNativeAd />
-        </View>
+        <AppNativeAd style={{ paddingHorizontal: 15 }} />
 
         <View style={styles.menuSection}>
           <Text style={styles.sectionTitle}>General</Text>
