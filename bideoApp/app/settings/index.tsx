@@ -10,6 +10,7 @@ import { RootState } from '../../redux/store';
 import { logout } from '../../redux/slices/authSlice';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api, { clearAuthSession, setAuthToken } from '../../services/api';
+import { AppNativeAd } from '../../components/AppAds';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -158,6 +159,10 @@ export default function SettingsScreen() {
               <Ionicons name="arrow-forward" size={16} color={Colors.primary} />
             </TouchableOpacity>
           </View>
+        </View>
+
+        <View style={{ paddingHorizontal: 15, marginVertical: 4 }}>
+          <AppNativeAd />
         </View>
 
         <View style={styles.menuSection}>

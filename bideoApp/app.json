@@ -154,6 +154,8 @@
       "router": {},
       "ADMOB_BANNER_ID": "ca-app-pub-3108167135160132/3447160062",
       "ADMOB_INTERSTITIAL_ID": "ca-app-pub-3108167135160132/8016583160",
+      "ADMOB_NATIVE_ID": "ca-app-pub-3108167135160132/7326918063",
+      "ADMOB_REWARDED_ID": "ca-app-pub-3108167135160132/9694061103",
       "eas": {
         "projectId": "c9d54950-dd5f-4e87-bf77-fcc184d8bcf7"
       }

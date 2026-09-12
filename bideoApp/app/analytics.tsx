@@ -18,6 +18,7 @@ import Colors from '../constants/Colors';
 import api from '../services/api';
 import { RootState } from '../redux/store';
 import { formatViews } from '../utils/formatDate';
+import { AppInterstitialAd } from '../components/AppAds';
 
 export default function AnalyticsScreen() {
   const router = useRouter();
@@ -26,6 +27,7 @@ export default function AnalyticsScreen() {
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showingAd, setShowingAd] = useState(true);
   const [videos, setVideos] = useState<any[]>([]);
 
   const [stats, setStats] = useState({
@@ -319,6 +321,7 @@ export default function AnalyticsScreen() {
           )}
         </ScrollView>
       )}
+      <AppInterstitialAd visible={showingAd} onClose={() => setShowingAd(false)} />
     </View>
   );
 }

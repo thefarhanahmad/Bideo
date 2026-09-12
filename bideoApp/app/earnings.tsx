@@ -21,6 +21,7 @@ import Colors from '../constants/Colors';
 import api from '../services/api';
 import { showAlert } from '../components/AppAlert';
 import { RootState } from '../redux/store';
+import { AppInterstitialAd, AppNativeAd } from '../components/AppAds';
 
 const MIN_WITHDRAWAL = 1000;
 
@@ -30,6 +31,7 @@ export default function EarningsScreen() {
   const { user } = useSelector((state: RootState) => state.auth);
 
   const [loading, setLoading] = useState(true);
+  const [showingAd, setShowingAd] = useState(true);
   const [monetizationData, setMonetizationData] = useState<any>(null);
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
 
@@ -328,6 +330,10 @@ export default function EarningsScreen() {
               </Text>
             </TouchableOpacity>
           </LinearGradient>
+
+          <View style={{ marginHorizontal: 12, marginBottom: 8 }}>
+            <AppNativeAd />
+          </View>
 
           {/* Withdrawal & Payout History */}
           <View style={styles.statsSection}>
@@ -680,6 +686,7 @@ export default function EarningsScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+      <AppInterstitialAd visible={showingAd} onClose={() => setShowingAd(false)} />
     </View>
   );
 }

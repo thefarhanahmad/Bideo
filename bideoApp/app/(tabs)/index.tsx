@@ -18,7 +18,7 @@ import api from '../../services/api';
 import AuthModal from '../../components/AuthModal';
 import PlaylistModal from '../../components/PlaylistModal';
 import { formatViews } from '../../utils/formatDate';
-import { AppAdBanner } from '../../components/AppAds';
+import { AppAdBanner, AppNativeAd } from '../../components/AppAds';
 
 const SAMPLE_VIDEOS = [
   {
@@ -249,57 +249,92 @@ export default function HomeScreen() {
 
   const shortsItems = filteredVideos.filter((v: any) => v.isShort);
 
-  const baseItems: any[] = [];
+  const feedData: any[] = [];
   if (selectedCategory === 'All') {
     const longVideos = [...pinnedVideos, ...regularLong];
     let postIndex = 0;
-    let videoCount = 0;
+    let videoCountAfterShorts = 0;
+    let shortsShelfInserted = false;
 
     for (let i = 0; i < longVideos.length; i++) {
-      baseItems.push(longVideos[i]);
-      videoCount++;
+      feedData.push(longVideos[i]);
 
-      // Insert shorts shelf after the 2nd video (if shorts exist)
+      // 1. Between 1st and 2nd video card (i === 0): show banner ad
+      if (i === 0) {
+        feedData.push({
+          _id: `feed_ad_banner_${longVideos[i]._id}`,
+          itemType: 'ad_banner',
+        });
+      }
+
+      // 2. Insert shorts shelf after the 2nd video (i === 1) if shorts exist
       if (i === 1 && shortsItems.length > 0) {
-        baseItems.push({
+        feedData.push({
           _id: 'shorts_shelf',
           itemType: 'shorts_shelf',
           data: shortsItems.slice(0, 4),
         });
+        shortsShelfInserted = true;
+        // Below shorts grid: show native ad
+        feedData.push({
+          _id: 'feed_ad_native_shorts',
+          itemType: 'ad_native',
+        });
+      }
+
+      // 3. After shorts grid, after every 4 video cards: show native ad
+      if (i >= 2) {
+        videoCountAfterShorts++;
+        if (videoCountAfterShorts % 4 === 0) {
+          feedData.push({
+            _id: `feed_ad_native_${longVideos[i]._id}`,
+            itemType: 'ad_native',
+          });
+        }
       }
 
       // After every 6 videos, insert 1 post (if available)
-      if (videoCount % 6 === 0 && postIndex < postItems.length) {
-        baseItems.push(postItems[postIndex]);
+      if ((i + 1) % 6 === 0 && postIndex < postItems.length) {
+        feedData.push(postItems[postIndex]);
         postIndex++;
       }
     }
 
-    // If there were fewer than 2 videos, ensure shorts shelf still appears if available
-    if (longVideos.length < 2 && shortsItems.length > 0) {
-      baseItems.push({
+    // Fallback if fewer than 2 videos but shorts exist
+    if (!shortsShelfInserted && shortsItems.length > 0) {
+      feedData.push({
         _id: 'shorts_shelf',
         itemType: 'shorts_shelf',
         data: shortsItems.slice(0, 4),
       });
+      feedData.push({
+        _id: 'feed_ad_native_shorts',
+        itemType: 'ad_native',
+      });
     }
   } else if (selectedCategory === 'Posts') {
     // Shuffled posts feed only
-    baseItems.push(...postItems);
+    feedData.push(...postItems);
   } else {
     // Specific category: videos only
-    baseItems.push(...pinnedVideos, ...regularLong);
-  }
-
-  const feedData: any[] = [];
-  for (let i = 0; i < baseItems.length; i++) {
-    feedData.push(baseItems[i]);
-    if ((i + 1) % 5 === 0) {
-      const prevId = baseItems[i]?._id || `pos_${i}`;
-      feedData.push({
-        _id: `feed_ad_${prevId}`,
-        itemType: 'ad_banner',
-      });
+    const catVideos = [...pinnedVideos, ...regularLong];
+    let catVideoCount = 0;
+    for (let i = 0; i < catVideos.length; i++) {
+      feedData.push(catVideos[i]);
+      if (i === 0) {
+        feedData.push({
+          _id: `cat_ad_banner_${catVideos[i]._id}`,
+          itemType: 'ad_banner',
+        });
+      } else {
+        catVideoCount++;
+        if (catVideoCount % 4 === 0) {
+          feedData.push({
+            _id: `cat_ad_native_${catVideos[i]._id}`,
+            itemType: 'ad_native',
+          });
+        }
+      }
     }
   }
 
@@ -359,6 +394,9 @@ export default function HomeScreen() {
           renderItem={({ item }) => {
             if (item.itemType === 'ad_banner') {
               return <AppAdBanner />;
+            }
+            if (item.itemType === 'ad_native') {
+              return <AppNativeAd />;
             }
             if (item.itemType === 'shorts_shelf') {
               return renderShortsShelf(item.data);

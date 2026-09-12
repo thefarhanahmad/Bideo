@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, FlatList, Share, useWindowDimensions, StatusBar, BackHandler } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, FlatList, Share, useWindowDimensions, StatusBar, BackHandler, Modal, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSelector } from 'react-redux';
@@ -18,7 +18,7 @@ import PlaylistModal from '../../components/PlaylistModal';
 import VerifiedBadge from '../../components/VerifiedBadge';
 import { formatTimeAgo, formatViews } from '../../utils/formatDate';
 import { hapticLight } from '../../utils/haptics';
-import { AppInterstitialAd } from '../../components/AppAds';
+import { AppInterstitialAd, AppNativeAd } from '../../components/AppAds';
 import HashtagText from '../../components/HashtagText';
 
 const FALLBACK_IMAGE = 'https://via.placeholder.com/80x80.png?text=User';
@@ -77,9 +77,33 @@ export default function VideoScreen() {
   const [showingAd, setShowingAd] = useState(false);
   const [adCompleted, setAdCompleted] = useState(false);
 
+  // Description and comments bottom sheet states
+  const [descriptionModalVisible, setDescriptionModalVisible] = useState(false);
+  const [commentsModalVisible, setCommentsModalVisible] = useState(false);
+  const [previewComment, setPreviewComment] = useState<any>(null);
+  const [commentsCount, setCommentsCount] = useState<number>(0);
+
   // View tracking states
   const viewRecordedRef = useRef(false);
   const watchTimeRef = useRef(0);
+
+  const fetchPreviewComments = useCallback(async (targetVideoId?: string) => {
+    const videoId = targetVideoId || (id as string);
+    if (!videoId) return;
+    try {
+      const res = await api.get('/comments', { params: { videoId } });
+      const list = res.data?.data || [];
+      setCommentsCount(list.length);
+      if (list.length > 0) {
+        const pinned = list.find((c: any) => c.isPinned);
+        setPreviewComment(pinned || list[0]);
+      } else {
+        setPreviewComment(null);
+      }
+    } catch {
+      // Ignore
+    }
+  }, [id]);
 
   const playMainVideo = useCallback(async () => {
     if (!video?.videoUrl) return;
@@ -186,6 +210,9 @@ export default function VideoScreen() {
 
       setVideo(videoData || null);
       setRecommendedVideos((allVideos || []).filter((v: any) => v?._id !== id));
+      if (videoData?._id) {
+        fetchPreviewComments(videoData._id);
+      }
       
       if (isAuthenticated) {
         setIsLiked(videoData.isLiked || false);
@@ -430,7 +457,21 @@ export default function VideoScreen() {
       <FlatList
         ListHeaderComponent={
           <View style={styles.contentContainer}>
-            <HashtagText text={video.title} style={styles.title} />
+            <View style={styles.titleContainer}>
+              <View style={{ flex: 1, paddingRight: 6 }}>
+                <HashtagText text={video.title} style={styles.title} numberOfLines={2} />
+              </View>
+              {Boolean(video.description) && (
+                <TouchableOpacity
+                  style={styles.moreButton}
+                  onPress={() => setDescriptionModalVisible(true)}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.moreButtonText}>...more</Text>
+                </TouchableOpacity>
+              )}
+            </View>
             <Text style={styles.metadata}>
               {formatViews(video.views || 0)} views • {formatTimeAgo(video.createdAt)}
             </Text>
@@ -483,26 +524,50 @@ export default function VideoScreen() {
               )}
             </View>
 
-            {!!video.description && (
-              <>
-                <View style={styles.descriptionContainer}>
-                  <HashtagText
-                    text={video.description}
-                    style={styles.description}
-                    numberOfLines={4}
+            {/* Comment Section Preview Box (Replaces inline description) */}
+            <TouchableOpacity
+              style={styles.commentPreviewBox}
+              onPress={() => setCommentsModalVisible(true)}
+              activeOpacity={0.8}
+            >
+              <View style={styles.commentPreviewHeader}>
+                <Text style={styles.commentPreviewHeading}>Comments</Text>
+                <Text style={styles.commentPreviewCount}>
+                  {commentsCount || video.commentsCount || 0}
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color={Colors.textGray} style={{ marginLeft: 'auto' }} />
+              </View>
+              {previewComment ? (
+                <View style={styles.commentPreviewBody}>
+                  <Image
+                    source={{ uri: previewComment.user?.avatar || FALLBACK_IMAGE }}
+                    style={styles.commentPreviewAvatar}
+                    contentFit="cover"
                   />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.commentPreviewUser} numberOfLines={1}>
+                      {previewComment.user?.channelName || previewComment.user?.name}
+                      {previewComment.isPinned && <Text style={styles.pinnedBadge}> • Pinned</Text>}
+                    </Text>
+                    <Text style={styles.commentPreviewText} numberOfLines={2}>
+                      {previewComment.text}
+                    </Text>
+                  </View>
                 </View>
-                <View style={styles.divider} />
-              </>
-            )}
-            
-            <CommentList 
-              videoId={video._id} 
-              contentOwnerId={video?.owner?._id || video?.owner}
-              onCommentAdded={() => setVideo((prev: any) => prev ? { ...prev, commentsCount: (prev.commentsCount || 0) + 1 } : prev)}
-              isAuthenticated={isAuthenticated}
-              onAuthRequired={() => setAuthModalVisible(true)}
-            />
+              ) : (
+                <View style={styles.commentPreviewBody}>
+                  <Image
+                    source={{ uri: user?.avatar || FALLBACK_IMAGE }}
+                    style={styles.commentPreviewAvatar}
+                    contentFit="cover"
+                  />
+                  <Text style={styles.commentAddPlaceholder}>Add a comment...</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {/* Native Ad below Comment preview */}
+            <AppNativeAd />
 
             <View style={styles.divider} />
             <Text style={styles.recommendedTitle}>Recommended</Text>
@@ -532,6 +597,94 @@ export default function VideoScreen() {
         visible={showingAd} 
         onClose={playMainVideo} 
       />
+
+      {/* Description Bottom Sheet Modal */}
+      <Modal
+        visible={descriptionModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setDescriptionModalVisible(false)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setDescriptionModalVisible(false)}>
+          <Pressable style={styles.descSheetContent} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetHeaderTitle}>Description</Text>
+              <TouchableOpacity
+                style={styles.sheetCloseBtn}
+                onPress={() => setDescriptionModalVisible(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="close" size={22} color={Colors.text} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.sheetScroll} showsVerticalScrollIndicator={false}>
+              <Text style={styles.sheetVideoTitle}>{video.title}</Text>
+              <View style={styles.descStatsRow}>
+                <View style={styles.descStatItem}>
+                  <Text style={styles.descStatNumber}>{formatViews(video.likes?.length || 0)}</Text>
+                  <Text style={styles.descStatLabel}>Likes</Text>
+                </View>
+                <View style={styles.descStatDivider} />
+                <View style={styles.descStatItem}>
+                  <Text style={styles.descStatNumber}>{formatViews(video.views || 0)}</Text>
+                  <Text style={styles.descStatLabel}>Views</Text>
+                </View>
+                <View style={styles.descStatDivider} />
+                <View style={styles.descStatItem}>
+                  <Text style={styles.descStatNumber}>{formatTimeAgo(video.createdAt)}</Text>
+                  <Text style={styles.descStatLabel}>Uploaded</Text>
+                </View>
+              </View>
+              <View style={styles.descDivider} />
+              <HashtagText
+                text={video.description || 'No description available for this video.'}
+                style={styles.sheetDescText}
+              />
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Comments Full Bottom Sheet Modal */}
+      <Modal
+        visible={commentsModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setCommentsModalVisible(false)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setCommentsModalVisible(false)}>
+          <Pressable style={styles.commentsSheetContent} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetHeaderTitle}>
+                Comments ({commentsCount || video.commentsCount || 0})
+              </Text>
+              <TouchableOpacity
+                style={styles.sheetCloseBtn}
+                onPress={() => setCommentsModalVisible(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="close" size={22} color={Colors.text} />
+              </TouchableOpacity>
+            </View>
+            <View style={{ flex: 1 }}>
+              <CommentList
+                videoId={video._id}
+                contentOwnerId={video?.owner?._id || video?.owner}
+                onCommentAdded={() => {
+                  setCommentsCount((prev) => prev + 1);
+                  setVideo((prev: any) => prev ? { ...prev, commentsCount: (prev.commentsCount || 0) + 1 } : prev);
+                  fetchPreviewComments(video._id);
+                }}
+                isAuthenticated={isAuthenticated}
+                onAuthRequired={() => {
+                  setCommentsModalVisible(false);
+                  setAuthModalVisible(true);
+                }}
+              />
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -629,14 +782,29 @@ const styles = StyleSheet.create({
   contentContainer: {
     padding: 12,
   },
-  title: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: Colors.text,
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
     marginBottom: 4,
   },
+  title: {
+    fontSize: 17,
+    fontWeight: 'bold',
+    color: Colors.text,
+    lineHeight: 22,
+  },
+  moreButton: {
+    paddingTop: 2,
+    paddingLeft: 4,
+  },
+  moreButtonText: {
+    color: Colors.textGray,
+    fontSize: 13,
+    fontWeight: '700',
+  },
   metadata: {
-    fontSize: 14,
+    fontSize: 13,
     color: Colors.textGray,
     marginBottom: 16,
   },
@@ -722,13 +890,60 @@ const styles = StyleSheet.create({
     color: '#FF8C00', // Orange text
     fontSize: 11,
   },
-  descriptionContainer: {
-    marginBottom: 16,
+  commentPreviewBox: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#ECEFF1',
   },
-  description: {
-    fontSize: 14,
+  commentPreviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  commentPreviewHeading: {
+    fontSize: 13,
+    fontWeight: '700',
     color: Colors.text,
-    lineHeight: 20,
+  },
+  commentPreviewCount: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textGray,
+    marginLeft: 6,
+  },
+  commentPreviewBody: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  commentPreviewAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#E0E0E0',
+  },
+  commentPreviewUser: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.text,
+    marginBottom: 2,
+  },
+  pinnedBadge: {
+    color: Colors.primary,
+    fontWeight: '700',
+  },
+  commentPreviewText: {
+    fontSize: 12,
+    color: Colors.text,
+    lineHeight: 16,
+  },
+  commentAddPlaceholder: {
+    fontSize: 12,
+    color: Colors.textGray,
+    alignSelf: 'center',
   },
   divider: {
     height: 1,
@@ -741,6 +956,93 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   listContainer: {
+    paddingBottom: 20,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  descSheetContent: {
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '75%',
+    minHeight: 250,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 24,
+  },
+  commentsSheetContent: {
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    height: '75%',
+    paddingTop: 14,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    paddingHorizontal: 4,
+  },
+  sheetHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.text,
+  },
+  sheetCloseBtn: {
+    padding: 4,
+  },
+  sheetScroll: {
+    marginTop: 12,
+  },
+  sheetVideoTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.text,
+    marginBottom: 12,
+    lineHeight: 22,
+  },
+  descStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    backgroundColor: '#F8F9FA',
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginBottom: 14,
+  },
+  descStatItem: {
+    alignItems: 'center',
+  },
+  descStatNumber: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.text,
+  },
+  descStatLabel: {
+    fontSize: 11,
+    color: Colors.textGray,
+    marginTop: 2,
+  },
+  descStatDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#E0E0E0',
+  },
+  descDivider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginBottom: 14,
+  },
+  sheetDescText: {
+    fontSize: 14,
+    color: Colors.text,
+    lineHeight: 22,
     paddingBottom: 20,
   },
 });

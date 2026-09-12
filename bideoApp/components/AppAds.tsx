@@ -28,9 +28,13 @@ const resolveMediaUrl = (url: string) => {
 
 const TEST_BANNER_ID = Platform.OS === 'ios' ? 'ca-app-pub-3940256099942544/2934735716' : 'ca-app-pub-3940256099942544/6300978111';
 const TEST_INTERSTITIAL_ID = Platform.OS === 'ios' ? 'ca-app-pub-3940256099942544/4411468910' : 'ca-app-pub-3940256099942544/1033173712';
+const TEST_NATIVE_ID = Platform.OS === 'ios' ? 'ca-app-pub-3940256099942544/3986624511' : 'ca-app-pub-3940256099942544/2247696110';
+const TEST_REWARDED_ID = Platform.OS === 'ios' ? 'ca-app-pub-3940256099942544/1712485313' : 'ca-app-pub-3940256099942544/5224354917';
 
 const REAL_BANNER_ID = 'ca-app-pub-3108167135160132/3447160062';
 const REAL_INTERSTITIAL_ID = 'ca-app-pub-3108167135160132/8016583160';
+const REAL_NATIVE_ID = 'ca-app-pub-3108167135160132/7326918063';
+const REAL_REWARDED_ID = 'ca-app-pub-3108167135160132/9694061103';
 
 // Use test ads in development OR when EXPO_PUBLIC_USE_TEST_ADS is explicitly true (local test APK builds)
 const isTestingAds = __DEV__ || process.env.EXPO_PUBLIC_USE_TEST_ADS === 'true';
@@ -43,6 +47,14 @@ export const ADMOB_IDS = {
   INTERSTITIAL: isTestingAds
     ? TEST_INTERSTITIAL_ID
     : (Constants.expoConfig?.extra?.ADMOB_INTERSTITIAL_ID || process.env.EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID || REAL_INTERSTITIAL_ID),
+
+  NATIVE: isTestingAds
+    ? TEST_NATIVE_ID
+    : (Constants.expoConfig?.extra?.ADMOB_NATIVE_ID || process.env.EXPO_PUBLIC_ADMOB_NATIVE_ID || REAL_NATIVE_ID),
+
+  REWARDED: isTestingAds
+    ? TEST_REWARDED_ID
+    : (Constants.expoConfig?.extra?.ADMOB_REWARDED_ID || process.env.EXPO_PUBLIC_ADMOB_REWARDED_ID || REAL_REWARDED_ID),
 };
 
 interface AppAdBannerProps {
@@ -533,5 +545,189 @@ const styles = StyleSheet.create({
     color: '#E67E22',
     marginTop: 2,
     fontWeight: '500',
+  },
+});
+
+/**
+ * Native Ad component that renders a high-eCPM sponsored card.
+ * Returns null in Expo Go or if the ad fails to load / fill.
+ */
+export const AppNativeAd: React.FC<{ style?: any }> = ({ style }) => {
+  const isExpoGo =
+    Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
+  if (isExpoGo) return null;
+
+  const [nativeAd, setNativeAd] = useState<any>(null);
+  const [adFailed, setAdFailed] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    try {
+      const { NativeAd, TestIds } = require('react-native-google-mobile-ads');
+      const unitId = isTestingAds ? (TestIds?.NATIVE || TEST_NATIVE_ID) : ADMOB_IDS.NATIVE;
+
+      NativeAd.createForAdRequest(unitId, {
+        requestNonPersonalizedAdsOnly: false,
+      })
+        .then((ad: any) => {
+          if (isMounted) setNativeAd(ad);
+        })
+        .catch((err: any) => {
+          console.log(`Native Ad failed to load (${unitId}):`, err?.message || err);
+          if (isMounted) setAdFailed(true);
+        });
+    } catch (e) {
+      if (isMounted) setAdFailed(true);
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  if (adFailed || !nativeAd) return null;
+
+  try {
+    const {
+      NativeAdView,
+      NativeAsset,
+      NativeAssetType,
+      NativeMediaView,
+    } = require('react-native-google-mobile-ads');
+
+    return (
+      <View style={[nativeCardStyles.container, style]}>
+        <NativeAdView nativeAd={nativeAd} style={nativeCardStyles.card}>
+          <View style={nativeCardStyles.mediaWrap}>
+            <NativeMediaView style={nativeCardStyles.media} resizeMode="cover" />
+            <View style={nativeCardStyles.badge}>
+              <Text style={nativeCardStyles.badgeText}>SPONSORED</Text>
+            </View>
+          </View>
+
+          <View style={nativeCardStyles.contentRow}>
+            {Boolean(nativeAd.icon?.url) && (
+              <NativeAsset assetType={NativeAssetType.ICON}>
+                <Image
+                  source={{ uri: nativeAd.icon.url }}
+                  style={nativeCardStyles.icon}
+                  contentFit="cover"
+                />
+              </NativeAsset>
+            )}
+
+            <View style={nativeCardStyles.textWrap}>
+              <NativeAsset assetType={NativeAssetType.HEADLINE}>
+                <Text style={nativeCardStyles.headline} numberOfLines={2}>
+                  {nativeAd.headline}
+                </Text>
+              </NativeAsset>
+
+              {Boolean(nativeAd.advertiser || nativeAd.body) && (
+                <NativeAsset assetType={NativeAssetType.BODY}>
+                  <Text style={nativeCardStyles.advertiser} numberOfLines={1}>
+                    {nativeAd.advertiser || nativeAd.body}
+                  </Text>
+                </NativeAsset>
+              )}
+            </View>
+
+            {Boolean(nativeAd.callToAction) && (
+              <NativeAsset assetType={NativeAssetType.CALL_TO_ACTION}>
+                <TouchableOpacity style={nativeCardStyles.ctaBtn} activeOpacity={0.85}>
+                  <Text style={nativeCardStyles.ctaText}>{nativeAd.callToAction}</Text>
+                </TouchableOpacity>
+              </NativeAsset>
+            )}
+          </View>
+        </NativeAdView>
+      </View>
+    );
+  } catch (err) {
+    return null;
+  }
+};
+
+const nativeCardStyles = StyleSheet.create({
+  container: {
+    marginVertical: 10,
+    width: '100%',
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#EEEEEE',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  mediaWrap: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    backgroundColor: '#1E1E1E',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  media: {
+    width: '100%',
+    height: '100%',
+  },
+  badge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: '#FF7A00',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  contentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    gap: 10,
+  },
+  icon: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: '#F0F0F0',
+  },
+  textWrap: {
+    flex: 1,
+  },
+  headline: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111111',
+    lineHeight: 18,
+  },
+  advertiser: {
+    fontSize: 12,
+    color: '#777777',
+    marginTop: 2,
+  },
+  ctaBtn: {
+    backgroundColor: '#FF7A00',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ctaText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
 });
