@@ -17,7 +17,6 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSelector } from 'react-redux';
 import { Image } from 'expo-image';
-import Constants from 'expo-constants';
 import Colors from '../constants/Colors';
 import api from '../services/api';
 import { showAlert } from '../components/AppAlert';
@@ -72,23 +71,6 @@ export default function EarningsScreen() {
 
   // Fast-track Rewarded Ad states for monetization video reviews
   const [loadingReviewId, setLoadingReviewId] = useState<string | null>(null);
-  const [demoAdModal, setDemoAdModal] = useState<{
-    visible: boolean;
-    review: any;
-    secondsLeft: number;
-  } | null>(null);
-
-  // Countdown timer for Expo Go rewarded ad preview simulation
-  useEffect(() => {
-    if (!demoAdModal?.visible) return;
-
-    if (demoAdModal.secondsLeft > 0) {
-      const timer = setTimeout(() => {
-        setDemoAdModal((prev) => (prev ? { ...prev, secondsLeft: prev.secondsLeft - 1 } : null));
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [demoAdModal?.visible, demoAdModal?.secondsLeft]);
 
   const claimReviewAdOnServer = async (reviewId: string) => {
     setLoadingReviewId(reviewId);
@@ -117,32 +99,19 @@ export default function EarningsScreen() {
       showAlert('Notice', msg);
     } finally {
       setLoadingReviewId(null);
-      setDemoAdModal(null);
     }
   };
 
   const handleWatchReviewAd = async (rev: any) => {
     if (loadingReviewId) return;
 
-    // In Expo Go, native Google Mobile Ads binary is not bundled, so show high-fidelity preview simulator
-    const isExpoGo = Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
-    if (isExpoGo) {
-      setDemoAdModal({
-        visible: true,
-        review: rev,
-        secondsLeft: 5,
-      });
-      return;
-    }
-
-    // In Standalone Production APK / Dev Client:
     setLoadingReviewId(rev._id);
     let adRewardEarned = false;
 
     try {
       loadAndShowRewardedAd({
         onLoaded: () => {
-          // Ad loaded, showing to user
+          // Ad loaded, showing fullscreen
         },
         onRewardEarned: async () => {
           adRewardEarned = true;
@@ -868,105 +837,6 @@ export default function EarningsScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Demo Rewarded Ad Simulator for Expo Go */}
-      <Modal
-        visible={!!demoAdModal?.visible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => {
-          if (demoAdModal && demoAdModal.secondsLeft === 0) {
-            setDemoAdModal(null);
-          }
-        }}
-      >
-        <View style={styles.demoAdBackdrop}>
-          <View style={styles.demoAdCard}>
-            <LinearGradient
-              colors={['#1E1E2F', '#0D0D17']}
-              style={styles.demoAdHeader}
-            >
-              <View style={styles.demoAdTopRow}>
-                <View style={styles.demoAdBadge}>
-                  <Text style={styles.demoAdBadgeText}>AD · PREVIEW (EXPO GO)</Text>
-                </View>
-                {demoAdModal && demoAdModal.secondsLeft > 0 ? (
-                  <View style={styles.demoAdTimer}>
-                    <Ionicons name="time-outline" size={13} color="#FFF" />
-                    <Text style={styles.demoAdTimerText}>Reward in {demoAdModal.secondsLeft}s</Text>
-                  </View>
-                ) : (
-                  <TouchableOpacity
-                    style={styles.demoAdCloseBtn}
-                    onPress={() => setDemoAdModal(null)}
-                  >
-                    <Ionicons name="close" size={20} color="#FFF" />
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              <View style={styles.demoAdCenter}>
-                <View style={styles.demoAdIconCircle}>
-                  <Ionicons name="play-circle" size={44} color="#FF6B00" />
-                </View>
-                <Text style={styles.demoAdTitle}>Sponsored Rewarded Video</Text>
-                <Text style={styles.demoAdSubtitle} numberOfLines={1}>
-                  Target: {demoAdModal?.review?.video?.title || 'Review Video'}
-                </Text>
-                <Text style={styles.demoAdNote}>
-                  {demoAdModal && demoAdModal.secondsLeft > 0
-                    ? `Simulating Google Rewarded Ad for Expo Go...\nPlease wait ${demoAdModal.secondsLeft}s to receive credit.`
-                    : 'Ad completed! Claim credit now to pass this video.'}
-                </Text>
-              </View>
-            </LinearGradient>
-
-            <View style={styles.demoAdFooter}>
-              {demoAdModal && demoAdModal.secondsLeft > 0 ? (
-                <View style={styles.demoAdWaitingRow}>
-                  <ActivityIndicator size="small" color={Colors.primary} />
-                  <Text style={styles.demoAdWaitingText}>Watching Ad ({demoAdModal.secondsLeft}s remaining)...</Text>
-                </View>
-              ) : (
-                <TouchableOpacity
-                  style={[styles.demoAdClaimBtn, loadingReviewId === demoAdModal?.review?._id && { opacity: 0.7 }]}
-                  disabled={loadingReviewId === demoAdModal?.review?._id}
-                  onPress={() => {
-                    if (demoAdModal?.review?._id) {
-                      claimReviewAdOnServer(demoAdModal.review._id);
-                    }
-                  }}
-                >
-                  {loadingReviewId === demoAdModal?.review?._id ? (
-                    <ActivityIndicator size="small" color="#FFF" />
-                  ) : (
-                    <>
-                      <Ionicons name="checkmark-circle" size={18} color="#FFF" />
-                      <Text style={styles.demoAdClaimBtnText}>
-                        Claim Ad Credit (
-                        {(demoAdModal?.review?.adsWatched || 0) + 1}/2
-                        )
-                      </Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              )}
-
-              {demoAdModal && demoAdModal.secondsLeft > 0 && (
-                <TouchableOpacity
-                  onPress={() => {
-                    showAlert('Cancelled', 'You closed the ad before completion. No credit was granted.');
-                    setDemoAdModal(null);
-                  }}
-                  style={styles.demoAdCancelBtn}
-                >
-                  <Text style={styles.demoAdCancelText}>Cancel & Forfeit Reward</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-        </View>
-      </Modal>
-
       <AppInterstitialAd visible={showingAd} onClose={() => setShowingAd(false)} />
     </View>
   );
@@ -1647,133 +1517,5 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontSize: 15,
     fontWeight: '800',
-  },
-  demoAdBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.85)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  demoAdCard: {
-    width: '100%',
-    maxWidth: 380,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    overflow: 'hidden',
-  },
-  demoAdHeader: {
-    padding: 20,
-    alignItems: 'center',
-  },
-  demoAdTopRow: {
-    width: '100%',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  demoAdBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  demoAdBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  demoAdTimer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(230, 81, 0, 0.85)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  demoAdTimerText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  demoAdCloseBtn: {
-    padding: 4,
-  },
-  demoAdCenter: {
-    alignItems: 'center',
-    marginVertical: 20,
-    paddingHorizontal: 12,
-  },
-  demoAdIconCircle: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    backgroundColor: 'rgba(255, 107, 0, 0.12)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 14,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 107, 0, 0.3)',
-  },
-  demoAdTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    textAlign: 'center',
-  },
-  demoAdSubtitle: {
-    fontSize: 12,
-    color: '#BBBBCC',
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  demoAdNote: {
-    fontSize: 11,
-    color: '#8E8EA8',
-    marginTop: 8,
-    textAlign: 'center',
-    lineHeight: 16,
-  },
-  demoAdFooter: {
-    padding: 16,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-  },
-  demoAdWaitingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 6,
-  },
-  demoAdWaitingText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.text,
-  },
-  demoAdClaimBtn: {
-    width: '100%',
-    backgroundColor: '#2E7D32',
-    paddingVertical: 12,
-    borderRadius: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  demoAdClaimBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  demoAdCancelBtn: {
-    marginTop: 10,
-    paddingVertical: 6,
-  },
-  demoAdCancelText: {
-    color: '#999',
-    fontSize: 12,
-    fontWeight: '500',
   },
 });
