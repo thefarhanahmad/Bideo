@@ -726,11 +726,17 @@ export default function BoostScreen() {
                         </View>
                       )}
                     </View>
-                    <Ionicons
-                      name={vid.isBoosted ? 'lock-closed' : 'chevron-forward'}
-                      size={20}
-                      color={vid.isBoosted ? '#AAA' : Colors.primary}
-                    />
+                    {vid.isBoosted ? (
+                      <View style={styles.videoBoostedBadge}>
+                        <Ionicons name="time-outline" size={12} color="#5E35B1" />
+                        <Text style={styles.videoBoostedBadgeText}>Queued</Text>
+                      </View>
+                    ) : (
+                      <View style={styles.videoCardBoostBtn}>
+                        <Ionicons name="rocket" size={12} color={Colors.white} />
+                        <Text style={styles.videoCardBoostBtnText}>Boost</Text>
+                      </View>
+                    )}
                   </TouchableOpacity>
                 ))
               )}
@@ -809,7 +815,7 @@ export default function BoostScreen() {
                 <ActivityIndicator size="small" color="#FFF" />
               ) : (
                 <Text style={styles.confirmFinalBtnText}>
-                  Confirm Highlight (🪙 {selectedTier === 1 ? 100 : selectedTier === 3 ? 250 : selectedTier === 6 ? 500 : 1000} Coins)
+                  Boost ({selectedTier === 1 ? 100 : selectedTier === 3 ? 250 : selectedTier === 6 ? 500 : 1000} coins)
                 </Text>
               )}
             </TouchableOpacity>
@@ -1284,6 +1290,34 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   alreadyBoostedText: { fontSize: 10, fontWeight: '600', color: '#5E35B1' },
+  videoCardBoostBtn: {
+    backgroundColor: '#8E24AA',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  videoCardBoostBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.white,
+  },
+  videoBoostedBadge: {
+    backgroundColor: '#EDE7F6',
+    paddingVertical: 5,
+    paddingHorizontal: 9,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  videoBoostedBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#5E35B1',
+  },
 
   // Confirm modal
   confirmBox: {
