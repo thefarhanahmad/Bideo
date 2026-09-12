@@ -55,6 +55,8 @@ export default function BoostScreen() {
   const [confirmModalVisible, setConfirmModalVisible] = useState(false);
   const [submittingBoost, setSubmittingBoost] = useState(false);
 
+  const [activeRemainingSecs, setActiveRemainingSecs] = useState<number>(0);
+
   const cooldownIntervalRef = useRef<any>(null);
 
   const fetchStatus = useCallback(async () => {
@@ -64,6 +66,11 @@ export default function BoostScreen() {
         setData(res.data.data);
         const cd = Number(res.data.data.dailyAds?.cooldownSeconds || 0);
         setCooldownLeft(cd);
+        if (res.data.data.activeBoost?.remainingSeconds) {
+          setActiveRemainingSecs(Number(res.data.data.activeBoost.remainingSeconds));
+        } else {
+          setActiveRemainingSecs(0);
+        }
       }
     } catch (err: any) {
       console.log('Failed to fetch boost status:', err);
@@ -99,14 +106,41 @@ export default function BoostScreen() {
     };
   }, [cooldownLeft, fetchStatus]);
 
+  // Live countdown timer for active highlight remaining time
+  useEffect(() => {
+    if (activeRemainingSecs <= 0) return;
+    const interval = setInterval(() => {
+      setActiveRemainingSecs((prev) => {
+        if (prev <= 1) {
+          fetchStatus(); // refresh and promote next in queue when active ends!
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [activeRemainingSecs, fetchStatus]);
+
   const onRefresh = () => {
     setRefreshing(true);
     fetchStatus();
   };
 
   const formatTimer = (totalSeconds: number) => {
-    const mins = Math.floor(totalSeconds / 60);
-    const secs = totalSeconds % 60;
+    const s = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+    const mins = Math.floor(s / 60);
+    const secs = s % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const formatCountdown = (totalSeconds: number) => {
+    const s = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+    const hrs = Math.floor(s / 3600);
+    const mins = Math.floor((s % 3600) / 60);
+    const secs = s % 60;
+    if (hrs > 0) {
+      return `${hrs}h ${mins.toString().padStart(2, '0')}m ${secs.toString().padStart(2, '0')}s`;
+    }
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
@@ -485,10 +519,10 @@ export default function BoostScreen() {
               <View style={styles.activeBadgeRow}>
                 <View style={styles.liveBadge}>
                   <View style={styles.liveDot} />
-                  <Text style={styles.liveBadgeText}>HIGHLIGHTED ON HOME FEED</Text>
+                  <Text style={styles.liveBadgeText}>LIVE ON FEED</Text>
                 </View>
                 <Text style={styles.remainingTimeText}>
-                  {formatTimer(activeBoost.remainingSeconds)} left
+                  Ends in {formatCountdown(activeRemainingSecs || activeBoost.remainingSeconds)}
                 </Text>
               </View>
 
@@ -514,7 +548,7 @@ export default function BoostScreen() {
                     {
                       width: `${Math.max(
                         5,
-                        Math.min(100, (activeBoost.remainingSeconds / (activeBoost.durationHours * 3600)) * 100)
+                        Math.min(100, ((activeRemainingSecs || activeBoost.remainingSeconds) / (activeBoost.durationHours * 3600)) * 100)
                       )}%`,
                     },
                   ]}
@@ -523,35 +557,56 @@ export default function BoostScreen() {
             </View>
           )}
 
-          {/* Queued Boosts (if any) */}
+          {/* Up Next Highlights (if any) */}
           {queuedBoosts.length > 0 && (
             <View style={styles.queuedSection}>
-              <Text style={styles.sectionTitle}>Your Queued Highlights ({queuedBoosts.length})</Text>
-              {queuedBoosts.map((qb: any) => (
-                <View key={qb._id} style={styles.queuedCard}>
-                  <View style={styles.queuedBadgeRow}>
-                    <View style={styles.queuedBadge}>
-                      <Ionicons name="time-outline" size={12} color="#5E35B1" />
-                      <Text style={styles.queuedBadgeText}>Queue Position #{qb.queuePosition}</Text>
-                    </View>
-                    <Text style={styles.queuedEstText}>
-                      Starts {new Date(qb.estimatedStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </Text>
-                  </View>
+              <Text style={styles.sectionTitle}>Up Next on Feed ({queuedBoosts.length})</Text>
+              {queuedBoosts.map((qb: any) => {
+                const startsInSecs = qb.queuePosition === 1
+                  ? (activeRemainingSecs || Math.max(0, Math.ceil((new Date(qb.estimatedStartTime).getTime() - Date.now()) / 1000)))
+                  : Math.max(0, Math.ceil((new Date(qb.estimatedStartTime).getTime() - Date.now()) / 1000));
 
-                  <View style={styles.boostVideoRow}>
-                    {qb.video?.thumbnail && (
-                      <Image source={{ uri: qb.video.thumbnail }} style={styles.boostThumb} contentFit="cover" />
-                    )}
-                    <View style={{ flex: 1, marginLeft: 12 }}>
-                      <Text style={styles.boostVidTitle} numberOfLines={1}>
-                        {qb.video?.title}
+                const activeTotalSecs = activeBoost ? activeBoost.durationHours * 3600 : 3600;
+                const waitProgress = Math.max(
+                  5,
+                  Math.min(100, Math.round(((activeTotalSecs - startsInSecs) / activeTotalSecs) * 100))
+                );
+
+                return (
+                  <View key={qb._id} style={styles.queuedCard}>
+                    <View style={styles.queuedBadgeRow}>
+                      <View style={styles.queuedBadge}>
+                        <Ionicons name="sparkles" size={11} color="#5E35B1" />
+                        <Text style={styles.queuedBadgeText}>#{qb.queuePosition} Up Next</Text>
+                      </View>
+                      <Text style={styles.queuedEstText}>
+                        Starts in {formatCountdown(startsInSecs)}
                       </Text>
-                      <Text style={styles.boostVidMeta}>{qb.durationHours} Hours Duration</Text>
+                    </View>
+
+                    <View style={styles.boostVideoRow}>
+                      {qb.video?.thumbnail && (
+                        <Image source={{ uri: qb.video.thumbnail }} style={styles.boostThumb} contentFit="cover" />
+                      )}
+                      <View style={{ flex: 1, marginLeft: 12 }}>
+                        <Text style={styles.boostVidTitle} numberOfLines={1}>
+                          {qb.video?.title}
+                        </Text>
+                        <Text style={styles.boostVidMeta}>{qb.durationHours}h Tier • Ready to go live next</Text>
+                      </View>
+                    </View>
+
+                    {/* Progress bar for queue wait */}
+                    <View style={styles.queueProgressWrap}>
+                      <View style={[styles.queueProgressFill, { width: `${waitProgress}%` }]} />
+                    </View>
+                    <View style={styles.queueProgressMetaRow}>
+                      <Text style={styles.queueProgressLabel}>Going live next</Text>
+                      <Text style={styles.queueProgressPercent}>{waitProgress}% ready</Text>
                     </View>
                   </View>
-                </View>
-              ))}
+                );
+              })}
             </View>
           )}
 
@@ -559,9 +614,9 @@ export default function BoostScreen() {
           <View style={styles.globalQueueBox}>
             <Ionicons name="people-outline" size={16} color="#8E24AA" />
             <Text style={styles.globalQueueText}>
-              Total in highlight queue: <Text style={{ fontWeight: '800' }}>{data?.globalQueue?.totalQueued || 0}</Text>
+              Videos waiting in line: <Text style={{ fontWeight: '800' }}>{data?.globalQueue?.totalQueued || 0}</Text>
               {data?.globalQueue?.currentActive
-                ? ` • Active now: "${data.globalQueue.currentActive.videoTitle}"`
+                ? ` • Live now: "${data.globalQueue.currentActive.videoTitle}"`
                 : ' • Slot open! Next highlighted video goes live immediately!'}
             </Text>
           </View>
@@ -722,14 +777,14 @@ export default function BoostScreen() {
                       </Text>
                       {vid.isBoosted && (
                         <View style={styles.alreadyBoostedBadge}>
-                          <Text style={styles.alreadyBoostedText}>Already in Highlight Queue</Text>
+                          <Text style={styles.alreadyBoostedText}>Scheduled Up Next</Text>
                         </View>
                       )}
                     </View>
                     {vid.isBoosted ? (
                       <View style={styles.videoBoostedBadge}>
-                        <Ionicons name="time-outline" size={12} color="#5E35B1" />
-                        <Text style={styles.videoBoostedBadgeText}>Queued</Text>
+                        <Ionicons name="sparkles" size={11} color="#5E35B1" />
+                        <Text style={styles.videoBoostedBadgeText}>Up Next</Text>
                       </View>
                     ) : (
                       <View style={styles.videoCardBoostBtn}>
@@ -802,7 +857,7 @@ export default function BoostScreen() {
               <Text style={styles.queueNoteText}>
                 {data?.globalQueue?.totalQueued === 0 && !data?.globalQueue?.currentActive
                   ? 'Your video will be highlighted at the top of the Home Feed immediately!'
-                  : 'A video is currently active. Your video will be queued and highlighted automatically when its turn arrives.'}
+                  : 'A video is currently live. Your video is scheduled Up Next and will go live automatically right after!'}
               </Text>
             </View>
 
@@ -1113,14 +1168,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#E8F5E9',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    gap: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    gap: 5,
   },
-  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#2E7D32' },
-  liveBadgeText: { fontSize: 11, fontWeight: '800', color: '#2E7D32', letterSpacing: 0.5 },
-  remainingTimeText: { fontSize: 12, fontWeight: '700', color: '#555' },
+  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#2E7D32' },
+  liveBadgeText: { fontSize: 10, fontWeight: '800', color: '#2E7D32', letterSpacing: 0.3 },
+  remainingTimeText: { fontSize: 12, fontWeight: '700', color: '#2E7D32' },
   boostVideoRow: { flexDirection: 'row', alignItems: 'center' },
   boostThumb: { width: 72, height: 48, borderRadius: 6, backgroundColor: '#DDD' },
   boostVidTitle: { fontSize: 13, fontWeight: '700', color: Colors.text },
@@ -1161,7 +1216,35 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   queuedBadgeText: { fontSize: 11, fontWeight: '700', color: '#5E35B1' },
-  queuedEstText: { fontSize: 11, color: '#888', fontWeight: '500' },
+  queuedEstText: { fontSize: 11, color: '#5E35B1', fontWeight: '700' },
+  queueProgressWrap: {
+    height: 6,
+    backgroundColor: '#EDE7F6',
+    borderRadius: 3,
+    marginTop: 10,
+    overflow: 'hidden',
+  },
+  queueProgressFill: {
+    height: '100%',
+    backgroundColor: '#8E24AA',
+    borderRadius: 3,
+  },
+  queueProgressMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  queueProgressLabel: {
+    fontSize: 10,
+    color: '#666',
+    fontWeight: '500',
+  },
+  queueProgressPercent: {
+    fontSize: 10,
+    color: '#8E24AA',
+    fontWeight: '700',
+  },
 
   // Global queue info
   globalQueueBox: {
