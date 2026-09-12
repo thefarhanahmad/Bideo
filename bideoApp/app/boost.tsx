@@ -241,11 +241,12 @@ export default function BoostScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* App Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Ionicons name="arrow-back" size={24} color={Colors.text} />
-        </TouchableOpacity>
-        
-        <Text style={styles.headerTitle}>Boost</Text>
+        <View style={styles.headerLeftGroup}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Ionicons name="arrow-back" size={24} color={Colors.text} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Boost</Text>
+        </View>
 
         <TouchableOpacity
           style={[styles.headerBoostBtn, !canBoostNow && styles.headerBoostBtnDisabled]}
@@ -258,7 +259,7 @@ export default function BoostScreen() {
             end={{ x: 1, y: 0 }}
             style={styles.headerBoostGradient}
           >
-            <Ionicons name="rocket" size={14} color={canBoostNow ? Colors.white : '#757575'} />
+            <Ionicons name="rocket" size={13} color={canBoostNow ? Colors.white : '#757575'} />
             <Text style={[styles.headerBoostBtnText, !canBoostNow && { color: '#757575' }]}>
               Boost
             </Text>
@@ -354,21 +355,21 @@ export default function BoostScreen() {
                   ]}>
                     <Ionicons
                       name={ad1Watched ? 'checkmark-circle' : ad1Active ? 'play' : 'lock-closed'}
-                      size={18}
+                      size={15}
                       color={ad1Watched ? '#2E7D32' : ad1Active ? '#8E24AA' : '#9E9E9E'}
                     />
                   </View>
-                  <View style={{ marginLeft: 10 }}>
-                    <Text style={styles.adItemTitle}>Sponsored Ad 1</Text>
+                  <View style={{ marginLeft: 8, flex: 1 }}>
+                    <Text style={styles.adItemTitle}>Reward 1</Text>
                     <Text style={styles.adItemStatus}>
-                      {ad1Watched ? 'Completed' : ad1Active ? 'Ready to watch' : isCooldown ? 'Locked (Cooldown)' : 'Available'}
+                      {ad1Watched ? 'Claimed' : ad1Active ? 'Available' : isCooldown ? 'In cooldown' : 'Available'}
                     </Text>
                   </View>
                 </View>
 
                 {ad1Watched ? (
                   <View style={styles.watchedBadge}>
-                    <Ionicons name="checkmark" size={13} color="#2E7D32" />
+                    <Ionicons name="checkmark" size={12} color="#2E7D32" />
                     <Text style={styles.watchedBadgeText}>Watched</Text>
                   </View>
                 ) : (
@@ -384,10 +385,10 @@ export default function BoostScreen() {
                     {isAdLoading && ad1Active ? (
                       <ActivityIndicator size="small" color="#FFF" />
                     ) : (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                        <Ionicons name={ad1Active ? 'play' : 'lock-closed'} size={13} color="#FFF" />
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Ionicons name={ad1Active ? 'play' : 'lock-closed'} size={11} color="#FFF" />
                         <Text style={styles.watchActionBtnText}>
-                          {ad1Active ? 'Watch Ad' : 'Locked'}
+                          {ad1Active ? 'Watch' : 'Locked'}
                         </Text>
                       </View>
                     )}
@@ -409,27 +410,27 @@ export default function BoostScreen() {
                   ]}>
                     <Ionicons
                       name={ad2Watched ? 'checkmark-circle' : ad2Active ? 'play' : 'lock-closed'}
-                      size={18}
+                      size={15}
                       color={ad2Watched ? '#2E7D32' : ad2Active ? '#8E24AA' : '#9E9E9E'}
                     />
                   </View>
-                  <View style={{ marginLeft: 10 }}>
-                    <Text style={styles.adItemTitle}>Sponsored Ad 2</Text>
+                  <View style={{ marginLeft: 8, flex: 1 }}>
+                    <Text style={styles.adItemTitle}>Reward 2</Text>
                     <Text style={styles.adItemStatus}>
                       {ad2Watched
-                        ? 'Completed'
+                        ? 'Claimed'
                         : ad2Active
-                        ? 'Ready to watch'
+                        ? 'Available'
                         : isCooldown
-                        ? 'Locked (Cooldown)'
-                        : 'Watch Ad 1 first'}
+                        ? 'In cooldown'
+                        : 'Locked'}
                     </Text>
                   </View>
                 </View>
 
                 {ad2Watched ? (
                   <View style={styles.watchedBadge}>
-                    <Ionicons name="checkmark" size={13} color="#2E7D32" />
+                    <Ionicons name="checkmark" size={12} color="#2E7D32" />
                     <Text style={styles.watchedBadgeText}>Watched</Text>
                   </View>
                 ) : (
@@ -445,10 +446,10 @@ export default function BoostScreen() {
                     {isAdLoading && ad2Active ? (
                       <ActivityIndicator size="small" color="#FFF" />
                     ) : (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                        <Ionicons name={ad2Active ? 'play' : 'lock-closed'} size={13} color="#FFF" />
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Ionicons name={ad2Active ? 'play' : 'lock-closed'} size={11} color="#FFF" />
                         <Text style={styles.watchActionBtnText}>
-                          {ad2Active ? 'Watch Ad' : 'Locked'}
+                          {ad2Active ? 'Watch' : 'Locked'}
                         </Text>
                       </View>
                     )}
@@ -831,6 +832,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#EEEEEE',
   },
+  headerLeftGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   backBtn: { padding: 4 },
   headerTitle: { fontSize: 18, fontWeight: '800', color: Colors.text },
   headerBoostBtn: {
@@ -963,7 +969,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     borderRadius: 12,
     backgroundColor: '#FAFAFA',
     borderWidth: 1,
@@ -984,11 +991,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    marginRight: 8,
   },
   adItemIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1002,20 +1010,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#EEEEEE',
   },
   adItemTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: Colors.text,
   },
   adItemStatus: {
     fontSize: 11,
     color: '#888',
-    marginTop: 2,
+    marginTop: 1,
   },
   watchActionBtn: {
     backgroundColor: '#8E24AA',
-    paddingVertical: 7,
-    paddingHorizontal: 14,
-    borderRadius: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -1024,20 +1032,20 @@ const styles = StyleSheet.create({
   },
   watchActionBtnText: {
     color: Colors.white,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
   },
   watchedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 3,
     backgroundColor: '#E8F5E9',
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 12,
+    paddingVertical: 4,
+    paddingHorizontal: 9,
+    borderRadius: 10,
   },
   watchedBadgeText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: '#2E7D32',
   },
