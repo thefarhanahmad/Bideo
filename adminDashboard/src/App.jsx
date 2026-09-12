@@ -21,6 +21,7 @@ import Reports from './pages/Reports';
 import Ads from './pages/Ads';
 import Monetization from './pages/Monetization';
 import UserEarnings from './pages/UserEarnings';
+import Boost from './pages/Boost';
 import Payouts from './pages/Payouts';
 import ErrorLogs from './pages/ErrorLogs';
 import './App.css';
@@ -63,6 +64,7 @@ function App() {
           <Route path="ads" element={<Ads />} />
           <Route path="monetization" element={<Monetization />} />
           <Route path="earnings" element={<UserEarnings />} />
+          <Route path="boost" element={<Boost />} />
           <Route path="payouts" element={<Payouts />} />
           <Route path="error-logs" element={<ErrorLogs />} />
         </Route>

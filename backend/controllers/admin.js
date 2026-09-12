@@ -10,6 +10,8 @@ const ErrorLog = require('../models/ErrorLog');
 const Ad = require('../models/Ad');
 const Post = require('../models/Post');
 const WalletCredit = require('../models/WalletCredit');
+const VideoBoost = require('../models/VideoBoost');
+const CoinTransaction = require('../models/CoinTransaction');
 const { processPendingWalletCredits } = require('../services/walletSettlementService');
 
 // Helper to calculate daily, weekly, and monthly trends for Users & Videos
@@ -1822,5 +1824,283 @@ exports.getAdminPosts = async (req, res, next) => {
     next(err);
   }
 };
+
+// @desc    Get Channel Boost analytics, users with coins, active & queued highlights
+// @route   GET /api/admin/boost
+// @access  Private/Admin
+exports.getAdminBoostData = async (req, res, next) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 10));
+    const skip = (page - 1) * limit;
+    const search = (req.query.search || '').trim();
+    const filter = req.query.filter || 'all'; // all, active, queued, ads_today, high_coins, has_boosted
+    const sortBy = req.query.sort || 'coins_desc';
+
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10);
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    // 1. Compute Global KPIs
+    const [
+      userCoinsAgg,
+      activeBoostsCount,
+      queuedBoostsCount,
+      totalBoostsCount,
+      coinsSpentAgg,
+      todayAdsAgg,
+      usersWithCoinsCount,
+      usersReadyCount,
+    ] = await Promise.all([
+      User.aggregate([
+        { $match: { coins: { $gt: 0 } } },
+        { $group: { _id: null, totalCoins: { $sum: '$coins' } } },
+      ]),
+      VideoBoost.countDocuments({ status: 'active', expiresAt: { $gt: now } }),
+      VideoBoost.countDocuments({ status: 'queued' }),
+      VideoBoost.countDocuments(),
+      VideoBoost.aggregate([
+        { $group: { _id: null, totalCoinsSpent: { $sum: '$coinsSpent' } } },
+      ]),
+      CoinTransaction.aggregate([
+        {
+          $match: {
+            type: 'ad_reward',
+            createdAt: { $gte: startOfToday },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            todayAdsCount: { $sum: 1 },
+            todayCoinsAwarded: { $sum: '$amount' },
+            uniqueViewers: { $addToSet: '$user' },
+          },
+        },
+      ]),
+      User.countDocuments({ coins: { $gt: 0 } }),
+      User.countDocuments({ coins: { $gte: 100 } }),
+    ]);
+
+    const kpi = {
+      totalCirculatingCoins: userCoinsAgg[0]?.totalCoins || 0,
+      usersWithCoins: usersWithCoinsCount,
+      usersReadyToBoost: usersReadyCount,
+      activeHighlights: activeBoostsCount,
+      queuedHighlights: queuedBoostsCount,
+      totalBoostsAllTime: totalBoostsCount,
+      totalCoinsSpent: coinsSpentAgg[0]?.totalCoinsSpent || 0,
+      todayAdsWatched: todayAdsAgg[0]?.todayAdsCount || 0,
+      todayCoinsAwarded: todayAdsAgg[0]?.todayCoinsAwarded || 0,
+      todayActiveViewers: todayAdsAgg[0]?.uniqueViewers?.length || 0,
+    };
+
+    // 2. Fetch Active and Queued boosts with populated video info
+    const [allActiveBoosts, allQueuedBoosts, boostCountsByUser] = await Promise.all([
+      VideoBoost.find({ status: 'active', expiresAt: { $gt: now } })
+        .populate('video', 'title thumbnail views duration')
+        .lean(),
+      VideoBoost.find({ status: 'queued' })
+        .sort({ queuePosition: 1, createdAt: 1 })
+        .populate('video', 'title thumbnail views duration')
+        .lean(),
+      VideoBoost.aggregate([
+        {
+          $group: {
+            _id: '$user',
+            totalBoosts: { $sum: 1 },
+            totalSpent: { $sum: '$coinsSpent' },
+            lastBoostAt: { $max: '$createdAt' },
+          },
+        },
+      ]),
+    ]);
+
+    const activeMap = new Map();
+    allActiveBoosts.forEach((b) => activeMap.set(b.user.toString(), b));
+
+    const queuedMap = new Map();
+    allQueuedBoosts.forEach((b) => {
+      const uStr = b.user.toString();
+      if (!queuedMap.has(uStr)) queuedMap.set(uStr, []);
+      queuedMap.get(uStr).push(b);
+    });
+
+    const userBoostStatsMap = new Map();
+    boostCountsByUser.forEach((b) => {
+      if (b._id) userBoostStatsMap.set(b._id.toString(), b);
+    });
+
+    // 3. Construct user query
+    const userQuery = {};
+
+    if (filter === 'active') {
+      const activeUserIds = Array.from(activeMap.keys());
+      userQuery._id = { $in: activeUserIds.map((id) => new mongoose.Types.ObjectId(id)) };
+    } else if (filter === 'queued') {
+      const queuedUserIds = Array.from(queuedMap.keys());
+      userQuery._id = { $in: queuedUserIds.map((id) => new mongoose.Types.ObjectId(id)) };
+    } else if (filter === 'ads_today') {
+      userQuery['adRewards.dailyDate'] = todayStr;
+      userQuery['adRewards.dailyCount'] = { $gt: 0 };
+    } else if (filter === 'high_coins') {
+      userQuery.coins = { $gte: 100 };
+    } else if (filter === 'has_boosted') {
+      const boostedUserIds = Array.from(userBoostStatsMap.keys());
+      userQuery._id = { $in: boostedUserIds.map((id) => new mongoose.Types.ObjectId(id)) };
+    } else {
+      // Default: users with coins > 0 OR who have ever boosted a video OR who watched ads today
+      const boostedUserIds = Array.from(userBoostStatsMap.keys()).map((id) => new mongoose.Types.ObjectId(id));
+      userQuery.$or = [
+        { coins: { $gt: 0 } },
+        { _id: { $in: boostedUserIds } },
+        { 'adRewards.dailyCount': { $gt: 0 } },
+      ];
+    }
+
+    if (search) {
+      const regex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      const searchConditions = [
+        { name: regex },
+        { channelName: regex },
+        { email: regex },
+      ];
+      if (userQuery.$or) {
+        userQuery.$and = [
+          { $or: userQuery.$or },
+          { $or: searchConditions },
+        ];
+        delete userQuery.$or;
+      } else {
+        userQuery.$or = searchConditions;
+      }
+    }
+
+    const matchingUsers = await User.find(userQuery)
+      .select('name channelName avatar email phone coins adRewards createdAt isVerified')
+      .lean();
+
+    // Attach enriched boost information to each user
+    const usersWithBoostInfo = matchingUsers.map((u) => {
+      const uIdStr = u._id.toString();
+      const active = activeMap.get(uIdStr) || null;
+      const queued = queuedMap.get(uIdStr) || [];
+      const stats = userBoostStatsMap.get(uIdStr) || { totalBoosts: 0, totalSpent: 0, lastBoostAt: null };
+
+      // Normalise daily ads for today
+      let dailyAdsCount = u.adRewards?.dailyDate === todayStr ? (u.adRewards?.dailyCount || 0) : 0;
+
+      // Compute status badge
+      let status = 'idle';
+      if (active) status = 'live';
+      else if (queued.length > 0) status = 'queued';
+      else if ((u.coins || 0) >= 100) status = 'ready';
+      else if (dailyAdsCount > 0) status = 'active_viewer';
+
+      return {
+        ...u,
+        coins: u.coins || 0,
+        dailyAdsCount,
+        sessionCount: u.adRewards?.sessionCount || 0,
+        lastAdWatchedAt: u.adRewards?.lastAdWatchedAt || null,
+        activeBoost: active
+          ? {
+              _id: active._id,
+              durationHours: active.durationHours,
+              coinsSpent: active.coinsSpent,
+              startedAt: active.startedAt,
+              expiresAt: active.expiresAt,
+              remainingSeconds: Math.max(0, Math.ceil((new Date(active.expiresAt).getTime() - now.getTime()) / 1000)),
+              video: active.video,
+            }
+          : null,
+        queuedBoosts: queued.map((q) => ({
+          _id: q._id,
+          durationHours: q.durationHours,
+          coinsSpent: q.coinsSpent,
+          queuePosition: q.queuePosition,
+          estimatedStartTime: q.estimatedStartTime,
+          video: q.video,
+        })),
+        totalBoosts: stats.totalBoosts,
+        totalCoinsSpent: stats.totalSpent,
+        lastBoostAt: stats.lastBoostAt,
+        status,
+      };
+    });
+
+    // 4. Sort
+    usersWithBoostInfo.sort((a, b) => {
+      if (sortBy === 'coins_asc') return a.coins - b.coins;
+      if (sortBy === 'ads_desc') return b.dailyAdsCount - a.dailyAdsCount || b.coins - a.coins;
+      if (sortBy === 'boosts_desc') return b.totalBoosts - a.totalBoosts || b.coins - a.coins;
+      if (sortBy === 'latest') {
+        return (
+          new Date(b.lastAdWatchedAt || b.lastBoostAt || b.createdAt) -
+          new Date(a.lastAdWatchedAt || a.lastBoostAt || a.createdAt)
+        );
+      }
+      // default: coins_desc
+      return b.coins - a.coins || b.totalBoosts - a.totalBoosts;
+    });
+
+    const total = usersWithBoostInfo.length;
+    const pages = Math.ceil(total / limit) || 1;
+    const paginated = usersWithBoostInfo.slice(skip, skip + limit);
+
+    res.status(200).json({
+      success: true,
+      kpi,
+      total,
+      pages,
+      page,
+      limit,
+      data: paginated,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Get detailed boost and coin transaction history for a specific user
+// @route   GET /api/admin/boost/user/:userId
+// @access  Private/Admin
+exports.getAdminUserBoostDetails = async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findById(userId)
+      .select('name channelName avatar email phone coins adRewards createdAt isVerified')
+      .lean();
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const [boosts, transactions] = await Promise.all([
+      VideoBoost.find({ user: userId })
+        .sort({ createdAt: -1 })
+        .populate('video', 'title thumbnail views duration')
+        .lean(),
+      CoinTransaction.find({ user: userId })
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .lean(),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        user,
+        boosts,
+        transactions,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 
 
