@@ -161,6 +161,14 @@ export const authService = {
     const response = await api.post('/auth/google', userData);
     return response.data;
   },
+  forgotPassword: async (phone: string) => {
+    const response = await api.post('/auth/forgot-password', { phone });
+    return response.data;
+  },
+  resetPassword: async (data: { phone: string; otp: string; password: string }) => {
+    const response = await api.post('/auth/reset-password', data);
+    return response.data;
+  },
 };
 
 export default api;

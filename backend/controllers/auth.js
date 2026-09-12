@@ -135,28 +135,92 @@ exports.loginWithPhone = async (req, res, next) => {
   }
 };
 
-// @desc    Forgot Password - Request instructions
+// @desc    Forgot Password - Request OTP (Dummy 1234)
 // @route   POST /api/auth/forgot-password
 // @access  Public
 exports.forgotPassword = async (req, res, next) => {
   try {
+    const rawIdentifier = String(req.body.phone || req.body.username || req.body.identifier || '').trim();
+    if (!rawIdentifier) {
+      return res.status(400).json({ success: false, message: 'Please enter your registered phone number' });
+    }
+
+    const cleanedPhone = cleanPhone(rawIdentifier);
+    const orConditions = [];
+
+    if (cleanedPhone && cleanedPhone.length === 10) {
+      orConditions.push({ phone: cleanedPhone });
+      orConditions.push({ phone: { $regex: new RegExp(`${cleanedPhone}$`) } });
+    }
+
+    if (rawIdentifier) {
+      orConditions.push({ phone: rawIdentifier });
+      orConditions.push({ name: { $regex: new RegExp(`^${escapeRegex(rawIdentifier)}$`, 'i') } });
+    }
+
+    const user = await User.findOne({ $or: orConditions });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'No account found with this phone number' });
+    }
+
     return res.status(200).json({
       success: true,
-      message: 'To reset your password, please contact official support at bideoapps@gmail.com with your registered details.',
+      message: 'OTP sent to phone. Use dummy OTP 1234 to proceed.',
     });
   } catch (err) {
     next(err);
   }
 };
 
-// @desc    Reset Password
+// @desc    Reset Password (Dummy OTP 1234)
 // @route   POST /api/auth/reset-password
 // @access  Public
 exports.resetPassword = async (req, res, next) => {
   try {
-    return res.status(403).json({
-      success: false,
-      message: 'Direct password reset via API is disabled for account security. Please contact official Bideo support at bideoapps@gmail.com.',
+    const rawIdentifier = String(req.body.phone || req.body.username || req.body.identifier || '').trim();
+    const otp = String(req.body.otp || '').trim();
+    const password = String(req.body.password || '').trim();
+
+    if (!rawIdentifier) {
+      return res.status(400).json({ success: false, message: 'Phone number is required' });
+    }
+
+    if (!otp) {
+      return res.status(400).json({ success: false, message: 'OTP is required' });
+    }
+
+    if (otp !== '1234') {
+      return res.status(400).json({ success: false, message: 'Invalid OTP. Please enter 1234' });
+    }
+
+    if (!password || password.length < 6) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 6 characters long' });
+    }
+
+    const cleanedPhone = cleanPhone(rawIdentifier);
+    const orConditions = [];
+
+    if (cleanedPhone && cleanedPhone.length === 10) {
+      orConditions.push({ phone: cleanedPhone });
+      orConditions.push({ phone: { $regex: new RegExp(`${cleanedPhone}$`) } });
+    }
+
+    if (rawIdentifier) {
+      orConditions.push({ phone: rawIdentifier });
+      orConditions.push({ name: { $regex: new RegExp(`^${escapeRegex(rawIdentifier)}$`, 'i') } });
+    }
+
+    const user = await User.findOne({ $or: orConditions });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'No account found with this phone number' });
+    }
+
+    user.password = password;
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Password reset successfully. You can now login with your new password.',
     });
   } catch (err) {
     next(err);

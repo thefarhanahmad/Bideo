@@ -1,94 +1,320 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Linking } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  ActivityIndicator,
+  Linking,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../constants/Colors';
-import { hapticSelection } from '../utils/haptics';
+import { authService } from '../services/api';
+import { hapticLight, hapticSuccess, hapticSelection } from '../utils/haptics';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
+  const [step, setStep] = useState<1 | 2>(1); // 1: Phone, 2: OTP & New Password
+  const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const cleanPhoneInput = useCallback((val: string): string => {
+    let digits = val.replace(/\D/g, '');
+    if (digits.length === 12 && digits.startsWith('91')) {
+      digits = digits.slice(2);
+    } else if (digits.length === 11 && digits.startsWith('0')) {
+      digits = digits.slice(1);
+    }
+    if (digits.length > 10) {
+      digits = digits.slice(0, 10);
+    }
+    return digits;
+  }, []);
+
+  const handleRequestOtp = async () => {
+    hapticSelection();
+    const sanitized = cleanPhoneInput(phone);
+    if (!sanitized || sanitized.length !== 10) {
+      hapticLight();
+      return Alert.alert('Invalid Phone', 'Please enter a valid 10-digit phone number.');
+    }
+
+    setLoading(true);
+    try {
+      const res = await authService.forgotPassword(sanitized);
+      if (res?.success) {
+        hapticSuccess();
+        setStep(2);
+        Alert.alert('OTP Sent', 'Use dummy OTP 1234 to proceed with resetting your password.');
+      }
+    } catch (err: any) {
+      hapticLight();
+      const apiError =
+        err.response?.data?.message ||
+        err.response?.data?.errors?.[0]?.msg ||
+        err.response?.data?.errors?.[0]?.message ||
+        'Failed to request OTP. Please verify your phone number.';
+      Alert.alert('Unable to Send OTP', apiError);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    hapticSelection();
+    const sanitized = cleanPhoneInput(phone);
+    const trimmedOtp = otp.trim();
+    const trimmedPassword = password.trim();
+
+    if (!trimmedOtp) {
+      hapticLight();
+      return Alert.alert('Missing OTP', 'Please enter the 4-digit OTP.');
+    }
+
+    if (trimmedOtp !== '1234') {
+      hapticLight();
+      return Alert.alert('Invalid OTP', 'Please enter dummy OTP 1234 to proceed.');
+    }
+
+    if (!trimmedPassword || trimmedPassword.length < 6) {
+      hapticLight();
+      return Alert.alert('Short Password', 'New password must be at least 6 characters long.');
+    }
+
+    setLoading(true);
+    try {
+      const res = await authService.resetPassword({
+        phone: sanitized,
+        otp: trimmedOtp,
+        password: trimmedPassword,
+      });
+
+      if (res?.success) {
+        hapticSuccess();
+        Alert.alert(
+          'Password Reset Successful',
+          'Your password has been updated! You can now log in with your new password.',
+          [{ text: 'Log In Now', onPress: () => router.back() }]
+        );
+      }
+    } catch (err: any) {
+      hapticLight();
+      const apiError =
+        err.response?.data?.message ||
+        err.response?.data?.errors?.[0]?.msg ||
+        err.response?.data?.errors?.[0]?.message ||
+        'Failed to reset password. Please try again.';
+      Alert.alert('Reset Failed', apiError);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleEmailSupport = () => {
     hapticSelection();
     Linking.openURL(
-      'mailto:bideoapps@gmail.com?subject=Bideo%20Password%20Reset%20Request&body=Hi%20Bideo%20Team%2C%0A%0AI%20forgot%20my%20password%20and%20would%20like%20to%20reset%20it.%0A%0ARegistered%20Phone%20Number%20or%20Username%3A%20%0A%0AThank%20you!'
+      'mailto:bideoapps@gmail.com?subject=Bideo%20Password%20Reset%20Help&body=Hi%20Bideo%20Support%2C%0A%0AI%20am%20having%20trouble%20resetting%20my%20password.%0ARegistered%20Phone%3A%20%0A%0AThank%20you!'
     );
   };
 
-  const handleInstagramSupport = () => {
-    hapticSelection();
-    Linking.openURL('https://www.instagram.com/bideo.app/');
-  };
-
   return (
-    <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={styles.container}
+    >
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backBtn}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
 
+        {/* Top Trust & Notice Banner */}
+        <View style={styles.trustBanner}>
+          <Ionicons name="shield-checkmark" size={15} color="#15803D" style={{ marginTop: 1 }} />
+          <Text style={styles.trustDesc}>
+            SMS gateway integration is underway. Dummy OTP <Text style={{ fontWeight: '700' }}>1234</Text> is temporary and will be secured with live SMS shortly.
+          </Text>
+        </View>
+
         <View style={styles.header}>
           <View style={styles.iconCircle}>
-            <Ionicons name="key-outline" size={38} color={Colors.primary} />
+            <Ionicons
+              name={step === 1 ? 'key-outline' : 'shield-checkmark-outline'}
+              size={36}
+              color={Colors.primary}
+            />
           </View>
-          <Text style={styles.title}>Forgot Password?</Text>
+          <Text style={styles.title}>
+            {step === 1 ? 'Forgot Password?' : 'Reset Password'}
+          </Text>
           <Text style={styles.subtitle}>
-            To reset or recover your account password, please contact our support team directly via Email or Instagram DM with your registered phone number or username.
+            {step === 1
+              ? 'Enter your registered phone number to verify your account and receive an OTP.'
+              : 'Enter the dummy OTP 1234 and choose a new password for your account.'}
           </Text>
         </View>
 
-        <View style={styles.cardsContainer}>
-          {/* Email Card */}
-          <TouchableOpacity
-            style={styles.actionCard}
-            onPress={handleEmailSupport}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.cardIconWrap, { backgroundColor: '#FEF3C7' }]}>
-              <Ionicons name="mail" size={24} color={Colors.primary} />
+        {step === 1 ? (
+          <View style={styles.form}>
+            <View style={styles.inputWrapper}>
+              <Text style={styles.fieldLabel}>Registered Phone Number</Text>
+              <View style={styles.phoneInputRow}>
+                <View style={styles.countryCodeBadge}>
+                  <Text style={styles.countryCodeText}>+91</Text>
+                </View>
+                <TextInput
+                  style={styles.phoneInput}
+                  placeholder="10-digit mobile number"
+                  placeholderTextColor={Colors.textGray}
+                  value={phone}
+                  onChangeText={(v) => setPhone(cleanPhoneInput(v))}
+                  keyboardType="phone-pad"
+                  maxLength={10}
+                  autoFocus
+                  editable={!loading}
+                />
+              </View>
             </View>
-            <View style={styles.cardContent}>
-              <Text style={styles.cardLabel}>Send Email to Support</Text>
-              <Text style={styles.cardValue}>bideoapps@gmail.com</Text>
-              <Text style={styles.cardActionHint}>Tap to open mail app</Text>
-            </View>
-            <Ionicons name="open-outline" size={20} color={Colors.textGray} />
-          </TouchableOpacity>
 
-          {/* Instagram Card */}
-          <TouchableOpacity
-            style={styles.actionCard}
-            onPress={handleInstagramSupport}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.cardIconWrap, { backgroundColor: '#FCE7F3' }]}>
-              <Ionicons name="logo-instagram" size={24} color="#E1306C" />
+            <View style={styles.infoBanner}>
+              <Ionicons name="information-circle-outline" size={18} color="#D97706" style={{ marginRight: 8, marginTop: 1 }} />
+              <Text style={styles.infoBannerText}>
+                Use dummy OTP <Text style={{ fontWeight: '700' }}>1234</Text> in the next step to verify and set a new password.
+              </Text>
             </View>
-            <View style={styles.cardContent}>
-              <Text style={styles.cardLabel}>Instagram Direct Message</Text>
-              <Text style={styles.cardValue}>@bideo.app</Text>
-              <Text style={styles.cardActionHint}>Tap to open Instagram profile</Text>
+
+            <TouchableOpacity
+              style={[styles.primaryButton, (loading || phone.length < 10) && styles.disabledButton]}
+              onPress={handleRequestOtp}
+              disabled={loading || phone.length < 10}
+              activeOpacity={0.8}
+            >
+              {loading ? (
+                <ActivityIndicator color={Colors.white} size="small" />
+              ) : (
+                <Text style={styles.buttonText}>Send OTP</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.form}>
+            {/* Phone Info Badge */}
+            <View style={styles.phoneBadge}>
+              <View style={styles.phoneBadgeLeft}>
+                <Ionicons name="phone-portrait-outline" size={18} color={Colors.textGray} />
+                <Text style={styles.phoneBadgeText}>+91 {phone}</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  hapticSelection();
+                  setStep(1);
+                  setOtp('');
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={styles.changePhoneText}>Change</Text>
+              </TouchableOpacity>
             </View>
-            <Ionicons name="open-outline" size={20} color={Colors.textGray} />
+
+            {/* OTP Input */}
+            <View style={styles.inputWrapper}>
+              <View style={styles.labelRow}>
+                <Text style={styles.fieldLabel}>Enter OTP</Text>
+                <Text style={styles.otpHint}>Dummy OTP: 1234</Text>
+              </View>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter 1234"
+                placeholderTextColor={Colors.textGray}
+                value={otp}
+                onChangeText={setOtp}
+                keyboardType="number-pad"
+                maxLength={4}
+                autoFocus
+                editable={!loading}
+              />
+            </View>
+
+            {/* New Password Input */}
+            <View style={styles.inputWrapper}>
+              <Text style={styles.fieldLabel}>New Password</Text>
+              <View style={styles.passwordRow}>
+                <TextInput
+                  style={[styles.input, styles.passwordInput]}
+                  placeholder="At least 6 characters"
+                  placeholderTextColor={Colors.textGray}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  editable={!loading}
+                />
+                <TouchableOpacity
+                  style={styles.eyeButton}
+                  onPress={() => setShowPassword((prev) => !prev)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons
+                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={22}
+                    color={Colors.textGray}
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.primaryButton, (loading || otp.length < 4 || password.length < 6) && styles.disabledButton]}
+              onPress={handleResetPassword}
+              disabled={loading || otp.length < 4 || password.length < 6}
+              activeOpacity={0.8}
+            >
+              {loading ? (
+                <ActivityIndicator color={Colors.white} size="small" />
+              ) : (
+                <Text style={styles.buttonText}>Reset Password</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => {
+                hapticSelection();
+                setStep(1);
+                setOtp('');
+              }}
+              style={styles.backToStepBtn}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.backToStepText}>Change Phone Number</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Fallback Support Link */}
+        <View style={styles.footerSection}>
+          <Text style={styles.footerHelpText}>Still having trouble?</Text>
+          <TouchableOpacity onPress={handleEmailSupport} activeOpacity={0.7}>
+            <Text style={styles.supportLinkText}>Contact Support</Text>
           </TouchableOpacity>
         </View>
-
-        <View style={styles.noticeBox}>
-          <Ionicons name="shield-checkmark-outline" size={18} color="#059669" style={{ marginRight: 8, marginTop: 1 }} />
-          <Text style={styles.noticeText}>
-            Our support team will verify your registered account details and help you restore access within 24 hours.
-          </Text>
-        </View>
-
-        <TouchableOpacity
-          style={styles.backToLoginBtn}
-          onPress={() => router.back()}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.backToLoginText}>Back to Login</Text>
-        </TouchableOpacity>
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -106,17 +332,35 @@ const styles = StyleSheet.create({
   backBtn: {
     alignSelf: 'flex-start',
     padding: 6,
+    marginBottom: 16,
+  },
+  trustBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     marginBottom: 20,
+    gap: 8,
+  },
+  trustDesc: {
+    flex: 1,
+    fontSize: 12,
+    color: '#166534',
+    lineHeight: 16,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 28,
   },
   iconCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: Colors.primary + '18',
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: Colors.primary + '16',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
@@ -133,74 +377,136 @@ const styles = StyleSheet.create({
     color: Colors.textGray,
     textAlign: 'center',
     lineHeight: 21,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
   },
-  cardsContainer: {
+  form: {
     width: '100%',
-    gap: 14,
-    marginBottom: 20,
   },
-  actionCard: {
+  inputWrapper: {
+    width: '100%',
+    marginBottom: 16,
+  },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.text,
+    marginBottom: 6,
+  },
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  otpHint: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  phoneInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F9FAFB',
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 1,
+    borderRadius: 14,
+    backgroundColor: '#F9FAFB',
+    overflow: 'hidden',
   },
-  cardIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
+  countryCodeBadge: {
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    backgroundColor: '#F3F4F6',
+    borderRightWidth: 1,
+    borderRightColor: '#E5E7EB',
     justifyContent: 'center',
-    marginRight: 14,
+    alignItems: 'center',
   },
-  cardContent: {
-    flex: 1,
-  },
-  cardLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.textGray,
-    marginBottom: 2,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  cardValue: {
-    fontSize: 16,
+  countryCodeText: {
+    fontSize: 15,
     fontWeight: '700',
     color: Colors.text,
-    marginBottom: 2,
   },
-  cardActionHint: {
-    fontSize: 12,
-    color: Colors.primary,
-    fontWeight: '600',
+  phoneInput: {
+    flex: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    fontSize: 15,
+    color: Colors.text,
   },
-  noticeBox: {
+  input: {
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 15,
+    backgroundColor: '#F9FAFB',
+    color: Colors.text,
+  },
+  passwordRow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 14,
+    backgroundColor: '#F9FAFB',
+    paddingRight: 8,
+  },
+  passwordInput: {
+    flex: 1,
+    marginBottom: 0,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
+  },
+  eyeButton: {
+    padding: 10,
+  },
+  infoBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: '#ECFDF5',
+    backgroundColor: '#FEF3C7',
     borderWidth: 1,
-    borderColor: '#A7F3D0',
+    borderColor: '#FDE68A',
     borderRadius: 12,
-    padding: 14,
-    marginBottom: 28,
+    padding: 12,
+    marginBottom: 20,
   },
-  noticeText: {
+  infoBannerText: {
     flex: 1,
-    fontSize: 13,
-    color: '#065F46',
+    fontSize: 12.5,
+    color: '#92400E',
     lineHeight: 18,
   },
-  backToLoginBtn: {
+  phoneBadge: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 18,
+  },
+  phoneBadgeLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  phoneBadgeText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  changePhoneText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  primaryButton: {
     backgroundColor: Colors.primary,
     width: '100%',
     height: 52,
@@ -209,13 +515,46 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 3,
+    marginTop: 6,
   },
-  backToLoginText: {
+  disabledButton: {
+    opacity: 0.5,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  buttonText: {
     color: Colors.white,
     fontSize: 16,
     fontWeight: '700',
+  },
+  backToStepBtn: {
+    marginTop: 18,
+    alignItems: 'center',
+    padding: 8,
+  },
+  backToStepText: {
+    color: Colors.primary,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  footerSection: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 'auto',
+    paddingTop: 36,
+    gap: 6,
+  },
+  footerHelpText: {
+    fontSize: 13,
+    color: Colors.textGray,
+  },
+  supportLinkText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.primary,
   },
 });
