@@ -128,19 +128,17 @@ export default function EarningsScreen() {
         },
         onError: (err: any) => {
           setLoadingReviewId(null);
-          console.error('Error showing rewarded ad:', err);
           showAlert(
             'Ad Unavailable',
-            err?.message || 'Rewarded ad is currently unavailable. Please try again in a few moments.'
+            'No rewarded ad available right now. Please try again in a few moments.'
           );
         },
       });
     } catch (error: any) {
       setLoadingReviewId(null);
-      console.error('Error initiating rewarded ad:', error);
       showAlert(
         'Ad Unavailable',
-        error?.message || 'Rewarded ad is currently unavailable. Please try again in a few moments.'
+        'No rewarded ad available right now. Please try again in a few moments.'
       );
     }
   };

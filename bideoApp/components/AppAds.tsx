@@ -752,7 +752,7 @@ export const loadAndShowRewardedAd = ({
     Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
 
   if (isExpoGo) {
-    if (onError) onError(new Error('Rewarded ads require a development or production APK build (not available in Expo Go).'));
+    if (onError) onError(new Error('No rewarded ad available right now. Please try again in a few moments.'));
     return () => {};
   }
 
