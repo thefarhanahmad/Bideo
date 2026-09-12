@@ -454,7 +454,7 @@ export default function VideoScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.white} />
       <View style={[styles.videoPlayerContainer, { height: playerHeight }]}>
-        {showingAd ? (
+        {!adCompleted && showingAd ? (
           <View style={styles.adPlayerPlaceholder}>
             <ActivityIndicator size="large" color={Colors.primary} />
             <Text style={{ color: Colors.white, marginTop: 10, fontSize: 13, fontWeight: '600' }}>Loading Sponsor Ad...</Text>
