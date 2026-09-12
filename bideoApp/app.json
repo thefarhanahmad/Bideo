@@ -54,6 +54,16 @@
             },
             {
               "scheme": "https",
+              "host": "bideo.in",
+              "pathPrefix": "/p"
+            },
+            {
+              "scheme": "https",
+              "host": "bideo.in",
+              "pathPrefix": "/post"
+            },
+            {
+              "scheme": "https",
               "host": "www.bideo.in",
               "pathPrefix": "/v"
             },
@@ -71,6 +81,16 @@
               "scheme": "https",
               "host": "www.bideo.in",
               "pathPrefix": "/channel"
+            },
+            {
+              "scheme": "https",
+              "host": "www.bideo.in",
+              "pathPrefix": "/p"
+            },
+            {
+              "scheme": "https",
+              "host": "www.bideo.in",
+              "pathPrefix": "/post"
             }
           ],
           "category": [

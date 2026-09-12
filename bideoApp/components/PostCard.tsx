@@ -40,13 +40,16 @@ const PostCard = ({ post, onDelete }: PostCardProps) => {
   const handleShare = async () => {
     setMenuVisible(false);
     try {
-      const shareMessage = post.text 
-        ? `${post.text}\n\nCheck out this post on Bideo!`
-        : 'Check out this post on Bideo!';
+      const shareUrl = `https://bideo.in/p/${post._id}`;
+      const snippet = post.text
+        ? `"${post.text.trim().slice(0, 90)}${post.text.trim().length > 90 ? '...' : ''}"\n`
+        : '';
+      const shareMessage = `Check out this post on Bideo:\n${snippet}${shareUrl}`;
         
       await Share.share({
+        title: 'Post on Bideo',
         message: shareMessage,
-        url: post.imageUrl || undefined,
+        url: shareUrl,
       });
     } catch (err) {
       console.error('Share failed', err);
