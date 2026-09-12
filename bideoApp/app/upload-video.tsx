@@ -74,20 +74,90 @@ export default function UploadVideoScreen() {
   const uploadType = type || (editId ? 'video' : 'video');
 
   useEffect(() => {
-    loadCategories();
-    if (editId) {
-      loadVideoDetails(editId);
-    }
+    let isMounted = true;
+
+    const init = async () => {
+      let loadedCats: any[] = [];
+      try {
+        const res = await api.get('/categories');
+        if (res.data.success && Array.isArray(res.data.data)) {
+          loadedCats = res.data.data;
+          if (isMounted) {
+            setCategories(loadedCats);
+          }
+        }
+      } catch (err) {
+        console.log('Failed to load categories');
+      }
+
+      const topCatId = loadedCats.length > 0 ? loadedCats[0]._id : '';
+
+      if (editId) {
+        try {
+          const res = await api.get(`/videos/${editId}`);
+          if (res.data.success && isMounted) {
+            const v = res.data.data;
+            setTitle(v.title || '');
+            setDescription(v.description || '');
+            const existingCat = v.category?._id || v.category;
+            // If existing category is valid in loaded categories, keep it; otherwise default to top category
+            const isValid = existingCat && loadedCats.some((c) => c._id === existingCat);
+            if (isValid) {
+              setCategory(existingCat);
+            } else if (topCatId) {
+              setCategory(topCatId);
+            }
+            setTags(Array.isArray(v.tags) ? v.tags.join(', ') : (v.tags || ''));
+            setVisibility(v.visibility || 'public');
+            if (v.thumbnail) {
+              setThumbnail({ uri: v.thumbnail } as ImagePicker.ImagePickerAsset);
+            }
+          }
+        } catch (err) {
+          console.log('Failed to load video details');
+          if (topCatId && isMounted) {
+            setCategory((prev) => prev || topCatId);
+          }
+        }
+      } else {
+        // By default, select the top category for new uploads (both long videos and shorts)
+        if (isMounted && topCatId) {
+          setCategory((prev) => prev || topCatId);
+        }
+      }
+    };
+
+    init();
+
+    return () => {
+      isMounted = false;
+    };
   }, [editId]);
 
-  const loadVideoDetails = async (id: string) => {
+  // Fallback sync: ensure top category is selected by default on upload & edit (shorts and long videos)
+  useEffect(() => {
+    if (categories.length > 0) {
+      if (!category || !categories.some((c) => c._id === category)) {
+        setCategory(categories[0]._id);
+      }
+    }
+  }, [categories, category]);
+
+  const loadVideoDetails = async (id: string, loadedCats?: any[]) => {
     try {
       const res = await api.get(`/videos/${id}`);
       if (res.data.success) {
         const v = res.data.data;
-        setTitle(v.title);
-        setDescription(v.description);
-        setCategory(v.category?._id || v.category);
+        setTitle(v.title || '');
+        setDescription(v.description || '');
+        const existingCat = v.category?._id || v.category;
+        const catsList = loadedCats && loadedCats.length > 0 ? loadedCats : categories;
+        const isValid = existingCat && catsList.some((c) => c._id === existingCat);
+        if (isValid) {
+          setCategory(existingCat);
+        } else if (catsList.length > 0) {
+          setCategory(catsList[0]._id);
+        }
         setTags(Array.isArray(v.tags) ? v.tags.join(', ') : (v.tags || ''));
         setVisibility(v.visibility || 'public');
         if (v.thumbnail) {
@@ -102,8 +172,11 @@ export default function UploadVideoScreen() {
   const loadCategories = async () => {
     try {
       const res = await api.get('/categories');
-      if (res.data.success) {
+      if (res.data.success && Array.isArray(res.data.data)) {
         setCategories(res.data.data);
+        if (res.data.data.length > 0 && !category) {
+          setCategory(res.data.data[0]._id);
+        }
       }
     } catch (err) {
       console.log('Failed to load categories');
@@ -489,7 +562,7 @@ export default function UploadVideoScreen() {
         <View style={styles.selectContainer}>
           <TouchableOpacity style={styles.selectTrigger} onPress={() => setCategoryOpen(!categoryOpen)}>
             <Text style={styles.selectValue}>
-              {categories.find((c) => c._id === category)?.name || 'Select category'}
+              {categories.find((c) => c._id === category)?.name || categories[0]?.name || 'Select category'}
             </Text>
             <Ionicons name={categoryOpen ? 'chevron-up' : 'chevron-down'} size={18} color={Colors.textGray} />
           </TouchableOpacity>
