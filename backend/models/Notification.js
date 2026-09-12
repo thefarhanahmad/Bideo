@@ -14,7 +14,7 @@ const notificationSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['video_like', 'video_comment', 'comment_like', 'comment_reply', 'post_like', 'post_comment'],
+    enum: ['video_like', 'video_comment', 'comment_like', 'comment_reply', 'post_like', 'post_comment', 'system'],
     required: true,
   },
   video: {
