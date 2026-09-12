@@ -420,7 +420,7 @@ const checkImageVisually = async (imageUrl) => {
 };
 
 /**
- * Cascading Auto-Purge: Permanently purges an adult video and suspends abusive account.
+ * Cascading Auto-Purge: Permanently purges an adult video without banning the user account.
  */
 const purgeAdultVideo = async (video, reason) => {
   try {
@@ -441,19 +441,9 @@ const purgeAdultVideo = async (video, reason) => {
       Comment.deleteMany({ video: videoId }),
     ]);
 
-    // 3. Suspend abusive uploader
-    if (ownerId) {
-      await User.findByIdAndUpdate(ownerId, {
-        isBlocked: true,
-        blockReason: 'Account suspended: Uploading adult/pornographic content is strictly prohibited on Bideo.',
-        blockedAt: new Date(),
-      }).catch((e) => console.warn('[Moderation] Failed to block user:', e.message));
-      console.warn(`[MODERATION] Abusive user ${ownerId} has been blocked.`);
-    }
-
-    // 4. Log in ErrorLog for Admin Dashboard tracking
+    // 3. Log in ErrorLog for Admin Dashboard tracking
     await ErrorLog.create({
-      message: `[Auto-Moderation] Adult video automatically purged after 10s: "${video.title}"`,
+      message: `[Auto-Moderation] Adult video automatically purged: "${video.title}"`,
       stack: `Reason: ${reason}\nVideo ID: ${videoId}\nUser ID: ${ownerId}\nURL: ${video.videoUrl}`,
       statusCode: 403,
       endpoint: '/api/videos/upload',
@@ -468,7 +458,7 @@ const purgeAdultVideo = async (video, reason) => {
 };
 
 /**
- * Cascading Auto-Purge: Permanently purges an adult post and suspends abusive account.
+ * Cascading Auto-Purge: Permanently purges an adult post without banning the user account.
  */
 const purgeAdultPost = async (post, reason) => {
   try {
@@ -486,19 +476,9 @@ const purgeAdultPost = async (post, reason) => {
       Comment.deleteMany({ post: postId }),
     ]);
 
-    // 3. Suspend abusive uploader
-    if (ownerId) {
-      await User.findByIdAndUpdate(ownerId, {
-        isBlocked: true,
-        blockReason: 'Account suspended: Uploading adult/pornographic content is strictly prohibited on Bideo.',
-        blockedAt: new Date(),
-      }).catch((e) => console.warn('[Moderation] Failed to block user:', e.message));
-      console.warn(`[MODERATION] Abusive user ${ownerId} has been blocked.`);
-    }
-
-    // 4. Log in ErrorLog
+    // 3. Log in ErrorLog
     await ErrorLog.create({
-      message: `[Auto-Moderation] Adult post automatically purged after 10s. Text: "${(post.text || '').slice(0, 50)}"`,
+      message: `[Auto-Moderation] Adult post automatically purged. Text: "${(post.text || '').slice(0, 50)}"`,
       stack: `Reason: ${reason}\nPost ID: ${postId}\nUser ID: ${ownerId}`,
       statusCode: 403,
       endpoint: '/api/posts',
