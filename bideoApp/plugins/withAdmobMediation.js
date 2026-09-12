@@ -1,12 +1,11 @@
-const { withAppBuildGradle, createRunOncePlugin } = require('@expo/config-plugins');
+const { withAppBuildGradle, withAndroidManifest, createRunOncePlugin } = require('@expo/config-plugins');
 
 /**
- * Expo Config Plugin to inject Google Mobile Ads mediation dependencies into android/app/build.gradle.
- * This ensures that when EAS Build or 'npx expo prebuild' runs, the Unity Ads & Meta Audience Network
- * mediation adapters and SDKs are automatically compiled into the native Android application.
+ * Expo Config Plugin to inject Google Mobile Ads mediation dependencies into android/app/build.gradle
+ * and ensure com.google.android.gms.permission.AD_ID is retained for Meta Audience Network.
  */
 const withAdmobMediation = (config) => {
-  return withAppBuildGradle(config, (gradleConfig) => {
+  config = withAppBuildGradle(config, (gradleConfig) => {
     let contents = gradleConfig.modResults.contents;
 
     const mediationDependencies = `
@@ -37,6 +36,24 @@ const withAdmobMediation = (config) => {
 
     return gradleConfig;
   });
+
+  config = withAndroidManifest(config, (manifestConfig) => {
+    const manifest = manifestConfig.modResults.manifest;
+    manifest['uses-permission'] = manifest['uses-permission'] || [];
+    const hasAdId = manifest['uses-permission'].some(
+      (p) => p.$?.['android:name'] === 'com.google.android.gms.permission.AD_ID'
+    );
+    if (!hasAdId) {
+      manifest['uses-permission'].push({
+        $: {
+          'android:name': 'com.google.android.gms.permission.AD_ID',
+        },
+      });
+    }
+    return manifestConfig;
+  });
+
+  return config;
 };
 
 module.exports = createRunOncePlugin(withAdmobMediation, 'withAdmobMediation', '1.0.0');

@@ -51,7 +51,7 @@ interface AppAdBannerProps {
 
 /**
  * Banner ad that returns null when running in Expo Go (no native module available)
- * or if the native module failed to link correctly.
+ * or if the ad failed to fill.
  */
 export const AppAdBanner: React.FC<AppAdBannerProps> = ({ size }: AppAdBannerProps) => {
   const isExpoGo =
@@ -60,7 +60,7 @@ export const AppAdBanner: React.FC<AppAdBannerProps> = ({ size }: AppAdBannerPro
 
   const [adFailed, setAdFailed] = useState(false);
 
-  // If live ad failed or no-fill, hide the banner completely! Never show test ad in production.
+  // If live ad failed or no-fill, hide the banner completely!
   if (adFailed) return null;
 
   try {
@@ -75,10 +75,9 @@ export const AppAdBanner: React.FC<AppAdBannerProps> = ({ size }: AppAdBannerPro
           key={unitId}
           unitId={unitId}
           size={size || BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
-          requestOptions={{ requestNonPersonalizedAdsOnly: true }}
+          requestOptions={{ requestNonPersonalizedAdsOnly: false }}
           onAdFailedToLoad={(error: any) => {
             console.log(`Banner Ad failed with unit ${unitId}:`, error?.message || error);
-            // Hide the banner completely if it fails or has NO_FILL. Never show test ad!
             setAdFailed(true);
           }}
         />
@@ -187,7 +186,7 @@ export const AppInterstitialAd: React.FC<AppInterstitialAdProps> = ({ visible, o
       const loadAd = (idToLoad: string) => {
         try {
           const interstitial = InterstitialAd.createForAdRequest(idToLoad, {
-            requestNonPersonalizedAdsOnly: true,
+            requestNonPersonalizedAdsOnly: false,
           });
 
           const unsubscribeLoaded = interstitial.addAdEventListener(AdEventType.LOADED, () => {
