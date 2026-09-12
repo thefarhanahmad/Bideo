@@ -13,6 +13,7 @@ const WalletCredit = require('../models/WalletCredit');
 const VideoBoost = require('../models/VideoBoost');
 const CoinTransaction = require('../models/CoinTransaction');
 const { processPendingWalletCredits } = require('../services/walletSettlementService');
+const { processBoostQueue } = require('../utils/boostQueueScheduler');
 
 // Helper to calculate daily, weekly, and monthly trends for Users & Videos
 const calculateAnalyticsTrends = async () => {
@@ -1837,28 +1838,36 @@ exports.getAdminBoostData = async (req, res, next) => {
     const filter = req.query.filter || 'all'; // all, active, queued, ads_today, high_coins, has_boosted
     const sortBy = req.query.sort || 'coins_desc';
 
+    // 1. Process boost queue to ensure expired boosts are rotated and queue positions are accurate
+    if (typeof processBoostQueue === 'function') {
+      try {
+        await processBoostQueue();
+      } catch (queueErr) {
+        console.error('Admin Boost: Error processing boost queue:', queueErr);
+      }
+    }
+
     const now = new Date();
     const todayStr = now.toISOString().slice(0, 10);
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
 
-    // 1. Compute Global KPIs
+    // 2. Fetch Active, Queued, and All-time boost stats
     const [
       userCoinsAgg,
-      activeBoostsCount,
-      queuedBoostsCount,
       totalBoostsCount,
       coinsSpentAgg,
       todayAdsAgg,
       usersWithCoinsCount,
       usersReadyCount,
+      allActiveBoosts,
+      allQueuedBoosts,
+      boostCountsByUser,
     ] = await Promise.all([
       User.aggregate([
         { $match: { coins: { $gt: 0 } } },
         { $group: { _id: null, totalCoins: { $sum: '$coins' } } },
       ]),
-      VideoBoost.countDocuments({ status: 'active', expiresAt: { $gt: now } }),
-      VideoBoost.countDocuments({ status: 'queued' }),
       VideoBoost.countDocuments(),
       VideoBoost.aggregate([
         { $group: { _id: null, totalCoinsSpent: { $sum: '$coinsSpent' } } },
@@ -1881,23 +1890,6 @@ exports.getAdminBoostData = async (req, res, next) => {
       ]),
       User.countDocuments({ coins: { $gt: 0 } }),
       User.countDocuments({ coins: { $gte: 100 } }),
-    ]);
-
-    const kpi = {
-      totalCirculatingCoins: userCoinsAgg[0]?.totalCoins || 0,
-      usersWithCoins: usersWithCoinsCount,
-      usersReadyToBoost: usersReadyCount,
-      activeHighlights: activeBoostsCount,
-      queuedHighlights: queuedBoostsCount,
-      totalBoostsAllTime: totalBoostsCount,
-      totalCoinsSpent: coinsSpentAgg[0]?.totalCoinsSpent || 0,
-      todayAdsWatched: todayAdsAgg[0]?.todayAdsCount || 0,
-      todayCoinsAwarded: todayAdsAgg[0]?.todayCoinsAwarded || 0,
-      todayActiveViewers: todayAdsAgg[0]?.uniqueViewers?.length || 0,
-    };
-
-    // 2. Fetch Active and Queued boosts with populated video info
-    const [allActiveBoosts, allQueuedBoosts, boostCountsByUser] = await Promise.all([
       VideoBoost.find({ status: 'active', expiresAt: { $gt: now } })
         .populate('video', 'title thumbnail views duration')
         .lean(),
@@ -1918,13 +1910,17 @@ exports.getAdminBoostData = async (req, res, next) => {
     ]);
 
     const activeMap = new Map();
-    allActiveBoosts.forEach((b) => activeMap.set(b.user.toString(), b));
+    allActiveBoosts.forEach((b) => {
+      if (b.user) activeMap.set(b.user.toString(), b);
+    });
 
     const queuedMap = new Map();
     allQueuedBoosts.forEach((b) => {
-      const uStr = b.user.toString();
-      if (!queuedMap.has(uStr)) queuedMap.set(uStr, []);
-      queuedMap.get(uStr).push(b);
+      if (b.user) {
+        const uStr = b.user.toString();
+        if (!queuedMap.has(uStr)) queuedMap.set(uStr, []);
+        queuedMap.get(uStr).push(b);
+      }
     });
 
     const userBoostStatsMap = new Map();
@@ -1932,32 +1928,84 @@ exports.getAdminBoostData = async (req, res, next) => {
       if (b._id) userBoostStatsMap.set(b._id.toString(), b);
     });
 
-    // 3. Construct user query
-    const userQuery = {};
+    const activeUserIds = Array.from(activeMap.keys());
+    const queuedUserIds = Array.from(queuedMap.keys());
+    const boostedUserIds = Array.from(userBoostStatsMap.keys());
+
+    // 3. Tab counts (exact counts for all 6 tabs)
+    const [todayAdsUsersCount, highCoinsUsersCount, totalAllUsersCount] = await Promise.all([
+      User.countDocuments({
+        'adRewards.dailyDate': todayStr,
+        'adRewards.dailyCount': { $gt: 0 },
+      }),
+      User.countDocuments({ coins: { $gte: 100 } }),
+      User.countDocuments({
+        $or: [
+          { coins: { $gt: 0 } },
+          { _id: { $in: boostedUserIds.map((id) => new mongoose.Types.ObjectId(id)) } },
+          { 'adRewards.dailyDate': todayStr, 'adRewards.dailyCount': { $gt: 0 } },
+        ],
+      }),
+    ]);
+
+    const tabCounts = {
+      all: totalAllUsersCount,
+      active: activeUserIds.length,
+      queued: queuedUserIds.length,
+      ads_today: todayAdsUsersCount,
+      high_coins: highCoinsUsersCount,
+      has_boosted: boostedUserIds.length,
+    };
+
+    const kpi = {
+      totalCirculatingCoins: userCoinsAgg[0]?.totalCoins || 0,
+      usersWithCoins: usersWithCoinsCount,
+      usersReadyToBoost: usersReadyCount,
+      activeHighlights: allActiveBoosts.length,
+      queuedHighlights: allQueuedBoosts.length,
+      totalBoostsAllTime: totalBoostsCount,
+      totalCoinsSpent: coinsSpentAgg[0]?.totalCoinsSpent || 0,
+      todayAdsWatched: todayAdsAgg[0]?.todayAdsCount || 0,
+      todayCoinsAwarded: todayAdsAgg[0]?.todayCoinsAwarded || 0,
+      todayActiveViewers: todayAdsAgg[0]?.uniqueViewers?.length || 0,
+    };
+
+    // 4. Construct user query based on filter
+    let userFilterClause = {};
 
     if (filter === 'active') {
-      const activeUserIds = Array.from(activeMap.keys());
-      userQuery._id = { $in: activeUserIds.map((id) => new mongoose.Types.ObjectId(id)) };
+      userFilterClause = {
+        _id: { $in: activeUserIds.map((id) => new mongoose.Types.ObjectId(id)) },
+      };
     } else if (filter === 'queued') {
-      const queuedUserIds = Array.from(queuedMap.keys());
-      userQuery._id = { $in: queuedUserIds.map((id) => new mongoose.Types.ObjectId(id)) };
+      userFilterClause = {
+        _id: { $in: queuedUserIds.map((id) => new mongoose.Types.ObjectId(id)) },
+      };
     } else if (filter === 'ads_today') {
-      userQuery['adRewards.dailyDate'] = todayStr;
-      userQuery['adRewards.dailyCount'] = { $gt: 0 };
+      userFilterClause = {
+        'adRewards.dailyDate': todayStr,
+        'adRewards.dailyCount': { $gt: 0 },
+      };
     } else if (filter === 'high_coins') {
-      userQuery.coins = { $gte: 100 };
+      userFilterClause = {
+        coins: { $gte: 100 },
+      };
     } else if (filter === 'has_boosted') {
-      const boostedUserIds = Array.from(userBoostStatsMap.keys());
-      userQuery._id = { $in: boostedUserIds.map((id) => new mongoose.Types.ObjectId(id)) };
+      userFilterClause = {
+        _id: { $in: boostedUserIds.map((id) => new mongoose.Types.ObjectId(id)) },
+      };
     } else {
-      // Default: users with coins > 0 OR who have ever boosted a video OR who watched ads today
-      const boostedUserIds = Array.from(userBoostStatsMap.keys()).map((id) => new mongoose.Types.ObjectId(id));
-      userQuery.$or = [
-        { coins: { $gt: 0 } },
-        { _id: { $in: boostedUserIds } },
-        { 'adRewards.dailyCount': { $gt: 0 } },
-      ];
+      // Default: 'all'
+      userFilterClause = {
+        $or: [
+          { coins: { $gt: 0 } },
+          { _id: { $in: boostedUserIds.map((id) => new mongoose.Types.ObjectId(id)) } },
+          { 'adRewards.dailyDate': todayStr, 'adRewards.dailyCount': { $gt: 0 } },
+        ],
+      };
     }
+
+    let finalQuery = userFilterClause;
 
     if (search) {
       const regex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
@@ -1966,18 +2014,15 @@ exports.getAdminBoostData = async (req, res, next) => {
         { channelName: regex },
         { email: regex },
       ];
-      if (userQuery.$or) {
-        userQuery.$and = [
-          { $or: userQuery.$or },
+      finalQuery = {
+        $and: [
+          userFilterClause,
           { $or: searchConditions },
-        ];
-        delete userQuery.$or;
-      } else {
-        userQuery.$or = searchConditions;
-      }
+        ],
+      };
     }
 
-    const matchingUsers = await User.find(userQuery)
+    const matchingUsers = await User.find(finalQuery)
       .select('name channelName avatar email phone coins adRewards createdAt isVerified')
       .lean();
 
@@ -1991,12 +2036,24 @@ exports.getAdminBoostData = async (req, res, next) => {
       // Normalise daily ads for today
       let dailyAdsCount = u.adRewards?.dailyDate === todayStr ? (u.adRewards?.dailyCount || 0) : 0;
 
-      // Compute status badge
+      // Lowest queue position for user
+      const minQueuePos = queued.length > 0
+        ? Math.min(...queued.map((q) => (typeof q.queuePosition === 'number' ? q.queuePosition : 999)))
+        : 999;
+
+      // Status computation
       let status = 'idle';
-      if (active) status = 'live';
-      else if (queued.length > 0) status = 'queued';
-      else if ((u.coins || 0) >= 100) status = 'ready';
-      else if (dailyAdsCount > 0) status = 'active_viewer';
+      if (active && queued.length > 0) {
+        status = 'live_and_queued';
+      } else if (active) {
+        status = 'live';
+      } else if (queued.length > 0) {
+        status = 'queued';
+      } else if ((u.coins || 0) >= 100) {
+        status = 'ready';
+      } else if (dailyAdsCount > 0) {
+        status = 'active_viewer';
+      }
 
       return {
         ...u,
@@ -2023,6 +2080,7 @@ exports.getAdminBoostData = async (req, res, next) => {
           estimatedStartTime: q.estimatedStartTime,
           video: q.video,
         })),
+        minQueuePos,
         totalBoosts: stats.totalBoosts,
         totalCoinsSpent: stats.totalSpent,
         lastBoostAt: stats.lastBoostAt,
@@ -2030,11 +2088,23 @@ exports.getAdminBoostData = async (req, res, next) => {
       };
     });
 
-    // 4. Sort
+    // 5. Sorting
     usersWithBoostInfo.sort((a, b) => {
+      if (filter === 'queued') {
+        // Queued tab: Sort by queue position (lowest position #1 first)
+        return a.minQueuePos - b.minQueuePos;
+      }
+      if (filter === 'active') {
+        // Active tab: Sort by remaining live time
+        return (b.activeBoost?.remainingSeconds || 0) - (a.activeBoost?.remainingSeconds || 0);
+      }
+      if (filter === 'ads_today' || sortBy === 'ads_desc') {
+        return b.dailyAdsCount - a.dailyAdsCount || b.coins - a.coins;
+      }
+      if (filter === 'has_boosted' || sortBy === 'boosts_desc') {
+        return b.totalBoosts - a.totalBoosts || b.coins - a.coins;
+      }
       if (sortBy === 'coins_asc') return a.coins - b.coins;
-      if (sortBy === 'ads_desc') return b.dailyAdsCount - a.dailyAdsCount || b.coins - a.coins;
-      if (sortBy === 'boosts_desc') return b.totalBoosts - a.totalBoosts || b.coins - a.coins;
       if (sortBy === 'latest') {
         return (
           new Date(b.lastAdWatchedAt || b.lastBoostAt || b.createdAt) -
@@ -2052,6 +2122,7 @@ exports.getAdminBoostData = async (req, res, next) => {
     res.status(200).json({
       success: true,
       kpi,
+      tabCounts,
       total,
       pages,
       page,

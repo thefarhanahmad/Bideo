@@ -80,6 +80,15 @@ const Boost = () => {
     todayActiveViewers: 0,
   });
 
+  const [tabCounts, setTabCounts] = useState({
+    all: 0,
+    active: 0,
+    queued: 0,
+    ads_today: 0,
+    high_coins: 0,
+    has_boosted: 0,
+  });
+
   // URL-synced search, filter, and pagination
   const { search, setSearch, filter, setFilter, page, setPage, limit, setLimit } =
     useTableParams({ defaultFilter: "all", defaultLimit: 10 });
@@ -119,6 +128,7 @@ const Boost = () => {
         setTotalItems(data.total || 0);
         setTotalPages(data.pages || 1);
         if (data.kpi) setKpi(data.kpi);
+        if (data.tabCounts) setTabCounts(data.tabCounts);
       } catch (err) {
         setError(err.message);
       } finally {
@@ -168,12 +178,12 @@ const Boost = () => {
   };
 
   const filterOptions = [
-    { label: "All Users with Coins", value: "all", count: totalItems },
-    { label: "🟢 Live on Feed", value: "active", count: kpi.activeHighlights },
-    { label: "⏳ Up Next in Queue", value: "queued", count: kpi.queuedHighlights },
-    { label: "📺 Watched Ads Today", value: "ads_today", count: kpi.todayActiveViewers },
-    { label: "🪙 100+ Coins Ready", value: "high_coins", count: kpi.usersReadyToBoost },
-    { label: "🚀 All-Time Boosters", value: "has_boosted" },
+    { label: "All Users with Coins", value: "all", count: tabCounts.all },
+    { label: "🟢 Live on Feed", value: "active", count: tabCounts.active },
+    { label: "⏳ Up Next in Queue", value: "queued", count: tabCounts.queued },
+    { label: "📺 Watched Ads Today", value: "ads_today", count: tabCounts.ads_today },
+    { label: "🪙 100+ Coins Ready", value: "high_coins", count: tabCounts.high_coins },
+    { label: "🚀 All-Time Boosters", value: "has_boosted", count: tabCounts.has_boosted },
   ];
 
   return (
@@ -342,7 +352,13 @@ const Boost = () => {
                 <th className="p-4">Rank / Creator</th>
                 <th className="p-4 text-center">Coin Balance</th>
                 <th className="p-4 text-center">Ads Watched Today</th>
-                <th className="p-4">Current Highlight</th>
+                <th className="p-4">
+                  {filter === "queued"
+                    ? "Queued Highlight (Up Next)"
+                    : filter === "active"
+                    ? "Live Highlight (Home Feed)"
+                    : "Current Highlight"}
+                </th>
                 <th className="p-4 text-center">Total Boosts</th>
                 <th className="p-4 text-center">Status</th>
                 <th className="p-4 text-center">Action</th>
@@ -449,67 +465,198 @@ const Boost = () => {
                         </div>
                       </td>
 
-                      {/* Current Highlight Video */}
+                      {/* Highlight Video Column */}
                       <td className="p-4">
-                        {hasActive ? (
-                          <div className="flex items-center gap-3 min-w-[240px]">
-                            {u.activeBoost.video?.thumbnail ? (
-                              <img
-                                src={resolveMediaUrl(u.activeBoost.video.thumbnail)}
-                                alt="Highlight Thumbnail"
-                                className="h-11 w-16 shrink-0 rounded-lg object-cover border border-line"
-                              />
-                            ) : (
-                              <div className="flex h-11 w-16 shrink-0 items-center justify-center rounded-lg bg-surface text-muted text-xs border border-line">
-                                🎬 Video
-                              </div>
-                            )}
-                            <div className="min-w-0">
-                              <div className="text-xs font-bold text-ink truncate max-w-[180px]">
-                                {u.activeBoost.video?.title || "Boosted Video"}
-                              </div>
-                              <div className="mt-1 flex items-center gap-2">
-                                <span className="inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-0.5 text-[11px] font-extrabold text-emerald-800 animate-pulse">
-                                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-600"></span>
-                                  {formatRemainingTime(u.activeBoost.remainingSeconds)}
-                                </span>
-                                <span className="text-[11px] text-muted">
-                                  {u.activeBoost.video?.views ?? 0} views
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        ) : hasQueued ? (
-                          <div className="flex items-center gap-3 min-w-[240px]">
-                            {u.queuedBoosts[0]?.video?.thumbnail ? (
-                              <img
-                                src={resolveMediaUrl(u.queuedBoosts[0].video.thumbnail)}
-                                alt="Queued Thumbnail"
-                                className="h-11 w-16 shrink-0 rounded-lg object-cover border border-line opacity-80"
-                              />
-                            ) : (
-                              <div className="flex h-11 w-16 shrink-0 items-center justify-center rounded-lg bg-surface text-muted text-xs border border-line">
-                                🎬 Video
-                              </div>
-                            )}
-                            <div className="min-w-0">
-                              <div className="text-xs font-semibold text-ink truncate max-w-[180px]">
-                                {u.queuedBoosts[0]?.video?.title || "Upcoming Highlight"}
-                              </div>
-                              <div className="mt-1 flex items-center gap-1.5">
-                                <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">
-                                  <span>⏳</span> Position #{u.queuedBoosts[0]?.queuePosition || 1}
-                                </span>
-                                {u.queuedBoosts.length > 1 && (
-                                  <span className="text-[10px] font-bold text-purple-700">
-                                    +{u.queuedBoosts.length - 1} more
-                                  </span>
+                        {filter === "queued" ? (
+                          hasQueued ? (
+                            <div className="flex flex-col gap-1.5 min-w-[250px]">
+                              <div className="flex items-center gap-3">
+                                {u.queuedBoosts[0]?.video?.thumbnail ? (
+                                  <img
+                                    src={resolveMediaUrl(u.queuedBoosts[0].video.thumbnail)}
+                                    alt="Queued Thumbnail"
+                                    className="h-11 w-16 shrink-0 rounded-lg object-cover border border-amber-300 shadow-2xs"
+                                  />
+                                ) : (
+                                  <div className="flex h-11 w-16 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-800 text-xs border border-amber-200">
+                                    🎬 Video
+                                  </div>
                                 )}
+                                <div className="min-w-0">
+                                  <div className="text-xs font-bold text-ink truncate max-w-[190px]" title={u.queuedBoosts[0]?.video?.title}>
+                                    {u.queuedBoosts[0]?.video?.title || "Upcoming Highlight"}
+                                  </div>
+                                  <div className="mt-1 flex items-center gap-1.5">
+                                    <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-0.5 text-[11px] font-extrabold text-amber-800">
+                                      <span>⏳</span> Position #{u.queuedBoosts[0]?.queuePosition || 1}
+                                    </span>
+                                    <span className="text-[11px] text-muted">
+                                      {u.queuedBoosts[0]?.durationHours || 1}h boost
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                              {hasActive && (
+                                <div className="flex items-center gap-1 text-[11px] text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 w-fit">
+                                  <span>🟢</span> Also Live: <span className="font-bold truncate max-w-[140px]">{u.activeBoost?.video?.title}</span>
+                                </div>
+                              )}
+                              {u.queuedBoosts.length > 1 && (
+                                <span className="text-[10px] font-bold text-purple-700">
+                                  +{u.queuedBoosts.length - 1} more video(s) in queue
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted italic">No queued highlights</span>
+                          )
+                        ) : filter === "active" ? (
+                          hasActive ? (
+                            <div className="flex flex-col gap-1.5 min-w-[250px]">
+                              <div className="flex items-center gap-3">
+                                {u.activeBoost.video?.thumbnail ? (
+                                  <img
+                                    src={resolveMediaUrl(u.activeBoost.video.thumbnail)}
+                                    alt="Highlight Thumbnail"
+                                    className="h-11 w-16 shrink-0 rounded-lg object-cover border border-emerald-300 shadow-2xs"
+                                  />
+                                ) : (
+                                  <div className="flex h-11 w-16 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800 text-xs border border-emerald-200">
+                                    🎬 Video
+                                  </div>
+                                )}
+                                <div className="min-w-0">
+                                  <div className="text-xs font-bold text-ink truncate max-w-[190px]" title={u.activeBoost.video?.title}>
+                                    {u.activeBoost.video?.title || "Boosted Video"}
+                                  </div>
+                                  <div className="mt-1 flex items-center gap-2">
+                                    <span className="inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-0.5 text-[11px] font-extrabold text-emerald-800 animate-pulse">
+                                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-600"></span>
+                                      {formatRemainingTime(u.activeBoost.remainingSeconds)}
+                                    </span>
+                                    <span className="text-[11px] text-muted">
+                                      {u.activeBoost.video?.views ?? 0} views
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                              {hasQueued && (
+                                <div className="flex items-center gap-1 text-[11px] text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 w-fit">
+                                  <span>⏳</span> +{u.queuedBoosts.length} in queue (Queue #{u.queuedBoosts[0]?.queuePosition || 1})
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted italic">No active highlight</span>
+                          )
+                        ) : (
+                          hasActive && hasQueued ? (
+                            <div className="flex flex-col gap-1.5 min-w-[250px]">
+                              {/* Active live item */}
+                              <div className="flex items-center gap-2.5">
+                                {u.activeBoost.video?.thumbnail ? (
+                                  <img
+                                    src={resolveMediaUrl(u.activeBoost.video.thumbnail)}
+                                    alt="Live Thumbnail"
+                                    className="h-8 w-14 shrink-0 rounded object-cover border border-emerald-300"
+                                  />
+                                ) : (
+                                  <div className="flex h-8 w-14 shrink-0 items-center justify-center rounded bg-emerald-50 text-[10px] text-emerald-800 border border-emerald-200">
+                                    Live
+                                  </div>
+                                )}
+                                <div className="min-w-0">
+                                  <div className="text-xs font-bold text-ink truncate max-w-[160px]" title={u.activeBoost.video?.title}>
+                                    {u.activeBoost.video?.title}
+                                  </div>
+                                  <span className="inline-flex items-center gap-1 rounded bg-emerald-100 px-1.5 py-0.2 text-[10px] font-bold text-emerald-800">
+                                    🟢 {formatRemainingTime(u.activeBoost.remainingSeconds)}
+                                  </span>
+                                </div>
+                              </div>
+                              {/* Queued item */}
+                              <div className="flex items-center gap-2.5 pt-1 border-t border-line/60">
+                                {u.queuedBoosts[0]?.video?.thumbnail ? (
+                                  <img
+                                    src={resolveMediaUrl(u.queuedBoosts[0].video.thumbnail)}
+                                    alt="Queued Thumbnail"
+                                    className="h-8 w-14 shrink-0 rounded object-cover border border-amber-200 opacity-90"
+                                  />
+                                ) : (
+                                  <div className="flex h-8 w-14 shrink-0 items-center justify-center rounded bg-amber-50 text-[10px] text-amber-800 border border-amber-200">
+                                    Queue
+                                  </div>
+                                )}
+                                <div className="min-w-0">
+                                  <div className="text-[11px] font-semibold text-ink truncate max-w-[160px]" title={u.queuedBoosts[0]?.video?.title}>
+                                    {u.queuedBoosts[0]?.video?.title}
+                                  </div>
+                                  <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.2 text-[10px] font-bold text-amber-800">
+                                    ⏳ Queue #{u.queuedBoosts[0]?.queuePosition || 1}
+                                  </span>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted italic">No active highlight</span>
+                          ) : hasActive ? (
+                            <div className="flex items-center gap-3 min-w-[240px]">
+                              {u.activeBoost.video?.thumbnail ? (
+                                <img
+                                  src={resolveMediaUrl(u.activeBoost.video.thumbnail)}
+                                  alt="Highlight Thumbnail"
+                                  className="h-11 w-16 shrink-0 rounded-lg object-cover border border-line"
+                                />
+                              ) : (
+                                <div className="flex h-11 w-16 shrink-0 items-center justify-center rounded-lg bg-surface text-muted text-xs border border-line">
+                                  🎬 Video
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <div className="text-xs font-bold text-ink truncate max-w-[180px]">
+                                  {u.activeBoost.video?.title || "Boosted Video"}
+                                </div>
+                                <div className="mt-1 flex items-center gap-2">
+                                  <span className="inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-0.5 text-[11px] font-extrabold text-emerald-800 animate-pulse">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-600"></span>
+                                    {formatRemainingTime(u.activeBoost.remainingSeconds)}
+                                  </span>
+                                  <span className="text-[11px] text-muted">
+                                    {u.activeBoost.video?.views ?? 0} views
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          ) : hasQueued ? (
+                            <div className="flex items-center gap-3 min-w-[240px]">
+                              {u.queuedBoosts[0]?.video?.thumbnail ? (
+                                <img
+                                  src={resolveMediaUrl(u.queuedBoosts[0].video.thumbnail)}
+                                  alt="Queued Thumbnail"
+                                  className="h-11 w-16 shrink-0 rounded-lg object-cover border border-line opacity-80"
+                                />
+                              ) : (
+                                <div className="flex h-11 w-16 shrink-0 items-center justify-center rounded-lg bg-surface text-muted text-xs border border-line">
+                                  🎬 Video
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <div className="text-xs font-semibold text-ink truncate max-w-[180px]">
+                                  {u.queuedBoosts[0]?.video?.title || "Upcoming Highlight"}
+                                </div>
+                                <div className="mt-1 flex items-center gap-1.5">
+                                  <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">
+                                    <span>⏳</span> Position #{u.queuedBoosts[0]?.queuePosition || 1}
+                                  </span>
+                                  {u.queuedBoosts.length > 1 && (
+                                    <span className="text-[10px] font-bold text-purple-700">
+                                      +{u.queuedBoosts.length - 1} more
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted italic">No active highlight</span>
+                          )
                         )}
                       </td>
 
@@ -525,14 +672,33 @@ const Boost = () => {
 
                       {/* Status */}
                       <td className="p-4 text-center">
-                        {u.status === "live" ? (
+                        {filter === "queued" ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-800 border border-amber-300 shadow-2xs">
+                            <span>⏳</span> In Queue (Pos #{u.minQueuePos || 1})
+                          </span>
+                        ) : filter === "active" ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 border border-emerald-200">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                            Live on Feed
+                          </span>
+                        ) : u.status === "live_and_queued" ? (
+                          <div className="inline-flex flex-col items-center gap-1">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                              Live on Feed
+                            </span>
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800 border border-amber-200">
+                              <span>⏳</span> +In Queue (Pos #{u.minQueuePos || 1})
+                            </span>
+                          </div>
+                        ) : u.status === "live" ? (
                           <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 border border-emerald-200">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping"></span>
                             Live on Feed
                           </span>
                         ) : u.status === "queued" ? (
                           <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700 border border-amber-200">
-                            <span>⏳</span> Up Next
+                            <span>⏳</span> Up Next (Pos #{u.minQueuePos || 1})
                           </span>
                         ) : u.status === "ready" ? (
                           <span className="inline-flex items-center gap-1 rounded-full bg-purple-50 px-2.5 py-1 text-xs font-bold text-purple-700 border border-purple-200">
