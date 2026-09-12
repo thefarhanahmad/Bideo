@@ -96,7 +96,7 @@ export default function EarningsScreen() {
       const res = await api.post(`/users/monetization/watch-review-ad/${reviewId}`);
       if (res.data?.success) {
         const data = res.data.data;
-        if (data.justPassed) {
+        if (data?.justPassed || data?.status === 'passed') {
           showAlert(
             '🎉 Video Passed!',
             'Congratulations! You have watched 2 ads. This video has been verified and passed for monetization!'
@@ -104,7 +104,7 @@ export default function EarningsScreen() {
         } else {
           showAlert(
             'Ad Completed!',
-            `Ad ${data.adsWatched} of ${data.adsRequired} completed! Watch 1 more ad to pass this video immediately.`
+            `Ad ${data?.adsWatched || 1} of ${data?.adsRequired || 2} completed! Watch 1 more ad to pass this video immediately.`
           );
         }
         await fetchStatus();
@@ -125,7 +125,7 @@ export default function EarningsScreen() {
     if (loadingReviewId) return;
 
     // In Expo Go, native Google Mobile Ads binary is not bundled, so show high-fidelity preview simulator
-    const isExpoGo = Constants.appOwnership === 'expo';
+    const isExpoGo = Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
     if (isExpoGo) {
       setDemoAdModal({
         visible: true,

@@ -1540,6 +1540,15 @@ exports.watchReviewAd = async (req, res, next) => {
       });
     }
 
+    // Clean up orphan if associated video was deleted
+    if (!review.video) {
+      await VideoMonetizationReview.findByIdAndDelete(review._id);
+      return res.status(404).json({
+        success: false,
+        message: 'The video associated with this review no longer exists.',
+      });
+    }
+
     // If already passed, return success with status
     if (review.status === 'passed') {
       const passedCount = await VideoMonetizationReview.countDocuments({
@@ -1559,7 +1568,23 @@ exports.watchReviewAd = async (req, res, next) => {
           passedVia: review.passedVia || 'rewarded_ads',
           step1Completed: passedCount >= 3,
           passedVideosCount: passedCount,
+          justPassed: false,
         },
+      });
+    }
+
+    // Disallow fast-tracking videos that were reviewed and rejected by audit team
+    if (review.status === 'failed') {
+      return res.status(400).json({
+        success: false,
+        message: 'This video was rejected by the audit team and cannot be auto-approved.',
+      });
+    }
+
+    if (review.status !== 'pending') {
+      return res.status(400).json({
+        success: false,
+        message: 'This video is not eligible for fast-track ad review.',
       });
     }
 
@@ -1643,6 +1668,7 @@ exports.watchReviewAd = async (req, res, next) => {
         passedVia: review.passedVia,
         step1Completed,
         passedVideosCount,
+        justPassed: autoPassed,
       },
     });
   } catch (err) {
