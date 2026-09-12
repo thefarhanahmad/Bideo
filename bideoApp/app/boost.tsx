@@ -562,11 +562,13 @@ export default function BoostScreen() {
             <View style={styles.queuedSection}>
               <Text style={styles.sectionTitle}>Up Next on Feed ({queuedBoosts.length})</Text>
               {queuedBoosts.map((qb: any) => {
+                const estTime = qb.estimatedStartTime ? new Date(qb.estimatedStartTime).getTime() : Date.now();
+                const diffFromNow = Math.max(0, Math.ceil((estTime - Date.now()) / 1000));
                 const startsInSecs = qb.queuePosition === 1
-                  ? (activeRemainingSecs || Math.max(0, Math.ceil((new Date(qb.estimatedStartTime).getTime() - Date.now()) / 1000)))
-                  : Math.max(0, Math.ceil((new Date(qb.estimatedStartTime).getTime() - Date.now()) / 1000));
+                  ? (activeRemainingSecs > 0 ? activeRemainingSecs : diffFromNow)
+                  : diffFromNow;
 
-                const activeTotalSecs = activeBoost ? activeBoost.durationHours * 3600 : 3600;
+                const activeTotalSecs = activeBoost && activeBoost.durationHours ? activeBoost.durationHours * 3600 : 3600;
                 const waitProgress = Math.max(
                   5,
                   Math.min(100, Math.round(((activeTotalSecs - startsInSecs) / activeTotalSecs) * 100))
@@ -590,7 +592,7 @@ export default function BoostScreen() {
                       )}
                       <View style={{ flex: 1, marginLeft: 12 }}>
                         <Text style={styles.boostVidTitle} numberOfLines={1}>
-                          {qb.video?.title}
+                          {qb.video?.title || 'Video in line'}
                         </Text>
                         <Text style={styles.boostVidMeta}>{qb.durationHours}h Tier • Ready to go live next</Text>
                       </View>
@@ -616,7 +618,7 @@ export default function BoostScreen() {
             <Text style={styles.globalQueueText}>
               Videos waiting in line: <Text style={{ fontWeight: '800' }}>{data?.globalQueue?.totalQueued || 0}</Text>
               {data?.globalQueue?.currentActive
-                ? ` • Live now: "${data.globalQueue.currentActive.videoTitle}"`
+                ? ` • Live now: "${data.globalQueue.currentActive.videoTitle || 'Active Video'}"`
                 : ' • Slot open! Next highlighted video goes live immediately!'}
             </Text>
           </View>
