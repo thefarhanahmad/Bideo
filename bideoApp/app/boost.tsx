@@ -9,7 +9,6 @@ import {
   Modal,
   TextInput,
   RefreshControl,
-  Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -125,7 +124,7 @@ export default function BoostScreen() {
 
     let adRewardEarned = false;
 
-    const cancelAd = loadAndShowRewardedAd({
+    loadAndShowRewardedAd({
       onLoaded: () => {
         setIsAdLoading(false);
       },
@@ -159,7 +158,7 @@ export default function BoostScreen() {
 
   const openBoostModal = async () => {
     if ((data?.coins || 0) < 100) {
-      showAlert('Coins Needed', 'You need at least 100 coins to boost a video. Watch ads to collect more coins!');
+      showAlert('Coins Needed', 'You need at least 100 coins to highlight a video. Watch ads to collect more coins!');
       return;
     }
 
@@ -179,7 +178,7 @@ export default function BoostScreen() {
 
   const handleSelectVideoForBoost = (video: any) => {
     if (video.isBoosted) {
-      showAlert('Already Boosted', 'This video is already currently pinned or in the boost queue.');
+      showAlert('Already Highlighted', 'This video is already currently highlighted or in the boost queue.');
       return;
     }
     setSelectedVideo(video);
@@ -207,18 +206,18 @@ export default function BoostScreen() {
         setConfirmModalVisible(false);
         setBoostModalVisible(false);
         setSelectedVideo(null);
-        showAlert('Video Boosted! 🚀', res.data.message || 'Your video has been added to the boost queue.');
+        showAlert('Video Highlighted! 🚀', res.data.message || 'Your video has been added to the highlight queue.');
         fetchStatus();
       }
     } catch (err: any) {
-      showAlert('Boost Error', err?.response?.data?.message || 'Failed to create video boost.');
+      showAlert('Boost Error', err?.response?.data?.message || 'Failed to create video highlight.');
     } finally {
       setSubmittingBoost(false);
     }
   };
 
   const userCoins = Number(data?.coins || 0);
-  const dailyAds = data?.dailyAds || { watched: 0, total: 16, remaining: 16, canWatch: false };
+  const dailyAds = data?.dailyAds || { watched: 0, total: 16, remaining: 16, canWatch: false, sessionCount: 0 };
   const canBoostNow = userCoins >= 100;
   const activeBoost = data?.activeBoost;
   const queuedBoosts = data?.queuedBoosts || [];
@@ -227,6 +226,17 @@ export default function BoostScreen() {
     (v.title || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Ad slot states
+  const isDailyDone = dailyAds.remaining <= 0;
+  const isCooldown = cooldownLeft > 0;
+  const sessionCount = Number(dailyAds.sessionCount || 0);
+
+  const ad1Watched = isDailyDone || isCooldown || sessionCount >= 1;
+  const ad1Active = !isDailyDone && !isCooldown && sessionCount === 0;
+
+  const ad2Watched = isDailyDone || isCooldown || sessionCount >= 2;
+  const ad2Active = !isDailyDone && !isCooldown && sessionCount === 1;
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* App Header */}
@@ -234,17 +244,25 @@ export default function BoostScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
-        <View style={styles.headerTitleWrap}>
-          <Text style={styles.headerTitle}>Channel Boost & Coins</Text>
-          <Text style={styles.headerSub}>Get Pinned on the Home Feed</Text>
-        </View>
+        
+        <Text style={styles.headerTitle}>Boost</Text>
+
         <TouchableOpacity
-          style={styles.rateChartBtn}
-          onPress={() => setRateChartModal(true)}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          style={[styles.headerBoostBtn, !canBoostNow && styles.headerBoostBtnDisabled]}
+          onPress={openBoostModal}
+          activeOpacity={0.85}
         >
-          <Ionicons name="stats-chart" size={18} color="#8E24AA" />
-          <Text style={styles.rateChartBtnText}>Rates</Text>
+          <LinearGradient
+            colors={canBoostNow ? ['#8E24AA', '#D81B60'] : ['#E0E0E0', '#BDBDBD']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.headerBoostGradient}
+          >
+            <Ionicons name="rocket" size={14} color={canBoostNow ? Colors.white : '#757575'} />
+            <Text style={[styles.headerBoostBtnText, !canBoostNow && { color: '#757575' }]}>
+              Boost
+            </Text>
+          </LinearGradient>
         </TouchableOpacity>
       </View>
 
@@ -259,59 +277,39 @@ export default function BoostScreen() {
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
         >
-          {/* Top Explanatory Info Card */}
+          {/* Top Explanatory Info Card (2 lines only with Rates button on bottom-right) */}
           <View style={styles.infoBanner}>
             <View style={styles.infoIconWrap}>
               <Ionicons name="information-circle" size={18} color="#8E24AA" />
             </View>
-            <Text style={styles.infoText}>
-              Watch rewarded ads to earn coins. Use 100+ coins to pin your video directly to the top of the Home Feed and gain massive real viewers!
-            </Text>
-          </View>
-
-          {/* Top Action Bar: Boost Video Button & Rate Chart Summary */}
-          <View style={styles.topActionBar}>
-            <TouchableOpacity
-              style={[styles.boostHeaderBtn, !canBoostNow && styles.boostHeaderBtnDisabled]}
-              onPress={openBoostModal}
-              disabled={!canBoostNow}
-              activeOpacity={0.85}
-            >
-              <LinearGradient
-                colors={canBoostNow ? ['#8E24AA', '#D81B60'] : ['#BDBDBD', '#9E9E9E']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.boostGradient}
+            <View style={styles.infoTextContainer}>
+              <Text style={styles.infoText} numberOfLines={2}>
+                Watch ads to earn coins. Spend 100+ coins to highlight your video directly at the top of the Home Feed!
+              </Text>
+              <TouchableOpacity
+                style={styles.infoRatesBtn}
+                onPress={() => setRateChartModal(true)}
+                activeOpacity={0.7}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
               >
-                <Ionicons name="rocket" size={18} color={Colors.white} />
-                <Text style={styles.boostBtnLabel}>
-                  {canBoostNow ? 'Boost Video Now' : `Need ${100 - userCoins} More Coins`}
-                </Text>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.miniRatesBtn} onPress={() => setRateChartModal(true)}>
-              <Text style={styles.miniRatesText}>100🪙 = 1 hr</Text>
-              <Ionicons name="chevron-forward" size={14} color="#8E24AA" />
-            </TouchableOpacity>
+                <Ionicons name="stats-chart" size={12} color="#8E24AA" />
+                <Text style={styles.infoRatesBtnText}>Rates</Text>
+                <Ionicons name="chevron-forward" size={11} color="#8E24AA" />
+              </TouchableOpacity>
+            </View>
           </View>
 
-          {/* Two Main KPI Cards */}
+          {/* Two Main KPI Cards without 0/100 or Ad Ready pills */}
           <View style={styles.kpiRow}>
             {/* KPI Card 1: Coins Balance */}
             <View style={[styles.kpiCard, styles.coinsCard]}>
               <View style={styles.kpiTopRow}>
-                <Text style={styles.kpiLabel}>Your Coins</Text>
+                <Text style={styles.kpiLabel}>Coins Balance</Text>
                 <View style={styles.coinBadgeIcon}>
-                  <Text style={{ fontSize: 14 }}>🪙</Text>
+                  <Text style={{ fontSize: 13 }}>🪙</Text>
                 </View>
               </View>
               <Text style={styles.kpiValue}>{userCoins.toLocaleString()}</Text>
-              <View style={[styles.statusPill, canBoostNow ? styles.statusPillSuccess : styles.statusPillMuted]}>
-                <Text style={[styles.statusPillText, canBoostNow ? styles.statusPillTextSuccess : styles.statusPillTextMuted]}>
-                  {canBoostNow ? '✓ Boost Unlocked' : `${userCoins}/100 collected`}
-                </Text>
-              </View>
             </View>
 
             {/* KPI Card 2: Daily Ads Watched */}
@@ -323,110 +321,170 @@ export default function BoostScreen() {
               <Text style={styles.kpiValue}>
                 {dailyAds.watched} <Text style={styles.kpiTotalText}>/ {dailyAds.total}</Text>
               </Text>
-              <View
-                style={[
-                  styles.statusPill,
-                  cooldownLeft > 0
-                    ? styles.statusPillWarning
-                    : dailyAds.remaining > 0
-                    ? styles.statusPillSuccess
-                    : styles.statusPillMuted,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.statusPillText,
-                    cooldownLeft > 0
-                      ? styles.statusPillTextWarning
-                      : dailyAds.remaining > 0
-                      ? styles.statusPillTextSuccess
-                      : styles.statusPillTextMuted,
-                  ]}
-                >
-                  {cooldownLeft > 0
-                    ? `Wait ${formatTimer(cooldownLeft)}`
-                    : dailyAds.remaining > 0
-                    ? 'Ad Ready'
-                    : 'Done for Today'}
-                </Text>
-              </View>
             </View>
           </View>
 
-          {/* Watch Ad Action Section */}
+          {/* Watch Ad Action Section - Single Column 2 Ads */}
           <View style={styles.adSectionCard}>
             <View style={styles.adSectionHeader}>
               <View style={styles.adRewardIconBox}>
-                <Ionicons name="gift" size={24} color="#FFF" />
+                <Ionicons name="gift" size={22} color="#FFF" />
               </View>
               <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={styles.adSectionTitle}>Earn Free Coins</Text>
+                <Text style={styles.adSectionTitle}>Earn Coins</Text>
                 <Text style={styles.adSectionDesc}>
-                  Watch rewarded video ad to get <Text style={{ fontWeight: '800', color: '#D81B60' }}>2 to 10 coins</Text> per ad.
+                  Watch sponsored video ads to earn free coins
                 </Text>
               </View>
             </View>
 
-            {/* Cooldown / Limit Banner */}
-            {cooldownLeft > 0 && (
+            {/* Both Ads in a Single Vertical Column */}
+            <View style={styles.adsListColumn}>
+              {/* Ad Card 1 */}
+              <View style={[
+                styles.adItemCard,
+                ad1Watched && styles.adItemCardWatched,
+                ad1Active && styles.adItemCardActive,
+                (isCooldown || isDailyDone) && styles.adItemCardDisabled,
+              ]}>
+                <View style={styles.adItemLeft}>
+                  <View style={[
+                    styles.adItemIconWrap,
+                    ad1Watched ? styles.adItemIconWrapWatched : ad1Active ? styles.adItemIconWrapActive : styles.adItemIconWrapMuted,
+                  ]}>
+                    <Ionicons
+                      name={ad1Watched ? 'checkmark-circle' : ad1Active ? 'play' : 'lock-closed'}
+                      size={18}
+                      color={ad1Watched ? '#2E7D32' : ad1Active ? '#8E24AA' : '#9E9E9E'}
+                    />
+                  </View>
+                  <View style={{ marginLeft: 10 }}>
+                    <Text style={styles.adItemTitle}>Sponsored Ad 1</Text>
+                    <Text style={styles.adItemStatus}>
+                      {ad1Watched ? 'Completed' : ad1Active ? 'Ready to watch' : isCooldown ? 'Locked (Cooldown)' : 'Available'}
+                    </Text>
+                  </View>
+                </View>
+
+                {ad1Watched ? (
+                  <View style={styles.watchedBadge}>
+                    <Ionicons name="checkmark" size={13} color="#2E7D32" />
+                    <Text style={styles.watchedBadgeText}>Watched</Text>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={[
+                      styles.watchActionBtn,
+                      (!ad1Active || isAdLoading) && styles.watchActionBtnDisabled,
+                    ]}
+                    onPress={handleWatchAd}
+                    disabled={!ad1Active || isAdLoading}
+                    activeOpacity={0.8}
+                  >
+                    {isAdLoading && ad1Active ? (
+                      <ActivityIndicator size="small" color="#FFF" />
+                    ) : (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                        <Ionicons name={ad1Active ? 'play' : 'lock-closed'} size={13} color="#FFF" />
+                        <Text style={styles.watchActionBtnText}>
+                          {ad1Active ? 'Watch Ad' : 'Locked'}
+                        </Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Ad Card 2 */}
+              <View style={[
+                styles.adItemCard,
+                ad2Watched && styles.adItemCardWatched,
+                ad2Active && styles.adItemCardActive,
+                (isCooldown || isDailyDone) && styles.adItemCardDisabled,
+              ]}>
+                <View style={styles.adItemLeft}>
+                  <View style={[
+                    styles.adItemIconWrap,
+                    ad2Watched ? styles.adItemIconWrapWatched : ad2Active ? styles.adItemIconWrapActive : styles.adItemIconWrapMuted,
+                  ]}>
+                    <Ionicons
+                      name={ad2Watched ? 'checkmark-circle' : ad2Active ? 'play' : 'lock-closed'}
+                      size={18}
+                      color={ad2Watched ? '#2E7D32' : ad2Active ? '#8E24AA' : '#9E9E9E'}
+                    />
+                  </View>
+                  <View style={{ marginLeft: 10 }}>
+                    <Text style={styles.adItemTitle}>Sponsored Ad 2</Text>
+                    <Text style={styles.adItemStatus}>
+                      {ad2Watched
+                        ? 'Completed'
+                        : ad2Active
+                        ? 'Ready to watch'
+                        : isCooldown
+                        ? 'Locked (Cooldown)'
+                        : 'Watch Ad 1 first'}
+                    </Text>
+                  </View>
+                </View>
+
+                {ad2Watched ? (
+                  <View style={styles.watchedBadge}>
+                    <Ionicons name="checkmark" size={13} color="#2E7D32" />
+                    <Text style={styles.watchedBadgeText}>Watched</Text>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={[
+                      styles.watchActionBtn,
+                      (!ad2Active || isAdLoading) && styles.watchActionBtnDisabled,
+                    ]}
+                    onPress={handleWatchAd}
+                    disabled={!ad2Active || isAdLoading}
+                    activeOpacity={0.8}
+                  >
+                    {isAdLoading && ad2Active ? (
+                      <ActivityIndicator size="small" color="#FFF" />
+                    ) : (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                        <Ionicons name={ad2Active ? 'play' : 'lock-closed'} size={13} color="#FFF" />
+                        <Text style={styles.watchActionBtnText}>
+                          {ad2Active ? 'Watch Ad' : 'Locked'}
+                        </Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            {/* Cooldown or Completion Banner */}
+            {cooldownLeft > 0 ? (
               <View style={styles.cooldownBanner}>
-                <Ionicons name="timer-outline" size={18} color="#E65100" />
+                <Ionicons name="timer-outline" size={16} color="#E65100" />
                 <Text style={styles.cooldownBannerText}>
-                  Cooldown active! Next ad available in <Text style={{ fontWeight: '800' }}>{formatTimer(cooldownLeft)}</Text>
+                  Cooldown active! Next batch unlocks in <Text style={{ fontWeight: '800' }}>{formatTimer(cooldownLeft)}</Text>
                 </Text>
               </View>
-            )}
-
-            {dailyAds.remaining <= 0 && (
+            ) : dailyAds.remaining <= 0 ? (
               <View style={styles.completedBanner}>
-                <Ionicons name="checkmark-circle" size={18} color="#2E7D32" />
+                <Ionicons name="checkmark-circle" size={16} color="#2E7D32" />
                 <Text style={styles.completedBannerText}>All 16 ads watched today! Resets tomorrow.</Text>
               </View>
+            ) : (
+              <View style={styles.sessionHintRow}>
+                <Ionicons name="time-outline" size={13} color="#757575" />
+                <Text style={styles.sessionHintText}>2 ads per session • 10-minute pause between sessions</Text>
+              </View>
             )}
-
-            {/* Main Action Button */}
-            <TouchableOpacity
-              style={[styles.watchAdBtn, (!dailyAds.canWatch || isAdLoading) && styles.watchAdBtnDisabled]}
-              onPress={handleWatchAd}
-              disabled={!dailyAds.canWatch || isAdLoading}
-              activeOpacity={0.85}
-            >
-              {isAdLoading ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <ActivityIndicator size="small" color="#FFF" />
-                  <Text style={styles.watchAdBtnText}>Loading Sponsor Ad...</Text>
-                </View>
-              ) : (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Ionicons name={dailyAds.canWatch ? 'play' : 'lock-closed'} size={18} color="#FFF" />
-                  <Text style={styles.watchAdBtnText}>
-                    {cooldownLeft > 0
-                      ? `Watch Ad in ${formatTimer(cooldownLeft)}`
-                      : dailyAds.remaining <= 0
-                      ? 'Daily Limit Reached (16/16)'
-                      : 'Watch Ad (+2-10 Coins)'}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
-
-            <View style={styles.sessionDotsRow}>
-              <Text style={styles.sessionDotsLabel}>Batch session:</Text>
-              <View style={[styles.sessionDot, dailyAds.sessionCount >= 1 && styles.sessionDotFilled]} />
-              <Text style={{ fontSize: 10, color: '#888' }}>Ad 1</Text>
-              <View style={[styles.sessionDot, dailyAds.sessionCount >= 2 && styles.sessionDotFilled]} />
-              <Text style={{ fontSize: 10, color: '#888' }}>Ad 2</Text>
-              <Text style={styles.sessionNote}>• 10m pause after 2 ads</Text>
-            </View>
           </View>
 
-          {/* Active Live Pinned Video (if any) */}
+          {/* Active Live Highlighted Video (if any) */}
           {activeBoost && (
             <View style={styles.activeBoostCard}>
               <View style={styles.activeBadgeRow}>
                 <View style={styles.liveBadge}>
                   <View style={styles.liveDot} />
-                  <Text style={styles.liveBadgeText}>LIVE ON HOME FEED TOP</Text>
+                  <Text style={styles.liveBadgeText}>HIGHLIGHTED ON HOME FEED</Text>
                 </View>
                 <Text style={styles.remainingTimeText}>
                   {formatTimer(activeBoost.remainingSeconds)} left
@@ -439,7 +497,7 @@ export default function BoostScreen() {
                 )}
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <Text style={styles.boostVidTitle} numberOfLines={2}>
-                    {activeBoost.video?.title || 'Boosted Video'}
+                    {activeBoost.video?.title || 'Highlighted Video'}
                   </Text>
                   <Text style={styles.boostVidMeta}>
                     {formatViews(activeBoost.video?.views || 0)} views • {activeBoost.durationHours}h Tier
@@ -500,10 +558,10 @@ export default function BoostScreen() {
           <View style={styles.globalQueueBox}>
             <Ionicons name="people-outline" size={16} color="#8E24AA" />
             <Text style={styles.globalQueueText}>
-              Total videos in boost queue: <Text style={{ fontWeight: '800' }}>{data?.globalQueue?.totalQueued || 0}</Text>
+              Total in highlight queue: <Text style={{ fontWeight: '800' }}>{data?.globalQueue?.totalQueued || 0}</Text>
               {data?.globalQueue?.currentActive
-                ? ` • Current active: "${data.globalQueue.currentActive.videoTitle}"`
-                : ' • Slot open! Next boosted video goes live immediately!'}
+                ? ` • Active now: "${data.globalQueue.currentActive.videoTitle}"`
+                : ' • Slot open! Next highlighted video goes live immediately!'}
             </Text>
           </View>
         </ScrollView>
@@ -514,7 +572,7 @@ export default function BoostScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.rateChartBox}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Coins vs Duration Rates</Text>
+              <Text style={styles.modalTitle}>Coins vs Highlight Rates</Text>
               <TouchableOpacity onPress={() => setRateChartModal(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="close" size={22} color={Colors.text} />
               </TouchableOpacity>
@@ -533,7 +591,7 @@ export default function BoostScreen() {
                   <Ionicons name="arrow-forward" size={16} color="#888" />
                 </View>
                 <View style={styles.tierRight}>
-                  <Text style={styles.tierHours}>1 Hour Pin</Text>
+                  <Text style={styles.tierHours}>1 Hour Highlight</Text>
                 </View>
               </View>
 
@@ -545,7 +603,7 @@ export default function BoostScreen() {
                   <Ionicons name="arrow-forward" size={16} color="#888" />
                 </View>
                 <View style={styles.tierRight}>
-                  <Text style={styles.tierHours}>3 Hours Pin</Text>
+                  <Text style={styles.tierHours}>3 Hours Highlight</Text>
                   <Text style={styles.discountBadge}>Save 50 coins</Text>
                 </View>
               </View>
@@ -558,7 +616,7 @@ export default function BoostScreen() {
                   <Ionicons name="arrow-forward" size={16} color="#888" />
                 </View>
                 <View style={styles.tierRight}>
-                  <Text style={styles.tierHours}>6 Hours Pin</Text>
+                  <Text style={styles.tierHours}>6 Hours Highlight</Text>
                   <Text style={styles.discountBadge}>Save 100 coins</Text>
                 </View>
               </View>
@@ -571,7 +629,7 @@ export default function BoostScreen() {
                   <Ionicons name="arrow-forward" size={16} color="#8E24AA" />
                 </View>
                 <View style={styles.tierRight}>
-                  <Text style={[styles.tierHours, { color: '#8E24AA' }]}>24 Hours Pin</Text>
+                  <Text style={[styles.tierHours, { color: '#8E24AA' }]}>24 Hours Highlight</Text>
                   <Text style={[styles.discountBadge, { backgroundColor: '#8E24AA', color: '#FFF' }]}>
                     Best Value!
                   </Text>
@@ -594,7 +652,7 @@ export default function BoostScreen() {
             <Text style={styles.celebrationTitle}>Coins Earned!</Text>
             <Text style={styles.celebrationCoins}>+{rewardModal.coins} Coins</Text>
             <Text style={styles.celebrationSub}>
-              Great job! Your coins have been added to your balance. Use them to boost your video to the top of the Home Feed!
+              Great job! Your coins have been added to your balance. Use them to highlight your video at the top of the Home Feed!
             </Text>
             <TouchableOpacity
               style={styles.claimDoneBtn}
@@ -613,7 +671,7 @@ export default function BoostScreen() {
             <TouchableOpacity onPress={() => setBoostModalVisible(false)} style={styles.backBtn}>
               <Ionicons name="close" size={24} color={Colors.text} />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Select Video to Boost</Text>
+            <Text style={styles.headerTitle}>Select Video to Highlight</Text>
             <View style={{ width: 24 }} />
           </View>
 
@@ -700,7 +758,7 @@ export default function BoostScreen() {
               </View>
             )}
 
-            <Text style={styles.selectTierLabel}>Select Pinning Duration Tier:</Text>
+            <Text style={styles.selectTierLabel}>Select Highlight Duration:</Text>
             <View style={styles.tierSelector}>
               {[
                 { hours: 1, coins: 100 },
@@ -736,13 +794,13 @@ export default function BoostScreen() {
               <Ionicons name="information-circle-outline" size={16} color="#666" />
               <Text style={styles.queueNoteText}>
                 {data?.globalQueue?.totalQueued === 0 && !data?.globalQueue?.currentActive
-                  ? 'Your video will be pinned at the top of the Home Feed immediately!'
-                  : 'A video is currently active. Your video will be queued and pinned automatically when its turn arrives.'}
+                  ? 'Your video will be highlighted at the top of the Home Feed immediately!'
+                  : 'A video is currently active. Your video will be queued and highlighted automatically when its turn arrives.'}
               </Text>
             </View>
 
             <TouchableOpacity
-              style={[styles.confirmFinalBtn, submittingBoost && styles.watchAdBtnDisabled]}
+              style={[styles.confirmFinalBtn, submittingBoost && styles.confirmFinalBtnDisabled]}
               onPress={handleConfirmBoost}
               disabled={submittingBoost}
             >
@@ -750,7 +808,7 @@ export default function BoostScreen() {
                 <ActivityIndicator size="small" color="#FFF" />
               ) : (
                 <Text style={styles.confirmFinalBtnText}>
-                  Confirm Pin (🪙 {selectedTier === 1 ? 100 : selectedTier === 3 ? 250 : selectedTier === 6 ? 500 : 1000} Coins)
+                  Confirm Highlight (🪙 {selectedTier === 1 ? 100 : selectedTier === 3 ? 250 : selectedTier === 6 ? 500 : 1000} Coins)
                 </Text>
               )}
             </TouchableOpacity>
@@ -774,19 +832,32 @@ const styles = StyleSheet.create({
     borderBottomColor: '#EEEEEE',
   },
   backBtn: { padding: 4 },
-  headerTitleWrap: { flex: 1, marginLeft: 12 },
-  headerTitle: { fontSize: 17, fontWeight: '800', color: Colors.text },
-  headerSub: { fontSize: 11, color: '#888', fontWeight: '500', marginTop: 1 },
-  rateChartBtn: {
+  headerTitle: { fontSize: 18, fontWeight: '800', color: Colors.text },
+  headerBoostBtn: {
+    borderRadius: 18,
+    overflow: 'hidden',
+    shadowColor: '#8E24AA',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  headerBoostBtnDisabled: {
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  headerBoostGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#F3E5F5',
-    paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 14,
+    paddingHorizontal: 14,
+    gap: 5,
   },
-  rateChartBtnText: { fontSize: 12, fontWeight: '700', color: '#8E24AA' },
+  headerBoostBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.white,
+  },
   centerContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
   loadingText: { marginTop: 12, color: '#666', fontSize: 14 },
   scrollContent: { padding: 16 },
@@ -794,50 +865,30 @@ const styles = StyleSheet.create({
   // Info banner
   infoBanner: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EDE7F6',
+    alignItems: 'flex-start',
+    backgroundColor: '#F3E5F5',
     borderRadius: 12,
     padding: 12,
     marginBottom: 14,
     gap: 8,
   },
-  infoIconWrap: { width: 22, alignItems: 'center' },
-  infoText: { flex: 1, fontSize: 12, color: '#4A148C', lineHeight: 17, fontWeight: '500' },
-
-  // Top action bar
-  topActionBar: {
+  infoIconWrap: { paddingTop: 2 },
+  infoTextContainer: { flex: 1 },
+  infoText: { fontSize: 12, color: '#4A148C', lineHeight: 17, fontWeight: '500' },
+  infoRatesBtn: {
+    alignSelf: 'flex-end',
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 14,
+    gap: 3,
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: '#E1BEE7',
   },
-  boostHeaderBtn: {
-    flex: 1,
-    borderRadius: 14,
-    overflow: 'hidden',
-    shadowColor: '#8E24AA',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  boostHeaderBtnDisabled: { opacity: 0.65, shadowOpacity: 0, elevation: 0 },
-  boostGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    gap: 8,
-  },
-  boostBtnLabel: { color: Colors.white, fontSize: 14, fontWeight: '800' },
-  miniRatesBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingLeft: 12,
-    gap: 2,
-  },
-  miniRatesText: { fontSize: 12, fontWeight: '700', color: '#8E24AA' },
+  infoRatesBtnText: { fontSize: 11, fontWeight: '700', color: '#8E24AA' },
 
   // KPI row
   kpiRow: {
@@ -872,20 +923,6 @@ const styles = StyleSheet.create({
   },
   kpiValue: { fontSize: 24, fontWeight: '800', color: Colors.text, marginTop: 4 },
   kpiTotalText: { fontSize: 14, fontWeight: '600', color: '#888' },
-  statusPill: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    marginTop: 8,
-  },
-  statusPillSuccess: { backgroundColor: '#E8F5E9' },
-  statusPillWarning: { backgroundColor: '#FFF3E0' },
-  statusPillMuted: { backgroundColor: '#F5F5F5' },
-  statusPillText: { fontSize: 11, fontWeight: '700' },
-  statusPillTextSuccess: { color: '#2E7D32' },
-  statusPillTextWarning: { color: '#E65100' },
-  statusPillTextMuted: { color: '#777' },
 
   // Ad section card
   adSectionCard: {
@@ -901,90 +938,187 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
-  adSectionHeader: { flexDirection: 'row', alignItems: 'center' },
+  adSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   adRewardIconBox: {
-    width: 44,
-    height: 44,
+    width: 42,
+    height: 42,
     borderRadius: 12,
-    backgroundColor: '#D81B60',
+    backgroundColor: '#8E24AA',
     alignItems: 'center',
     justifyContent: 'center',
   },
   adSectionTitle: { fontSize: 16, fontWeight: '800', color: Colors.text },
-  adSectionDesc: { fontSize: 12, color: '#666', marginTop: 2, lineHeight: 17 },
+  adSectionDesc: { fontSize: 12, color: '#666', marginTop: 2 },
+
+  // Ads list column
+  adsListColumn: {
+    gap: 10,
+    marginBottom: 12,
+  },
+  adItemCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#FAFAFA',
+    borderWidth: 1,
+    borderColor: '#EEEEEE',
+  },
+  adItemCardActive: {
+    backgroundColor: '#FAF5FC',
+    borderColor: '#CE93D8',
+  },
+  adItemCardWatched: {
+    backgroundColor: '#F1F8E9',
+    borderColor: '#C8E6C9',
+  },
+  adItemCardDisabled: {
+    opacity: 0.85,
+  },
+  adItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  adItemIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adItemIconWrapActive: {
+    backgroundColor: '#F3E5F5',
+  },
+  adItemIconWrapWatched: {
+    backgroundColor: '#E8F5E9',
+  },
+  adItemIconWrapMuted: {
+    backgroundColor: '#EEEEEE',
+  },
+  adItemTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  adItemStatus: {
+    fontSize: 11,
+    color: '#888',
+    marginTop: 2,
+  },
+  watchActionBtn: {
+    backgroundColor: '#8E24AA',
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  watchActionBtnDisabled: {
+    backgroundColor: '#BDBDBD',
+  },
+  watchActionBtnText: {
+    color: Colors.white,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  watchedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#E8F5E9',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+  },
+  watchedBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#2E7D32',
+  },
+
   cooldownBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF8E1',
-    padding: 10,
+    backgroundColor: '#FFF3E0',
+    paddingVertical: 9,
+    paddingHorizontal: 12,
     borderRadius: 10,
-    marginTop: 12,
     gap: 8,
   },
-  cooldownBannerText: { fontSize: 12, color: '#E65100', flex: 1 },
+  cooldownBannerText: { fontSize: 12, color: '#E65100', fontWeight: '500' },
   completedBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#E8F5E9',
-    padding: 10,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
     borderRadius: 10,
-    marginTop: 12,
     gap: 8,
   },
-  completedBannerText: { fontSize: 12, color: '#2E7D32', flex: 1, fontWeight: '600' },
-  watchAdBtn: {
-    backgroundColor: '#D81B60',
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 14,
-  },
-  watchAdBtnDisabled: { backgroundColor: '#CCC', opacity: 0.8 },
-  watchAdBtnText: { color: Colors.white, fontSize: 15, fontWeight: '800' },
-  sessionDotsRow: {
+  completedBannerText: { fontSize: 12, color: '#2E7D32', fontWeight: '600' },
+  sessionHintRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 12,
-    gap: 6,
+    justifyContent: 'center',
+    gap: 5,
+    paddingTop: 4,
   },
-  sessionDotsLabel: { fontSize: 11, color: '#888', fontWeight: '600' },
-  sessionDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#E0E0E0' },
-  sessionDotFilled: { backgroundColor: '#D81B60' },
-  sessionNote: { fontSize: 11, color: '#888', marginLeft: 4 },
+  sessionHintText: {
+    fontSize: 11,
+    color: '#757575',
+    fontWeight: '500',
+  },
 
-  // Active boost card
+  // Active live card
   activeBoostCard: {
-    backgroundColor: '#1E1E1E',
+    backgroundColor: Colors.white,
     borderRadius: 16,
     padding: 16,
+    borderWidth: 1.5,
+    borderColor: '#4CAF50',
     marginBottom: 16,
+    shadowColor: '#4CAF50',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  activeBadgeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  activeBadgeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
   liveBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(233, 30, 99, 0.25)',
+    backgroundColor: '#E8F5E9',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: 8,
     gap: 6,
   },
-  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#E91E63' },
-  liveBadgeText: { color: '#FF4081', fontSize: 10, fontWeight: '800' },
-  remainingTimeText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
-  boostVideoRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
-  boostThumb: { width: 70, height: 45, borderRadius: 8, backgroundColor: '#333' },
-  boostVidTitle: { fontSize: 13, fontWeight: '700', color: '#FFF' },
-  boostVidMeta: { fontSize: 11, color: '#AAA', marginTop: 2 },
+  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#2E7D32' },
+  liveBadgeText: { fontSize: 11, fontWeight: '800', color: '#2E7D32', letterSpacing: 0.5 },
+  remainingTimeText: { fontSize: 12, fontWeight: '700', color: '#555' },
+  boostVideoRow: { flexDirection: 'row', alignItems: 'center' },
+  boostThumb: { width: 72, height: 48, borderRadius: 6, backgroundColor: '#DDD' },
+  boostVidTitle: { fontSize: 13, fontWeight: '700', color: Colors.text },
+  boostVidMeta: { fontSize: 11, color: '#777', marginTop: 3 },
   progressBarWrap: {
-    height: 4,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 2,
+    height: 6,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 3,
     marginTop: 12,
     overflow: 'hidden',
   },
-  progressBarFill: { height: '100%', backgroundColor: '#E91E63', borderRadius: 2 },
+  progressBarFill: { height: '100%', backgroundColor: '#4CAF50', borderRadius: 3 },
 
   // Queued section
   queuedSection: { marginBottom: 16 },
@@ -995,16 +1129,21 @@ const styles = StyleSheet.create({
     padding: 12,
     borderWidth: 1,
     borderColor: '#EEEEEE',
-    marginBottom: 10,
+    marginBottom: 8,
   },
-  queuedBadgeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  queuedBadgeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   queuedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#EDE7F6',
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 6,
+    borderRadius: 8,
     gap: 4,
   },
   queuedBadgeText: { fontSize: 11, fontWeight: '700', color: '#5E35B1' },
@@ -1018,49 +1157,62 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 12,
     gap: 8,
+    marginBottom: 20,
   },
-  globalQueueText: { fontSize: 11, color: '#6A1B9A', flex: 1, lineHeight: 16 },
+  globalQueueText: { fontSize: 12, color: '#4A148C', flex: 1, lineHeight: 17 },
 
-  // Modals
+  // Modal styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
+    alignItems: 'center',
     padding: 20,
   },
   rateChartBox: {
+    width: '100%',
     backgroundColor: Colors.white,
     borderRadius: 20,
     padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 6,
   },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   modalTitle: { fontSize: 17, fontWeight: '800', color: Colors.text },
-  rateChartSub: { fontSize: 12, color: '#666', marginBottom: 16, lineHeight: 18 },
-  tiersList: { gap: 10, marginBottom: 16 },
+  rateChartSub: { fontSize: 13, color: '#666', lineHeight: 18, marginBottom: 16 },
+  tiersList: { gap: 10, marginBottom: 18 },
   tierRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 12,
     borderRadius: 12,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#F9F9F9',
     borderWidth: 1,
     borderColor: '#EEEEEE',
   },
-  tierLeft: { width: 100 },
-  tierCoin: { fontSize: 13, fontWeight: '800', color: Colors.text },
-  tierArrow: { paddingHorizontal: 6 },
-  tierRight: { flex: 1, alignItems: 'flex-end' },
-  tierHours: { fontSize: 13, fontWeight: '700', color: Colors.text },
+  tierLeft: { flex: 1 },
+  tierCoin: { fontSize: 14, fontWeight: '700', color: Colors.text },
+  tierArrow: { paddingHorizontal: 8 },
+  tierRight: { flex: 1.2, alignItems: 'flex-end' },
+  tierHours: { fontSize: 14, fontWeight: '700', color: Colors.text },
   discountBadge: {
     fontSize: 10,
-    fontWeight: '800',
-    color: '#2E7D32',
-    backgroundColor: '#E8F5E9',
+    fontWeight: '700',
+    color: '#E65100',
+    backgroundColor: '#FFE0B2',
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 4,
-    marginTop: 2,
+    borderRadius: 6,
+    marginTop: 3,
   },
   gotItBtn: {
     backgroundColor: '#8E24AA',
@@ -1070,63 +1222,64 @@ const styles = StyleSheet.create({
   },
   gotItText: { color: Colors.white, fontSize: 14, fontWeight: '700' },
 
-  // Celebration
+  // Celebration modal
   celebrationBox: {
+    width: '85%',
     backgroundColor: Colors.white,
     borderRadius: 24,
     padding: 24,
     alignItems: 'center',
   },
-  celebrationTitle: { fontSize: 20, fontWeight: '800', color: Colors.text, marginTop: 10 },
-  celebrationCoins: { fontSize: 32, fontWeight: '900', color: '#D81B60', marginVertical: 6 },
-  celebrationSub: { fontSize: 13, color: '#666', textAlign: 'center', lineHeight: 19, marginBottom: 20 },
+  celebrationTitle: { fontSize: 20, fontWeight: '800', color: Colors.text, marginTop: 12 },
+  celebrationCoins: { fontSize: 28, fontWeight: '900', color: '#8E24AA', marginVertical: 6 },
+  celebrationSub: { fontSize: 13, color: '#666', textAlign: 'center', lineHeight: 18, marginBottom: 20 },
   claimDoneBtn: {
-    backgroundColor: '#D81B60',
-    width: '100%',
-    paddingVertical: 14,
-    borderRadius: 14,
-    alignItems: 'center',
+    backgroundColor: '#8E24AA',
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+    borderRadius: 20,
   },
-  claimDoneBtnText: { color: Colors.white, fontSize: 15, fontWeight: '800' },
+  claimDoneBtnText: { color: Colors.white, fontSize: 14, fontWeight: '700' },
 
-  // Video Select
+  // Select video modal
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EEEEEE',
-    marginHorizontal: 16,
-    marginVertical: 10,
+    backgroundColor: '#EEE',
+    borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 10,
+    marginHorizontal: 16,
+    marginVertical: 10,
   },
   searchInput: { flex: 1, fontSize: 14, color: Colors.text },
   videoSelectCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.white,
-    padding: 12,
+    padding: 10,
     borderRadius: 12,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#EEEEEE',
+    borderColor: '#EEE',
   },
   videoSelectCardDisabled: { opacity: 0.5 },
-  videoSelectThumb: { width: 80, height: 48, borderRadius: 6, backgroundColor: '#E0E0E0' },
+  videoSelectThumb: { width: 80, height: 50, borderRadius: 6, backgroundColor: '#DDD' },
   videoSelectTitle: { fontSize: 13, fontWeight: '700', color: Colors.text },
-  videoSelectMeta: { fontSize: 11, color: '#888', marginTop: 3 },
+  videoSelectMeta: { fontSize: 11, color: '#888', marginTop: 2 },
   alreadyBoostedBadge: {
+    backgroundColor: '#EDE7F6',
     alignSelf: 'flex-start',
-    backgroundColor: '#FFF3E0',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
     marginTop: 4,
   },
-  alreadyBoostedText: { fontSize: 10, color: '#E65100', fontWeight: '700' },
+  alreadyBoostedText: { fontSize: 10, fontWeight: '600', color: '#5E35B1' },
 
-  // Confirm box
+  // Confirm modal
   confirmBox: {
+    width: '100%',
     backgroundColor: Colors.white,
     borderRadius: 20,
     padding: 20,
@@ -1134,44 +1287,45 @@ const styles = StyleSheet.create({
   confirmVidPreview: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8F9FA',
-    padding: 10,
+    backgroundColor: '#F5F5F5',
+    padding: 8,
     borderRadius: 10,
     marginBottom: 14,
-    gap: 10,
   },
-  confirmThumb: { width: 60, height: 36, borderRadius: 6 },
-  confirmVidTitle: { flex: 1, fontSize: 12, fontWeight: '700', color: Colors.text },
-  selectTierLabel: { fontSize: 13, fontWeight: '700', color: Colors.text, marginBottom: 8 },
+  confirmThumb: { width: 50, height: 35, borderRadius: 4, backgroundColor: '#DDD', marginRight: 10 },
+  confirmVidTitle: { flex: 1, fontSize: 12, fontWeight: '600', color: Colors.text },
+  selectTierLabel: { fontSize: 13, fontWeight: '700', color: Colors.text, marginBottom: 10 },
   tierSelector: { flexDirection: 'row', gap: 8, marginBottom: 14 },
   tierOption: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: '#E0E0E0',
+    borderColor: '#DDD',
+    borderRadius: 10,
+    paddingVertical: 10,
     alignItems: 'center',
+    backgroundColor: '#FFF',
   },
   tierOptionSelected: { borderColor: '#8E24AA', backgroundColor: '#F3E5F5' },
   tierOptionDisabled: { opacity: 0.4 },
-  tierOptionHours: { fontSize: 13, fontWeight: '700', color: Colors.text },
-  tierOptionCoins: { fontSize: 11, color: '#666', marginTop: 2, fontWeight: '600' },
+  tierOptionHours: { fontSize: 12, fontWeight: '700', color: '#555' },
+  tierOptionCoins: { fontSize: 11, fontWeight: '600', color: '#777', marginTop: 2 },
   tierOptionTextSelected: { color: '#8E24AA' },
   queueNoteBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#FFF8E1',
     padding: 10,
-    borderRadius: 10,
+    borderRadius: 8,
     gap: 8,
     marginBottom: 16,
   },
-  queueNoteText: { flex: 1, fontSize: 11, color: '#666', lineHeight: 15 },
+  queueNoteText: { flex: 1, fontSize: 11, color: '#E65100', lineHeight: 15 },
   confirmFinalBtn: {
     backgroundColor: '#8E24AA',
-    paddingVertical: 14,
-    borderRadius: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
     alignItems: 'center',
   },
-  confirmFinalBtnText: { color: Colors.white, fontSize: 15, fontWeight: '800' },
+  confirmFinalBtnDisabled: { opacity: 0.6 },
+  confirmFinalBtnText: { color: Colors.white, fontSize: 14, fontWeight: '800' },
 });

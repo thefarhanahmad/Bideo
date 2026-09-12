@@ -210,17 +210,17 @@ export default function LibraryScreen() {
         <View style={styles.headerButtons}>
           {user?._id && (
             <TouchableOpacity style={styles.viewChannelBtn} onPress={() => router.push(`/channel/${user._id}`)}>
-              <Ionicons name="person-outline" size={16} color={Colors.white} />
-              <Text style={styles.viewChannelBtnText}>View Channel</Text>
+              <Ionicons name="person-outline" size={15} color={Colors.white} />
+              <Text style={styles.viewChannelBtnText}>View</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity style={styles.editBtn} onPress={() => router.push('/edit-channel')}>
-            <Ionicons name="create-outline" size={16} color={Colors.text} />
-            <Text style={styles.editBtnText}>{user?.channelName ? 'Edit Channel' : 'Create Channel'}</Text>
+            <Ionicons name="create-outline" size={15} color={Colors.text} />
+            <Text style={styles.editBtnText}>{user?.channelName ? 'Edit' : 'Create'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.boostBtn} onPress={() => router.push('/boost')}>
-            <Ionicons name="rocket" size={15} color={Colors.white} />
-            <Text style={styles.boostBtnText}>Boost Channel</Text>
+            <Ionicons name="rocket" size={14} color={Colors.white} />
+            <Text style={styles.boostBtnText}>Boost</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -506,18 +506,19 @@ const styles = StyleSheet.create({
   headerButtons: {
     marginTop: 15,
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
+    alignItems: 'center',
+    gap: 8,
   },
   viewChannelBtn: {
+    flex: 1,
     backgroundColor: Colors.primary,
     borderRadius: 20,
     paddingVertical: 7,
-    paddingHorizontal: 15,
-    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'center',
+    gap: 5,
   },
   viewChannelBtnText: {
     fontSize: 13,
@@ -525,15 +526,16 @@ const styles = StyleSheet.create({
     color: Colors.white,
   },
   editBtn: {
+    flex: 1,
     borderWidth: 1,
     borderColor: Colors.border,
     borderRadius: 20,
     paddingVertical: 6,
-    paddingHorizontal: 15,
-    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'center',
+    gap: 5,
   },
   editBtnText: {
     fontSize: 13,
@@ -541,14 +543,15 @@ const styles = StyleSheet.create({
     color: Colors.text,
   },
   boostBtn: {
+    flex: 1,
     backgroundColor: '#8E24AA',
     borderRadius: 20,
     paddingVertical: 6,
-    paddingHorizontal: 15,
-    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'center',
+    gap: 5,
   },
   boostBtnText: {
     fontSize: 13,
