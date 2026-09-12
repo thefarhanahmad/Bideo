@@ -76,6 +76,8 @@ export default function VideoScreen() {
   // Ad states
   const [showingAd, setShowingAd] = useState(false);
   const [adCompleted, setAdCompleted] = useState(false);
+  const adCompletedRef = useRef(false);
+  const triggeredMidrollsRef = useRef<Set<number>>(new Set());
 
   // Description and comments bottom sheet states
   const [descriptionModalVisible, setDescriptionModalVisible] = useState(false);
@@ -108,16 +110,23 @@ export default function VideoScreen() {
   const playMainVideo = useCallback(async () => {
     if (!video?.videoUrl) return;
     setShowingAd(false);
-    setAdCompleted(true);
     try {
-      if (typeof player.replaceAsync === 'function') {
-        await player.replaceAsync(video.videoUrl);
+      if (!adCompletedRef.current) {
+        // Initial pre-roll ad finished: load source into player and start playback
+        adCompletedRef.current = true;
+        setAdCompleted(true);
+        if (typeof player.replaceAsync === 'function') {
+          await player.replaceAsync(video.videoUrl);
+        } else {
+          player.replace(video.videoUrl);
+        }
+        player.play();
       } else {
-        player.replace(video.videoUrl);
+        // Mid-roll ad finished: resume playback right where it was paused
+        player.play();
       }
-      player.play();
     } catch (err) {
-      console.log('Main video load error:', err);
+      console.log('Main video playback error after ad:', err);
     }
   }, [video?.videoUrl, player]);
 
@@ -125,6 +134,8 @@ export default function VideoScreen() {
     if (id) {
       viewRecordedRef.current = false;
       watchTimeRef.current = 0;
+      adCompletedRef.current = false;
+      triggeredMidrollsRef.current.clear();
       loadVideoData();
     }
   }, [id]);
@@ -139,17 +150,35 @@ export default function VideoScreen() {
     } catch {}
 
     // Reset ad state and show AdMob interstitial ad first
+    adCompletedRef.current = false;
+    triggeredMidrollsRef.current.clear();
     setAdCompleted(false);
     setShowingAd(true);
   }, [video?.videoUrl, player]);
 
-  // Track active watch time (3 seconds required before recording a view)
+  // Track active watch time (3 seconds required before recording a view) and trigger mid-roll ads
   useEffect(() => {
     if (!video?._id) return;
 
     const interval = setInterval(() => {
       try {
         if (player && player.playing && !showingAd) {
+          // Mid-roll ad check: show an interstitial ad every 8 minutes (480s) on long videos
+          if (adCompletedRef.current && player.currentTime >= 480) {
+            const currentSlot = Math.floor(player.currentTime / 480);
+            if (currentSlot >= 1 && !triggeredMidrollsRef.current.has(currentSlot)) {
+              const duration = player.duration || video.duration || 0;
+              // Ensure video is at least 8 minutes long and has at least 30s remaining
+              if (duration >= 480 && (duration - player.currentTime) > 30) {
+                triggeredMidrollsRef.current.add(currentSlot);
+                try {
+                  player.pause();
+                } catch {}
+                setShowingAd(true);
+              }
+            }
+          }
+
           // If user restarted/replayed video from start after previous view was recorded, allow a new view
           if (viewRecordedRef.current && player.currentTime < 1 && watchTimeRef.current >= REQUIRED_WATCH_TIME) {
             viewRecordedRef.current = false;
