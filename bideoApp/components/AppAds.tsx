@@ -731,3 +731,83 @@ const nativeCardStyles = StyleSheet.create({
     fontWeight: '700',
   },
 });
+
+/**
+ * Loads and shows an AdMob Rewarded Ad.
+ * Only triggers onRewardEarned if Google Mobile Ads fires the EARNED_REWARD event.
+ * If user skips, cancels, or the ad fails, onRewardEarned is NEVER called.
+ */
+export const loadAndShowRewardedAd = ({
+  onLoaded,
+  onRewardEarned,
+  onDismiss,
+  onError,
+}: {
+  onLoaded?: () => void;
+  onRewardEarned: (reward?: any) => void;
+  onDismiss?: () => void;
+  onError?: (err: any) => void;
+}): (() => void) => {
+  const isExpoGo =
+    Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
+
+  if (isExpoGo) {
+    if (onError) onError(new Error('Rewarded ads require a development or production APK build (not available in Expo Go).'));
+    return () => {};
+  }
+
+  try {
+    const { RewardedAd, RewardedAdEventType, AdEventType, TestIds } = require('react-native-google-mobile-ads');
+    const unitId = isTestingAds ? (TestIds?.REWARDED || TEST_REWARDED_ID) : ADMOB_IDS.REWARDED;
+
+    const rewarded = RewardedAd.createForAdRequest(unitId, {
+      requestNonPersonalizedAdsOnly: false,
+    });
+
+    const unsubs: Array<() => void> = [];
+
+    unsubs.push(
+      rewarded.addAdEventListener(RewardedAdEventType.LOADED, () => {
+        if (onLoaded) onLoaded();
+        rewarded.show().catch((err: any) => {
+          console.log('Failed to show rewarded ad:', err);
+          if (onError) onError(err);
+        });
+      })
+    );
+
+    unsubs.push(
+      rewarded.addAdEventListener(RewardedAdEventType.EARNED_REWARD, (reward: any) => {
+        onRewardEarned(reward);
+      })
+    );
+
+    unsubs.push(
+      rewarded.addAdEventListener(AdEventType.CLOSED, () => {
+        if (onDismiss) onDismiss();
+      })
+    );
+
+    unsubs.push(
+      rewarded.addAdEventListener(AdEventType.ERROR, (error: any) => {
+        console.log(`Rewarded ad error on unit ${unitId}:`, error?.message || error);
+        if (onError) onError(error);
+      })
+    );
+
+    rewarded.load();
+
+    return () => {
+      unsubs.forEach((u) => {
+        try {
+          u();
+        } catch {}
+      });
+    };
+  } catch (err) {
+    console.log('Error creating rewarded ad:', err);
+    if (onError) onError(err);
+    return () => {};
+  }
+};
+

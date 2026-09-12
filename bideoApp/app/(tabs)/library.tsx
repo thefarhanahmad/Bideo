@@ -218,6 +218,10 @@ export default function LibraryScreen() {
             <Ionicons name="create-outline" size={16} color={Colors.text} />
             <Text style={styles.editBtnText}>{user?.channelName ? 'Edit Channel' : 'Create Channel'}</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={styles.boostBtn} onPress={() => router.push('/boost')}>
+            <Ionicons name="rocket" size={15} color={Colors.white} />
+            <Text style={styles.boostBtnText}>Boost Channel</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -535,6 +539,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: Colors.text,
+  },
+  boostBtn: {
+    backgroundColor: '#8E24AA',
+    borderRadius: 20,
+    paddingVertical: 6,
+    paddingHorizontal: 15,
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  boostBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.white,
   },
   section: {
     paddingVertical: 15,

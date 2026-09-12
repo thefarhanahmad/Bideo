@@ -64,3 +64,13 @@ export const formatTimeAgo = (date: string | Date): string => {
   const years = Math.floor(days / 365);
   return `${years}y ago`;
 };
+
+export const formatDuration = (seconds: number | string | undefined | null): string => {
+  let totalSecs = Math.round(Number(seconds) || 0);
+  if (totalSecs > 1000) {
+    totalSecs = Math.round(totalSecs / 1000);
+  }
+  const mins = Math.floor(totalSecs / 60);
+  const secs = Math.floor(totalSecs % 60);
+  return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+};

@@ -12,6 +12,7 @@ const { initDeletionScheduler } = require("./utils/deletionScheduler");
 const { initAutoBoostScheduler } = require("./utils/autoBoostScheduler");
 const { initOrphanMediaScheduler } = require("./utils/orphanMediaScheduler");
 const { initWalletSettlementScheduler } = require("./utils/walletSettlementScheduler");
+const { initBoostQueueScheduler } = require("./utils/boostQueueScheduler");
 
 // Connect to database
 connectDB();
@@ -27,6 +28,9 @@ initOrphanMediaScheduler();
 
 // Initialize 24-hour wallet credit settlement scheduler
 initWalletSettlementScheduler();
+
+// Initialize video boost queue scheduler (evaluates and promotes pinned video boosts)
+initBoostQueueScheduler();
 
 const PORT = process.env.PORT || 5000;
 

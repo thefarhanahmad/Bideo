@@ -129,6 +129,29 @@ const userSchema = new mongoose.Schema({
     default: 0,
     min: 0,
   },
+  coins: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
+  adRewards: {
+    dailyCount: {
+      type: Number,
+      default: 0,
+    },
+    dailyDate: {
+      type: String,
+      default: null,
+    },
+    sessionCount: {
+      type: Number,
+      default: 0,
+    },
+    lastAdWatchedAt: {
+      type: Date,
+      default: null,
+    },
+  },
   lastNotificationViewedAt: {
     type: Date,
     default: null,

@@ -66,6 +66,15 @@ const videoSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  boostExpiresAt: {
+    type: Date,
+    default: null,
+  },
+  boostType: {
+    type: String,
+    enum: ['none', 'admin', 'user'],
+    default: 'none',
+  },
   aspectRatio: {
     type: Number,
     default: null,
