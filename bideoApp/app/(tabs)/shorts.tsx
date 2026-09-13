@@ -522,15 +522,25 @@ export default function ShortsScreen() {
       </Modal>
 
       <Modal visible={commentModalVisible} transparent animationType="slide" onRequestClose={() => setCommentModalVisible(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setCommentModalVisible(false)}>
-          <Pressable style={styles.commentModalContent} onPress={(e) => e.stopPropagation()}>
+        <View style={styles.modalOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setCommentModalVisible(false)} />
+          <View style={styles.commentModalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Comments</Text>
               <TouchableOpacity onPress={() => setCommentModalVisible(false)}>
                 <Ionicons name="close" size={24} color={Colors.text} />
               </TouchableOpacity>
             </View>
-            <ScrollView>
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={{ paddingBottom: 40 }}
+              showsVerticalScrollIndicator={true}
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled={true}
+              scrollEventThrottle={16}
+              bounces={true}
+              overScrollMode="always"
+            >
               {selectedShortId && (
                 <CommentList 
                   videoId={selectedShortId} 
@@ -544,8 +554,8 @@ export default function ShortsScreen() {
                 />
               )}
             </ScrollView>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
 
       {/* Report Modal (themed, works on Android unlike Alert.prompt) */}

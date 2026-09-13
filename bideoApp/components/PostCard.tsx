@@ -214,7 +214,16 @@ const PostCard = ({ post, onDelete }: PostCardProps) => {
             <Text style={styles.modalTitle}>Comments</Text>
           </View>
           
-          <ScrollView>
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingBottom: 40 }}
+            showsVerticalScrollIndicator={true}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled={true}
+            scrollEventThrottle={16}
+            bounces={true}
+            overScrollMode="always"
+          >
             <CommentList 
               postId={post._id} 
               contentOwnerId={post?.owner?._id || post?.owner}

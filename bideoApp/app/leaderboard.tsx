@@ -19,6 +19,7 @@ import api from '../services/api';
 import { RootState } from '../redux/store';
 import VerifiedBadge from '../components/VerifiedBadge';
 import { formatViews } from '../utils/formatDate';
+import { AppNativeAd } from '../components/AppAds';
 
 const FALLBACK_AVATAR = 'https://via.placeholder.com/100x100.png?text=User';
 
@@ -262,7 +263,7 @@ export default function LeaderboardScreen() {
         </View>
       ) : (
         <View style={styles.mainContent}>
-          {/* Pinned Top Section (Banner + Followers Slider + Views Section Header) */}
+          {/* Pinned Top Section (Banner + Followers Slider) */}
           <View style={styles.fixedTopSection}>
             {/* Sleek Banner */}
             <View style={styles.banner}>
@@ -300,24 +301,31 @@ export default function LeaderboardScreen() {
               </View>
             )}
 
-            {/* Top 50 by Views Section Header (Fixed right above the scrollable views area) */}
-            {viewLeaderboard.length > 0 && (
-              <View style={styles.viewsHeaderRow}>
-                <View style={styles.sectionHeaderLeft}>
-                  <Ionicons name="flame" size={15} color={Colors.primary} />
-                  <Text style={styles.sectionHeaderTitle}>Top 50 Creators By Views</Text>
-                </View>
-                <Text style={styles.viewsHeaderSubtitle}>This week</Text>
-              </View>
-            )}
           </View>
 
-          {/* Scrollable Views Column Area (ONLY this area scrolls!) */}
+          {/* Scrollable Views Column Area */}
           <View style={styles.viewsListContainer}>
             <FlatList
               data={viewLeaderboard}
               keyExtractor={(item) => item._id}
               renderItem={renderItem}
+              ListHeaderComponent={
+                <View>
+                  {/* Native Ad after top 10 followers section and before views creators section */}
+                  <AppNativeAd style={{ paddingHorizontal: 12, marginTop: 8, marginBottom: 0 }} />
+
+                  {/* Top 50 by Views Section Header */}
+                  {viewLeaderboard.length > 0 && (
+                    <View style={styles.viewsHeaderRow}>
+                      <View style={styles.sectionHeaderLeft}>
+                        <Ionicons name="flame" size={15} color={Colors.primary} />
+                        <Text style={styles.sectionHeaderTitle}>Top 50 Creators By Views</Text>
+                      </View>
+                      <Text style={styles.viewsHeaderSubtitle}>This week</Text>
+                    </View>
+                  )}
+                </View>
+              }
               contentContainerStyle={styles.listContent}
               showsVerticalScrollIndicator={false}
               refreshControl={

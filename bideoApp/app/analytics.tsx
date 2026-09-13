@@ -18,7 +18,7 @@ import Colors from '../constants/Colors';
 import api from '../services/api';
 import { RootState } from '../redux/store';
 import { formatViews } from '../utils/formatDate';
-import { AppInterstitialAd } from '../components/AppAds';
+import { AppInterstitialAd, AppNativeAd } from '../components/AppAds';
 
 export default function AnalyticsScreen() {
   const router = useRouter();
@@ -181,6 +181,9 @@ export default function AnalyticsScreen() {
               </View>
             </View>
           </LinearGradient>
+
+          {/* Native Ad after orange card and before content performance */}
+          <AppNativeAd style={{ marginTop: 14, marginBottom: 0 }} />
 
           {/* Performance by Content Type */}
           <View style={styles.section}>

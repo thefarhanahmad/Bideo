@@ -634,8 +634,9 @@ export default function VideoScreen() {
         transparent
         onRequestClose={() => setDescriptionModalVisible(false)}
       >
-        <Pressable style={styles.modalBackdrop} onPress={() => setDescriptionModalVisible(false)}>
-          <Pressable style={styles.descSheetContent} onPress={(e) => e.stopPropagation()}>
+        <View style={styles.modalBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setDescriptionModalVisible(false)} />
+          <View style={styles.descSheetContent}>
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetHeaderTitle}>Description</Text>
               <TouchableOpacity
@@ -646,7 +647,7 @@ export default function VideoScreen() {
                 <Ionicons name="close" size={22} color={Colors.text} />
               </TouchableOpacity>
             </View>
-            <ScrollView style={styles.sheetScroll} showsVerticalScrollIndicator={false}>
+            <ScrollView style={styles.sheetScroll} showsVerticalScrollIndicator={false} nestedScrollEnabled={true}>
               <Text style={styles.sheetVideoTitle}>{video.title}</Text>
               <View style={styles.descStatsRow}>
                 <View style={styles.descStatItem}>
@@ -670,8 +671,8 @@ export default function VideoScreen() {
                 style={styles.sheetDescText}
               />
             </ScrollView>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
 
       {/* Comments Full Bottom Sheet Modal */}
@@ -681,9 +682,10 @@ export default function VideoScreen() {
         transparent
         onRequestClose={() => setCommentsModalVisible(false)}
       >
-        <Pressable style={styles.modalBackdrop} onPress={() => setCommentsModalVisible(false)}>
-          <Pressable style={styles.commentsSheetContent} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.sheetHeader}>
+        <View style={styles.modalBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setCommentsModalVisible(false)} />
+          <View style={styles.commentsSheetContent}>
+            <View style={[styles.sheetHeader, { paddingHorizontal: 16 }]}>
               <Text style={styles.sheetHeaderTitle}>
                 Comments ({commentsCount || video.commentsCount || 0})
               </Text>
@@ -695,7 +697,16 @@ export default function VideoScreen() {
                 <Ionicons name="close" size={22} color={Colors.text} />
               </TouchableOpacity>
             </View>
-            <View style={{ flex: 1 }}>
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={{ paddingBottom: 40 }}
+              showsVerticalScrollIndicator={true}
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled={true}
+              scrollEventThrottle={16}
+              bounces={true}
+              overScrollMode="always"
+            >
               <CommentList
                 videoId={video._id}
                 contentOwnerId={video?.owner?._id || video?.owner}
@@ -710,9 +721,9 @@ export default function VideoScreen() {
                   setAuthModalVisible(true);
                 }}
               />
-            </View>
-          </Pressable>
-        </Pressable>
+            </ScrollView>
+          </View>
+        </View>
       </Modal>
     </View>
   );
