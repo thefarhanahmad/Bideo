@@ -192,11 +192,11 @@ exports.claimAdReward = async (req, res) => {
       });
     }
 
-    // Calculate coin reward (2-10 coins: 80% chance 2-6, 20% chance 7-10)
+    // Calculate coin reward (1-6 coins: 80% chance 1-3, 20% chance 4-6)
     const isHighReward = Math.random() < 0.20;
     const coinsEarned = isHighReward
-      ? Math.floor(Math.random() * 4) + 7 // 7, 8, 9, 10
-      : Math.floor(Math.random() * 5) + 2; // 2, 3, 4, 5, 6
+      ? Math.floor(Math.random() * 3) + 4 // 4, 5, 6
+      : Math.floor(Math.random() * 3) + 1; // 1, 2, 3
 
     user.coins = (user.coins || 0) + coinsEarned;
 
