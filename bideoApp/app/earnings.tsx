@@ -81,12 +81,13 @@ export default function EarningsScreen() {
         if (data?.justPassed || data?.status === 'passed') {
           showAlert(
             '🎉 Video Passed!',
-            'Congratulations! You have watched 2 ads. This video has been verified and passed for monetization!'
+            'Congratulations! You have watched 4 ads. This video has been verified and passed for monetization!'
           );
         } else {
+          const rem = Math.max(1, (data?.adsRequired || 4) - (data?.adsWatched || 1));
           showAlert(
             'Ad Completed!',
-            `Ad ${data?.adsWatched || 1} of ${data?.adsRequired || 2} completed! Watch 1 more ad to pass this video immediately.`
+            `Ad ${data?.adsWatched || 1} of ${data?.adsRequired || 4} completed! Watch ${rem} more ad${rem === 1 ? '' : 's'} to pass this video immediately.`
           );
         }
         await fetchStatus();
@@ -513,7 +514,7 @@ export default function EarningsScreen() {
                         <Ionicons name="checkmark-circle" size={14} color="#2E7D32" />
                         <Text style={styles.passedNoteText}>
                           {rev.passedVia === 'rewarded_ads'
-                            ? 'Passed via 2 Rewarded Ads'
+                            ? 'Passed via Rewarded Ads'
                             : 'Verified & Approved by Audit Team'}
                         </Text>
                       </View>
@@ -529,7 +530,7 @@ export default function EarningsScreen() {
                       </View>
                     )}
 
-                    {/* Pending video: Fast-Track pass by watching 2 rewarded ads */}
+                    {/* Pending video: Fast-Track pass by watching 4 rewarded ads */}
                     {rev.status === 'pending' && (
                       <View style={styles.fastTrackBox}>
                         <View style={styles.fastTrackHeader}>
@@ -539,13 +540,13 @@ export default function EarningsScreen() {
                           </View>
                           <View style={styles.counterBadge}>
                             <Text style={styles.fastTrackCounter}>
-                              {rev.adsWatched || 0}/2
+                              {rev.adsWatched || 0}/{rev.adsRequired || 4}
                             </Text>
                           </View>
                         </View>
 
                         <Text style={styles.fastTrackInfoText} numberOfLines={2}>
-                          Watch 2 short ads to pass this video instantly without waiting for audit review.
+                          Watch 4 short ads to pass this video instantly without waiting for audit review.
                         </Text>
 
                         {/* Watch Ad Action Button */}
@@ -568,8 +569,10 @@ export default function EarningsScreen() {
                               <Ionicons name="play-circle" size={15} color="#FFFFFF" />
                               <Text style={styles.watchAdBtnText}>
                                 {(rev.adsWatched || 0) === 0
-                                  ? 'Watch Ad (1/2)'
-                                  : 'Watch Final Ad (2/2)'}
+                                  ? 'Watch Ad (1/4)'
+                                  : (rev.adsWatched || 0) >= 3
+                                  ? 'Watch Final Ad (4/4)'
+                                  : `Watch Ad (${(rev.adsWatched || 0) + 1}/4)`}
                               </Text>
                             </>
                           )}

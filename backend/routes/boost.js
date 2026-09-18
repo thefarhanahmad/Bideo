@@ -4,6 +4,7 @@ const {
   claimAdReward,
   createVideoBoost,
   getMyEligibleVideos,
+  buyVerifiedBadge,
 } = require('../controllers/boost');
 const { protect } = require('../middlewares/auth');
 
@@ -15,5 +16,6 @@ router.get('/status', getBoostStatus);
 router.post('/claim-ad-reward', claimAdReward);
 router.post('/create', createVideoBoost);
 router.get('/my-videos', getMyEligibleVideos);
+router.post('/buy-verified-badge', buyVerifiedBadge);
 
 module.exports = router;

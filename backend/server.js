@@ -13,6 +13,7 @@ const { initAutoBoostScheduler } = require("./utils/autoBoostScheduler");
 const { initOrphanMediaScheduler } = require("./utils/orphanMediaScheduler");
 const { initWalletSettlementScheduler } = require("./utils/walletSettlementScheduler");
 const { initBoostQueueScheduler } = require("./utils/boostQueueScheduler");
+const { initVerifiedBadgeScheduler } = require("./utils/verifiedBadgeScheduler");
 
 // Connect to database
 connectDB();
@@ -31,6 +32,9 @@ initWalletSettlementScheduler();
 
 // Initialize video boost queue scheduler (evaluates and promotes pinned video boosts)
 initBoostQueueScheduler();
+
+// Initialize 1-month verified badge expiration scheduler
+initVerifiedBadgeScheduler();
 
 const PORT = process.env.PORT || 5000;
 

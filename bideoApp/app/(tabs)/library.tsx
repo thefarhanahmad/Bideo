@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Colors from '../../constants/Colors';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../../redux/store';
+import { updateUser } from '../../redux/slices/authSlice';
 import AuthModal from '../../components/AuthModal';
 import VerifiedBadge from '../../components/VerifiedBadge';
 import api, { setAuthToken } from '../../services/api';
@@ -56,7 +57,7 @@ export default function LibraryScreen() {
           setAuthModalVisible(true);
         }
       }
-    }, [isAuthenticated, authLoading, user])
+    }, [isAuthenticated, authLoading, user?.deletionScheduled])
   );
 
   useEffect(() => {
@@ -119,7 +120,30 @@ export default function LibraryScreen() {
     }
   };
 
+  const loadCurrentUser = async () => {
+    try {
+      const res = await api.get('/auth/me');
+      const freshUser = res.data?.data || res.data;
+      if (freshUser) {
+        if (
+          !user ||
+          user.isVerified !== freshUser.isVerified ||
+          user.channelName !== freshUser.channelName ||
+          user.name !== freshUser.name ||
+          user.avatar !== freshUser.avatar ||
+          user.coins !== freshUser.coins
+        ) {
+          dispatch(updateUser(freshUser));
+          AsyncStorage.setItem('cached_user', JSON.stringify(freshUser)).catch(() => {});
+        }
+      }
+    } catch (err) {
+      console.log('Failed to refresh user in library:', err);
+    }
+  };
+
   const loadAllData = async () => {
+    loadCurrentUser();
     loadHistory();
     loadMyVideos();
     loadPlaylists();
@@ -135,6 +159,7 @@ export default function LibraryScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     await Promise.all([
+      loadCurrentUser(),
       loadHistory(),
       loadMyVideos(),
       loadPlaylists(),

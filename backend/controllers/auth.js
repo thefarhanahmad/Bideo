@@ -461,6 +461,8 @@ const sendTokenResponse = (user, statusCode, res) => {
         coverImage: user.coverImage || null,
         about: user.about,
         isVerified: !!user.isVerified,
+        verifiedUntil: user.verifiedUntil || null,
+        verifiedSource: user.verifiedSource || null,
         deletionScheduled: !!user.deletionScheduled,
         scheduledDeletionDate: user.scheduledDeletionDate,
         deletionReason: user.deletionReason,

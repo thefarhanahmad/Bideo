@@ -21,11 +21,11 @@ const videoMonetizationReviewSchema = new mongoose.Schema({
     type: Number,
     default: 0,
     min: 0,
-    max: 2
+    max: 4
   },
   adsRequired: {
     type: Number,
-    default: 2
+    default: 4
   },
   passedVia: {
     type: String,

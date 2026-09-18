@@ -842,6 +842,13 @@ exports.toggleVerifyUser = async (req, res, next) => {
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
     user.isVerified = !user.isVerified;
+    if (user.isVerified) {
+      user.verifiedSource = 'admin';
+      user.verifiedUntil = null; // Admin verification does not expire
+    } else {
+      user.verifiedSource = null;
+      user.verifiedUntil = null;
+    }
     await user.save();
 
     res.status(200).json({
@@ -1563,8 +1570,8 @@ exports.watchReviewAd = async (req, res, next) => {
           videoId: review.video?._id || review.video,
           videoTitle: review.video?.title || '',
           status: review.status,
-          adsWatched: review.adsWatched || 2,
-          adsRequired: review.adsRequired || 2,
+          adsWatched: review.adsWatched || 4,
+          adsRequired: review.adsRequired || 4,
           passedVia: review.passedVia || 'rewarded_ads',
           step1Completed: passedCount >= 3,
           passedVideosCount: passedCount,
@@ -1607,7 +1614,7 @@ exports.watchReviewAd = async (req, res, next) => {
 
     const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '';
     const currentWatched = Number(review.adsWatched || 0);
-    const required = Number(review.adsRequired || 2);
+    const required = Number(review.adsRequired || 4);
     const newCount = currentWatched + 1;
 
     review.adsWatched = Math.min(newCount, required);
@@ -1627,7 +1634,7 @@ exports.watchReviewAd = async (req, res, next) => {
       review.status = 'passed';
       review.passedVia = 'rewarded_ads';
       review.passedAt = now;
-      review.reviewMessage = 'Approved automatically via 2 completed rewarded ads.';
+      review.reviewMessage = `Approved automatically via ${required} completed rewarded ads.`;
       autoPassed = true;
     }
 
@@ -1643,7 +1650,7 @@ exports.watchReviewAd = async (req, res, next) => {
     // Send notification on pass
     if (autoPassed) {
       const videoTitle = review.video?.title || 'Your video';
-      const notifMsg = `🎉 "${videoTitle}" has been approved for monetization (2/2 ads completed)! (${passedVideosCount}/3 passed)`;
+      const notifMsg = `🎉 "${videoTitle}" has been approved for monetization (${required}/${required} ads completed)! (${passedVideosCount}/3 passed)`;
       Notification.create({
         recipient: userId,
         actor: userId,
@@ -1653,11 +1660,13 @@ exports.watchReviewAd = async (req, res, next) => {
       }).catch(() => {});
     }
 
+    const remainingToPass = Math.max(0, required - newCount);
+
     res.status(200).json({
       success: true,
       message: autoPassed
         ? 'Congratulations! This video has been approved for monetization! 🎉'
-        : `Ad 1 of ${required} completed! Watch 1 more ad to pass this video.`,
+        : `Ad ${newCount} of ${required} completed! Watch ${remainingToPass} more ad${remainingToPass === 1 ? '' : 's'} to pass this video.`,
       data: {
         reviewId: review._id,
         videoId: review.video?._id || review.video,

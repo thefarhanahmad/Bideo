@@ -8,8 +8,9 @@ import { Ionicons } from '@expo/vector-icons';
 import Colors from '../../constants/Colors';
 import api from '../../services/api';
 import PostCard from '../../components/PostCard';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../../redux/store';
+import { updateUser } from '../../redux/slices/authSlice';
 import AuthModal from '../../components/AuthModal';
 import VerifiedBadge from '../../components/VerifiedBadge';
 import { formatTimeAgo, formatViews } from '../../utils/formatDate';
@@ -19,6 +20,7 @@ const { width } = Dimensions.get('window');
 const FALLBACK_AVATAR = 'https://via.placeholder.com/100x100.png?text=User';
 
 export default function ChannelScreen() {
+  const dispatch = useDispatch();
   const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
@@ -48,9 +50,18 @@ export default function ChannelScreen() {
         params: { filter: activeFilter, sort: activeSort } 
       });
       if (res.data.success) {
-        setChannel(res.data.data.channel);
+        const fetchedChannel = res.data.data.channel;
+        setChannel(fetchedChannel);
         setVideos(activeFilter === 'posts' ? [] : res.data.data.videos || []);
         setPosts(activeFilter === 'posts' ? res.data.data.posts || [] : []);
+
+        const channelOwnerId = fetchedChannel?._id?.toString() || '';
+        const currentUserId = user?._id?.toString() || user?.id?.toString() || '';
+        if (currentUserId && channelOwnerId && currentUserId === channelOwnerId) {
+          dispatch(updateUser({
+            isVerified: Boolean(fetchedChannel.isVerified),
+          }));
+        }
         return;
       }
       throw new Error('Channel not found');
@@ -309,7 +320,7 @@ export default function ChannelScreen() {
                   <Text style={styles.name} numberOfLines={1}>
                     {channel?.channelName || channel?.name || 'Channel'}
                   </Text>
-                  {Boolean(channel?.isVerified || (isOwner && user?.isVerified)) && (
+                  {Boolean(channel?.isVerified) && (
                     <VerifiedBadge size={17} style={{ marginLeft: 5 }} />
                   )}
                 </View>

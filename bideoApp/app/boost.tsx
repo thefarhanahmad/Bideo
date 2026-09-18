@@ -15,11 +15,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useDispatch, useSelector } from 'react-redux';
 import Colors from '../constants/Colors';
 import api from '../services/api';
 import { showAlert } from '../components/AppAlert';
 import { formatViews, formatDuration } from '../utils/formatDate';
 import { loadAndShowRewardedAd } from '../components/AppAds';
+import { RootState } from '../redux/store';
+import { updateUser } from '../redux/slices/authSlice';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import VerifiedBadge from '../components/VerifiedBadge';
 
 interface BoostTier {
   coins: number;
@@ -31,6 +36,8 @@ interface BoostTier {
 export default function BoostScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const dispatch = useDispatch();
+  const { user: currentUser } = useSelector((state: RootState) => state.auth);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -42,6 +49,15 @@ export default function BoostScreen() {
   const [rewardModal, setRewardModal] = useState<{ visible: boolean; coins: number }>({
     visible: false,
     coins: 0,
+  });
+
+  // Verified Badge Modal States
+  const [verifiedModalVisible, setVerifiedModalVisible] = useState(false);
+  const [confirmBadgeModalVisible, setConfirmBadgeModalVisible] = useState(false);
+  const [submittingBadge, setSubmittingBadge] = useState(false);
+  const [badgeSuccessModal, setBadgeSuccessModal] = useState<{ visible: boolean; expiryDate: string }>({
+    visible: false,
+    expiryDate: '',
   });
 
   // Boost Action & Modal States
@@ -64,6 +80,13 @@ export default function BoostScreen() {
       const res = await api.get('/boost/status');
       if (res.data.success && res.data.data) {
         setData(res.data.data);
+        if (res.data.data.verifiedBadge) {
+          const { isVerified, verifiedUntil, verifiedSource } = res.data.data.verifiedBadge;
+          dispatch(updateUser({ isVerified, verifiedUntil, verifiedSource }));
+          if (currentUser) {
+            AsyncStorage.setItem('cached_user', JSON.stringify({ ...currentUser, isVerified, verifiedUntil, verifiedSource })).catch(() => {});
+          }
+        }
         const cd = Number(res.data.data.dailyAds?.cooldownSeconds || 0);
         setCooldownLeft(cd);
         if (res.data.data.activeBoost?.remainingSeconds) {
@@ -147,9 +170,13 @@ export default function BoostScreen() {
   const handleWatchAd = () => {
     if (!data?.dailyAds?.canWatch) {
       if (cooldownLeft > 0) {
-        showAlert('Cooldown Active', `Please wait ${formatTimer(cooldownLeft)} before watching another ad.`);
+        if (data?.dailyAds?.isCycleReset) {
+          showAlert('Cycle Limit Reached', `All 16 ads watched! Limit resets in ${formatTimer(cooldownLeft)} (1-hour cooldown).`);
+        } else {
+          showAlert('Cooldown Active', `Please wait ${formatTimer(cooldownLeft)} before watching another ad.`);
+        }
       } else if (data?.dailyAds?.remaining <= 0) {
-        showAlert('Daily Limit Reached', 'You have watched all 16 ads for today. Limit resets tomorrow!');
+        showAlert('Cycle Limit Reached', 'You have watched all 16 ads. Limit resets in 1 hour!');
       }
       return;
     }
@@ -188,6 +215,55 @@ export default function BoostScreen() {
         showAlert('Ad Unavailable', 'No rewarded ad available right now. Please try again in a few moments.');
       },
     });
+  };
+
+  const onInitiateBuyBadge = () => {
+    if (userCoins < badgePrice) {
+      showAlert('Coins Needed', `You need ${badgePrice.toLocaleString()} coins to get the Verified Badge. You currently have ${userCoins.toLocaleString()} coins. Watch ads to collect more coins!`);
+      return;
+    }
+    setVerifiedModalVisible(false);
+    setTimeout(() => {
+      setConfirmBadgeModalVisible(true);
+    }, 200);
+  };
+
+  const handleCancelConfirmBadge = () => {
+    setConfirmBadgeModalVisible(false);
+    setTimeout(() => {
+      setVerifiedModalVisible(true);
+    }, 200);
+  };
+
+  const handleConfirmBuyBadge = async () => {
+    setSubmittingBadge(true);
+    try {
+      const res = await api.post('/boost/buy-verified-badge');
+      if (res.data.success && res.data.data) {
+        const { isVerified, verifiedUntil, verifiedSource } = res.data.data;
+        const updatedUserData = { ...currentUser, isVerified, verifiedUntil, verifiedSource };
+        dispatch(updateUser({ isVerified, verifiedUntil, verifiedSource }));
+        AsyncStorage.setItem('cached_user', JSON.stringify(updatedUserData)).catch(() => {});
+        setConfirmBadgeModalVisible(false);
+        setVerifiedModalVisible(false);
+        const formattedDate = new Date(verifiedUntil).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        });
+        setTimeout(() => {
+          setBadgeSuccessModal({
+            visible: true,
+            expiryDate: formattedDate,
+          });
+        }, 200);
+        fetchStatus();
+      }
+    } catch (err: any) {
+      showAlert('Purchase Failed', err?.response?.data?.message || 'Failed to purchase verified badge.');
+    } finally {
+      setSubmittingBadge(false);
+    }
   };
 
   const openBoostModal = async () => {
@@ -263,6 +339,7 @@ export default function BoostScreen() {
   // Ad slot states
   const isDailyDone = dailyAds.remaining <= 0;
   const isCooldown = cooldownLeft > 0;
+  const isCycleReset = Boolean(dailyAds.isCycleReset) || (isDailyDone && isCooldown);
   const sessionCount = Number(dailyAds.sessionCount || 0);
 
   const ad1Watched = isDailyDone || isCooldown || sessionCount >= 1;
@@ -270,6 +347,15 @@ export default function BoostScreen() {
 
   const ad2Watched = isDailyDone || isCooldown || sessionCount >= 2;
   const ad2Active = !isDailyDone && !isCooldown && sessionCount === 1;
+
+  const ad3Watched = isDailyDone || isCooldown || sessionCount >= 3;
+  const ad3Active = !isDailyDone && !isCooldown && sessionCount === 2;
+
+  // Verified Badge states
+  const isUserVerified = Boolean(currentUser?.isVerified || data?.verifiedBadge?.isVerified);
+  const verifiedUntil = data?.verifiedBadge?.verifiedUntil || currentUser?.verifiedUntil;
+  const isCoinVerified = (data?.verifiedBadge?.verifiedSource || currentUser?.verifiedSource) === 'coin_purchase';
+  const badgePrice = Number(data?.verifiedBadge?.priceCoins || 1500);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -282,23 +368,37 @@ export default function BoostScreen() {
           <Text style={styles.headerTitle}>Boost</Text>
         </View>
 
-        <TouchableOpacity
-          style={[styles.headerBoostBtn, !canBoostNow && styles.headerBoostBtnDisabled]}
-          onPress={openBoostModal}
-          activeOpacity={0.85}
-        >
-          <LinearGradient
-            colors={canBoostNow ? ['#8E24AA', '#D81B60'] : ['#E0E0E0', '#BDBDBD']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.headerBoostGradient}
+        <View style={styles.headerRightGroup}>
+          {/* Get Verified Blue Tick Button (Left of Boost Button) */}
+          <TouchableOpacity
+            style={styles.headerVerifiedBtn}
+            onPress={() => setVerifiedModalVisible(true)}
+            activeOpacity={0.85}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
           >
-            <Ionicons name="rocket" size={13} color={canBoostNow ? Colors.white : '#757575'} />
-            <Text style={[styles.headerBoostBtnText, !canBoostNow && { color: '#757575' }]}>
-              Boost
-            </Text>
-          </LinearGradient>
-        </TouchableOpacity>
+            <Text style={styles.headerVerifiedBtnText}>Get </Text>
+            <Ionicons name="checkmark-circle" size={16} color="#0095F6" />
+          </TouchableOpacity>
+
+          {/* Boost Button */}
+          <TouchableOpacity
+            style={[styles.headerBoostBtn, !canBoostNow && styles.headerBoostBtnDisabled]}
+            onPress={openBoostModal}
+            activeOpacity={0.85}
+          >
+            <LinearGradient
+              colors={canBoostNow ? ['#8E24AA', '#D81B60'] : ['#E0E0E0', '#BDBDBD']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.headerBoostGradient}
+            >
+              <Ionicons name="rocket" size={13} color={canBoostNow ? Colors.white : '#757575'} />
+              <Text style={[styles.headerBoostBtnText, !canBoostNow && { color: '#757575' }]}>
+                Boost
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {loading ? (
@@ -359,7 +459,7 @@ export default function BoostScreen() {
             </View>
           </View>
 
-          {/* Watch Ad Action Section - Single Column 2 Ads */}
+          {/* Watch Ad Action Section - 3 Ads Instant Burst */}
           <View style={styles.adSectionCard}>
             <View style={styles.adSectionHeader}>
               <View style={styles.adRewardIconBox}>
@@ -373,7 +473,7 @@ export default function BoostScreen() {
               </View>
             </View>
 
-            {/* Both Ads in a Single Vertical Column */}
+            {/* All 3 Ads in a Single Vertical Column */}
             <View style={styles.adsListColumn}>
               {/* Ad Card 1 */}
               <View style={[
@@ -490,25 +590,93 @@ export default function BoostScreen() {
                   </TouchableOpacity>
                 )}
               </View>
+
+              {/* Ad Card 3 */}
+              <View style={[
+                styles.adItemCard,
+                ad3Watched && styles.adItemCardWatched,
+                ad3Active && styles.adItemCardActive,
+                (isCooldown || isDailyDone) && styles.adItemCardDisabled,
+              ]}>
+                <View style={styles.adItemLeft}>
+                  <View style={[
+                    styles.adItemIconWrap,
+                    ad3Watched ? styles.adItemIconWrapWatched : ad3Active ? styles.adItemIconWrapActive : styles.adItemIconWrapMuted,
+                  ]}>
+                    <Ionicons
+                      name={ad3Watched ? 'checkmark-circle' : ad3Active ? 'play' : 'lock-closed'}
+                      size={15}
+                      color={ad3Watched ? '#2E7D32' : ad3Active ? '#8E24AA' : '#9E9E9E'}
+                    />
+                  </View>
+                  <View style={{ marginLeft: 8, flex: 1 }}>
+                    <Text style={styles.adItemTitle}>Reward 3</Text>
+                    <Text style={styles.adItemStatus}>
+                      {ad3Watched
+                        ? 'Claimed'
+                        : ad3Active
+                        ? 'Available'
+                        : isCooldown
+                        ? 'In cooldown'
+                        : 'Locked'}
+                    </Text>
+                  </View>
+                </View>
+
+                {ad3Watched ? (
+                  <View style={styles.watchedBadge}>
+                    <Ionicons name="checkmark" size={12} color="#2E7D32" />
+                    <Text style={styles.watchedBadgeText}>Watched</Text>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={[
+                      styles.watchActionBtn,
+                      (!ad3Active || isAdLoading) && styles.watchActionBtnDisabled,
+                    ]}
+                    onPress={handleWatchAd}
+                    disabled={!ad3Active || isAdLoading}
+                    activeOpacity={0.8}
+                  >
+                    {isAdLoading && ad3Active ? (
+                      <ActivityIndicator size="small" color="#FFF" />
+                    ) : (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Ionicons name={ad3Active ? 'play' : 'lock-closed'} size={11} color="#FFF" />
+                        <Text style={styles.watchActionBtnText}>
+                          {ad3Active ? 'Watch' : 'Locked'}
+                        </Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
 
             {/* Cooldown or Completion Banner */}
-            {cooldownLeft > 0 ? (
+            {isCycleReset && cooldownLeft > 0 ? (
+              <View style={[styles.cooldownBanner, { backgroundColor: '#EDE7F6', borderColor: '#D1C4E9', borderWidth: 1 }]}>
+                <Ionicons name="hourglass-outline" size={16} color="#6A1B9A" />
+                <Text style={[styles.cooldownBannerText, { color: '#4A148C' }]}>
+                  All 16 ads watched! Limit resets in <Text style={{ fontWeight: '800' }}>{formatTimer(cooldownLeft)}</Text> (1-hour cooldown)
+                </Text>
+              </View>
+            ) : cooldownLeft > 0 ? (
               <View style={styles.cooldownBanner}>
                 <Ionicons name="timer-outline" size={16} color="#E65100" />
                 <Text style={styles.cooldownBannerText}>
-                  Cooldown active! Next batch unlocks in <Text style={{ fontWeight: '800' }}>{formatTimer(cooldownLeft)}</Text>
+                  Cooldown active! Next 3 ads unlock in <Text style={{ fontWeight: '800' }}>{formatTimer(cooldownLeft)}</Text>
                 </Text>
               </View>
             ) : dailyAds.remaining <= 0 ? (
               <View style={styles.completedBanner}>
                 <Ionicons name="checkmark-circle" size={16} color="#2E7D32" />
-                <Text style={styles.completedBannerText}>All 16 ads watched today! Resets tomorrow.</Text>
+                <Text style={styles.completedBannerText}>All 16 ads watched! Limit resets in 1 hour.</Text>
               </View>
             ) : (
               <View style={styles.sessionHintRow}>
                 <Ionicons name="time-outline" size={13} color="#757575" />
-                <Text style={styles.sessionHintText}>2 ads per session • 10-minute pause between sessions</Text>
+                <Text style={styles.sessionHintText}>3 ads per session • 10-minute pause • 16-ad limit resets in 1 hour</Text>
               </View>
             )}
           </View>
@@ -879,6 +1047,211 @@ export default function BoostScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Verified Badge Purchase Modal */}
+      <Modal visible={verifiedModalVisible} transparent animationType="fade" onRequestClose={() => setVerifiedModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.verifiedModalBox}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="checkmark-circle" size={18} color="#0095F6" />
+                <Text style={styles.verifiedModalTitle}>Official Verified Badge</Text>
+              </View>
+              <TouchableOpacity onPress={() => setVerifiedModalVisible(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close" size={20} color={Colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Profile Preview with Blue Tick */}
+            <View style={styles.verifiedPreviewBox}>
+              {currentUser?.avatar ? (
+                <Image source={{ uri: currentUser.avatar }} style={styles.verifiedPreviewAvatar} contentFit="cover" />
+              ) : (
+                <View style={[styles.verifiedPreviewAvatar, { backgroundColor: '#0095F6', alignItems: 'center', justifyContent: 'center' }]}>
+                  <Text style={{ color: '#FFF', fontWeight: '800', fontSize: 14 }}>
+                    {(currentUser?.name || 'U').slice(0, 1).toUpperCase()}
+                  </Text>
+                </View>
+              )}
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Text style={styles.verifiedPreviewName} numberOfLines={1}>
+                    {currentUser?.channelName || currentUser?.name || 'Your Channel'}
+                  </Text>
+                  <VerifiedBadge size={15} style={{ marginLeft: 4 }} />
+                </View>
+                <Text style={styles.verifiedPreviewSub}>Verified Channel Preview</Text>
+              </View>
+            </View>
+
+            {/* Benefits List */}
+            <View style={styles.verifiedBenefitsList}>
+              <View style={styles.verifiedBenefitRow}>
+                <Ionicons name="checkmark-circle" size={15} color="#0095F6" />
+                <Text style={styles.verifiedBenefitText}>Blue tick checkmark beside your channel name</Text>
+              </View>
+              <View style={styles.verifiedBenefitRow}>
+                <Ionicons name="checkmark-circle" size={15} color="#0095F6" />
+                <Text style={styles.verifiedBenefitText}>Displays on all your videos, comments, shorts & posts</Text>
+              </View>
+              <View style={styles.verifiedBenefitRow}>
+                <Ionicons name="checkmark-circle" size={15} color="#0095F6" />
+                <Text style={styles.verifiedBenefitText}>Build creator authority & trust across the community</Text>
+              </View>
+              <View style={styles.verifiedBenefitRow}>
+                <Ionicons name="time-outline" size={15} color="#0095F6" />
+                <Text style={styles.verifiedBenefitText}>Valid for 1 month</Text>
+              </View>
+            </View>
+
+            {/* Cost & Balance */}
+            <View style={styles.verifiedCostCard}>
+              <View style={styles.verifiedCostRow}>
+                <Text style={styles.verifiedCostLabel}>Badge Cost (1 Month)</Text>
+                <Text style={styles.verifiedCostValue}>🪙 {badgePrice.toLocaleString()} Coins</Text>
+              </View>
+              <View style={[styles.verifiedCostRow, { marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#EEEEEE' }]}>
+                <Text style={styles.verifiedCostLabel}>Your Balance</Text>
+                <Text style={[styles.verifiedCostValue, { color: userCoins >= badgePrice ? '#2E7D32' : '#C62828' }]}>
+                  🪙 {userCoins.toLocaleString()} Coins
+                </Text>
+              </View>
+            </View>
+
+            {userCoins < badgePrice && (
+              <View style={styles.verifiedCoinsShortage}>
+                <Ionicons name="alert-circle-outline" size={14} color="#C62828" />
+                <Text style={styles.verifiedCoinsShortageText}>
+                  You need {(badgePrice - userCoins).toLocaleString()} more coins. Watch ads to collect coins!
+                </Text>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={[
+                styles.verifiedBuyBtn,
+                (userCoins < badgePrice || submittingBadge) && styles.verifiedBuyBtnDisabled,
+              ]}
+              onPress={onInitiateBuyBadge}
+              disabled={userCoins < badgePrice || submittingBadge}
+              activeOpacity={0.85}
+            >
+              {submittingBadge ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  <Ionicons name="checkmark-circle" size={16} color="#FFF" />
+                  <Text style={styles.verifiedBuyBtnText}>
+                    {userCoins >= badgePrice
+                      ? isUserVerified
+                        ? `Extend Badge (🪙 ${badgePrice.toLocaleString()} Coins)`
+                        : `Get Verified Badge (🪙 ${badgePrice.toLocaleString()} Coins)`
+                      : `Need ${(badgePrice - userCoins).toLocaleString()} More Coins`}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Verified Badge Confirmation Modal */}
+      <Modal
+        visible={confirmBadgeModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={handleCancelConfirmBadge}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.badgeConfirmBox}>
+            <View style={styles.badgeConfirmIconWrap}>
+              <Ionicons name="shield-checkmark" size={32} color="#0095F6" />
+            </View>
+
+            <Text style={styles.badgeConfirmTitle}>
+              {isUserVerified ? 'Extend Verified Badge?' : 'Get Verified Badge?'}
+            </Text>
+            <Text style={styles.badgeConfirmDesc}>
+              {isUserVerified
+                ? 'Confirm extending your official blue tick verification for an additional 1 month.'
+                : 'Confirm getting the official blue tick badge on your channel profile and videos for 1 month.'}
+            </Text>
+
+            <View style={styles.badgeConfirmSummaryBox}>
+              <View style={styles.badgeConfirmSummaryRow}>
+                <Text style={styles.badgeConfirmSummaryLabel}>Validity Duration</Text>
+                <Text style={styles.badgeConfirmSummaryValue}>1 Month</Text>
+              </View>
+              <View style={styles.badgeConfirmSummaryRow}>
+                <Text style={styles.badgeConfirmSummaryLabel}>Cost</Text>
+                <Text style={[styles.badgeConfirmSummaryValue, { color: '#0095F6' }]}>
+                  🪙 {badgePrice.toLocaleString()} Coins
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.badgeConfirmBtnRow}>
+              <TouchableOpacity
+                style={styles.badgeConfirmCancelBtn}
+                onPress={handleCancelConfirmBadge}
+                disabled={submittingBadge}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.badgeConfirmCancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.badgeConfirmSubmitBtn, submittingBadge && { opacity: 0.7 }]}
+                onPress={handleConfirmBuyBadge}
+                disabled={submittingBadge}
+                activeOpacity={0.85}
+              >
+                {submittingBadge ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Text style={styles.badgeConfirmSubmitBtnText}>Confirm</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Verified Badge Success Modal */}
+      <Modal
+        visible={badgeSuccessModal.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setBadgeSuccessModal({ visible: false, expiryDate: '' })}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.verifiedSuccessBox}>
+            <View style={styles.verifiedSuccessIconWrap}>
+              <Ionicons name="checkmark-circle" size={40} color="#0095F6" />
+            </View>
+
+            <Text style={styles.verifiedSuccessTitle}>Verified Badge Active!</Text>
+
+            <View style={styles.verifiedSuccessPill}>
+              <Ionicons name="checkmark-circle" size={13} color="#0284C7" />
+              <Text style={styles.verifiedSuccessPillText}>Official Blue Tick Granted</Text>
+            </View>
+
+            <Text style={styles.verifiedSuccessDesc}>
+              Congratulations! Your channel is now verified with the official blue tick badge on your profile and videos until{' '}
+              <Text style={{ fontWeight: '700', color: Colors.text }}>{badgeSuccessModal.expiryDate}</Text> (1 Month).
+            </Text>
+
+            <TouchableOpacity
+              style={styles.verifiedSuccessDoneBtn}
+              onPress={() => setBadgeSuccessModal({ visible: false, expiryDate: '' })}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.verifiedSuccessDoneBtnText}>Great, Thanks!</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -902,6 +1275,26 @@ const styles = StyleSheet.create({
   },
   backBtn: { padding: 4 },
   headerTitle: { fontSize: 18, fontWeight: '800', color: Colors.text },
+  headerRightGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerVerifiedBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F8FF',
+    paddingVertical: 6,
+    paddingHorizontal: 11,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: '#BAE3FF',
+  },
+  headerVerifiedBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0095F6',
+  },
   headerBoostBtn: {
     borderRadius: 18,
     overflow: 'hidden',
@@ -1266,7 +1659,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 20,
   },
   rateChartBox: {
     width: '100%',
@@ -1455,4 +1849,333 @@ const styles = StyleSheet.create({
   },
   confirmFinalBtnDisabled: { opacity: 0.6 },
   confirmFinalBtnText: { color: Colors.white, fontSize: 14, fontWeight: '800' },
+
+  // Verified Badge Purchase Modal
+  verifiedModalBox: {
+    width: '100%',
+    maxWidth: 390,
+    backgroundColor: Colors.white,
+    borderRadius: 20,
+    padding: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  verifiedModalTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  verifiedPreviewBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F8FF',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    marginVertical: 10,
+    borderWidth: 1,
+    borderColor: '#BAE3FF',
+  },
+  verifiedPreviewAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#DDD',
+  },
+  verifiedPreviewName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  verifiedPreviewSub: {
+    fontSize: 11,
+    color: '#0284C7',
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  verifiedBenefitsList: {
+    gap: 7,
+    marginBottom: 12,
+  },
+  verifiedBenefitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  verifiedBenefitText: {
+    fontSize: 12,
+    color: '#444',
+    fontWeight: '500',
+    flex: 1,
+    lineHeight: 16,
+  },
+  verifiedCostCard: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#EEEEEE',
+    marginBottom: 12,
+  },
+  verifiedCostRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+  },
+  verifiedCostLabel: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '600',
+    flexShrink: 1,
+  },
+  verifiedCostValue: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.text,
+    flexShrink: 0,
+    textAlign: 'right',
+  },
+  verifiedCoinsShortage: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFEBEE',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#FFCDD2',
+  },
+  verifiedCoinsShortageText: {
+    fontSize: 11,
+    color: '#C62828',
+    fontWeight: '600',
+    flex: 1,
+    lineHeight: 15,
+  },
+  verifiedBuyBtn: {
+    backgroundColor: '#0095F6',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0095F6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  verifiedBuyBtnDisabled: {
+    backgroundColor: '#BDBDBD',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  verifiedBuyBtnText: {
+    color: Colors.white,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  // Verified Badge Confirmation Modal
+  badgeConfirmBox: {
+    backgroundColor: Colors.white,
+    borderRadius: 20,
+    padding: 20,
+    width: '88%',
+    maxWidth: 340,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  badgeConfirmIconWrap: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#E0F2FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  badgeConfirmTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: Colors.text,
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  badgeConfirmDesc: {
+    fontSize: 12.5,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 14,
+    paddingHorizontal: 4,
+  },
+  badgeConfirmSummaryBox: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#EEEEEE',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    width: '100%',
+    marginBottom: 16,
+    gap: 6,
+  },
+  badgeConfirmSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  badgeConfirmSummaryLabel: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+  },
+  badgeConfirmSummaryValue: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  badgeConfirmDivider: {
+    height: 1,
+    backgroundColor: '#EEEEEE',
+    marginVertical: 2,
+  },
+  badgeConfirmBtnRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    width: '100%',
+  },
+  badgeConfirmCancelBtn: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: 12,
+    backgroundColor: '#F1F3F5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeConfirmCancelBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#555',
+    textAlign: 'center',
+  },
+  badgeConfirmSubmitBtn: {
+    flex: 1.3,
+    paddingVertical: 11,
+    borderRadius: 12,
+    backgroundColor: '#0095F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0095F6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  badgeConfirmSubmitBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFF',
+    textAlign: 'center',
+  },
+
+  // Verified Badge Success Modal
+  verifiedSuccessBox: {
+    backgroundColor: Colors.white,
+    borderRadius: 20,
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+    width: '88%',
+    maxWidth: 340,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  verifiedSuccessIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#E0F2FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  verifiedSuccessTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.text,
+    textAlign: 'center',
+    alignSelf: 'center',
+    width: '100%',
+    marginBottom: 8,
+  },
+  verifiedSuccessPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    gap: 5,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    marginBottom: 14,
+  },
+  verifiedSuccessPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0284C7',
+    textAlign: 'center',
+    alignSelf: 'center',
+  },
+  verifiedSuccessDesc: {
+    fontSize: 12.5,
+    color: '#666',
+    textAlign: 'center',
+    alignSelf: 'center',
+    width: '100%',
+    lineHeight: 19,
+    marginBottom: 20,
+    paddingHorizontal: 6,
+  },
+  verifiedSuccessDoneBtn: {
+    backgroundColor: '#0095F6',
+    paddingVertical: 12,
+    borderRadius: 12,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    shadowColor: '#0095F6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  verifiedSuccessDoneBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFF',
+    textAlign: 'center',
+    alignSelf: 'center',
+  },
 });

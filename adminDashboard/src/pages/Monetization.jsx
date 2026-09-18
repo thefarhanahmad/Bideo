@@ -368,13 +368,13 @@ const Monetization = () => {
                                 <span>•</span>
                                 {rev.status === "passed" ? (
                                   <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700">
-                                    Approved {rev.passedVia === "rewarded_ads" ? "via 2 Rewarded Ads" : "Manually by Admin"}
+                                    Approved {rev.passedVia === "rewarded_ads" ? "via Rewarded Ads" : "Manually by Admin"}
                                   </span>
                                 ) : (
                                   <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
                                     (rev.adsWatched || 0) > 0 ? "bg-amber-50 text-amber-700 border border-amber-200" : "bg-gray-100 text-gray-600"
                                   }`}>
-                                    📺 Ads Watched: {rev.adsWatched || 0} / {rev.adsRequired || 2}
+                                    📺 Ads Watched: {rev.adsWatched || 0} / {rev.adsRequired || 4}
                                   </span>
                                 )}
                               </div>

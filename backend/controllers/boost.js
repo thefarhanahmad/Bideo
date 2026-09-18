@@ -2,43 +2,71 @@ const User = require('../models/User');
 const Video = require('../models/Video');
 const VideoBoost = require('../models/VideoBoost');
 const CoinTransaction = require('../models/CoinTransaction');
+const Notification = require('../models/Notification');
 const { processBoostQueue } = require('../utils/boostQueueScheduler');
 
 const DAILY_MAX_ADS = 16;
-const SESSION_BURST_MAX = 2;
+const SESSION_BURST_MAX = 3;
 const COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
+const CYCLE_RESET_MS = 60 * 60 * 1000; // 1 hour reset after 16 ads
+const BADGE_COIN_PRICE = 1500;
+const BADGE_DURATION_DAYS = 30;
 
 const BOOST_TIERS = {
-  1: { coins: 100, hours: 1, label: '1 Hour' },
-  3: { coins: 250, hours: 3, label: '3 Hours', discount: 'Save 50' },
-  6: { coins: 500, hours: 6, label: '6 Hours', discount: 'Save 100' },
-  24: { coins: 1000, hours: 24, label: '24 Hours', discount: 'Save 1400' },
+  1: { hours: 1, coins: 100, label: '1 Hour', discount: null },
+  3: { hours: 3, coins: 250, label: '3 Hours', discount: 'Save 50 coins' },
+  6: { hours: 6, coins: 500, label: '6 Hours', discount: 'Save 100 coins' },
+  24: { hours: 24, coins: 1000, label: '24 Hours', discount: 'Save 1,400 coins' },
 };
 
 /**
  * Helper to normalize and get user ad limits & cooldown status
+ * Production-grade: 3 ads instant, 10 min session cooldown, and 16 ads resets after 1 hour.
  */
 const getUserAdStatus = (user) => {
   const todayStr = new Date().toISOString().slice(0, 10);
   let dailyCount = user.adRewards?.dailyCount || 0;
   let sessionCount = user.adRewards?.sessionCount || 0;
-  const dailyDate = user.adRewards?.dailyDate || null;
   const lastAdWatchedAt = user.adRewards?.lastAdWatchedAt ? new Date(user.adRewards.lastAdWatchedAt) : null;
+  const now = Date.now();
 
-  // Reset if new day
-  if (dailyDate !== todayStr) {
+  let cooldownSeconds = 0;
+  let isCycleReset = false;
+
+  // Reset counters if a new calendar day has started
+  if (user.adRewards?.dailyDate && user.adRewards.dailyDate !== todayStr) {
     dailyCount = 0;
     sessionCount = 0;
   }
 
-  // Calculate cooldown
-  let cooldownSeconds = 0;
-  if (sessionCount >= SESSION_BURST_MAX && lastAdWatchedAt) {
-    const elapsed = Date.now() - lastAdWatchedAt.getTime();
-    if (elapsed < COOLDOWN_MS) {
-      cooldownSeconds = Math.ceil((COOLDOWN_MS - elapsed) / 1000);
+  // 1. Check if user reached the 16-ad cycle limit
+  if (dailyCount >= DAILY_MAX_ADS) {
+    if (lastAdWatchedAt) {
+      const elapsed = now - lastAdWatchedAt.getTime();
+      if (elapsed >= CYCLE_RESET_MS) {
+        // 1-hour cooldown completed! Reset cycle back to 0
+        dailyCount = 0;
+        sessionCount = 0;
+      } else {
+        // Still inside 1-hour cycle reset cooldown
+        cooldownSeconds = Math.ceil((CYCLE_RESET_MS - elapsed) / 1000);
+        isCycleReset = true;
+      }
     } else {
-      sessionCount = 0; // Cooldown expired, reset session count
+      dailyCount = 0;
+      sessionCount = 0;
+    }
+  }
+
+  // 2. Check session burst limit & 10-minute session cooldown
+  if (dailyCount < DAILY_MAX_ADS && lastAdWatchedAt) {
+    const elapsed = now - lastAdWatchedAt.getTime();
+    if (elapsed >= COOLDOWN_MS) {
+      // 10-minute cooldown expired or user was idle for 10+ min: unlock fresh 3-ad burst
+      sessionCount = 0;
+    } else if (sessionCount >= SESSION_BURST_MAX) {
+      // Still inside 10-minute cooldown after 3-ad burst
+      cooldownSeconds = Math.ceil((COOLDOWN_MS - elapsed) / 1000);
     }
   }
 
@@ -51,6 +79,7 @@ const getUserAdStatus = (user) => {
     sessionCount,
     remainingDaily,
     cooldownSeconds,
+    isCycleReset,
     canWatch,
   };
 };
@@ -70,12 +99,25 @@ exports.getBoostStatus = async (req, res) => {
     // Process any queue expirations/promotions first
     await processBoostQueue();
 
+    // Self-healing check for coin-purchased verified badge expiration
+    if (
+      user.isVerified &&
+      user.verifiedUntil &&
+      new Date(user.verifiedUntil) <= new Date() &&
+      user.verifiedSource === 'coin_purchase'
+    ) {
+      user.isVerified = false;
+      user.verifiedUntil = null;
+      user.verifiedSource = null;
+      await user.save();
+    }
+
     const adStatus = getUserAdStatus(user);
 
-    // Save normalization if day or session state changed
+    // Save normalization if cycle count or session state changed
     if (
-      user.adRewards?.dailyDate !== adStatus.todayStr ||
-      (user.adRewards?.sessionCount >= SESSION_BURST_MAX && adStatus.sessionCount === 0)
+      user.adRewards?.dailyCount !== adStatus.dailyCount ||
+      user.adRewards?.sessionCount !== adStatus.sessionCount
     ) {
       user.adRewards = {
         dailyCount: adStatus.dailyCount,
@@ -121,7 +163,14 @@ exports.getBoostStatus = async (req, res) => {
           sessionCount: adStatus.sessionCount,
           sessionMax: SESSION_BURST_MAX,
           cooldownSeconds: adStatus.cooldownSeconds,
+          isCycleReset: adStatus.isCycleReset,
           canWatch: adStatus.canWatch,
+        },
+        verifiedBadge: {
+          isVerified: Boolean(user.isVerified),
+          verifiedUntil: user.verifiedUntil,
+          verifiedSource: user.verifiedSource,
+          priceCoins: BADGE_COIN_PRICE,
         },
         boostTiers: Object.values(BOOST_TIERS),
         activeBoost: activeBoost
@@ -176,9 +225,11 @@ exports.claimAdReward = async (req, res) => {
     const adStatus = getUserAdStatus(user);
 
     if (adStatus.dailyCount >= DAILY_MAX_ADS) {
+      const minutes = Math.ceil(adStatus.cooldownSeconds / 60) || 60;
       return res.status(400).json({
         success: false,
-        message: `Daily limit reached (${DAILY_MAX_ADS}/${DAILY_MAX_ADS} ads). Come back tomorrow!`,
+        cooldownSeconds: adStatus.cooldownSeconds,
+        message: `Cycle limit reached (${DAILY_MAX_ADS}/${DAILY_MAX_ADS} ads). Limit resets in ${minutes} minutes!`,
       });
     }
 
@@ -188,7 +239,9 @@ exports.claimAdReward = async (req, res) => {
       return res.status(400).json({
         success: false,
         cooldownSeconds: adStatus.cooldownSeconds,
-        message: `Cooldown active. Please wait ${minutes}m ${seconds}s before watching your next ad.`,
+        message: adStatus.isCycleReset
+          ? `Cycle limit reached. Please wait ${minutes}m ${seconds}s for the 1-hour reset.`
+          : `Cooldown active. Please wait ${minutes}m ${seconds}s before watching your next ad.`,
       });
     }
 
@@ -226,8 +279,14 @@ exports.claimAdReward = async (req, res) => {
       },
     });
 
-    // Check if new cooldown triggered (after 2nd ad in session)
-    const newCooldownSeconds = newSessionCount >= SESSION_BURST_MAX ? 600 : 0;
+    // Check if new cooldown triggered:
+    // If completed 16 ads -> 1-hour (3600s) cooldown; if reached 3 ads in session -> 10-minute (600s) cooldown
+    let newCooldownSeconds = 0;
+    if (newDailyCount >= DAILY_MAX_ADS) {
+      newCooldownSeconds = 3600;
+    } else if (newSessionCount >= SESSION_BURST_MAX) {
+      newCooldownSeconds = 600;
+    }
 
     res.status(200).json({
       success: true,
@@ -437,3 +496,102 @@ exports.getMyEligibleVideos = async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to fetch videos' });
   }
 };
+
+/**
+ * @route   POST /api/boost/buy-verified-badge
+ * @desc    Spend 1500 coins to purchase or extend a 1-month verified blue tick badge
+ * @access  Private
+ */
+exports.buyVerifiedBadge = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    if ((user.coins || 0) < BADGE_COIN_PRICE) {
+      return res.status(400).json({
+        success: false,
+        message: `Insufficient coins. You have ${user.coins || 0} coins, but the Verified Badge costs ${BADGE_COIN_PRICE} coins.`,
+      });
+    }
+
+    const now = new Date();
+    // If user already has an active verified badge with future expiry, extend it by 30 days
+    let newExpiryDate;
+    if (user.isVerified && user.verifiedUntil && new Date(user.verifiedUntil) > now) {
+      newExpiryDate = new Date(new Date(user.verifiedUntil).getTime() + BADGE_DURATION_DAYS * 24 * 60 * 60 * 1000);
+    } else {
+      newExpiryDate = new Date(now.getTime() + BADGE_DURATION_DAYS * 24 * 60 * 60 * 1000);
+    }
+
+    // Production-grade atomic deduction preventing race condition double-spending
+    const updatedUser = await User.findOneAndUpdate(
+      {
+        _id: userId,
+        coins: { $gte: BADGE_COIN_PRICE },
+      },
+      {
+        $inc: { coins: -BADGE_COIN_PRICE },
+        $set: {
+          isVerified: true,
+          verifiedSource: 'coin_purchase',
+          verifiedUntil: newExpiryDate,
+        },
+      },
+      { new: true }
+    );
+
+    if (!updatedUser) {
+      return res.status(400).json({
+        success: false,
+        message: 'Transaction could not be completed. Please check your coin balance.',
+      });
+    }
+
+    // Record coin transaction
+    await CoinTransaction.create({
+      user: updatedUser._id,
+      type: 'verified_badge_spend',
+      amount: -BADGE_COIN_PRICE,
+      balanceAfter: updatedUser.coins,
+      description: `Purchased 1-Month Verified Badge (-${BADGE_COIN_PRICE} coins)`,
+      metadata: {
+        verifiedUntil: newExpiryDate,
+        durationDays: BADGE_DURATION_DAYS,
+      },
+    });
+
+    // Create system notification for user
+    const formattedExpiry = newExpiryDate.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+    const message = `🎉 Congratulations! Your profile is now officially Verified with a blue tick until ${formattedExpiry}!`;
+
+    Notification.create({
+      recipient: updatedUser._id,
+      actor: updatedUser._id,
+      type: 'system',
+      message,
+    }).catch(() => {});
+
+    res.status(200).json({
+      success: true,
+      message: `🎉 Success! You are now verified with the official blue badge until ${formattedExpiry}!`,
+      data: {
+        isVerified: true,
+        verifiedUntil: newExpiryDate,
+        verifiedSource: updatedUser.verifiedSource,
+        remainingCoins: updatedUser.coins,
+      },
+    });
+  } catch (err) {
+    console.error('Error purchasing verified badge:', err);
+    res.status(500).json({ success: false, message: 'Failed to purchase verified badge' });
+  }
+};
+

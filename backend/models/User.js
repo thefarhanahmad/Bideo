@@ -102,6 +102,15 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  verifiedUntil: {
+    type: Date,
+    default: null,
+  },
+  verifiedSource: {
+    type: String,
+    enum: ['admin', 'coin_purchase', null],
+    default: null,
+  },
   isBlocked: {
     type: Boolean,
     default: false,
@@ -232,5 +241,7 @@ userSchema.methods.getSignedJwtToken = function () {
     expiresIn: process.env.JWT_EXPIRE || '365d',
   });
 };
+
+userSchema.index({ isVerified: 1, verifiedSource: 1, verifiedUntil: 1 });
 
 module.exports = mongoose.model('User', userSchema);
