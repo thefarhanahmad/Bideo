@@ -29,7 +29,9 @@ exports.getComments = async (req, res, next) => {
     const comments = await Comment.find(query)
       .populate('user', 'name avatar channelName isVerified')
       .populate('pinnedBy', 'name avatar channelName isVerified')
+      .populate('lovedBy', 'name avatar channelName isVerified')
       .populate('replies.user', 'name avatar channelName isVerified')
+      .populate('replies.lovedBy', 'name avatar channelName isVerified')
       .sort('-isPinned -createdAt')
       .limit(limit)
       .lean();
@@ -226,7 +228,15 @@ exports.deleteReply = async (req, res, next) => {
     const reply = comment.replies.id(req.params.replyId);
     if (!reply) return res.status(404).json({ success: false, message: 'Reply not found' });
 
-    if (reply.user.toString() !== req.user.id && req.user.role !== 'admin') {
+    let parent;
+    if (comment.video) parent = await Video.findById(comment.video);
+    else if (comment.post) parent = await Post.findById(comment.post);
+
+    const isReplyAuthor = reply.user.toString() === req.user.id.toString();
+    const isContentOwner = parent && parent.owner.toString() === req.user.id.toString();
+    const isAdmin = req.user.role === 'admin';
+
+    if (!isReplyAuthor && !isContentOwner && !isAdmin) {
       return res.status(401).json({ success: false, message: 'Not authorized to delete this reply' });
     }
 
@@ -359,6 +369,139 @@ exports.togglePinComment = async (req, res, next) => {
       success: true,
       message: comment.isPinned ? 'Comment pinned successfully' : 'Comment unpinned successfully',
       data: comment,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Toggle creator love/heart on comment (by video/post creator or admin)
+// @route   POST /api/comments/:id/love
+// @access  Private
+exports.toggleCommentLove = async (req, res, next) => {
+  try {
+    const comment = await Comment.findById(req.params.id);
+    if (!comment) {
+      return res.status(404).json({ success: false, message: 'Comment not found' });
+    }
+
+    let parent;
+    if (comment.video) parent = await Video.findById(comment.video);
+    else if (comment.post) parent = await Post.findById(comment.post);
+
+    if (!parent) {
+      return res.status(404).json({ success: false, message: 'Parent video or post not found' });
+    }
+
+    const isCreator = parent.owner.toString() === req.user.id.toString();
+    const isAdmin = req.user.role === 'admin';
+
+    if (!isCreator && !isAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only the creator of this video can heart comments',
+      });
+    }
+
+    const isCurrentlyLoved = Boolean(comment.isLoved);
+
+    if (isCurrentlyLoved) {
+      comment.isLoved = false;
+      comment.lovedBy = null;
+      comment.lovedAt = null;
+    } else {
+      comment.isLoved = true;
+      comment.lovedBy = req.user.id;
+      comment.lovedAt = new Date();
+
+      await createNotification({
+        recipient: comment.user,
+        actor: req.user.id,
+        type: 'comment_heart',
+        video: comment.video,
+        post: comment.post,
+        comment: comment._id,
+        message: `${req.user.channelName || req.user.name} loved your comment ❤️`,
+      });
+    }
+
+    await comment.save();
+    await comment.populate('lovedBy', 'name avatar channelName isVerified');
+
+    res.status(200).json({
+      success: true,
+      isLoved: comment.isLoved,
+      lovedBy: comment.lovedBy,
+      data: comment,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Toggle creator love/heart on reply (by video/post creator or admin)
+// @route   POST /api/comments/:id/replies/:replyId/love
+// @access  Private
+exports.toggleReplyLove = async (req, res, next) => {
+  try {
+    const comment = await Comment.findById(req.params.id);
+    if (!comment) {
+      return res.status(404).json({ success: false, message: 'Comment not found' });
+    }
+
+    const reply = comment.replies.id(req.params.replyId);
+    if (!reply) {
+      return res.status(404).json({ success: false, message: 'Reply not found' });
+    }
+
+    let parent;
+    if (comment.video) parent = await Video.findById(comment.video);
+    else if (comment.post) parent = await Post.findById(comment.post);
+
+    if (!parent) {
+      return res.status(404).json({ success: false, message: 'Parent video or post not found' });
+    }
+
+    const isCreator = parent.owner.toString() === req.user.id.toString();
+    const isAdmin = req.user.role === 'admin';
+
+    if (!isCreator && !isAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only the creator of this video can heart replies',
+      });
+    }
+
+    const isCurrentlyLoved = Boolean(reply.isLoved);
+
+    if (isCurrentlyLoved) {
+      reply.isLoved = false;
+      reply.lovedBy = null;
+      reply.lovedAt = null;
+    } else {
+      reply.isLoved = true;
+      reply.lovedBy = req.user.id;
+      reply.lovedAt = new Date();
+
+      await createNotification({
+        recipient: reply.user,
+        actor: req.user.id,
+        type: 'comment_heart',
+        video: comment.video,
+        post: comment.post,
+        comment: comment._id,
+        message: `${req.user.channelName || req.user.name} loved your reply ❤️`,
+      });
+    }
+
+    await comment.save();
+    await comment.populate('replies.lovedBy', 'name avatar channelName isVerified');
+
+    res.status(200).json({
+      success: true,
+      isLoved: reply.isLoved,
+      lovedBy: reply.lovedBy,
+      data: reply,
     });
   } catch (err) {
     next(err);

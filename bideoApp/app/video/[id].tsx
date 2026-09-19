@@ -18,7 +18,7 @@ import PlaylistModal from '../../components/PlaylistModal';
 import VerifiedBadge from '../../components/VerifiedBadge';
 import { formatTimeAgo, formatViews } from '../../utils/formatDate';
 import { hapticLight } from '../../utils/haptics';
-import { AppInterstitialAd, AppNativeAd } from '../../components/AppAds';
+import { AppInterstitialAd, AppAdBanner } from '../../components/AppAds';
 import HashtagText from '../../components/HashtagText';
 
 const FALLBACK_IMAGE = 'https://via.placeholder.com/80x80.png?text=User';
@@ -26,7 +26,7 @@ const REQUIRED_WATCH_TIME = 3; // 3 seconds minimum watch time to count a view
 const MIDROLL_INTERVAL_SECONDS = 300; // 5 minutes (300 seconds) mid-roll ad interval
 
 export default function VideoScreen() {
-  const { id, fromChannelId } = useLocalSearchParams<{ id: string; fromChannelId?: string }>();
+  const { id } = useLocalSearchParams<{ id: string; fromChannelId?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
@@ -34,31 +34,26 @@ export default function VideoScreen() {
   const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
 
   const handleBack = useCallback(() => {
-    if (fromChannelId) {
-      router.replace(`/channel/${fromChannelId}`);
-    } else if (router.canGoBack()) {
+    if (router.canGoBack()) {
       router.back();
     } else {
-      router.push('/(tabs)');
+      router.replace('/(tabs)');
     }
-  }, [fromChannelId]);
+  }, [router]);
 
   useEffect(() => {
     const onBackPress = () => {
-      if (fromChannelId) {
-        router.replace(`/channel/${fromChannelId}`);
-        return true;
-      }
       if (router.canGoBack()) {
         router.back();
         return true;
       }
-      return false;
+      router.replace('/(tabs)');
+      return true;
     };
 
     const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
     return () => sub.remove();
-  }, [fromChannelId]);
+  }, [router]);
   // expo-video player (replaces the deprecated expo-av <Video>). Source is loaded
   // via player.replace() once the video data arrives.
   const player = useVideoPlayer(null, (p) => {
@@ -644,8 +639,8 @@ export default function VideoScreen() {
               )}
             </TouchableOpacity>
 
-            {/* Native Ad below Comment preview */}
-            <AppNativeAd />
+            {/* Banner Ad instead of Native Ad */}
+            <AppAdBanner />
 
             <View style={styles.divider} />
             <Text style={styles.recommendedTitle}>Recommended</Text>

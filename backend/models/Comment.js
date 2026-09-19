@@ -32,6 +32,19 @@ const commentSchema = new mongoose.Schema({
     ref: 'User',
     default: null,
   },
+  isLoved: {
+    type: Boolean,
+    default: false,
+  },
+  lovedBy: {
+    type: mongoose.Schema.ObjectId,
+    ref: 'User',
+    default: null,
+  },
+  lovedAt: {
+    type: Date,
+    default: null,
+  },
   likes: [
     {
       type: mongoose.Schema.ObjectId,
@@ -48,6 +61,19 @@ const commentSchema = new mongoose.Schema({
         type: String,
         required: true,
         maxlength: [500, 'Reply cannot be more than 500 characters'],
+      },
+      isLoved: {
+        type: Boolean,
+        default: false,
+      },
+      lovedBy: {
+        type: mongoose.Schema.ObjectId,
+        ref: 'User',
+        default: null,
+      },
+      lovedAt: {
+        type: Date,
+        default: null,
       },
       likes: [
         {

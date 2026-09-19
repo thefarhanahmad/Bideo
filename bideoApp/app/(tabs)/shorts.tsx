@@ -78,23 +78,17 @@ export default function ShortsScreen() {
   const [reportReason, setReportReason] = useState('');
 
   const handleBack = useCallback(() => {
-    if (fromChannelId) {
-      router.replace(`/channel/${fromChannelId}`);
-    } else if (router.canGoBack()) {
+    if (router.canGoBack()) {
       router.back();
     } else {
-      router.push('/(tabs)');
+      router.replace('/(tabs)');
     }
-  }, [fromChannelId]);
+  }, [router]);
 
   useEffect(() => {
     if (!isFocused) return;
     const onBackPress = () => {
-      if (fromChannelId) {
-        router.replace(`/channel/${fromChannelId}`);
-        return true;
-      }
-      if (initialShortId && router.canGoBack()) {
+      if ((fromChannelId || initialShortId) && router.canGoBack()) {
         router.back();
         return true;
       }
@@ -103,11 +97,11 @@ export default function ShortsScreen() {
 
     const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
     return () => sub.remove();
-  }, [isFocused, fromChannelId, initialShortId]);
+  }, [isFocused, fromChannelId, initialShortId, router]);
 
   useEffect(() => {
     loadShorts(initialShortId);
-  }, [isAuthenticated]);
+  }, [isAuthenticated, fromChannelId]);
 
   useEffect(() => {
     if (!initialShortId) return;
@@ -152,7 +146,11 @@ export default function ShortsScreen() {
     hasMore.current = true;
     isFetchingMore.current = false;
     try {
-      const data = await api.get('/videos', { params: { type: 'short', page: 1, limit: 50 } });
+      const queryParams: any = { type: 'short', page: 1, limit: 50 };
+      if (fromChannelId) {
+        queryParams.owner = fromChannelId;
+      }
+      const data = await api.get('/videos', { params: queryParams });
       const rawList = data.data.data || [];
       if (rawList.length < 50) hasMore.current = false;
 
@@ -216,29 +214,16 @@ export default function ShortsScreen() {
     isFetchingMore.current = true;
     try {
       const nextPage = page + 1;
-      const data = await api.get('/videos', { params: { type: 'short', page: nextPage, limit: 50 } });
+      const queryParams: any = { type: 'short', page: nextPage, limit: 50 };
+      if (fromChannelId) {
+        queryParams.owner = fromChannelId;
+      }
+      const data = await api.get('/videos', { params: queryParams });
       const rawList = data.data.data || [];
       if (rawList.length > 0) {
         const onlyShorts = rawList
           .filter((v: any) => v.isShort === true)
-          .map((v: any) => ({
-            _id: v._id,
-            videoUrl: v.videoUrl,
-            thumbnail: v.thumbnail,
-            owner: { 
-              _id: v.owner?._id,
-              name: v.owner?.name || 'Unknown', 
-              channelName: v.owner?.channelName,
-              avatar: v.owner?.avatar || '',
-              isVerified: Boolean(v.owner?.isVerified),
-            },
-            title: v.title,
-            likes: v.likes || [],
-            commentsCount: v.commentsCount || 0,
-            isLiked: v.isLiked ?? (isAuthenticated && v.likes?.includes(user?._id)),
-            isFollowing: v.isFollowing || false,
-            createdAt: v.createdAt,
-          }));
+          .map((v: any) => formatShortItem(v, user?._id, isAuthenticated));
 
         setShorts((prev) => {
           const existingIds = new Set(prev.map((s: any) => s._id));

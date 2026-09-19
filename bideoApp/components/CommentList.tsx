@@ -216,6 +216,28 @@ const CommentList: React.FC<CommentListProps> = ({ videoId, postId, contentOwner
     }
   };
 
+  const handleToggleLove = async (commentId: string) => {
+    if (!isAuthenticated) return onAuthRequired();
+    try {
+      await api.post(`/comments/${commentId}/love`);
+      fetchComments(true);
+    } catch (err: any) {
+      console.error('Failed to toggle comment love', err);
+      showAlert('Error', err?.response?.data?.message || 'Failed to update love status');
+    }
+  };
+
+  const handleToggleReplyLove = async (commentId: string, replyId: string) => {
+    if (!isAuthenticated) return onAuthRequired();
+    try {
+      await api.post(`/comments/${commentId}/replies/${replyId}/love`);
+      fetchComments(true);
+    } catch (err: any) {
+      console.error('Failed to toggle reply love', err);
+      showAlert('Error', err?.response?.data?.message || 'Failed to update love status');
+    }
+  };
+
   const handlePinComment = async (commentId: string) => {
     if (!isAuthenticated) return onAuthRequired();
     try {
@@ -258,11 +280,15 @@ const CommentList: React.FC<CommentListProps> = ({ videoId, postId, contentOwner
             item={item}
             userId={user?._id}
             canManagePin={canManagePin}
+            isCreator={isCreator}
+            isAdmin={isAdmin}
             onPin={() => handlePinComment(item._id)}
             onOpenChannel={(channelId: string) => router.push(`/channel/${channelId}`)}
             onLike={() => handleLikeComment(item._id)}
+            onToggleLove={() => handleToggleLove(item._id)}
             onReply={() => openReplyComposer(item)}
             onLikeReply={(replyId: string) => handleLikeReply(item._id, replyId)}
+            onToggleReplyLove={(replyId: string) => handleToggleReplyLove(item._id, replyId)}
             onEdit={() => {
               setEditingComment(item);
               setEditText(item.text);
@@ -419,6 +445,8 @@ const CommentItem = ({
   item,
   userId,
   canManagePin,
+  isCreator,
+  isAdmin,
   onOpenChannel,
   onLike,
   onReply,
@@ -426,9 +454,13 @@ const CommentItem = ({
   onEdit,
   onDelete,
   onPin,
+  onToggleLove,
+  onToggleReplyLove,
+  onDeleteReply,
 }: any) => {
   const liked = item.likes?.some((id: string) => id === userId);
   const isOwner = item.user?._id === userId;
+  const canDeleteComment = isOwner || isCreator || isAdmin;
   const [showMenu, setShowMenu] = useState(false);
 
   const handleDeletePress = () => {
@@ -461,7 +493,7 @@ const CommentItem = ({
             {Boolean(item.user?.isVerified) && <VerifiedBadge size={12} style={{ marginLeft: 2 }} />}
             <Text style={styles.time}> • {formatTimeAgo(item.createdAt)}</Text>
           </View>
-          {(isOwner || canManagePin) && (
+          {(isOwner || canManagePin || canDeleteComment) && (
             <TouchableOpacity onPress={() => setShowMenu(!showMenu)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <Ionicons name="ellipsis-vertical" size={14} color={showMenu ? Colors.primary : Colors.textGray} />
             </TouchableOpacity>
@@ -496,7 +528,7 @@ const CommentItem = ({
                 <Text style={styles.inlineOptionText}>Edit</Text>
               </TouchableOpacity>
             )}
-            {(isOwner || canManagePin) && (
+            {canDeleteComment && (
               <TouchableOpacity
                 style={styles.inlineOptionBtn}
                 onPress={handleDeletePress}
@@ -521,6 +553,27 @@ const CommentItem = ({
             <Ionicons name={liked ? 'thumbs-up' : 'thumbs-up-outline'} size={14} color={liked ? Colors.primary : Colors.textGray} />
             <Text style={styles.actionText}>{item.likes?.length || 0}</Text>
           </TouchableOpacity>
+          {(isCreator || item.isLoved) && (
+            <TouchableOpacity
+              style={styles.actionItem}
+              onPress={isCreator ? onToggleLove : undefined}
+              activeOpacity={isCreator ? 0.7 : 1}
+            >
+              <View style={styles.loveContainer}>
+                <Ionicons
+                  name={item.isLoved ? 'heart' : 'heart-outline'}
+                  size={15}
+                  color={item.isLoved ? '#E11D48' : Colors.textGray}
+                />
+                {item.isLoved && (
+                  <Image
+                    source={{ uri: item.lovedBy?.avatar || FALLBACK_AVATAR }}
+                    style={styles.creatorLoveAvatarBadge}
+                  />
+                )}
+              </View>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity style={styles.actionItem} onPress={onReply}>
             <Text style={styles.replyBtnText}>Reply</Text>
           </TouchableOpacity>
@@ -528,12 +581,31 @@ const CommentItem = ({
 
         {(item.replies || []).map((reply: any) => {
           const replyLiked = reply.likes?.some((id: string) => id === userId);
+          const canDeleteReply = reply.user?._id === userId || isCreator || isAdmin;
           return (
             <View key={reply._id || reply.createdAt} style={styles.replyItem}>
               <View style={styles.replyHeader}>
-                <Text style={styles.username}>{reply.user?.channelName || reply.user?.name || 'User'}</Text>
-                {Boolean(reply.user?.isVerified) && <VerifiedBadge size={11} style={{ marginLeft: 2 }} />}
-                <Text style={styles.time}> • {formatTimeAgo(reply.createdAt)}</Text>
+                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <Text style={styles.username} onPress={() => reply.user?._id && onOpenChannel(reply.user._id)}>
+                    {reply.user?.channelName || reply.user?.name || 'User'}
+                  </Text>
+                  {Boolean(reply.user?.isVerified) && <VerifiedBadge size={11} style={{ marginLeft: 2 }} />}
+                  <Text style={styles.time}> • {formatTimeAgo(reply.createdAt)}</Text>
+                </View>
+                {canDeleteReply && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      showAlert('Delete Reply', 'Are you sure you want to delete this reply?', [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Delete', style: 'destructive', onPress: () => onDeleteReply(reply._id) },
+                      ]);
+                    }}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={{ marginLeft: 6, padding: 2 }}
+                  >
+                    <Ionicons name="trash-outline" size={13} color="#EF4444" />
+                  </TouchableOpacity>
+                )}
               </View>
               <HashtagText text={reply.text} style={styles.commentText} />
               <View style={styles.commentActions}>
@@ -541,6 +613,27 @@ const CommentItem = ({
                   <Ionicons name={replyLiked ? 'thumbs-up' : 'thumbs-up-outline'} size={12} color={replyLiked ? Colors.primary : Colors.textGray} />
                   <Text style={styles.actionText}>{reply.likes?.length || 0}</Text>
                 </TouchableOpacity>
+                {(isCreator || reply.isLoved) && (
+                  <TouchableOpacity
+                    style={styles.actionItem}
+                    onPress={isCreator ? () => onToggleReplyLove(reply._id) : undefined}
+                    activeOpacity={isCreator ? 0.7 : 1}
+                  >
+                    <View style={styles.loveContainer}>
+                      <Ionicons
+                        name={reply.isLoved ? 'heart' : 'heart-outline'}
+                        size={13}
+                        color={reply.isLoved ? '#E11D48' : Colors.textGray}
+                      />
+                      {reply.isLoved && (
+                        <Image
+                          source={{ uri: reply.lovedBy?.avatar || FALLBACK_AVATAR }}
+                          style={styles.creatorLoveAvatarBadgeSmall}
+                        />
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity style={styles.actionItem} onPress={onReply}>
                   <Text style={styles.replyBtnText}>Reply</Text>
                 </TouchableOpacity>
@@ -615,6 +708,28 @@ const styles = StyleSheet.create({
   },
   actionItem: { flexDirection: 'row', alignItems: 'center', marginRight: 20 },
   actionText: { fontSize: 12, color: Colors.textGray, marginLeft: 4 },
+  loveContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  creatorLoveAvatarBadge: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    marginLeft: 3,
+    borderWidth: 1,
+    borderColor: Colors.white,
+    backgroundColor: '#E5E7EB',
+  },
+  creatorLoveAvatarBadgeSmall: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginLeft: 2,
+    borderWidth: 1,
+    borderColor: Colors.white,
+    backgroundColor: '#E5E7EB',
+  },
   replyBtnText: { fontSize: 12, fontWeight: 'bold', color: Colors.textGray },
   replyItem: { marginTop: 15, paddingLeft: 12, borderLeftWidth: 2, borderLeftColor: Colors.border },
   replyHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 2 },
