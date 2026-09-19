@@ -1102,6 +1102,23 @@ exports.uploadVideo = async (req, res, next) => {
     });
   }
 
+  // Creator Email Verification Enforcement
+  if (req.user && req.user.role !== 'admin' && !req.user.isEmailVerified) {
+    if (req.files) {
+      if (req.files.video && req.files.video[0]?.path) {
+        try { require('fs').unlinkSync(req.files.video[0].path); } catch {}
+      }
+      if (req.files.thumbnail && req.files.thumbnail[0]?.path) {
+        try { require('fs').unlinkSync(req.files.thumbnail[0].path); } catch {}
+      }
+    }
+    return res.status(403).json({
+      success: false,
+      code: 'EMAIL_VERIFICATION_REQUIRED',
+      message: 'Please add and verify your email address in your profile before uploading videos or shorts.',
+    });
+  }
+
   try {
     if (!req.files || !req.files.video || !req.files.video[0]) {
       return res

@@ -4,6 +4,8 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useSelector } from 'react-redux';
+import { RootState } from '../redux/store';
 import Colors from '../constants/Colors';
 import api from '../services/api';
 import { showAlert } from '../components/AppAlert';
@@ -12,7 +14,21 @@ import MentionSuggestions from '../components/MentionSuggestions';
 
 export default function UploadPostScreen() {
   const router = useRouter();
+  const { user } = useSelector((state: RootState) => state.auth);
   const { editPostId } = useLocalSearchParams<{ editPostId?: string }>();
+
+  useEffect(() => {
+    if (user && !user.isEmailVerified) {
+      showAlert(
+        'Email Verification Required',
+        'To upload community posts on Bideo, please verify your Gmail address in your profile.',
+        [
+          { text: 'Go Back', style: 'cancel', onPress: () => router.back() },
+          { text: 'Verify Email', onPress: () => router.replace('/edit-channel') },
+        ]
+      );
+    }
+  }, [user]);
 
   const [postText, setPostText] = useState('');
   const [postImage, setPostImage] = useState<ImagePicker.ImagePickerAsset | null>(null);

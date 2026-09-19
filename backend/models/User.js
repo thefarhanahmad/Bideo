@@ -17,6 +17,10 @@ const userSchema = new mongoose.Schema({
       'Please add a valid email',
     ],
   },
+  isEmailVerified: {
+    type: Boolean,
+    default: false,
+  },
   avatar: {
     type: String,
     default: null,

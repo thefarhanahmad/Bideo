@@ -171,4 +171,15 @@ export const authService = {
   },
 };
 
+export const userService = {
+  sendEmailOtp: async (email: string) => {
+    const response = await api.post('/users/send-email-otp', { email });
+    return response.data;
+  },
+  verifyEmailOtp: async (email: string, otp: string) => {
+    const response = await api.post('/users/verify-email-otp', { email, otp });
+    return response.data;
+  },
+};
+
 export default api;

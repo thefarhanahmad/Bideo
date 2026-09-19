@@ -1,9 +1,12 @@
+const crypto = require('crypto');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const Video = require('../models/Video');
 const Post = require('../models/Post');
 const Follower = require('../models/Follower');
+const EmailOtp = require('../models/EmailOtp');
+const { sendOtpEmail } = require('../utils/emailService');
 const { deleteLocalFile } = require('../utils/localUpload');
 const { permanentlyDeleteUser } = require('../utils/deletionScheduler');
 const VideoMonetizationReview = require('../models/VideoMonetizationReview');
@@ -1658,6 +1661,161 @@ exports.watchReviewAd = async (req, res, next) => {
         step1Completed,
         passedVideosCount,
         justPassed: autoPassed,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Send OTP to user's email for verification
+// @route   POST /api/users/send-email-otp
+// @access  Private
+exports.sendEmailOtp = async (req, res, next) => {
+  try {
+    const rawEmail = String(req.body.email || '').trim().toLowerCase();
+
+    if (!rawEmail) {
+      return res.status(400).json({ success: false, message: 'Please provide an email address' });
+    }
+
+    const emailRegex = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/;
+    if (!emailRegex.test(rawEmail)) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid email address' });
+    }
+
+    // Check if email is already verified and linked to another user
+    const existingUser = await User.findOne({
+      email: rawEmail,
+      _id: { $ne: req.user.id },
+      isEmailVerified: true,
+    });
+
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: 'This email address is already verified and linked to another Bideo account.',
+      });
+    }
+
+    // Rate limiting: Check if an OTP was requested less than 60 seconds ago
+    const recentOtp = await EmailOtp.findOne({
+      userId: req.user.id,
+      email: rawEmail,
+      createdAt: { $gt: new Date(Date.now() - 60 * 1000) },
+    });
+
+    if (recentOtp) {
+      const waitSeconds = Math.max(1, Math.ceil((recentOtp.createdAt.getTime() + 60 * 1000 - Date.now()) / 1000));
+      return res.status(429).json({
+        success: false,
+        message: `Please wait ${waitSeconds}s before requesting a new code.`,
+        retryAfter: waitSeconds,
+      });
+    }
+
+    // Generate secure 6-digit OTP
+    const otp = crypto.randomInt(100000, 999999).toString();
+
+    // Clean up any existing active OTP for this user and email
+    await EmailOtp.deleteMany({ userId: req.user.id, email: rawEmail });
+
+    // Store new OTP with 10-minute TTL
+    await EmailOtp.create({
+      userId: req.user.id,
+      email: rawEmail,
+      otp,
+      attempts: 0,
+    });
+
+    // Send email via multi-provider failover service
+    await sendOtpEmail({
+      to: rawEmail,
+      otp,
+      name: req.user.name,
+      purposeTitle: 'verify your creator email address',
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `A 6-digit verification code has been sent to ${rawEmail}.`,
+    });
+  } catch (err) {
+    console.error('[sendEmailOtp error]', err);
+    res.status(500).json({
+      success: false,
+      message: err.message || 'Failed to send verification email. Please try again.',
+    });
+  }
+};
+
+// @desc    Verify OTP and update user's verified email
+// @route   POST /api/users/verify-email-otp
+// @access  Private
+exports.verifyEmailOtp = async (req, res, next) => {
+  try {
+    const rawEmail = String(req.body.email || '').trim().toLowerCase();
+    const otp = String(req.body.otp || '').trim();
+
+    if (!rawEmail || !otp) {
+      return res.status(400).json({ success: false, message: 'Email and OTP code are required' });
+    }
+
+    const otpDoc = await EmailOtp.findOne({
+      userId: req.user.id,
+      email: rawEmail,
+    });
+
+    if (!otpDoc) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired verification code. Please request a new code.',
+      });
+    }
+
+    // Brute-force protection: max 5 attempts
+    if (otpDoc.attempts >= 5) {
+      await EmailOtp.deleteOne({ _id: otpDoc._id });
+      return res.status(429).json({
+        success: false,
+        message: 'Too many incorrect attempts. This code has expired. Please request a new code.',
+      });
+    }
+
+    if (otpDoc.otp !== otp) {
+      otpDoc.attempts += 1;
+      await otpDoc.save();
+      const remaining = 5 - otpDoc.attempts;
+      return res.status(400).json({
+        success: false,
+        message: `Incorrect code. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`,
+      });
+    }
+
+    // Valid OTP! Delete OTP record
+    await EmailOtp.deleteOne({ _id: otpDoc._id });
+
+    // Update user's email and set isEmailVerified: true
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    user.email = rawEmail;
+    user.isEmailVerified = true;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Email verified successfully! Creator upload privileges are now active.',
+      data: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        isEmailVerified: user.isEmailVerified,
+        channelName: user.channelName,
+        phone: user.phone,
+        avatar: user.avatar,
       },
     });
   } catch (err) {

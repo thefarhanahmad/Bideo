@@ -242,12 +242,23 @@ exports.googleLogin = async (req, res, next) => {
         email,
         avatar: normalizeAvatar(providedAvatar),
         authProvider: 'google',
+        isEmailVerified: true,
         channelNameEditCount: 0,
         channelNameChangedAt: null,
       });
-    } else if (!user.authProvider) {
-      user.authProvider = 'google';
-      await user.save();
+    } else {
+      let needsSave = false;
+      if (!user.authProvider) {
+        user.authProvider = 'google';
+        needsSave = true;
+      }
+      if (!user.isEmailVerified) {
+        user.isEmailVerified = true;
+        needsSave = true;
+      }
+      if (needsSave) {
+        await user.save();
+      }
     }
 
     sendTokenResponse(user, 200, res);

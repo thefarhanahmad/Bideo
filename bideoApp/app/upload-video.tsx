@@ -4,6 +4,8 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useSelector } from 'react-redux';
+import { RootState } from '../redux/store';
 import Colors from '../constants/Colors';
 import api from '../services/api';
 import { showAlert } from '../components/AppAlert';
@@ -16,7 +18,21 @@ const FALLBACK_THUMBNAIL = 'https://via.placeholder.com/640x360.png?text=Tube+In
 
 export default function UploadVideoScreen() {
   const router = useRouter();
+  const { user } = useSelector((state: RootState) => state.auth);
   const { editId, type } = useLocalSearchParams<{ editId?: string; type?: 'video' | 'short' }>();
+
+  useEffect(() => {
+    if (user && !user.isEmailVerified) {
+      showAlert(
+        'Email Verification Required',
+        'To upload videos or shorts on Bideo, please verify your Gmail address in your profile.',
+        [
+          { text: 'Go Back', style: 'cancel', onPress: () => router.back() },
+          { text: 'Verify Email', onPress: () => router.replace('/edit-channel') },
+        ]
+      );
+    }
+  }, [user]);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');

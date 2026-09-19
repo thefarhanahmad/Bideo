@@ -89,6 +89,17 @@ exports.createPost = async (req, res, next) => {
   try {
     // Secondary safety check in controller
     if (req.user && req.user.role !== 'admin') {
+      if (!req.user.isEmailVerified) {
+        if (req.file && req.file.path) {
+          try { require('fs').unlinkSync(req.file.path); } catch {}
+        }
+        return res.status(403).json({
+          success: false,
+          code: 'EMAIL_VERIFICATION_REQUIRED',
+          message: 'Please add and verify your email address in your profile before uploading community posts.',
+        });
+      }
+
       const startOfTodayUTC = getStartOfTodayIST();
       const existingPostToday = await Post.findOne({
         owner: req.user.id,

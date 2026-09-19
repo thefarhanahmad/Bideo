@@ -28,6 +28,8 @@ const {
   requestWebDeletion,
   toggleVerifyUser,
   toggleBlockUser,
+  sendEmailOtp,
+  verifyEmailOtp,
 } = require('../controllers/users');
 const { protect, authorize, softProtect } = require('../middlewares/auth');
 
@@ -39,6 +41,9 @@ router.get('/leaderboard', softProtect, getLeaderboard);
 router.post('/web-deletion-request', requestWebDeletion);
 
 router.use(protect);
+
+router.post('/send-email-otp', sendEmailOtp);
+router.post('/verify-email-otp', verifyEmailOtp);
 
 router.post('/history', addToHistory);
 router.get('/history', getHistory);

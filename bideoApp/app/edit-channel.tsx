@@ -1,6 +1,6 @@
 import { showAlert } from '../components/AppAlert';
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Modal } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
@@ -8,10 +8,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSelector, useDispatch } from 'react-redux';
 import { useRouter } from 'expo-router';
 import Colors from '../constants/Colors';
-import { hapticLight, hapticSelection } from '../utils/haptics';
-import api from '../services/api';
+import { hapticLight, hapticSelection, hapticSuccess } from '../utils/haptics';
+import api, { userService } from '../services/api';
 import { RootState } from '../redux/store';
-import { loginSuccess } from '../redux/slices/authSlice';
+import { loginSuccess, updateUser } from '../redux/slices/authSlice';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 
@@ -64,6 +64,109 @@ export default function EditChannelScreen() {
   const [avatar, setAvatar] = useState(user?.avatar || '');
   const [coverImage, setCoverImage] = useState(user?.coverImage || '');
   const [loading, setLoading] = useState(false);
+
+  // Email verification state
+  const [emailInput, setEmailInput] = useState(user?.email || '');
+  const [isEmailVerified, setIsEmailVerified] = useState(!!user?.isEmailVerified);
+  const [otpModalVisible, setOtpModalVisible] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
+  const [resendTimer, setResendTimer] = useState(0);
+  const [isEditingEmail, setIsEditingEmail] = useState(!user?.email || !user?.isEmailVerified);
+
+  useEffect(() => {
+    let interval: any = null;
+    if (resendTimer > 0) {
+      interval = setInterval(() => {
+        setResendTimer((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [resendTimer]);
+
+  useEffect(() => {
+    if (user) {
+      setEmailInput(user.email || '');
+      setIsEmailVerified(!!user.isEmailVerified);
+      setIsEditingEmail(!user.email || !user.isEmailVerified);
+    }
+  }, [user?.email, user?.isEmailVerified]);
+
+  const handleSendOtp = async () => {
+    const trimmed = emailInput.trim().toLowerCase();
+    if (!trimmed) {
+      showAlert('Email Required', 'Please enter your Gmail address to verify.');
+      return;
+    }
+
+    const emailRegex = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/;
+    if (!emailRegex.test(trimmed)) {
+      showAlert('Invalid Email', 'Please enter a valid email address.');
+      return;
+    }
+
+    hapticSelection();
+    setSendingOtp(true);
+    try {
+      const res = await userService.sendEmailOtp(trimmed);
+      hapticSuccess();
+      setOtpCode('');
+      setResendTimer(60);
+      setOtpModalVisible(true);
+      showAlert('Code Sent', res?.message || `A 6-digit verification code has been sent to ${trimmed}.`);
+    } catch (err: any) {
+      hapticLight();
+      const msg = err.response?.data?.message || 'Failed to send verification email. Please try again.';
+      showAlert('Unable to Send Code', msg);
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    const trimmedEmail = emailInput.trim().toLowerCase();
+    const trimmedOtp = otpCode.trim();
+
+    if (!trimmedOtp || trimmedOtp.length !== 6) {
+      showAlert('Invalid Code', 'Please enter the 6-digit verification code sent to your email.');
+      return;
+    }
+
+    hapticSelection();
+    setVerifyingOtp(true);
+    try {
+      const res = await userService.verifyEmailOtp(trimmedEmail, trimmedOtp);
+      hapticSuccess();
+      setIsEmailVerified(true);
+      setIsEditingEmail(false);
+      setOtpModalVisible(false);
+
+      // Update Redux state
+      dispatch(updateUser({ email: trimmedEmail, isEmailVerified: true }));
+
+      // Update cached user in AsyncStorage
+      try {
+        const cached = await AsyncStorage.getItem('cached_user');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          parsed.email = trimmedEmail;
+          parsed.isEmailVerified = true;
+          await AsyncStorage.setItem('cached_user', JSON.stringify(parsed));
+        }
+      } catch {}
+
+      showAlert('Email Verified! 🎉', 'Your creator email has been verified. You can now upload videos, shorts, and community posts!');
+    } catch (err: any) {
+      hapticLight();
+      const msg = err.response?.data?.message || 'Verification failed. Please check the code and try again.';
+      showAlert('Verification Failed', msg);
+    } finally {
+      setVerifyingOtp(false);
+    }
+  };
 
   const pickAvatar = async () => {
     hapticSelection();
@@ -401,6 +504,92 @@ export default function EditChannelScreen() {
           </View>
         </View>
 
+        {/* Creator Email Verification Card */}
+        <View style={styles.formCard}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="mail" size={18} color={Colors.primary} style={{ marginRight: 6 }} />
+              <Text style={[styles.fieldLabel, { marginBottom: 0 }]}>Creator Email Verification</Text>
+            </View>
+            {isEmailVerified ? (
+              <View style={styles.verifiedEmailBadge}>
+                <Ionicons name="checkmark-circle" size={14} color="#059669" />
+                <Text style={styles.verifiedEmailBadgeText}>Verified</Text>
+              </View>
+            ) : (
+              <View style={styles.unverifiedEmailBadge}>
+                <Ionicons name="alert-circle" size={13} color="#D97706" />
+                <Text style={styles.unverifiedEmailBadgeText}>Required to Upload</Text>
+              </View>
+            )}
+          </View>
+
+          <Text style={{ fontSize: 12, color: Colors.textGray, marginBottom: 12, lineHeight: 17 }}>
+            {isEmailVerified
+              ? 'Your email is verified. Creator upload privileges are active on this channel.'
+              : 'Add and verify your Gmail address to unlock uploading videos, shorts, and posts.'}
+          </Text>
+
+          {isEmailVerified && !isEditingEmail ? (
+            <View style={styles.verifiedEmailRow}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.verifiedEmailText} numberOfLines={1}>{emailInput}</Text>
+                <Text style={{ fontSize: 11, color: '#059669', fontWeight: '600', marginTop: 2 }}>✓ Verified for creator uploads</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.changeEmailBtn}
+                onPress={() => {
+                  hapticSelection();
+                  setIsEditingEmail(true);
+                }}
+              >
+                <Text style={styles.changeEmailBtnText}>Change</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={{ gap: 10 }}>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Enter your Gmail address (e.g. name@gmail.com)"
+                placeholderTextColor={Colors.textGray}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                value={emailInput}
+                onChangeText={setEmailInput}
+              />
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                {isEmailVerified && (
+                  <TouchableOpacity
+                    style={styles.cancelEditEmailBtn}
+                    onPress={() => {
+                      hapticSelection();
+                      setEmailInput(user?.email || '');
+                      setIsEditingEmail(false);
+                    }}
+                  >
+                    <Text style={styles.cancelEditEmailBtnText}>Cancel</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={[styles.sendOtpBtn, (!emailInput.trim() || sendingOtp) && styles.disabledBtn]}
+                  onPress={handleSendOtp}
+                  disabled={!emailInput.trim() || sendingOtp}
+                >
+                  {sendingOtp ? (
+                    <ActivityIndicator size="small" color={Colors.white} />
+                  ) : (
+                    <>
+                      <Ionicons name="paper-plane-outline" size={15} color={Colors.white} style={{ marginRight: 6 }} />
+                      <Text style={styles.sendOtpBtnText}>Send 6-Digit Code</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </View>
+
         <TouchableOpacity 
           style={[styles.mainSaveBtn, loading && styles.disabledBtn]} 
           onPress={handleSave}
@@ -413,6 +602,80 @@ export default function EditChannelScreen() {
           )}
         </TouchableOpacity>
       </ScrollView>
+
+      {/* OTP Verification Modal */}
+      <Modal
+        visible={otpModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!verifyingOtp) setOtpModalVisible(false);
+        }}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.otpModalCard}>
+            <View style={styles.otpIconCircle}>
+              <Ionicons name="mail-open-outline" size={36} color={Colors.primary} />
+            </View>
+
+            <Text style={styles.otpModalTitle}>Verify Your Email</Text>
+            <Text style={styles.otpModalSubtitle}>
+              We sent a 6-digit verification code to{'\n'}
+              <Text style={{ fontWeight: '700', color: Colors.text }}>{emailInput}</Text>
+            </Text>
+
+            <View style={styles.otpInputContainer}>
+              <TextInput
+                style={styles.otpInput}
+                value={otpCode}
+                onChangeText={(text) => setOtpCode(text.replace(/\D/g, '').slice(0, 6))}
+                placeholder="••••••"
+                placeholderTextColor="#CBD5E1"
+                keyboardType="number-pad"
+                maxLength={6}
+                autoFocus
+              />
+            </View>
+
+            <View style={styles.resendContainer}>
+              {resendTimer > 0 ? (
+                <Text style={styles.resendCountdownText}>Resend code in {resendTimer}s</Text>
+              ) : (
+                <TouchableOpacity onPress={handleSendOtp} disabled={sendingOtp}>
+                  <Text style={styles.resendBtnText}>
+                    {sendingOtp ? 'Sending...' : "Didn't receive code? Resend"}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <View style={styles.otpModalActions}>
+              <TouchableOpacity
+                style={styles.otpCancelBtn}
+                onPress={() => setOtpModalVisible(false)}
+                disabled={verifyingOtp}
+              >
+                <Text style={styles.otpCancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.otpVerifyBtn, (otpCode.length !== 6 || verifyingOtp) && styles.disabledBtn]}
+                onPress={handleVerifyOtp}
+                disabled={otpCode.length !== 6 || verifyingOtp}
+              >
+                {verifyingOtp ? (
+                  <ActivityIndicator size="small" color={Colors.white} />
+                ) : (
+                  <Text style={styles.otpVerifyBtnText}>Verify & Save</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -651,5 +914,196 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontSize: 16,
     fontWeight: '700',
+  },
+
+  // Email Verification Card & Modal Styles
+  verifiedEmailBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    gap: 4,
+  },
+  verifiedEmailBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  unverifiedEmailBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    gap: 4,
+  },
+  unverifiedEmailBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#D97706',
+  },
+  verifiedEmailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 12,
+  },
+  verifiedEmailText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  changeEmailBtn: {
+    backgroundColor: '#EEF2FF',
+    borderColor: '#C7D2FE',
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  changeEmailBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  cancelEditEmailBtn: {
+    flex: 1,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelEditEmailBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.textGray,
+  },
+  sendOtpBtn: {
+    flex: 2,
+    flexDirection: 'row',
+    backgroundColor: Colors.primary,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendOtpBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.white,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  otpModalCard: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: Colors.white,
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  otpIconCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#EEF2FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  otpModalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors.text,
+    marginBottom: 6,
+  },
+  otpModalSubtitle: {
+    fontSize: 13,
+    color: Colors.textGray,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 20,
+  },
+  otpInputContainer: {
+    width: '100%',
+    marginBottom: 16,
+  },
+  otpInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    borderRadius: 14,
+    paddingVertical: 14,
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: 10,
+    textAlign: 'center',
+    color: Colors.primary,
+  },
+  resendContainer: {
+    marginBottom: 20,
+  },
+  resendCountdownText: {
+    fontSize: 12,
+    color: Colors.textGray,
+    fontWeight: '500',
+  },
+  resendBtnText: {
+    fontSize: 12,
+    color: Colors.primary,
+    fontWeight: '700',
+  },
+  otpModalActions: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 12,
+  },
+  otpCancelBtn: {
+    flex: 1,
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  otpCancelBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textGray,
+  },
+  otpVerifyBtn: {
+    flex: 1.5,
+    backgroundColor: Colors.primary,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  otpVerifyBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.white,
   },
 });

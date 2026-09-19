@@ -14,6 +14,7 @@ export default function UploadScreen() {
   const { isAuthenticated, user, loading: authLoading } = useSelector((state: RootState) => state.auth);
   const [authModalVisible, setAuthModalVisible] = useState(false);
   const [showChannelPrompt, setShowChannelPrompt] = useState(false);
+  const [showEmailPrompt, setShowEmailPrompt] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -22,11 +23,16 @@ export default function UploadScreen() {
           setAuthModalVisible(true);
         } else if (!user?.channelName) {
           setShowChannelPrompt(true);
+          setShowEmailPrompt(false);
+        } else if (!user?.isEmailVerified) {
+          setShowChannelPrompt(false);
+          setShowEmailPrompt(true);
         } else {
           setShowChannelPrompt(false);
+          setShowEmailPrompt(false);
         }
       }
-    }, [isAuthenticated, authLoading, user?.channelName])
+    }, [isAuthenticated, authLoading, user?.channelName, user?.isEmailVerified])
   );
 
   if (!isAuthenticated) {
@@ -75,6 +81,26 @@ export default function UploadScreen() {
     );
   }
 
+  if (showEmailPrompt) {
+    return (
+      <View style={styles.center}>
+        <View style={[styles.iconCircle, { backgroundColor: '#EEF2FF', borderColor: '#C7D2FE', borderWidth: 1 }]}>
+          <Ionicons name="mail-unread-outline" size={48} color={Colors.primary} />
+        </View>
+        <Text style={styles.promptTitle}>Email Verification Required</Text>
+        <Text style={styles.promptText}>
+          To upload videos, shorts, and community posts, please add and verify your Gmail address in your profile.
+        </Text>
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={() => router.push('/edit-channel')}
+        >
+          <Text style={styles.actionBtnText}>Add & Verify Email</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <View style={styles.headerRow}>
@@ -94,6 +120,17 @@ export default function UploadScreen() {
             activeOpacity={0.85}
             onPress={() => {
               hapticSelection();
+              if (!user?.isEmailVerified) {
+                showAlert(
+                  'Email Verification Required',
+                  'To upload content on Bideo, please verify your Gmail address in your profile.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Verify Email', onPress: () => router.push('/edit-channel') },
+                  ]
+                );
+                return;
+              }
               router.push(item.route);
             }}
           >
