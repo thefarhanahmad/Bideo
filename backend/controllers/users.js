@@ -11,7 +11,7 @@ const MonetizationApplication = require('../models/MonetizationApplication');
 const WithdrawalRequest = require('../models/WithdrawalRequest');
 const VideoView = require('../models/VideoView');
 const Notification = require('../models/Notification');
-const { getUserEarningsSummary, processPendingWalletCredits } = require('../services/walletSettlementService');
+const { getUserEarningsSummary, processPendingWalletCredits, getRewardRates } = require('../services/walletSettlementService');
 
 const escapeRegex = (str) => {
   if (!str || typeof str !== 'string') return '';
@@ -1084,13 +1084,7 @@ exports.getMonetizationStatus = async (req, res, next) => {
     const todayEarnings = earningsSummary?.todayEarnings || 0;
     const totalEarnings = earningsSummary?.totalEarnings || 0;
 
-    const defaultRate = Number(process.env.VIEW_REWARD_RATE) || 0.15;
-    const longRate = !isNaN(Number(process.env.LONG_VIDEO_REWARD_RATE))
-      ? Number(process.env.LONG_VIDEO_REWARD_RATE)
-      : defaultRate;
-    const shortRate = !isNaN(Number(process.env.SHORT_VIDEO_REWARD_RATE))
-      ? Number(process.env.SHORT_VIDEO_REWARD_RATE)
-      : 0.05;
+    const { longRate, shortRate } = getRewardRates();
 
     res.status(200).json({
       success: true,

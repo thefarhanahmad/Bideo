@@ -20,6 +20,21 @@ import { RootState } from '../redux/store';
 import { formatViews } from '../utils/formatDate';
 import { AppInterstitialAd, AppNativeAd } from '../components/AppAds';
 
+type FilterType = 'views' | 'revenue' | 'newest' | 'oldest';
+
+interface FilterOption {
+  key: FilterType;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+}
+
+const FILTER_OPTIONS: FilterOption[] = [
+  { key: 'views', label: 'Top Views', icon: 'flame-outline' },
+  { key: 'revenue', label: 'Top Revenue', icon: 'cash-outline' },
+  { key: 'newest', label: 'Newest', icon: 'time-outline' },
+  { key: 'oldest', label: 'Oldest', icon: 'calendar-outline' },
+];
+
 export default function AnalyticsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -29,6 +44,7 @@ export default function AnalyticsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showingAd, setShowingAd] = useState(true);
   const [videos, setVideos] = useState<any[]>([]);
+  const [videoSortFilter, setVideoSortFilter] = useState<FilterType>('views');
 
   const [stats, setStats] = useState({
     totalViews: 0,
@@ -121,7 +137,20 @@ export default function AnalyticsScreen() {
     fetchAnalytics();
   };
 
-  const topVideos = [...videos].sort((a, b) => (b.views || 0) - (a.views || 0)).slice(0, 5);
+  const sortedVideos = [...videos].sort((a, b) => {
+    if (videoSortFilter === 'views') {
+      return (b.views || 0) - (a.views || 0);
+    }
+    if (videoSortFilter === 'revenue') {
+      const revA = Number(a.revenue || 0);
+      const revB = Number(b.revenue || 0);
+      return revB - revA;
+    }
+    if (videoSortFilter === 'oldest') {
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    }
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
 
   return (
     <View style={styles.container}>
@@ -292,36 +321,89 @@ export default function AnalyticsScreen() {
             </View>
           </View>
 
-          {/* Top Performing Videos */}
-          {topVideos.length > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Top Performing Videos</Text>
-              <View style={styles.topVidsCard}>
-                {topVideos.map((item: any, idx: number) => (
-                  <TouchableOpacity
-                    key={item._id}
-                    style={[styles.topVidRow, idx === topVideos.length - 1 && { borderBottomWidth: 0 }]}
-                    onPress={() => router.push(item.isShort ? '/(tabs)/shorts' : `/video/${item._id}`)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.rankNum}>#{idx + 1}</Text>
-                    {item.thumbnail && (
-                      <Image source={{ uri: item.thumbnail }} style={styles.vidThumb} contentFit="cover" />
-                    )}
-                    <View style={styles.vidInfo}>
-                      <Text style={styles.vidTitle} numberOfLines={1}>
-                        {item.title}
-                      </Text>
-                      <Text style={styles.vidMeta}>
-                        {formatViews(item.views || 0)} views  •  {item.likes?.length || 0} likes  •  {item.isShort ? 'Short' : 'Video'}
-                      </Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={16} color="#AAA" />
-                  </TouchableOpacity>
-                ))}
-              </View>
+          {/* Video Performance & Sorting */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>Video Performance</Text>
+              <Text style={styles.videoCountText}>{videos.length} videos</Text>
             </View>
-          )}
+
+            {/* Filter Pills */}
+            <View style={styles.filterContainer}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
+                {FILTER_OPTIONS.map((f) => {
+                  const active = videoSortFilter === f.key;
+                  return (
+                    <TouchableOpacity
+                      key={f.key}
+                      style={[styles.filterPill, active && styles.filterPillActive]}
+                      onPress={() => setVideoSortFilter(f.key)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name={f.icon}
+                        size={13}
+                        color={active ? Colors.white : Colors.textGray}
+                      />
+                      <Text style={[styles.filterPillText, active && styles.filterPillTextActive]}>
+                        {f.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            {/* Video List */}
+            {sortedVideos.length === 0 ? (
+              <View style={styles.emptyVideosCard}>
+                <Ionicons name="videocam-outline" size={36} color="#AAA" />
+                <Text style={styles.emptyVideosTitle}>No videos published yet</Text>
+                <Text style={styles.emptyVideosSub}>Upload your first video to start tracking performance and earnings.</Text>
+              </View>
+            ) : (
+              <View style={styles.topVidsCard}>
+                {sortedVideos.map((item: any, idx: number) => {
+                  const settled = Number(item.revenue || 0);
+
+                  return (
+                    <TouchableOpacity
+                      key={item._id}
+                      style={[styles.topVidRow, idx === sortedVideos.length - 1 && { borderBottomWidth: 0 }]}
+                      onPress={() => {
+                        if (item.isShort) {
+                          router.push({ pathname: '/shorts', params: { initialShortId: item._id } });
+                        } else {
+                          router.push(`/video/${item._id}`);
+                        }
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.rankNum}>#{idx + 1}</Text>
+                      {item.thumbnail && (
+                        <Image source={{ uri: item.thumbnail }} style={styles.vidThumb} contentFit="cover" />
+                      )}
+                      <View style={styles.vidInfo}>
+                        <Text style={styles.vidTitle} numberOfLines={1}>
+                          {item.title}
+                        </Text>
+                        <Text style={styles.vidMeta}>
+                          {formatViews(item.views || 0)} views  •  {item.likes?.length || 0} likes  •  {item.isShort ? 'Short' : 'Video'}
+                        </Text>
+                        <View style={styles.revenueRow}>
+                          <View style={styles.settledBadge}>
+                            <Ionicons name="cash-outline" size={11} color="#15803d" />
+                            <Text style={styles.settledText}>₹{settled.toFixed(2)}</Text>
+                          </View>
+                        </View>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color="#AAA" />
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+          </View>
         </ScrollView>
       )}
       <AppInterstitialAd visible={showingAd} onClose={() => setShowingAd(false)} />
@@ -532,5 +614,103 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.textGray,
     marginTop: 2,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  videoCountText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textGray,
+  },
+  filterContainer: {
+    marginBottom: 12,
+  },
+  filterScroll: {
+    gap: 8,
+    paddingRight: 10,
+  },
+  filterPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  filterPillActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  filterPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textGray,
+  },
+  filterPillTextActive: {
+    color: Colors.white,
+    fontWeight: '700',
+  },
+  revenueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+    flexWrap: 'wrap',
+  },
+  settledBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  settledText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#15803d',
+  },
+  pendingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  pendingText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#B45309',
+  },
+  emptyVideosCard: {
+    backgroundColor: Colors.white,
+    borderRadius: 14,
+    padding: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#EAEAEA',
+    gap: 6,
+  },
+  emptyVideosTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.text,
+    marginTop: 4,
+  },
+  emptyVideosSub: {
+    fontSize: 12,
+    color: Colors.textGray,
+    textAlign: 'center',
   },
 });

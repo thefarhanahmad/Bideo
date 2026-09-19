@@ -735,6 +735,7 @@ const Videos = () => {
                   <th className="p-4 font-semibold">Duration</th>
                   <th className="p-4 font-semibold">Category</th>
                   <th className="p-4 font-semibold">Views / Likes</th>
+                  <th className="p-4 font-semibold">Revenue (₹)</th>
                   <th className="p-4 font-semibold">Visibility</th>
                   <th className="p-4 font-semibold">Created</th>
                   <th className="p-4 text-right font-semibold">Actions</th>
@@ -825,6 +826,11 @@ const Videos = () => {
                         ❤️ {Array.isArray(v.likes) ? v.likes.length : 0} likes
                       </div>
                     </td>
+                    <td className="p-4 whitespace-nowrap">
+                      <div className="font-bold text-emerald-600 text-xs">
+                        ₹{Number(v.revenue || 0).toFixed(2)}
+                      </div>
+                    </td>
                     <td className="p-4">
                       <span
                         className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold capitalize ${visibilityBadge(
@@ -881,7 +887,7 @@ const Videos = () => {
                 ))}
                 {videos.length === 0 && (
                   <tr>
-                    <td colSpan="8" className="p-8 text-center text-muted">
+                    <td colSpan="9" className="p-8 text-center text-muted">
                       No matching videos found.
                     </td>
                   </tr>

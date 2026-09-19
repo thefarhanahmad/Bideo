@@ -95,6 +95,14 @@ const videoSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  revenue: {
+    type: Number,
+    default: 0,
+  },
+  pendingRevenue: {
+    type: Number,
+    default: 0,
+  },
   createdAt: {
     type: Date,
     default: Date.now,
