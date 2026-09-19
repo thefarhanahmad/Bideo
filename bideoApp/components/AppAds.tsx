@@ -71,8 +71,20 @@ export const AppAdBanner: React.FC<AppAdBannerProps> = ({ size }: AppAdBannerPro
   if (isExpoGo) return null;
 
   const [adFailed, setAdFailed] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  // If live ad failed or no-fill, hide the banner completely!
+  // Auto-refresh banner ad every 45 seconds while user stays on the page.
+  // Also automatically retries if AdMob had a temporary no-fill.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setAdFailed(false);
+      setRefreshKey((prev) => prev + 1);
+    }, 45000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // If live ad failed or no-fill, hide the banner until next refresh cycle
   if (adFailed) return null;
 
   try {
@@ -84,7 +96,7 @@ export const AppAdBanner: React.FC<AppAdBannerProps> = ({ size }: AppAdBannerPro
     return (
       <View style={styles.container}>
         <BannerAd
-          key={unitId}
+          key={`${unitId}-${refreshKey}`}
           unitId={unitId}
           size={size || BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
           requestOptions={{ requestNonPersonalizedAdsOnly: false }}
@@ -562,30 +574,65 @@ export const AppNativeAd: React.FC<{ style?: any }> = ({ style }) => {
 
   useEffect(() => {
     let isMounted = true;
-    try {
-      const { NativeAd, TestIds } = require('react-native-google-mobile-ads');
-      const unitId = isTestingAds ? (TestIds?.NATIVE || TEST_NATIVE_ID) : ADMOB_IDS.NATIVE;
 
-      NativeAd.createForAdRequest(unitId, {
-        requestNonPersonalizedAdsOnly: false,
-      })
-        .then((ad: any) => {
-          if (isMounted) setNativeAd(ad);
+    const fetchNativeAd = () => {
+      try {
+        const { NativeAd, TestIds } = require('react-native-google-mobile-ads');
+        const unitId = isTestingAds ? (TestIds?.NATIVE || TEST_NATIVE_ID) : ADMOB_IDS.NATIVE;
+
+        NativeAd.createForAdRequest(unitId, {
+          requestNonPersonalizedAdsOnly: false,
         })
-        .catch((err: any) => {
-          console.log(`Native Ad failed to load (${unitId}):`, err?.message || err);
-          if (isMounted) setAdFailed(true);
-        });
-    } catch (e) {
-      if (isMounted) setAdFailed(true);
-    }
+          .then((ad: any) => {
+            if (isMounted && ad) {
+              setNativeAd((prevAd: any) => {
+                // Destroy previous ad instance to avoid memory accumulation
+                try {
+                  prevAd?.destroy?.();
+                } catch {}
+                return ad;
+              });
+              setAdFailed(false);
+            }
+          })
+          .catch((err: any) => {
+            console.log(`Native Ad failed to load (${unitId}):`, err?.message || err);
+            if (isMounted) {
+              // Only mark failed if we have never loaded an ad before (keep existing ad visible if refresh fails)
+              setNativeAd((currentAd: any) => {
+                if (!currentAd) setAdFailed(true);
+                return currentAd;
+              });
+            }
+          });
+      } catch (e) {
+        if (isMounted) {
+          setNativeAd((currentAd: any) => {
+            if (!currentAd) setAdFailed(true);
+            return currentAd;
+          });
+        }
+      }
+    };
+
+    // Load initial native ad
+    fetchNativeAd();
+
+    // Auto-refresh native ad every 45 seconds while user is on this screen
+    const interval = setInterval(() => {
+      if (isMounted) {
+        fetchNativeAd();
+      }
+    }, 45000);
 
     return () => {
       isMounted = false;
+      clearInterval(interval);
     };
   }, []);
 
-  if (adFailed || !nativeAd) return null;
+  if (adFailed && !nativeAd) return null;
+  if (!nativeAd) return null;
 
   try {
     const {
