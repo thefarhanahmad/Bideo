@@ -782,13 +782,47 @@ export default function BoostScreen() {
 
           {/* Global Queue Info */}
           <View style={styles.globalQueueBox}>
-            <Ionicons name="people-outline" size={16} color="#8E24AA" />
-            <Text style={styles.globalQueueText}>
-              Videos waiting in line: <Text style={{ fontWeight: '800' }}>{data?.globalQueue?.totalQueued || 0}</Text>
-              {data?.globalQueue?.currentActive
-                ? ` • Live now: "${data.globalQueue.currentActive.videoTitle || 'Active Video'}"`
-                : ' • Slot open! Next highlighted video goes live immediately!'}
-            </Text>
+            {/* Line 1: Videos waiting in line */}
+            <View style={styles.globalQueueItem}>
+              <View style={styles.globalQueueIconWrap}>
+                <Ionicons name="people" size={14} color="#8E24AA" />
+              </View>
+              <Text style={styles.globalQueueLabel}>Videos waiting in line:</Text>
+              <View style={styles.globalQueueBadge}>
+                <Text style={styles.globalQueueBadgeText}>{data?.globalQueue?.totalQueued || 0}</Text>
+              </View>
+            </View>
+
+            {/* Line 2: Live video */}
+            <View style={styles.globalQueueItem}>
+              {data?.globalQueue?.currentActive ? (
+                <>
+                  <View style={[styles.globalQueueIconWrap, styles.globalQueueLiveIconWrap]}>
+                    <View style={styles.globalQueueLiveDot} />
+                  </View>
+                  <Text style={styles.globalQueueLiveLabel}>Live video:</Text>
+                  <View style={styles.globalQueueLiveBadge}>
+                    <Text style={styles.globalQueueLiveBadgeText}>LIVE</Text>
+                  </View>
+                  <Text style={styles.globalQueueLiveTitle} numberOfLines={1}>
+                    "{data.globalQueue.currentActive.videoTitle || 'Active Video'}"
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <View style={[styles.globalQueueIconWrap, styles.globalQueueOpenIconWrap]}>
+                    <Ionicons name="flash" size={13} color="#2E7D32" />
+                  </View>
+                  <Text style={styles.globalQueueLiveLabel}>Live video:</Text>
+                  <View style={styles.globalQueueOpenBadge}>
+                    <Text style={styles.globalQueueOpenBadgeText}>OPEN</Text>
+                  </View>
+                  <Text style={styles.globalQueueOpenText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
+                    Slot open! Highlight goes live immediately
+                  </Text>
+                </>
+              )}
+            </View>
           </View>
         </ScrollView>
       )}
@@ -883,8 +917,16 @@ export default function BoostScreen() {
             <TouchableOpacity
               style={styles.claimDoneBtn}
               onPress={() => setRewardModal({ visible: false, coins: 0 })}
+              activeOpacity={0.85}
             >
-              <Text style={styles.claimDoneBtnText}>Collect & Continue</Text>
+              <Text
+                style={styles.claimDoneBtnText}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.85}
+              >
+                Collect & Continue
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1643,15 +1685,110 @@ const styles = StyleSheet.create({
 
   // Global queue info
   globalQueueBox: {
+    backgroundColor: '#FAF5FC',
+    borderRadius: 14,
+    padding: 10,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#EBD8F5',
+    gap: 8,
+  },
+  globalQueueItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F3E5F5',
-    padding: 12,
-    borderRadius: 12,
-    gap: 8,
-    marginBottom: 20,
+    backgroundColor: Colors.white,
+    paddingVertical: 9,
+    paddingHorizontal: 11,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#F0E5F7',
   },
-  globalQueueText: { fontSize: 12, color: '#4A148C', flex: 1, lineHeight: 17 },
+  globalQueueIconWrap: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#F3E5F5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  globalQueueLiveIconWrap: {
+    backgroundColor: '#E8F5E9',
+  },
+  globalQueueOpenIconWrap: {
+    backgroundColor: '#E8F5E9',
+  },
+  globalQueueLiveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#2E7D32',
+  },
+  globalQueueLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#4A148C',
+    marginRight: 8,
+  },
+  globalQueueBadge: {
+    backgroundColor: '#8E24AA',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  globalQueueBadgeText: {
+    color: Colors.white,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  globalQueueLiveLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#4A148C',
+    marginRight: 6,
+  },
+  globalQueueLiveBadge: {
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginRight: 6,
+    borderWidth: 1,
+    borderColor: '#C8E6C9',
+  },
+  globalQueueLiveBadgeText: {
+    color: '#2E7D32',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  globalQueueLiveTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#222222',
+    flex: 1,
+  },
+  globalQueueOpenBadge: {
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginRight: 6,
+    borderWidth: 1,
+    borderColor: '#C8E6C9',
+  },
+  globalQueueOpenBadgeText: {
+    color: '#2E7D32',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  globalQueueOpenText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#2E7D32',
+    flex: 1,
+  },
 
   // Modal styles
   modalOverlay: {
@@ -1718,6 +1855,7 @@ const styles = StyleSheet.create({
   // Celebration modal
   celebrationBox: {
     width: '85%',
+    maxWidth: 340,
     backgroundColor: Colors.white,
     borderRadius: 24,
     padding: 24,
@@ -1728,11 +1866,19 @@ const styles = StyleSheet.create({
   celebrationSub: { fontSize: 13, color: '#666', textAlign: 'center', lineHeight: 18, marginBottom: 20 },
   claimDoneBtn: {
     backgroundColor: '#8E24AA',
-    paddingVertical: 12,
-    paddingHorizontal: 32,
-    borderRadius: 20,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  claimDoneBtnText: { color: Colors.white, fontSize: 14, fontWeight: '700' },
+  claimDoneBtnText: {
+    color: Colors.white,
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
 
   // Select video modal
   searchBar: {
