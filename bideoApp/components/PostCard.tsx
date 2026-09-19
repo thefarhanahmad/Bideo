@@ -15,6 +15,7 @@ import api, { resolveMediaUrl } from '../services/api';
 import AuthModal from './AuthModal';
 import VerifiedBadge from './VerifiedBadge';
 import HashtagText from './HashtagText';
+import { sharePost } from '../utils/shareHelper';
 
 const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
 
@@ -39,21 +40,11 @@ const PostCard = ({ post, onDelete }: PostCardProps) => {
 
   const handleShare = async () => {
     setMenuVisible(false);
-    try {
-      const shareUrl = `https://bideo.in/p/${post._id}`;
-      const snippet = post.text
-        ? `"${post.text.trim().slice(0, 90)}${post.text.trim().length > 90 ? '...' : ''}"\n`
-        : '';
-      const shareMessage = `Check out this post on Bideo:\n${snippet}${shareUrl}`;
-        
-      await Share.share({
-        title: 'Post on Bideo',
-        message: shareMessage,
-        url: shareUrl,
-      });
-    } catch (err) {
-      console.error('Share failed', err);
-    }
+    await sharePost({
+      _id: post._id,
+      text: post.text,
+      authorName: owner?.channelName || owner?.name,
+    });
   };
 
   const handleLike = async () => {

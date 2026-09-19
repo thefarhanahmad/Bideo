@@ -18,6 +18,7 @@ import { formatViews } from '../../utils/formatDate';
 import { hapticLight } from '../../utils/haptics';
 import { AppInterstitialAd } from '../../components/AppAds';
 import HashtagText from '../../components/HashtagText';
+import { shareVideo } from '../../utils/shareHelper';
 
 const shuffleArray = <T,>(array: T[]): T[] => {
   const shuffled = [...array];
@@ -338,16 +339,12 @@ export default function ShortsScreen() {
   };
 
   const handleShare = async (short: any) => {
-    try {
-      const shareUrl = `https://bideo.in/v/${short._id}`;
-      await Share.share({
-        title: short.title,
-        message: `Watch this short on Bideo: ${short.title}\n${shareUrl}`,
-        url: shareUrl,
-      });
-    } catch (err) {
-      console.error('Share failed', err);
-    }
+    if (!short) return;
+    await shareVideo({
+      _id: short._id,
+      title: short.title,
+      isShort: true,
+    });
   };
 
   const handleCommentClick = (shortOrId: any) => {

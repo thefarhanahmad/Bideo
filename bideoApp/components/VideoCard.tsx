@@ -14,6 +14,7 @@ import { useSelector } from 'react-redux';
 import { RootState } from '../redux/store';
 import VerifiedBadge from './VerifiedBadge';
 import HashtagText from './HashtagText';
+import { shareVideo } from '../utils/shareHelper';
 
 const FALLBACK_IMAGE = 'https://via.placeholder.com/640x360?text=No+Image';
 const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
@@ -34,6 +35,7 @@ interface VideoCardProps {
     };
     duration: number;
     videoUrl?: string;
+    isShort?: boolean;
   };
   onMenuPress?: () => void;
   onPlaylistPress?: (videoId: string) => void;
@@ -68,16 +70,11 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, onMenuPress, onPlaylistPre
 
   const handleShare = async () => {
     setMenuVisible(false);
-    try {
-      const shareUrl = `https://bideo.in/v/${video._id}`;
-      await Share.share({
-        title: video.title,
-        message: `Watch "${video.title}" on Bideo:\n${shareUrl}`,
-        url: shareUrl,
-      });
-    } catch (err) {
-      console.error('Share failed', err);
-    }
+    await shareVideo({
+      _id: video._id,
+      title: video.title,
+      isShort: Boolean(video.isShort),
+    });
   };
 
   const handleReport = () => {

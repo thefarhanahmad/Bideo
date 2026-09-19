@@ -8,6 +8,7 @@ const PLAY_STORE_URL =
   process.env.PLAY_STORE_URL ||
   'https://play.google.com/store/apps/details?id=com.farhan.bideoapp';
 const APP_PACKAGE = 'com.farhan.bideoapp';
+const DEFAULT_SHARE_IMAGE = 'https://play-lh.googleusercontent.com/IG8UtEAD8gMWrdjAt8_LR4JDoofZVXM-A99932YQBhc16nO0KAcIxqb35MAJgP-DSuKXo6G9E3NkqtEqZNiI5Q4=w480-h960-rw';
 
 function escapeHtml(str) {
   if (!str) return '';
@@ -41,7 +42,7 @@ function resolveMediaUrl(url) {
 
 function isCrawler(ua) {
   if (!ua || typeof ua !== 'string') return false;
-  return /bot|crawler|spider|facebookexternalhit|whatsapp|telegrambot|twitterbot|slackbot|discordbot|linkedinbot|pinterest|applebot|bingbot|googlebot/i.test(
+  return /bot|crawler|spider|facebookexternalhit|whatsapp|telegram|twitter|slack|discord|linkedin|pinterest|applebot|bingbot|googlebot|meta|instagram|snapchat|skype|viber/i.test(
     ua
   );
 }
@@ -100,16 +101,10 @@ function renderLauncherHtml({
   ${imageUrl ? `
   <meta property="og:image" content="${imageUrl}">
   <meta property="og:image:secure_url" content="${imageUrl}">
+  <meta property="og:image:type" content="image/jpeg">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="720">
   <meta property="og:image:alt" content="${escapeHtml(title)}">
-  ` : ''}
-  ${videoUrl ? `
-  <meta property="og:video" content="${videoUrl}">
-  <meta property="og:video:secure_url" content="${videoUrl}">
-  <meta property="og:video:type" content="video/mp4">
-  <meta property="og:video:width" content="1280">
-  <meta property="og:video:height" content="720">
   ` : ''}
 
   <!-- Twitter Card -->
@@ -135,20 +130,17 @@ function renderLauncherHtml({
       var isAndroid = /android/i.test(ua);
       var isIOS = /iphone|ipad|ipod/i.test(ua);
       var intentUrl = "${intentLink}";
-      var playStoreUrl = "${PLAY_STORE_URL}";
+      var deepLink = "${deepLink}";
 
+      // Attempt non-intrusive automatic launch for mobile browsers
       if (isAndroid) {
-        // Attempt immediate app launch via Android Intent
-        window.location.href = intentUrl;
-        var start = Date.now();
-        setTimeout(function() {
-          // If browser is still foreground (app not installed), forward to Play Store
-          if (Date.now() - start < 1800) {
-            window.location.href = playStoreUrl;
-          }
-        }, 1000);
+        try {
+          window.location.replace(intentUrl);
+        } catch (e) {}
       } else if (isIOS) {
-        window.location.href = playStoreUrl;
+        try {
+          window.location.replace(deepLink);
+        } catch (e) {}
       }
     })();
   </script>
@@ -283,11 +275,16 @@ function renderLauncherHtml({
       <div class="app-name">Bideo<span>.in</span></div>
     </div>
 
-    ${imageUrl ? (
-      ogType === 'profile'
-        ? `<img src="${imageUrl}" alt="${escapeHtml(title)}" class="avatar-preview" />`
-        : `<img src="${imageUrl}" alt="${escapeHtml(title)}" class="media-preview" />`
-    ) : ''}
+    ${ogType === 'profile'
+      ? (imageUrl ? `<img src="${imageUrl}" alt="${escapeHtml(title)}" class="avatar-preview" />` : '')
+      : (videoUrl
+          ? `<video controls playsinline poster="${imageUrl || ''}" preload="metadata" class="media-preview">
+               <source src="${videoUrl}" type="video/mp4">
+               Your browser does not support the video tag.
+             </video>`
+          : (imageUrl ? `<img src="${imageUrl}" alt="${escapeHtml(title)}" class="media-preview" />` : '')
+        )
+    }
 
     <h1 class="title">${escapeHtml(title)}</h1>
     ${description ? `<p class="desc">${escapeHtml(description)}</p>` : ''}
@@ -295,7 +292,7 @@ function renderLauncherHtml({
     <div class="status-text">⚡ Opening in Bideo App...</div>
 
     <div class="btn-group">
-      <a href="${intentLink}" class="primary-btn">Open in Bideo App</a>
+      <a id="openAppBtn" href="${intentLink}" class="primary-btn">▶ Open in Bideo App</a>
       <a href="${PLAY_STORE_URL}" class="secondary-btn" target="_blank" rel="noopener">Get on Google Play</a>
     </div>
   </div>
@@ -333,11 +330,11 @@ exports.getVideoPage = async (req, res, next) => {
     const description =
       video.description ||
       `Watch ${title} by ${video.owner?.channelName || 'Bideo Creator'} on Bideo.`;
-    const thumbnailUrl = resolveMediaUrl(video.thumbnail);
+    const thumbnailUrl = resolveMediaUrl(video.thumbnail) || DEFAULT_SHARE_IMAGE;
     const videoUrl = resolveMediaUrl(video.videoUrl);
     const canonicalUrl = `${BASE_URL}/v/${video._id}`;
     const channelName = video.owner?.channelName || video.owner?.name || 'Bideo Creator';
-    const channelAvatar = resolveMediaUrl(video.owner?.avatar) || 'https://via.placeholder.com/100';
+    const channelAvatar = resolveMediaUrl(video.owner?.avatar) || DEFAULT_SHARE_IMAGE;
     const deepLink = `bideo://video/${video._id}`;
     const intentLink = `intent://video/${video._id}#Intent;scheme=bideo;package=${APP_PACKAGE};S.browser_fallback_url=${encodeURIComponent(PLAY_STORE_URL)};end`;
     const isCrawlerReq = isCrawler(req.headers['user-agent']);
@@ -385,7 +382,7 @@ exports.getChannelPage = async (req, res, next) => {
     const channelName = channel.channelName || channel.name || 'Bideo Creator';
     const description =
       channel.about || `Watch videos and shorts by ${channelName} on Bideo.`;
-    const avatar = resolveMediaUrl(channel.avatar) || 'https://via.placeholder.com/120';
+    const avatar = resolveMediaUrl(channel.avatar) || DEFAULT_SHARE_IMAGE;
     const canonicalUrl = `${BASE_URL}/c/${channel._id}`;
     const deepLink = `bideo://channel/${channel._id}`;
     const intentLink = `intent://channel/${channel._id}#Intent;scheme=bideo;package=${APP_PACKAGE};S.browser_fallback_url=${encodeURIComponent(PLAY_STORE_URL)};end`;
@@ -432,7 +429,7 @@ exports.getPostPage = async (req, res, next) => {
     }
 
     const channelName = post.owner?.channelName || post.owner?.name || 'Bideo Creator';
-    const channelAvatar = resolveMediaUrl(post.owner?.avatar) || 'https://via.placeholder.com/100';
+    const channelAvatar = resolveMediaUrl(post.owner?.avatar) || DEFAULT_SHARE_IMAGE;
     const postSnippet = post.text ? post.text.trim().slice(0, 160) : 'Check out this post on Bideo';
     const title = `Post by ${channelName} on Bideo`;
     const description = post.text ? post.text.trim() : `View updates and photos from ${channelName} on Bideo.`;

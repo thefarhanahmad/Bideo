@@ -7,6 +7,7 @@ import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import Colors from '../constants/Colors';
 import api from '../services/api';
 import { formatTimeAgo, formatViews } from '../utils/formatDate';
+import { shareVideo } from '../utils/shareHelper';
 
 export default function YourVideosScreen() {
   const router = useRouter();
@@ -86,16 +87,11 @@ export default function YourVideosScreen() {
   const handleShare = async () => {
     if (!selectedVideo) return;
     setMenuVisible(false);
-    try {
-      const shareUrl = `https://bideo.in/v/${selectedVideo._id}`;
-      await Share.share({
-        title: selectedVideo.title,
-        message: `Watch "${selectedVideo.title}" on Bideo:\n${shareUrl}`,
-        url: shareUrl,
-      });
-    } catch (err) {
-      console.error('Share failed', err);
-    }
+    await shareVideo({
+      _id: selectedVideo._id,
+      title: selectedVideo.title,
+      isShort: Boolean(selectedVideo.isShort),
+    });
   };
 
   const handleEdit = () => {

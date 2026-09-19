@@ -20,6 +20,7 @@ import { formatTimeAgo, formatViews } from '../../utils/formatDate';
 import { hapticLight } from '../../utils/haptics';
 import { AppInterstitialAd, AppAdBanner } from '../../components/AppAds';
 import HashtagText from '../../components/HashtagText';
+import { shareVideo } from '../../utils/shareHelper';
 
 const FALLBACK_IMAGE = 'https://via.placeholder.com/80x80.png?text=User';
 const REQUIRED_WATCH_TIME = 3; // 3 seconds minimum watch time to count a view
@@ -398,16 +399,11 @@ export default function VideoScreen() {
   };
 
   const handleShare = async () => {
-    try {
-      const shareUrl = `https://bideo.in/v/${video._id || id}`;
-      await Share.share({
-        title: video.title,
-        message: `Watch "${video.title}" on Bideo:\n${shareUrl}`,
-        url: shareUrl,
-      });
-    } catch (err) {
-      console.error('Share failed', err);
-    }
+    await shareVideo({
+      _id: video?._id || (id as string),
+      title: video?.title,
+      isShort: Boolean(video?.isShort),
+    });
   };
 
   const handleFollow = async () => {

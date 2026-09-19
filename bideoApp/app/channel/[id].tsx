@@ -15,6 +15,7 @@ import AuthModal from '../../components/AuthModal';
 import VerifiedBadge from '../../components/VerifiedBadge';
 import { formatTimeAgo, formatViews } from '../../utils/formatDate';
 import { hapticLight } from '../../utils/haptics';
+import { shareChannel, shareVideo } from '../../utils/shareHelper';
 
 const { width } = Dimensions.get('window');
 const FALLBACK_AVATAR = 'https://via.placeholder.com/100x100.png?text=User';
@@ -106,15 +107,11 @@ export default function ChannelScreen() {
 
   const handleShare = async () => {
     if (!channel) return;
-    try {
-      const url = `https://bideo.in/c/${channel._id}`;
-      await Share.share({
-        message: `Check out ${channel.channelName || channel.name} on Bideo!\n${url}`,
-        url: url,
-      });
-    } catch (error) {
-      console.error('Share Error:', error);
-    }
+    await shareChannel({
+      _id: channel._id,
+      name: channel.name,
+      channelName: channel.channelName,
+    });
   };
 
   const openMenu = (video: any) => {
@@ -131,16 +128,11 @@ export default function ChannelScreen() {
   const handleShareVideo = async () => {
     if (!selectedVideo) return;
     setMenuVisible(false);
-    try {
-      const shareUrl = `https://bideo.in/v/${selectedVideo._id}`;
-      await Share.share({
-        title: selectedVideo.title,
-        message: `Watch "${selectedVideo.title}" on Bideo:\n${shareUrl}`,
-        url: shareUrl,
-      });
-    } catch (err) {
-      console.error('Share failed', err);
-    }
+    await shareVideo({
+      _id: selectedVideo._id,
+      title: selectedVideo.title,
+      isShort: Boolean(selectedVideo.isShort),
+    });
   };
 
   const handleDeleteVideo = async () => {
