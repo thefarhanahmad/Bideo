@@ -216,9 +216,13 @@ export default function LeaderboardScreen() {
               </View>
             )}
           </View>
-          {(isFirst || isSecond || isThird) && (
+          {(isFirst || isSecond || isThird) ? (
             <Text style={[styles.topRankSub, { color: medalColor }]}>
               {isFirst ? '🏆 1st Place' : isSecond ? '🥈 2nd Place' : '🥉 3rd Place'}
+            </Text>
+          ) : (
+            <Text style={[styles.topRankSub, { color: Colors.textGray }]}>
+              {formatViews(item.followersCount || 0)} followers
             </Text>
           )}
         </View>

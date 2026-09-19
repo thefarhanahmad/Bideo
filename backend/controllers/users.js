@@ -325,6 +325,9 @@ exports.getChannelProfile = async (req, res, next) => {
 
     let leaderboardRank = null;
     if (channelObj.role === 'user' && myWeeklyViews > 0) {
+      const myFollowers = channelObj.followersCount || 0;
+      const myCreatedAt = channelObj.createdAt ? new Date(channelObj.createdAt) : new Date(0);
+
       const higherCount = await VideoView.aggregate([
         { $match: { createdAt: { $gte: oneWeekAgo } } },
         {
@@ -338,7 +341,6 @@ exports.getChannelProfile = async (req, res, next) => {
         { $unwind: '$videoDoc' },
         { $match: { 'videoDoc.visibility': 'public' } },
         { $group: { _id: '$videoDoc.owner', total: { $sum: 1 } } },
-        { $match: { total: { $gt: myWeeklyViews } } },
         {
           $lookup: {
             from: 'users',
@@ -349,6 +351,22 @@ exports.getChannelProfile = async (req, res, next) => {
         },
         { $unwind: '$user' },
         { $match: { 'user.role': 'user', 'user.isBlocked': { $ne: true } } },
+        {
+          $match: {
+            $or: [
+              { total: { $gt: myWeeklyViews } },
+              {
+                total: myWeeklyViews,
+                'user.followersCount': { $gt: myFollowers },
+              },
+              {
+                total: myWeeklyViews,
+                'user.followersCount': myFollowers,
+                'user.createdAt': { $lt: myCreatedAt },
+              },
+            ],
+          },
+        },
         { $count: 'higher' },
       ]);
       const rank = (higherCount[0]?.higher || 0) + 1;
@@ -364,7 +382,7 @@ exports.getChannelProfile = async (req, res, next) => {
   }
 };
 
-// @desc    Get top 20 creators by views for this week (Weekly Leaderboard)
+// @desc    Get top creators by views for this week (Weekly Leaderboard) & top 10 by followers
 // @route   GET /api/users/leaderboard
 // @access  Public
 exports.getLeaderboard = async (req, res, next) => {
@@ -411,9 +429,6 @@ exports.getLeaderboard = async (req, res, next) => {
           'user.isBlocked': { $ne: true },
         },
       },
-      // 7. Sort by this week's views descending
-      { $sort: { weeklyViews: -1 } },
-      { $limit: 50 },
       {
         $project: {
           _id: '$user._id',
@@ -423,6 +438,7 @@ exports.getLeaderboard = async (req, res, next) => {
           isVerified: '$user.isVerified',
           followersCount: '$user.followersCount',
           about: '$user.about',
+          createdAt: '$user.createdAt',
           totalViews: '$weeklyViews',
           weeklyViews: '$weeklyViews',
           videoCount: { $size: '$videoCount' },
@@ -441,7 +457,7 @@ exports.getLeaderboard = async (req, res, next) => {
         role: 'user',
         isBlocked: { $ne: true },
       })
-        .select('_id name channelName avatar isVerified followersCount about')
+        .select('_id name channelName avatar isVerified followersCount about createdAt')
         .sort({ followersCount: -1, createdAt: -1 })
         .limit(remainingCount)
         .lean();
@@ -455,6 +471,7 @@ exports.getLeaderboard = async (req, res, next) => {
           isVerified: u.isVerified,
           followersCount: u.followersCount || 0,
           about: u.about,
+          createdAt: u.createdAt,
           totalViews: 0,
           weeklyViews: 0,
           videoCount: 0,
@@ -462,7 +479,22 @@ exports.getLeaderboard = async (req, res, next) => {
       }
     }
 
-    leaderboard.sort((a, b) => (b.totalViews || 0) - (a.totalViews || 0));
+    // Sort strictly: Primary by weeklyViews descending, Secondary by followersCount descending, Tertiary by createdAt
+    leaderboard.sort((a, b) => {
+      const viewsA = a.weeklyViews || a.totalViews || 0;
+      const viewsB = b.weeklyViews || b.totalViews || 0;
+      if (viewsB !== viewsA) {
+        return viewsB - viewsA;
+      }
+      const followersA = a.followersCount || 0;
+      const followersB = b.followersCount || 0;
+      if (followersB !== followersA) {
+        return followersB - followersA;
+      }
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return dateB - dateA;
+    });
 
     let userFollowings = new Set();
     if (req.user) {
@@ -480,81 +512,35 @@ exports.getLeaderboard = async (req, res, next) => {
       };
     });
 
-    // 2. Aggregate top creators by new followers gained this week or highest followers
-    const weeklyFollowersAgg = await Follower.aggregate([
-      { $match: { createdAt: { $gte: oneWeekAgo } } },
-      {
-        $group: {
-          _id: '$channel',
-          weeklyGain: { $sum: 1 },
-        },
-      },
-      {
-        $lookup: {
-          from: 'users',
-          localField: '_id',
-          foreignField: '_id',
-          as: 'user',
-        },
-      },
-      { $unwind: '$user' },
-      {
-        $match: {
-          'user.role': 'user',
-          'user.isBlocked': { $ne: true },
-        },
-      },
-      { $sort: { weeklyGain: -1, 'user.followersCount': -1 } },
-      { $limit: 10 },
-      {
-        $project: {
-          _id: '$user._id',
-          name: '$user.name',
-          channelName: '$user.channelName',
-          avatar: '$user.avatar',
-          isVerified: '$user.isVerified',
-          followersCount: '$user.followersCount',
-          about: '$user.about',
-          weeklyGain: '$weeklyGain',
-        },
-      },
+    // 2. Top 10 Creators By Followers: Strictly top creators by followersCount descending
+    const topFollowersUsers = await User.find({
+      role: 'user',
+      isBlocked: { $ne: true },
+    })
+      .select('_id name channelName avatar isVerified followersCount about createdAt')
+      .sort({ followersCount: -1, createdAt: -1 })
+      .limit(10)
+      .lean();
+
+    const topUserIds = topFollowersUsers.map((u) => u._id);
+    const weeklyGainAgg = await Follower.aggregate([
+      { $match: { channel: { $in: topUserIds }, createdAt: { $gte: oneWeekAgo } } },
+      { $group: { _id: '$channel', gain: { $sum: 1 } } },
     ]);
+    const gainMap = new Map(weeklyGainAgg.map((g) => [g._id.toString(), g.gain]));
 
-    let topFollowers = [...weeklyFollowersAgg];
-    if (topFollowers.length < 10) {
-      const existingIds = topFollowers.map((u) => u._id);
-      const remainingNeeded = 10 - topFollowers.length;
-      const extraCreators = await User.find({
-        _id: { $nin: existingIds },
-        role: 'user',
-        isBlocked: { $ne: true },
-      })
-        .select('_id name channelName avatar isVerified followersCount about')
-        .sort({ followersCount: -1, createdAt: -1 })
-        .limit(remainingNeeded)
-        .lean();
-
-      for (const u of extraCreators) {
-        topFollowers.push({
-          _id: u._id,
-          name: u.name,
-          channelName: u.channelName,
-          avatar: u.avatar,
-          isVerified: u.isVerified,
-          followersCount: u.followersCount || 0,
-          about: u.about,
-          weeklyGain: 0,
-        });
-      }
-    }
-
-    topFollowers.sort((a, b) => (b.followersCount || 0) - (a.followersCount || 0));
-
-    const topFollowersResults = topFollowers.slice(0, 10).map((item, idx) => ({
-      ...item,
+    const topFollowersResults = topFollowersUsers.map((u, idx) => ({
+      _id: u._id,
+      name: u.name,
+      channelName: u.channelName,
+      avatar: u.avatar,
+      isVerified: u.isVerified,
+      followersCount: u.followersCount || 0,
+      about: u.about,
+      weeklyGain: gainMap.get(u._id.toString()) || 0,
       rank: idx + 1,
-      isFollowing: userFollowings.has(item._id.toString()),
-      isCurrentUser: req.user ? req.user.id.toString() === item._id.toString() : false,
+      isFollowing: userFollowings.has(u._id.toString()),
+      isCurrentUser: req.user ? req.user.id.toString() === u._id.toString() : false,
     }));
 
     res.status(200).json({
