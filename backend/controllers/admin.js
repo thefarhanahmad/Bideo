@@ -1856,6 +1856,13 @@ exports.getAdminPosts = async (req, res, next) => {
       ];
     }
 
+    const isServerStorage = req.query.storage === 'server' || req.query.storage === 'local';
+    if (isServerStorage) {
+      query.imageUrl = { $regex: '/uploads/|uploads/|localhost', $options: 'i' };
+    }
+
+    const baseCountMatch = isServerStorage ? { imageUrl: { $regex: '/uploads/|uploads/|localhost', $options: 'i' } } : {};
+
     const [total, posts, filterCountsAgg] = await Promise.all([
       Post.countDocuments(query),
       Post.find(query)
@@ -1865,6 +1872,7 @@ exports.getAdminPosts = async (req, res, next) => {
         .limit(limit)
         .lean(),
       Post.aggregate([
+        { $match: baseCountMatch },
         {
           $group: {
             _id: '$visibility',
@@ -1883,11 +1891,22 @@ exports.getAdminPosts = async (req, res, next) => {
     });
     filterCounts.all = totalAllPosts;
 
-    const formattedPosts = posts.map((p) => ({
-      ...p,
-      likesCount: Array.isArray(p.likes) ? p.likes.length : 0,
-      commentsCount: Number(p.commentsCount) || 0,
-    }));
+    const proto = req.headers["x-forwarded-proto"] || req.protocol || "http";
+    const host = req.headers["x-forwarded-host"] || req.get("host") || "localhost:5000";
+    const serverBase = `${proto}://${host}`.replace(/\/$/, "");
+
+    const formattedPosts = posts.map((p) => {
+      let img = p.imageUrl;
+      if (img && (img.includes("localhost:5000") || img.includes("127.0.0.1:5000"))) {
+        img = img.replace(/https?:\/\/localhost:5000/, serverBase).replace(/https?:\/\/127\.0\.0\.1:5000/, serverBase);
+      }
+      return {
+        ...p,
+        imageUrl: img,
+        likesCount: Array.isArray(p.likes) ? p.likes.length : 0,
+        commentsCount: Number(p.commentsCount) || 0,
+      };
+    });
 
     res.status(200).json({
       success: true,

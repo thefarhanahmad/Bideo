@@ -111,6 +111,30 @@ const getVideoQuery = (req) => {
       query._id = { ...(query._id || {}), $nin: validExcludeIds };
     }
   }
+
+  if (req.query.storage === "server" || req.query.storage === "local") {
+    const serverFilter = {
+      $and: [
+        {
+          $or: [
+            { videoUrl: { $regex: "/uploads/|uploads/|localhost", $options: "i" } },
+            { thumbnail: { $regex: "/uploads/|uploads/|localhost", $options: "i" } },
+          ],
+        },
+        {
+          videoUrl: {
+            $not: { $regex: "r2\\.dev|cloudflarestorage|cloudinary\\.com", $options: "i" },
+          },
+        },
+      ],
+    };
+    if (query.$and) {
+      query.$and.push(serverFilter);
+    } else {
+      query.$and = [serverFilter];
+    }
+  }
+
   return applyVideoTypeFilter(query, req.query.type);
 };
 
@@ -562,7 +586,9 @@ exports.getVideos = async (req, res, next) => {
         searchOr.push({ _id: rawSearch });
       }
 
-      if (query.$or) {
+      if (query.$and) {
+        query.$and.push({ $or: searchOr });
+      } else if (query.$or) {
         query.$and = [{ $or: query.$or }, { $or: searchOr }];
         delete query.$or;
       } else {
@@ -682,14 +708,33 @@ exports.getVideos = async (req, res, next) => {
       });
     }
 
+    const isServerStorage = req.query.storage === "server" || req.query.storage === "local";
+    const serverStorageBase = isServerStorage
+      ? {
+          $and: [
+            {
+              $or: [
+                { videoUrl: { $regex: "/uploads/|uploads/|localhost", $options: "i" } },
+                { thumbnail: { $regex: "/uploads/|uploads/|localhost", $options: "i" } },
+              ],
+            },
+            {
+              videoUrl: {
+                $not: { $regex: "r2\\.dev|cloudflarestorage|cloudinary\\.com", $options: "i" },
+              },
+            },
+          ],
+        }
+      : {};
+
     const countsPromise = isAdmin
       ? Promise.all([
-          Video.countDocuments({}),
-          Video.countDocuments({ isShort: { $ne: true } }),
-          Video.countDocuments({ isShort: true }),
-          Video.countDocuments({ $or: [{ visibility: "public" }, { visibility: { $exists: false } }] }),
-          Video.countDocuments({ visibility: { $in: ["private", "unlisted"] } }),
-          Video.countDocuments({ isPinned: true }),
+          Video.countDocuments(serverStorageBase),
+          Video.countDocuments({ ...serverStorageBase, isShort: { $ne: true } }),
+          Video.countDocuments({ ...serverStorageBase, isShort: true }),
+          Video.countDocuments({ ...serverStorageBase, $or: [{ visibility: "public" }, { visibility: { $exists: false } }] }),
+          Video.countDocuments({ ...serverStorageBase, visibility: { $in: ["private", "unlisted"] } }),
+          Video.countDocuments({ ...serverStorageBase, isPinned: true }),
         ])
       : Promise.resolve(null);
 
@@ -1399,6 +1444,77 @@ exports.deleteVideo = async (req, res, next) => {
       ),
     ]);
     res.status(200).json({ success: true, data: {} });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Bulk delete videos and their physical files
+// @route   POST /api/videos/bulk-delete
+// @access  Private/Admin
+exports.bulkDeleteVideos = async (req, res, next) => {
+  try {
+    if (!req.user || req.user.role !== "admin") {
+      return res.status(401).json({ success: false, message: "Not authorized to perform bulk deletion" });
+    }
+
+    const { videoIds } = req.body;
+    if (!Array.isArray(videoIds) || videoIds.length === 0) {
+      return res.status(400).json({ success: false, message: "videoIds array is required" });
+    }
+
+    const validIds = videoIds.filter((id) => mongoose.isValidObjectId(id));
+    if (validIds.length === 0) {
+      return res.status(400).json({ success: false, message: "No valid video IDs provided" });
+    }
+
+    const videos = await Video.find({ _id: { $in: validIds } });
+    let deletedCount = 0;
+
+    for (const video of videos) {
+      try {
+        const videoFileUrl = video.videoUrl || video.url;
+        if (videoFileUrl) await deleteLocalFile(videoFileUrl);
+        if (video.thumbnail) await deleteLocalFile(video.thumbnail);
+
+        try {
+          await revertVideoEarningsOnDeletion({
+            videoId: video._id,
+            ownerId: video.owner,
+            videoTitle: video.title,
+            videoRevenue: video.revenue,
+            videoPendingRevenue: video.pendingRevenue,
+            deletedBy: req.user.id,
+            deletedByRole: req.user.role,
+          });
+        } catch (revErr) {
+          console.error(`[bulkDeleteVideos] Error reverting earnings for ${video._id}:`, revErr.message);
+        }
+
+        await video.deleteOne();
+        await Promise.all([
+          VideoMonetizationReview.deleteMany({ video: video._id }),
+          VideoReport.deleteMany({ video: video._id }),
+          VideoView.deleteMany({ video: video._id }),
+          Comment.deleteMany({ video: video._id }),
+          Notification.deleteMany({ video: video._id }),
+          Playlist.updateMany({ videos: video._id }, { $pull: { videos: video._id } }),
+          User.updateMany(
+            { $or: [{ watchHistory: video._id }, { likedVideos: video._id }] },
+            { $pull: { watchHistory: video._id, likedVideos: video._id } }
+          ),
+        ]);
+        deletedCount++;
+      } catch (itemErr) {
+        console.error(`[bulkDeleteVideos] Error deleting video ${video._id}:`, itemErr.message);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Successfully deleted ${deletedCount} video(s) and their server files.`,
+      deletedCount,
+    });
   } catch (err) {
     next(err);
   }

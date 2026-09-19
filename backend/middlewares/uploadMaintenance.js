@@ -3,6 +3,16 @@
  * Rejects upload requests immediately BEFORE multer disk buffering, preventing disk exhaustion.
  */
 const uploadMaintenance = (req, res, next) => {
+  // If explicitly uploading to local server storage or request is by admin, bypass cloud storage maintenance
+  if (
+    req.user?.role === 'admin' ||
+    req.query?.storage === 'server' ||
+    req.query?.storage === 'local' ||
+    req.headers?.['x-storage-type'] === 'server'
+  ) {
+    return next();
+  }
+
   // Can be toggled via backend/.env:
   // UPLOAD_MAINTENANCE_ENABLED=true  -> Uploads paused (maintenance active)
   // UPLOAD_MAINTENANCE_ENABLED=false -> Uploads enabled (normal operation)

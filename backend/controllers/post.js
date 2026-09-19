@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Post = require('../models/Post');
 const User = require('../models/User');
 const Follower = require('../models/Follower');
@@ -343,6 +344,48 @@ exports.deletePost = async (req, res, next) => {
     ]);
 
     res.status(200).json({ success: true, data: {} });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Bulk delete community posts and their files
+// @route   POST /api/posts/bulk-delete
+// @access  Private/Admin
+exports.bulkDeletePosts = async (req, res, next) => {
+  try {
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(401).json({ success: false, message: 'Not authorized to perform bulk deletion' });
+    }
+
+    const { postIds } = req.body;
+    if (!Array.isArray(postIds) || postIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'postIds array is required' });
+    }
+
+    const validIds = postIds.filter((id) => mongoose.isValidObjectId(id));
+    const posts = await Post.find({ _id: { $in: validIds } });
+    let deletedCount = 0;
+
+    for (const post of posts) {
+      try {
+        if (post.imageUrl) await deleteLocalFile(post.imageUrl);
+        await post.deleteOne();
+        await Promise.all([
+          Comment.deleteMany({ post: post._id }),
+          Notification.deleteMany({ post: post._id }),
+        ]);
+        deletedCount++;
+      } catch (itemErr) {
+        console.error(`[bulkDeletePosts] Error deleting post ${post._id}:`, itemErr.message);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Successfully deleted ${deletedCount} post(s) and their server files.`,
+      deletedCount,
+    });
   } catch (err) {
     next(err);
   }

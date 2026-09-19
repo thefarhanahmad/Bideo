@@ -17,6 +17,7 @@ import {
   AlertOctagonIcon,
   TrendingUpIcon,
   RocketIcon,
+  ServerIcon,
 } from "./Icons";
 
 const nav = [
@@ -24,6 +25,7 @@ const nav = [
   { to: "/admin/users", label: "Users", icon: UsersIcon },
   { to: "/admin/categories", label: "Categories", icon: TagIcon },
   { to: "/admin/videos", label: "Videos", icon: PlayIcon },
+  { to: "/admin/server-videos", label: "Server Videos", icon: ServerIcon },
   { to: "/admin/reports", label: "Reports", icon: FlagIcon },
   { to: "/admin/ads", label: "Ads", icon: TvIcon },
   { to: "/admin/monetization", label: "Monetization", icon: WalletIcon },

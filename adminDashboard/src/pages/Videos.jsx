@@ -10,8 +10,23 @@ import { API_URL } from "../config";
 
 const resolveMediaUrl = (url) => {
   if (!url) return "https://via.placeholder.com/640x360.png?text=No+Thumbnail";
-  if (url.startsWith("http://") || url.startsWith("https://")) return url;
-  return `${API_URL}${url.startsWith("/") ? "" : "/"}${url}`;
+  let finalUrl = url;
+  if (finalUrl.includes("localhost:5000") || finalUrl.includes("127.0.0.1:5000")) {
+    const isBrowserOnRemote =
+      typeof window !== "undefined" &&
+      window.location.hostname !== "localhost" &&
+      window.location.hostname !== "127.0.0.1";
+    const remoteBase = isBrowserOnRemote
+      ? window.location.origin
+      : (API_URL || "").replace(/\/+$/, "");
+    if (remoteBase && !remoteBase.includes("localhost:5000")) {
+      finalUrl = finalUrl
+        .replace(/https?:\/\/localhost:5000/, remoteBase)
+        .replace(/https?:\/\/127\.0\.0\.1:5000/, remoteBase);
+    }
+  }
+  if (finalUrl.startsWith("http://") || finalUrl.startsWith("https://")) return finalUrl;
+  return `${API_URL}${finalUrl.startsWith("/") ? "" : "/"}${finalUrl}`;
 };
 
 const formatDuration = (seconds) => {
@@ -46,7 +61,7 @@ const getVideoMetadata = (file) => {
   });
 };
 
-const Videos = () => {
+const Videos = ({ isServerOnly = false }) => {
   const [videos, setVideos] = useState([]);
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -63,6 +78,15 @@ const Videos = () => {
 
   // Active top-level content tab: 'videos' | 'shorts' | 'posts'
   const [activeTab, setActiveTab] = useState("videos");
+
+  // Video Preview State
+  const [previewingVideo, setPreviewingVideo] = useState(null);
+  const [showPreviewVideo, setShowPreviewVideo] = useState(false);
+
+  // Bulk Selection State
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   // Community Posts State
   const [posts, setPosts] = useState([]);
@@ -110,6 +134,10 @@ const Videos = () => {
       url.searchParams.set("limit", limit);
       url.searchParams.set("sort", "latest");
 
+      if (isServerOnly) {
+        url.searchParams.set("storage", "server");
+      }
+
       if (activeTab === "shorts") {
         url.searchParams.set("type", "short");
         if (filter && filter !== "all") {
@@ -148,7 +176,7 @@ const Videos = () => {
       setError(err.message);
     }
     setLoading(false);
-  }, [API, page, limit, filter, search, activeTab]);
+  }, [API, page, limit, filter, search, activeTab, isServerOnly]);
 
   const fetchPosts = useCallback(async () => {
     setLoading(true);
@@ -158,6 +186,9 @@ const Videos = () => {
       const url = new URL(`${API}/api/admin/posts`);
       url.searchParams.set("page", page);
       url.searchParams.set("limit", limit);
+      if (isServerOnly) {
+        url.searchParams.set("storage", "server");
+      }
       if (filter && filter !== "all") {
         url.searchParams.set("visibility", filter);
       }
@@ -183,7 +214,7 @@ const Videos = () => {
       setError(err.message);
     }
     setLoading(false);
-  }, [API, page, limit, filter, search]);
+  }, [API, page, limit, filter, search, isServerOnly]);
 
   const fetchPostsCount = useCallback(async () => {
     try {
@@ -191,6 +222,9 @@ const Videos = () => {
       const url = new URL(`${API}/api/admin/posts`);
       url.searchParams.set("page", "1");
       url.searchParams.set("limit", "1");
+      if (isServerOnly) {
+        url.searchParams.set("storage", "server");
+      }
       const res = await fetch(url.toString(), {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -209,7 +243,68 @@ const Videos = () => {
     } catch {
       // Ignore background count fetch error
     }
-  }, [API]);
+  }, [API, isServerOnly]);
+
+  // Clear selections when tab, filter, page, or search changes
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [activeTab, filter, page, search]);
+
+  const toggleSelectAll = () => {
+    const currentList = activeTab === "posts" ? posts : videos;
+    if (selectedIds.size === currentList.length && currentList.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(currentList.map((item) => item._id)));
+    }
+  };
+
+  const toggleSelectItem = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    setBulkDeleting(true);
+    try {
+      const token = localStorage.getItem("admin_token");
+      const endpoint =
+        activeTab === "posts"
+          ? `${API}/api/posts/bulk-delete`
+          : `${API}/api/videos/bulk-delete`;
+      const bodyKey = activeTab === "posts" ? "postIds" : "videoIds";
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ [bodyKey]: Array.from(selectedIds) }),
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Bulk deletion failed");
+
+      setShowBulkDeleteModal(false);
+      setSelectedIds(new Set());
+      if (activeTab === "posts") {
+        await fetchPosts();
+        fetchPostsCount();
+      } else {
+        await fetchVideos();
+      }
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
 
   useEffect(() => {
     fetchPostsCount();
@@ -320,11 +415,24 @@ const Videos = () => {
 
   const handleUpload = async (formData) => {
     const token = localStorage.getItem("admin_token");
-    const res = await fetch(API + "/api/videos/upload", {
+    const endpoint = isServerOnly
+      ? `${API}/api/videos/upload?storage=server`
+      : `${API}/api/videos/upload`;
+
+    if (isServerOnly) {
+      formData.set("storage", "server");
+    }
+
+    const headers = {
+      Authorization: `Bearer ${token}`,
+    };
+    if (isServerOnly) {
+      headers["x-storage-type"] = "server";
+    }
+
+    const res = await fetch(endpoint, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      headers,
       body: formData,
       credentials: "include",
     });
@@ -456,12 +564,28 @@ const Videos = () => {
       {/* Page Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 min-w-0">
         <div className="min-w-0">
-          <h2 className="font-display text-xl sm:text-2xl font-extrabold text-ink truncate">Content Management</h2>
+          <h2 className="font-display text-xl sm:text-2xl font-extrabold text-ink truncate">
+            {isServerOnly ? "Server Uploaded Media" : "Content Management"}
+          </h2>
           <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-muted">
-            Manage uploaded videos, short reels, and community posts across all channels.
+            {isServerOnly
+              ? "Review, inspect, and clean up media files stored directly on the local server disk (/uploads/) to reclaim VPS disk space."
+              : "Manage uploaded videos, short reels, and community posts across all channels."}
           </p>
         </div>
       </div>
+
+      {isServerOnly && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50/90 p-4 text-amber-900 flex items-start gap-3 shadow-xs">
+          <div className="text-2xl shrink-0 mt-0.5">🖥️</div>
+          <div className="text-xs sm:text-sm">
+            <p className="font-bold text-amber-950">Local Server Storage Audit & Cleanup</p>
+            <p className="mt-0.5 text-amber-850 leading-relaxed">
+              This section displays only media stored directly on your server disk (<code className="bg-amber-100 px-1.5 py-0.5 rounded text-xs font-mono font-bold text-amber-900">/uploads/</code>) rather than Cloudflare R2 cloud storage. Click <strong>👁️ Preview</strong> to watch and verify any video before deleting. Deleting an item permanently purges the physical file from the server disk and removes its database records.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Top Primary Tabs: Videos | Shorts | Posts */}
       <div className="flex border-b border-line gap-2">
@@ -538,28 +662,46 @@ const Videos = () => {
         totalCount={currentTotal}
         filteredCount={currentTotal}
         actions={
-          activeTab !== "posts" ? (
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
+            {selectedIds.size > 0 && (
               <button
-                onClick={() => openBoostModal(null)}
-                disabled={totalItems === 0}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 px-3.5 py-2 text-xs sm:text-sm font-semibold text-white shadow-xs transition-all hover:-translate-y-0.5 hover:bg-purple-700 disabled:opacity-50"
-                title="Add +100 to +300 random views and matching ~7% likes to all uploaded videos"
+                type="button"
+                onClick={() => setShowBulkDeleteModal(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-xs transition-all hover:-translate-y-0.5 hover:bg-red-700"
               >
-                <span>⚡ Boost All (100-300 Views)</span>
+                <span>🗑️ Delete Selected ({selectedIds.size})</span>
               </button>
-              <button
-                onClick={() => {
-                  fetchUsers();
-                  fetchCategories();
-                  setShowAdd(true);
-                }}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-brand transition-all hover:-translate-y-0.5 hover:bg-brand-dark"
-              >
-                <span>+ Upload {activeTab === "shorts" ? "Short" : "Video"}</span>
-              </button>
-            </div>
-          ) : null
+            )}
+            {isServerOnly ? (
+              activeTab !== "posts" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    fetchUsers();
+                    fetchCategories();
+                    setShowAdd(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-emerald-700"
+                  title="Upload video or short directly to local server VPS disk (bypasses Cloudflare R2, zero cloud cost)"
+                >
+                  <span>🖥️ + Upload to Server ({activeTab === "shorts" ? "Short" : "Video"})</span>
+                </button>
+              )
+            ) : (
+              activeTab !== "posts" && (
+                <button
+                  onClick={() => {
+                    fetchUsers();
+                    fetchCategories();
+                    setShowAdd(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-brand transition-all hover:-translate-y-0.5 hover:bg-brand-dark"
+                >
+                  <span>+ Upload {activeTab === "shorts" ? "Short" : "Video"}</span>
+                </button>
+              )
+            )}
+          </div>
         }
       />
 
@@ -573,6 +715,15 @@ const Videos = () => {
             <table className="w-full min-w-[960px] text-sm">
               <thead>
                 <tr className="border-b border-line bg-surface/60 text-left text-xs uppercase tracking-wider text-muted">
+                  <th className="p-4 w-10 text-center">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand cursor-pointer"
+                      checked={posts.length > 0 && selectedIds.size === posts.length}
+                      onChange={toggleSelectAll}
+                      title="Select all on this page"
+                    />
+                  </th>
                   <th className="p-4 font-semibold">Post Media / Preview</th>
                   <th className="p-4 font-semibold">Creator & Channel</th>
                   <th className="p-4 text-center font-semibold">Likes</th>
@@ -585,6 +736,14 @@ const Videos = () => {
               <tbody>
                 {posts.map((p) => (
                   <tr key={p._id} className="border-t border-line align-middle hover:bg-surface/50 transition-colors">
+                    <td className="p-4 text-center">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand cursor-pointer"
+                        checked={selectedIds.has(p._id)}
+                        onChange={() => toggleSelectItem(p._id)}
+                      />
+                    </td>
                     {/* Media & Text */}
                     <td className="p-4">
                       <div className="flex items-start gap-3 max-w-md">
@@ -705,7 +864,7 @@ const Videos = () => {
                 ))}
                 {posts.length === 0 && (
                   <tr>
-                    <td colSpan="7" className="p-8 text-center text-muted">
+                    <td colSpan="8" className="p-8 text-center text-muted">
                       No matching community posts found.
                     </td>
                   </tr>
@@ -730,6 +889,15 @@ const Videos = () => {
             <table className="w-full min-w-[960px] text-sm">
               <thead>
                 <tr className="border-b border-line bg-surface/60 text-left text-xs uppercase tracking-wider text-muted">
+                  <th className="p-4 w-10 text-center">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand cursor-pointer"
+                      checked={videos.length > 0 && selectedIds.size === videos.length}
+                      onChange={toggleSelectAll}
+                      title="Select all on this page"
+                    />
+                  </th>
                   <th className="p-4 font-semibold">Video Details</th>
                   <th className="p-4 font-semibold">Owner & Channel</th>
                   <th className="p-4 font-semibold">Duration</th>
@@ -744,6 +912,14 @@ const Videos = () => {
               <tbody>
                 {videos.map((v) => (
                   <tr key={v._id} className="border-t border-line align-middle hover:bg-surface/50 transition-colors">
+                    <td className="p-4 text-center">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand cursor-pointer"
+                        checked={selectedIds.has(v._id)}
+                        onChange={() => toggleSelectItem(v._id)}
+                      />
+                    </td>
                     <td className="p-4">
                       <div className="flex items-center gap-3">
                         <a
@@ -777,6 +953,11 @@ const Videos = () => {
                         <div className="min-w-0 max-w-xs">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="truncate font-semibold text-ink text-sm">{v.title}</span>
+                            {isServerOnly && (
+                              <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 border border-amber-300">
+                                🖥️ Server Disk
+                              </span>
+                            )}
                             {v.isPinned && (
                               <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 border border-amber-300">
                                 📌 Pinned
@@ -844,6 +1025,17 @@ const Videos = () => {
                     <td className="p-4">
                       <div className="flex justify-end gap-1.5 whitespace-nowrap">
                         <button
+                          type="button"
+                          onClick={() => {
+                            setPreviewingVideo(v);
+                            setShowPreviewVideo(true);
+                          }}
+                          className="rounded-lg bg-indigo-50 border border-indigo-200 px-2.5 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors"
+                          title="Watch & preview video"
+                        >
+                          👁️ Preview
+                        </button>
+                        <button
                           onClick={() => openBoostModal(v)}
                           className="rounded-lg bg-purple-50 border border-purple-200 px-2.5 py-1 text-xs font-semibold text-purple-700 hover:bg-purple-100 transition-colors"
                           title="Add +100 to +300 random views & 7% likes to this video"
@@ -887,7 +1079,7 @@ const Videos = () => {
                 ))}
                 {videos.length === 0 && (
                   <tr>
-                    <td colSpan="9" className="p-8 text-center text-muted">
+                    <td colSpan="10" className="p-8 text-center text-muted">
                       No matching videos found.
                     </td>
                   </tr>
@@ -926,10 +1118,16 @@ const Videos = () => {
       )}
 
       {showAdd && (
-        <Modal title="Upload Video" maxWidth="max-w-lg" onClose={() => setShowAdd(false)}>
+        <Modal
+          title={isServerOnly ? "Upload Directly to Server Disk (VPS)" : `Upload ${activeTab === "shorts" ? "Short" : "Video"}`}
+          maxWidth="max-w-lg"
+          onClose={() => setShowAdd(false)}
+        >
           <UploadForm
             categories={categories}
             users={users}
+            defaultType={activeTab === "shorts" ? "short" : "video"}
+            isServerOnly={isServerOnly}
             onSubmit={handleUpload}
             onCancel={() => setShowAdd(false)}
           />
@@ -960,8 +1158,14 @@ const Videos = () => {
 
       {showDelete && deleteVideo && (
         <ConfirmModal
-          title="Confirm delete"
-          message={`Delete video "${deleteVideo.title}"?`}
+          title={isServerOnly ? "Delete Video from Server" : "Confirm delete"}
+          message={
+            isServerOnly
+              ? `Are you sure you want to delete "${deleteVideo.title}"? This will physically remove the video and thumbnail from the server disk (/uploads/) and delete all associated database records.`
+              : `Delete video "${deleteVideo.title}"?`
+          }
+          confirmLabel={isServerOnly ? "Delete from Server" : "Delete"}
+          danger
           onConfirm={() => handleDelete(deleteVideo._id)}
           onCancel={() => {
             setShowDelete(false);
@@ -1047,15 +1251,100 @@ const Videos = () => {
       {/* Delete Community Post Modal */}
       {showDeletePost && deletingPost && (
         <ConfirmModal
-          title="Delete Community Post"
-          message={`Are you sure you want to permanently delete this post by "${deletingPost.owner?.name || "creator"}"?`}
-          confirmText="Delete Post"
+          title={isServerOnly ? "Delete Post from Server" : "Delete Community Post"}
+          message={
+            isServerOnly
+              ? `Are you sure you want to permanently delete this post by "${deletingPost.owner?.name || "creator"}"? This will physically remove its image from the server disk (/uploads/) and delete all associated records.`
+              : `Are you sure you want to permanently delete this post by "${deletingPost.owner?.name || "creator"}"?`
+          }
+          confirmText={isServerOnly ? "Delete from Server" : "Delete Post"}
           confirmClass="bg-red-600 hover:bg-red-700 text-white"
           onConfirm={() => handleDeletePost(deletingPost._id)}
           onCancel={() => {
             setShowDeletePost(false);
             setDeletingPost(null);
           }}
+        />
+      )}
+
+      {/* Video In-Modal Preview */}
+      {showPreviewVideo && previewingVideo && (
+        <Modal
+          title={`Preview: ${previewingVideo.title}`}
+          maxWidth="max-w-2xl"
+          onClose={() => {
+            setShowPreviewVideo(false);
+            setPreviewingVideo(null);
+          }}
+        >
+          <div className="space-y-4">
+            <div className="rounded-xl overflow-hidden bg-black aspect-video flex items-center justify-center">
+              <video
+                src={resolveMediaUrl(previewingVideo.videoUrl)}
+                controls
+                autoPlay
+                className="w-full h-full max-h-[440px] object-contain"
+              />
+            </div>
+            <div className="rounded-xl bg-surface border border-line p-3.5 text-xs space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-muted">Creator:</span>
+                <span className="font-semibold text-ink">
+                  {previewingVideo.owner?.name || "Unknown"} (@{previewingVideo.owner?.channelName || "channel"})
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted">Server Media URL:</span>
+                <span className="font-mono text-ink text-[11px] truncate max-w-sm">
+                  {previewingVideo.videoUrl}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted">Duration / Views:</span>
+                <span className="font-semibold text-ink">
+                  {formatDuration(previewingVideo.duration)} • {previewingVideo.views || 0} views
+                </span>
+              </div>
+            </div>
+            <div className="flex justify-between items-center pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const target = previewingVideo;
+                  setShowPreviewVideo(false);
+                  setPreviewingVideo(null);
+                  setDeleteVideo(target);
+                  setShowDelete(true);
+                }}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-xs hover:bg-red-700"
+              >
+                🗑️ Delete from Server
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPreviewVideo(false);
+                  setPreviewingVideo(null);
+                }}
+                className="rounded-xl bg-surface border border-line px-4 py-2 text-xs sm:text-sm font-semibold text-ink hover:bg-line"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Bulk Delete Confirmation Modal */}
+      {showBulkDeleteModal && (
+        <ConfirmModal
+          title={`Bulk Delete ${selectedIds.size} ${activeTab === "posts" ? "Post(s)" : "Video(s)"}`}
+          message={`Are you sure you want to permanently delete these ${selectedIds.size} selected items? This will purge their media files directly from the server disk (/uploads/) and delete all related database records. This action cannot be undone.`}
+          confirmLabel={bulkDeleting ? "Deleting..." : "Delete Permanently"}
+          danger
+          disabled={bulkDeleting}
+          onConfirm={handleBulkDelete}
+          onCancel={() => setShowBulkDeleteModal(false)}
         />
       )}
     </div>
@@ -1188,7 +1477,15 @@ const EditPostForm = ({ post, onSubmit, onCancel, submitting }) => {
 const inputClass =
   "mt-1.5 w-full rounded-lg border border-line p-2.5 outline-none transition-colors focus:border-brand focus:ring-2 focus:ring-brand/20 text-sm";
 
-const UploadForm = ({ categories = [], users = [], onSubmit, onCancel }) => {
+const UploadForm = ({
+  categories = [],
+  users = [],
+  defaultType = "video",
+  isServerOnly = false,
+  onSubmit,
+  onCancel,
+}) => {
+  const [uploadType, setUploadType] = useState(defaultType);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
@@ -1253,6 +1550,10 @@ const UploadForm = ({ categories = [], users = [], onSubmit, onCancel }) => {
       fd.append("category", category);
       fd.append("visibility", visibility);
       fd.append("isPinned", isPinned);
+      fd.append("uploadType", uploadType);
+      if (isServerOnly) {
+        fd.append("storage", "server");
+      }
       fd.append("duration", Number(finalDuration) || 0);
       if (finalWidth && finalHeight) {
         fd.append("width", finalWidth);
@@ -1271,11 +1572,63 @@ const UploadForm = ({ categories = [], users = [], onSubmit, onCancel }) => {
 
   return (
     <form onSubmit={submit} className="space-y-4">
+      {isServerOnly && (
+        <div className="rounded-xl border-2 border-emerald-600 bg-emerald-50 p-3.5 text-xs text-emerald-950 flex items-start gap-3 shadow-xs">
+          <span className="text-xl leading-none select-none">🖥️</span>
+          <div className="space-y-1">
+            <div className="font-bold text-sm text-emerald-950">
+              Direct Local Server Storage
+            </div>
+            <p className="text-xs text-emerald-900 leading-relaxed font-medium">
+              This media will be saved directly on your VPS disk (
+              <code className="bg-emerald-200/90 text-emerald-950 px-1.5 py-0.5 rounded font-mono font-bold text-[11px] border border-emerald-300">
+                /uploads/videos/
+              </code>
+              ). It bypasses Cloudflare R2 cloud storage completely with{" "}
+              <strong className="text-emerald-950 underline decoration-emerald-600 font-bold">
+                zero cloud billing costs
+              </strong>
+              .
+            </p>
+          </div>
+        </div>
+      )}
+
       {uploadError && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-600">
           ⚠️ {uploadError}
         </div>
       )}
+
+      <div>
+        <label className="block text-sm font-medium text-ink mb-1.5">Format</label>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            disabled={uploading}
+            onClick={() => setUploadType("video")}
+            className={`py-2 px-3 text-xs font-semibold rounded-xl border transition-all text-center flex items-center justify-center gap-1.5 ${
+              uploadType === "video"
+                ? "bg-brand text-white border-brand shadow-sm"
+                : "bg-surface text-ink border-line hover:bg-surface/80"
+            }`}
+          >
+            <span>🎬 Regular Video (Landscape)</span>
+          </button>
+          <button
+            type="button"
+            disabled={uploading}
+            onClick={() => setUploadType("short")}
+            className={`py-2 px-3 text-xs font-semibold rounded-xl border transition-all text-center flex items-center justify-center gap-1.5 ${
+              uploadType === "short"
+                ? "bg-brand text-white border-brand shadow-sm"
+                : "bg-surface text-ink border-line hover:bg-surface/80"
+            }`}
+          >
+            <span>📱 Short (Portrait 9:16)</span>
+          </button>
+        </div>
+      </div>
 
       <div>
         <div className="flex justify-between items-center">
@@ -1430,7 +1783,11 @@ const UploadForm = ({ categories = [], users = [], onSubmit, onCancel }) => {
         <button
           type="submit"
           disabled={uploading}
-          className="rounded-full bg-brand px-6 py-2 text-sm font-semibold text-white shadow-brand hover:bg-brand-dark disabled:opacity-75 flex items-center gap-2"
+          className={`rounded-full px-6 py-2 text-sm font-semibold text-white shadow-brand transition-all flex items-center gap-2 ${
+            isServerOnly
+              ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20"
+              : "bg-brand hover:bg-brand-dark shadow-brand"
+          } disabled:opacity-75`}
         >
           {uploading ? (
             <>
@@ -1438,10 +1795,12 @@ const UploadForm = ({ categories = [], users = [], onSubmit, onCancel }) => {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              <span>Uploading Video...</span>
+              <span>{isServerOnly ? "Saving to Server Disk..." : "Uploading Video..."}</span>
             </>
           ) : (
-            "Upload Video"
+            isServerOnly
+              ? `💾 Upload to Server Disk (${uploadType === "short" ? "Short" : "Video"})`
+              : (uploadType === "short" ? "Upload Short" : "Upload Video")
           )}
         </button>
       </div>

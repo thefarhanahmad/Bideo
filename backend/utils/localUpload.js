@@ -69,11 +69,25 @@ const getContentType = (filename, fileMime, isVideo) => {
  * @param {string} type 'image' or 'video'
  * @returns {Promise<Object>} { url, filename, key, path }
  */
-const saveLocalFile = async (req, file, type) => {
+const saveLocalFile = async (req, file, type, options = {}) => {
   if (!file) return null;
 
   const isVideo = type === 'video' || (file.mimetype && file.mimetype.startsWith('video/'));
   const folderName = isVideo ? 'videos' : 'images';
+
+  // Check if forced local server disk storage is requested (bypasses Cloudflare R2)
+  const isServerRequested = Boolean(
+    options?.forceLocal ||
+    options?.storage === 'server' ||
+    options?.storage === 'local' ||
+    req?.query?.storage === 'server' ||
+    req?.query?.storage === 'local' ||
+    req?.body?.storage === 'server' ||
+    req?.body?.storage === 'local'
+  );
+
+  // Allow admin (or internal options) to force local VPS disk storage
+  const forceLocal = isServerRequested && (!req?.user || req.user.role === 'admin' || options?.forceLocal);
 
   // Generate unique file name with strictly whitelisted extension
   const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
@@ -89,8 +103,8 @@ const saveLocalFile = async (req, file, type) => {
   const key = `${folderName}/${filename}`;
   const contentType = getContentType(filename, file.mimetype, isVideo);
 
-  // Cloudflare R2 Upload Path (Zero VPS Disk Usage)
-  if (isR2Configured()) {
+  // Cloudflare R2 Upload Path (Zero VPS Disk Usage) - only when NOT forceLocal
+  if (!forceLocal && isR2Configured()) {
     try {
       const client = getS3Client();
       const body = file.path ? fs.createReadStream(file.path) : file.buffer;
@@ -136,7 +150,7 @@ const saveLocalFile = async (req, file, type) => {
     }
   }
 
-  // Fallback: Local disk storage under backend/uploads
+  // Fallback / Forced: Local disk storage under backend/uploads
   const targetDir = path.join(__dirname, '../uploads', folderName);
   if (!fs.existsSync(targetDir)) {
     fs.mkdirSync(targetDir, { recursive: true });
@@ -156,9 +170,13 @@ const saveLocalFile = async (req, file, type) => {
     throw error;
   }
 
-  const protocol = req?.protocol || 'http';
-  const host = req?.get ? req.get('host') : 'localhost:5000';
+  const protoHeader = req?.headers?.['x-forwarded-proto'];
+  const protocol = protoHeader ? protoHeader.split(',')[0].trim() : (req?.protocol || 'http');
+  const hostHeader = req?.headers?.['x-forwarded-host'] || (req?.get ? req.get('host') : 'localhost:5000');
+  const host = hostHeader.split(',')[0].trim();
   const fileUrl = `${protocol}://${host}/api/uploads/${folderName}/${filename}`;
+
+  console.log(`[Storage] Uploaded directly to Local Server Disk: ${fileUrl}`);
 
   return {
     url: fileUrl,
@@ -210,7 +228,6 @@ const deleteLocalFile = async (url) => {
       }
     }
 
-    // 2. Local disk deletion (legacy / fallback)
     let relativePath = '';
     const uploadsIdx = url.indexOf('/uploads/');
     if (uploadsIdx !== -1) {
@@ -220,6 +237,9 @@ const deleteLocalFile = async (url) => {
     } else {
       return;
     }
+
+    // Strip any URL query parameters or hash fragments, and decode percent-encoding
+    relativePath = decodeURIComponent(relativePath.split('?')[0].split('#')[0]);
 
     const uploadsBaseDir = path.resolve(__dirname, '../uploads');
     const absolutePath = path.resolve(path.join(__dirname, '..', relativePath));

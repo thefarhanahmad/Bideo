@@ -5,6 +5,7 @@ const {
   uploadVideo,
   updateVideo,
   deleteVideo,
+  bulkDeleteVideos,
   searchVideos,
   toggleLike,
   toggleDislike,
@@ -33,10 +34,12 @@ router.post('/:id/dislike', protect, toggleDislike);
 router.post('/:id/view', softProtect, recordView);
 router.post('/:id/report', protect, reportVideo);
 
-router.post('/upload', uploadMaintenance, protect, upload.fields([
+router.post('/upload', protect, uploadMaintenance, upload.fields([
   { name: 'video', maxCount: 1 },
   { name: 'thumbnail', maxCount: 1 }
 ]), videoValidationRules(), validate, uploadVideo);
+
+router.post('/bulk-delete', protect, bulkDeleteVideos);
 
 router.route('/:id')
   .get(softProtect, getVideo)

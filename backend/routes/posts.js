@@ -7,6 +7,7 @@ const {
   getPost,
   updatePost,
   deletePost,
+  bulkDeletePosts,
   checkDailyPostLimit,
   getDailyPostLimitStatus,
 } = require('../controllers/post');
@@ -18,6 +19,7 @@ const router = express.Router();
 router.get('/', softProtect, getPosts);
 router.get('/followed', protect, getFollowedPosts);
 router.get('/daily-limit', protect, getDailyPostLimitStatus);
+router.post('/bulk-delete', protect, bulkDeletePosts);
 router.get('/:id', getPost);
 router.post('/', protect, checkDailyPostLimit, upload.single('image'), createPost);
 router.put('/:id', protect, upload.single('image'), updatePost);
