@@ -6,6 +6,7 @@ const Video = require('../models/Video');
 const Post = require('../models/Post');
 const Follower = require('../models/Follower');
 const EmailOtp = require('../models/EmailOtp');
+const ErrorLog = require('../models/ErrorLog');
 const { sendOtpEmail } = require('../utils/emailService');
 const { deleteLocalFile } = require('../utils/localUpload');
 const { permanentlyDeleteUser } = require('../utils/deletionScheduler');
@@ -1742,6 +1743,23 @@ exports.sendEmailOtp = async (req, res, next) => {
     });
   } catch (err) {
     console.error('[sendEmailOtp error]', err);
+
+    // Asynchronously log to ErrorLog database for Admin Dashboard tracking
+    ErrorLog.create({
+      message: `Email OTP Delivery Failure: ${err.message}`,
+      stack: err.stack || '',
+      statusCode: 500,
+      endpoint: '/api/users/send-email-otp',
+      method: 'POST',
+      status: 'unresolved',
+      count: 1,
+      firstSeenAt: new Date(),
+      lastSeenAt: new Date(),
+      adminNote: `Recipient: ${req.body?.email || 'unknown'} (User ID: ${req.user?.id || 'unknown'})`,
+    }).catch((logErr) => {
+      console.error('[sendEmailOtp ErrorLog error]', logErr.message);
+    });
+
     res.status(500).json({
       success: false,
       message: err.message || 'Failed to send verification email. Please try again.',
