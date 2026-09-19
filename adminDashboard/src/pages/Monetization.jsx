@@ -40,6 +40,11 @@ const Monetization = () => {
   const [showMonetizedDetailsModal, setShowMonetizedDetailsModal] = useState(false);
   const [copiedField, setCopiedField] = useState(null);
 
+  // Edit Application & Bank Details modal states
+  const [selectedEditApp, setSelectedEditApp] = useState(null);
+  const [showEditAppModal, setShowEditAppModal] = useState(false);
+  const [editSubmitting, setEditSubmitting] = useState(false);
+
   // Bulk selection states for applications
   const [selectedAppIds, setSelectedAppIds] = useState([]);
   const [showBulkApproveModal, setShowBulkApproveModal] = useState(false);
@@ -299,6 +304,47 @@ const Monetization = () => {
       await fetchData(activeTab, page, limit, search);
     } catch (err) {
       alert(err.message);
+    }
+  };
+
+  const handleUpdateApplicationDetails = async (formData) => {
+    if (!selectedEditApp) return;
+    setEditSubmitting(true);
+    try {
+      const token = localStorage.getItem("admin_token");
+      const appId = selectedEditApp._id || selectedEditApp.id;
+      const res = await fetch(`${API}/api/admin/monetization-applications/${appId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(formData),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to update application details");
+
+      const updatedApp = data.data;
+
+      // Update monetizedUsers state
+      setMonetizedUsers((prev) =>
+        prev.map((app) => (app._id === updatedApp._id ? updatedApp : app))
+      );
+      // Update applications state
+      setApplications((prev) =>
+        prev.map((app) => (app._id === updatedApp._id ? updatedApp : app))
+      );
+      // Update selectedMonetizedUser if currently open
+      if (selectedMonetizedUser && selectedMonetizedUser._id === updatedApp._id) {
+        setSelectedMonetizedUser(updatedApp);
+      }
+
+      setShowEditAppModal(false);
+      setSelectedEditApp(null);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setEditSubmitting(false);
     }
   };
 
@@ -645,6 +691,16 @@ const Monetization = () => {
                               <div className="flex justify-end gap-1.5 whitespace-nowrap">
                                 <button
                                   onClick={() => {
+                                    setSelectedEditApp(app);
+                                    setShowEditAppModal(true);
+                                  }}
+                                  className="rounded-lg border border-line bg-white px-2.5 py-1.5 text-xs font-semibold text-ink hover:bg-surface hover:border-brand transition-colors"
+                                  title="Edit Application / Bank Details"
+                                >
+                                  ✏️ Edit
+                                </button>
+                                <button
+                                  onClick={() => {
                                     setSelectedApp(app);
                                     setShowApproveApp(true);
                                   }}
@@ -750,15 +806,27 @@ const Monetization = () => {
                           {formatDate(app.updatedAt || app.createdAt)}
                         </td>
                         <td className="p-4 text-right">
-                          <button
-                            onClick={() => {
-                              setSelectedMonetizedUser(app);
-                              setShowMonetizedDetailsModal(true);
-                            }}
-                            className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink hover:bg-surface hover:border-brand transition-colors"
-                          >
-                            View Details
-                          </button>
+                          <div className="flex justify-end gap-2 whitespace-nowrap">
+                            <button
+                              onClick={() => {
+                                setSelectedEditApp(app);
+                                setShowEditAppModal(true);
+                              }}
+                              className="rounded-lg border border-brand/30 bg-brand/5 px-3 py-1.5 text-xs font-semibold text-brand hover:bg-brand/10 transition-colors"
+                              title="Edit Bank & Application Details"
+                            >
+                              ✏️ Edit Details
+                            </button>
+                            <button
+                              onClick={() => {
+                                setSelectedMonetizedUser(app);
+                                setShowMonetizedDetailsModal(true);
+                              }}
+                              className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink hover:bg-surface hover:border-brand transition-colors"
+                            >
+                              View Details
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1100,7 +1168,19 @@ const Monetization = () => {
                 </div>
               </div>
               <div>
-                <span className="text-xs font-semibold text-muted uppercase">Bank Account Details</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-muted uppercase">Bank Account Details</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedEditApp(selectedMonetizedUser);
+                      setShowEditAppModal(true);
+                    }}
+                    className="text-xs font-semibold text-brand hover:underline flex items-center gap-1"
+                  >
+                    ✏️ Edit Bank Details
+                  </button>
+                </div>
                 <div className="mt-2 rounded-lg bg-surface/50 p-3 space-y-1.5 text-xs text-ink">
                   <div className="flex justify-between">
                     <span className="text-muted">Bank Name:</span>
@@ -1118,7 +1198,17 @@ const Monetization = () => {
               </div>
             </div>
 
-            <div className="flex justify-end pt-2">
+            <div className="flex justify-between items-center pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedEditApp(selectedMonetizedUser);
+                  setShowEditAppModal(true);
+                }}
+                className="rounded-full border border-brand/30 bg-brand/10 px-4 py-2 text-sm font-semibold text-brand hover:bg-brand/20 transition-colors flex items-center gap-1.5"
+              >
+                ✏️ Edit Bank Details
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -1133,7 +1223,250 @@ const Monetization = () => {
           </div>
         </Modal>
       )}
+
+      {/* Edit Application & Bank Details Modal */}
+      {showEditAppModal && selectedEditApp && (
+        <EditApplicationModal
+          app={selectedEditApp}
+          isOpen={showEditAppModal}
+          onClose={() => {
+            setShowEditAppModal(false);
+            setSelectedEditApp(null);
+          }}
+          onSave={handleUpdateApplicationDetails}
+          isSaving={editSubmitting}
+          resolveMediaUrl={resolveMediaUrl}
+        />
+      )}
     </div>
+  );
+};
+
+// Subcomponent: Edit Application & Bank Details Modal
+const EditApplicationModal = ({ app, isOpen, onClose, onSave, isSaving, resolveMediaUrl }) => {
+  const [formData, setFormData] = useState({
+    name: "",
+    phone: "",
+    adharNumber: "",
+    upiId: "",
+    bankName: "",
+    accountNumber: "",
+    ifscCode: "",
+    status: "approved",
+    reviewMessage: "",
+  });
+
+  useEffect(() => {
+    if (app) {
+      setFormData({
+        name: app.name || app.user?.name || "",
+        phone: app.phone || app.user?.phone || "",
+        adharNumber: app.adharNumber || "",
+        upiId: app.upiId || "",
+        bankName: app.bankDetails?.bankName || "",
+        accountNumber: app.bankDetails?.accountNumber || "",
+        ifscCode: app.bankDetails?.ifscCode || "",
+        status: app.status || "approved",
+        reviewMessage: app.reviewMessage || "",
+      });
+    }
+  }, [app]);
+
+  if (!isOpen || !app) return null;
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave({
+      name: formData.name,
+      phone: formData.phone,
+      adharNumber: formData.adharNumber,
+      upiId: formData.upiId,
+      bankDetails: {
+        bankName: formData.bankName,
+        accountNumber: formData.accountNumber,
+        ifscCode: formData.ifscCode.toUpperCase().trim(),
+      },
+      status: formData.status,
+      reviewMessage: formData.reviewMessage,
+    });
+  };
+
+  return (
+    <Modal
+      title="Edit Application & Bank Details"
+      maxWidth="max-w-2xl"
+      onClose={onClose}
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Creator Info Header */}
+        <div className="flex items-center gap-3 rounded-xl border border-line bg-surface/40 p-3">
+          <img
+            src={resolveMediaUrl(app.user?.avatar)}
+            alt="avatar"
+            className="h-12 w-12 rounded-full bg-white object-cover border border-line"
+            onError={(e) => {
+              e.currentTarget.src = "https://via.placeholder.com/80x80.png?text=User";
+            }}
+          />
+          <div className="min-w-0 flex-1">
+            <h4 className="font-bold text-ink text-sm truncate">{app.name || app.user?.name}</h4>
+            <p className="text-xs text-brand font-medium">@{app.user?.channelName || "no-channel"}</p>
+            <p className="text-xs text-muted truncate">{app.user?.email || "No email"}</p>
+          </div>
+          <span
+            className={`rounded-full px-2.5 py-1 text-xs font-bold uppercase ${
+              formData.status === "approved"
+                ? "bg-emerald-100 text-emerald-800"
+                : formData.status === "pending"
+                ? "bg-amber-100 text-amber-800"
+                : "bg-red-100 text-red-800"
+            }`}
+          >
+            {formData.status}
+          </span>
+        </div>
+
+        {/* Bank Details Section */}
+        <div className="rounded-xl border border-brand/20 bg-brand/5 p-4 space-y-3">
+          <div className="flex items-center gap-2 border-b border-brand/15 pb-2">
+            <span className="text-base">🏦</span>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-brand-dark">Bank Account Details</h4>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-semibold text-ink mb-1">Bank Name</label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. State Bank of India, HDFC Bank, ICICI Bank"
+                value={formData.bankName}
+                onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
+                className="w-full rounded-xl border border-line bg-white px-3 py-2 text-xs font-medium text-ink focus:border-brand focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-ink mb-1">Account Number</label>
+              <input
+                type="text"
+                required
+                placeholder="Enter bank account number"
+                value={formData.accountNumber}
+                onChange={(e) => setFormData({ ...formData, accountNumber: e.target.value })}
+                className="w-full rounded-xl border border-line bg-white px-3 py-2 text-xs font-mono font-medium text-ink focus:border-brand focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-ink mb-1">IFSC Code</label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. SBIN0001234"
+                value={formData.ifscCode}
+                onChange={(e) => setFormData({ ...formData, ifscCode: e.target.value.toUpperCase() })}
+                className="w-full rounded-xl border border-line bg-white px-3 py-2 text-xs font-mono uppercase font-medium text-ink focus:border-brand focus:outline-none"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Personal & Identification Details */}
+        <div className="rounded-xl border border-line bg-white p-4 space-y-3">
+          <div className="flex items-center gap-2 border-b border-line pb-2">
+            <span className="text-base">👤</span>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-ink">Creator & Identification</h4>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-ink mb-1">Full Legal Name</label>
+              <input
+                type="text"
+                required
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                className="w-full rounded-xl border border-line bg-white px-3 py-2 text-xs font-medium text-ink focus:border-brand focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-ink mb-1">Phone Number</label>
+              <input
+                type="text"
+                required
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                className="w-full rounded-xl border border-line bg-white px-3 py-2 text-xs font-medium text-ink focus:border-brand focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-ink mb-1">Aadhaar Card UID</label>
+              <input
+                type="text"
+                placeholder="12-digit Aadhaar number"
+                value={formData.adharNumber}
+                onChange={(e) => setFormData({ ...formData, adharNumber: e.target.value })}
+                className="w-full rounded-xl border border-line bg-white px-3 py-2 text-xs font-mono font-medium text-ink focus:border-brand focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-ink mb-1">UPI ID (VPA)</label>
+              <input
+                type="text"
+                placeholder="e.g. username@okhdfcbank"
+                value={formData.upiId}
+                onChange={(e) => setFormData({ ...formData, upiId: e.target.value })}
+                className="w-full rounded-xl border border-line bg-white px-3 py-2 text-xs font-mono font-medium text-brand focus:border-brand focus:outline-none"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Application Status & Message */}
+        <div className="rounded-xl border border-line bg-white p-4 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-ink mb-1">Application Status</label>
+              <select
+                value={formData.status}
+                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                className="w-full rounded-xl border border-line bg-white px-3 py-2 text-xs font-medium text-ink focus:border-brand focus:outline-none"
+              >
+                <option value="approved">Approved (Monetized)</option>
+                <option value="pending">Pending</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-semibold text-ink mb-1">Admin Review Message / Note</label>
+              <input
+                type="text"
+                placeholder="Optional review message or notes"
+                value={formData.reviewMessage}
+                onChange={(e) => setFormData({ ...formData, reviewMessage: e.target.value })}
+                className="w-full rounded-xl border border-line bg-white px-3 py-2 text-xs font-medium text-ink focus:border-brand focus:outline-none"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex justify-end gap-2 pt-2">
+          <button
+            type="button"
+            disabled={isSaving}
+            onClick={onClose}
+            className="rounded-full bg-surface px-5 py-2 text-xs font-semibold text-ink hover:bg-line transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={isSaving}
+            className="rounded-full bg-brand px-6 py-2 text-xs font-semibold text-white shadow-brand hover:bg-brand-dark transition-colors disabled:opacity-50 flex items-center gap-1.5"
+          >
+            {isSaving ? "Saving..." : "Save Changes"}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 };
 

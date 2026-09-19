@@ -801,6 +801,62 @@ exports.reviewMonetizationApplication = async (req, res, next) => {
   }
 };
 
+// @desc    Update monetization application & bank details by Admin
+// @route   PUT /api/admin/monetization-applications/:id
+// @access  Private/Admin
+exports.updateMonetizationApplication = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { name, phone, adharNumber, upiId, bankDetails, reviewMessage, status } = req.body;
+
+    let application = null;
+    if (mongoose.isValidObjectId(id)) {
+      application = await MonetizationApplication.findById(id);
+      if (!application) {
+        application = await MonetizationApplication.findOne({ user: id });
+      }
+    }
+
+    if (!application) {
+      return res.status(404).json({ success: false, message: 'Monetization application not found' });
+    }
+
+    if (name !== undefined) application.name = String(name).trim();
+    if (phone !== undefined) application.phone = String(phone).trim();
+    if (adharNumber !== undefined) application.adharNumber = String(adharNumber).trim();
+    if (upiId !== undefined) application.upiId = String(upiId).trim();
+
+    if (bankDetails && typeof bankDetails === 'object') {
+      application.bankDetails = {
+        bankName: bankDetails.bankName !== undefined ? String(bankDetails.bankName).trim() : (application.bankDetails?.bankName || ''),
+        accountNumber: bankDetails.accountNumber !== undefined ? String(bankDetails.accountNumber).trim() : (application.bankDetails?.accountNumber || ''),
+        ifscCode: bankDetails.ifscCode !== undefined ? String(bankDetails.ifscCode).trim().toUpperCase() : (application.bankDetails?.ifscCode || ''),
+      };
+    }
+
+    if (reviewMessage !== undefined) {
+      application.reviewMessage = String(reviewMessage).trim();
+    }
+
+    if (status && ['pending', 'approved', 'rejected'].includes(status)) {
+      application.status = status;
+    }
+
+    application.updatedAt = Date.now();
+    await application.save();
+
+    await application.populate('user', 'name email phone avatar channelName followersCount');
+
+    res.status(200).json({
+      success: true,
+      message: 'Monetization application and bank details updated successfully',
+      data: application,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // @desc    Bulk review monetization applications (approve multiple, selected, or all)
 // @route   PUT /api/admin/monetization-applications/bulk-review
 // @access  Private/Admin
