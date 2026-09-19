@@ -20,7 +20,7 @@ import Colors from '../constants/Colors';
 import api from '../services/api';
 import { showAlert } from '../components/AppAlert';
 import { formatViews, formatDuration } from '../utils/formatDate';
-import { loadAndShowRewardedAd } from '../components/AppAds';
+import { loadAndShowRewardedAd, AppAdBanner } from '../components/AppAds';
 import { RootState } from '../redux/store';
 import { updateUser } from '../redux/slices/authSlice';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -457,6 +457,11 @@ export default function BoostScreen() {
                 {dailyAds.watched} <Text style={styles.kpiTotalText}>/ {dailyAds.total}</Text>
               </Text>
             </View>
+          </View>
+
+          {/* Banner Ad between Coins Stats and Earn Coins section */}
+          <View style={styles.bannerAdContainer}>
+            <AppAdBanner />
           </View>
 
           {/* Watch Ad Action Section - 3 Ads Instant Burst */}
@@ -1427,6 +1432,10 @@ const styles = StyleSheet.create({
   },
   kpiValue: { fontSize: 24, fontWeight: '800', color: Colors.text, marginTop: 4 },
   kpiTotalText: { fontSize: 14, fontWeight: '600', color: '#888' },
+  bannerAdContainer: {
+    marginVertical: 10,
+    alignItems: 'center',
+  },
 
   // Ad section card
   adSectionCard: {

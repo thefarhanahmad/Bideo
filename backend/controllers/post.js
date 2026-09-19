@@ -18,10 +18,93 @@ const createNotification = async ({ recipient, actor, type, video, post, comment
   }
 };
 
+// Helper to get start of current day in Indian Standard Time (IST, UTC+5:30)
+const getStartOfTodayIST = () => {
+  const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+  const nowIST = new Date(Date.now() + IST_OFFSET_MS);
+  nowIST.setUTCHours(0, 0, 0, 0);
+  return new Date(nowIST.getTime() - IST_OFFSET_MS);
+};
+
+// Middleware: Strictly 1 community post per calendar day per user (admins exempt)
+exports.checkDailyPostLimit = async (req, res, next) => {
+  try {
+    if (!req.user || req.user.role === 'admin') {
+      return next();
+    }
+
+    const startOfTodayUTC = getStartOfTodayIST();
+    const existingPostToday = await Post.findOne({
+      owner: req.user.id,
+      createdAt: { $gte: startOfTodayUTC },
+    }).select('_id');
+
+    if (existingPostToday) {
+      if (req.file && req.file.path) {
+        try { require('fs').unlinkSync(req.file.path); } catch {}
+      }
+      return res.status(400).json({
+        success: false,
+        message: 'Daily post limit reached: You can upload only 1 community post per day. Please try again tomorrow!',
+      });
+    }
+
+    next();
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Endpoint: GET /posts/daily-limit
+exports.getDailyPostLimitStatus = async (req, res, next) => {
+  try {
+    if (!req.user || req.user.role === 'admin') {
+      return res.status(200).json({ success: true, canPost: true, postsToday: 0, limit: 1 });
+    }
+
+    const startOfTodayUTC = getStartOfTodayIST();
+    const existingPostToday = await Post.findOne({
+      owner: req.user.id,
+      createdAt: { $gte: startOfTodayUTC },
+    }).select('_id');
+
+    return res.status(200).json({
+      success: true,
+      canPost: !existingPostToday,
+      postsToday: existingPostToday ? 1 : 0,
+      limit: 1,
+      message: existingPostToday
+        ? 'Daily post limit reached: You can upload only 1 community post per day. Please try again tomorrow!'
+        : 'You can upload 1 community post today.',
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 exports.createPost = async (req, res, next) => {
   let savedImageUrl = null;
 
   try {
+    // Secondary safety check in controller
+    if (req.user && req.user.role !== 'admin') {
+      const startOfTodayUTC = getStartOfTodayIST();
+      const existingPostToday = await Post.findOne({
+        owner: req.user.id,
+        createdAt: { $gte: startOfTodayUTC },
+      }).select('_id');
+
+      if (existingPostToday) {
+        if (req.file && req.file.path) {
+          try { require('fs').unlinkSync(req.file.path); } catch {}
+        }
+        return res.status(400).json({
+          success: false,
+          message: 'Daily post limit reached: You can upload only 1 community post per day. Please try again tomorrow!',
+        });
+      }
+    }
+
     const text = (req.body.text || '').trim();
     let imageUrl = req.body.imageUrl;
     if (req.file) {

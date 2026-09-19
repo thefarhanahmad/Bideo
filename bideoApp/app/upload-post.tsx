@@ -267,29 +267,33 @@ export default function UploadPostScreen() {
           )}
         </TouchableOpacity>
 
-        <Text style={styles.label}>Visibility</Text>
-        <View style={styles.selectContainer}>
-          <TouchableOpacity style={styles.selectTrigger} onPress={() => setVisibilityOpen(!visibilityOpen)}>
-            <Text style={styles.selectValue}>{visibility === 'private' ? 'Private' : 'Public'}</Text>
-            <Ionicons name={visibilityOpen ? 'chevron-up' : 'chevron-down'} size={18} color={Colors.textGray} />
-          </TouchableOpacity>
-          {visibilityOpen && (
-            <View style={styles.selectMenu}>
-              {['public', 'private'].map((v) => (
-                <TouchableOpacity
-                  key={v}
-                  style={styles.selectOption}
-                  onPress={() => {
-                    setVisibility(v);
-                    setVisibilityOpen(false);
-                  }}
-                >
-                  <Text style={[styles.selectOptionText, visibility === v && styles.selectOptionTextActive]}>{v.toUpperCase()}</Text>
-                </TouchableOpacity>
-              ))}
+        {Boolean(editPostId) && (
+          <>
+            <Text style={styles.label}>Visibility</Text>
+            <View style={styles.selectContainer}>
+              <TouchableOpacity style={styles.selectTrigger} onPress={() => setVisibilityOpen(!visibilityOpen)}>
+                <Text style={styles.selectValue}>{visibility === 'private' ? 'Private' : 'Public'}</Text>
+                <Ionicons name={visibilityOpen ? 'chevron-up' : 'chevron-down'} size={18} color={Colors.textGray} />
+              </TouchableOpacity>
+              {visibilityOpen && (
+                <View style={styles.selectMenu}>
+                  {['public', 'private'].map((v) => (
+                    <TouchableOpacity
+                      key={v}
+                      style={styles.selectOption}
+                      onPress={() => {
+                        setVisibility(v);
+                        setVisibilityOpen(false);
+                      }}
+                    >
+                      <Text style={[styles.selectOptionText, visibility === v && styles.selectOptionTextActive]}>{v.toUpperCase()}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
             </View>
-          )}
-        </View>
+          </>
+        )}
 
         <TouchableOpacity
           style={[styles.uploadButton, uploading && styles.disabledButton]}
