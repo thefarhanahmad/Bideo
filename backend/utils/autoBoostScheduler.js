@@ -6,23 +6,23 @@ const User = require('../models/User');
 const MonetizationApplication = require('../models/MonetizationApplication');
 
 /**
- * Deterministically generates a unique, persistent target view cap (between 130 and 290)
- * for a given video ID so that every video settles at a different, organic number.
+ * Deterministically generates a unique, persistent target view cap (between 25 and 50)
+ * for a given video ID so that every video settles at a different, organic number up to 50 views max.
  */
 const getTargetCap = (videoId) => {
   const str = videoId ? videoId.toString() : '';
   const hash = crypto.createHash('md5').update(str).digest('hex');
   const num = parseInt(hash.slice(0, 8), 16) || 0;
-  // Range: 130 to 290 inclusive
-  return 130 + (num % 161);
+  // Range: 25 to 50 inclusive (max ceiling 50)
+  return 25 + (num % 26);
 };
 
 /**
  * Executes one hourly pass of gradual organic boosting:
  * - Only public videos uploaded at least 3 hours ago (createdAt <= 3 hours ago)
- * - Only public videos below their unique deterministic cap (< 290)
+ * - Only public videos below their unique deterministic cap (< 50)
  * - Strictly excludes videos by approved monetized creators
- * - Increments 1-3 views (whole integer, capped at target)
+ * - Increments 1-2 views (whole integer, capped at target of 50 max)
  * - Adds 0-1 natural likes proportionally (no duplicates)
  * - 0 ₹ wallet balance (purely cosmetic)
  */
@@ -40,11 +40,11 @@ const processAutoHourlyBoost = async () => {
       .filter(Boolean);
     const monetizedUserSet = new Set(monetizedUserIds.map((id) => id.toString()));
 
-    // 2. Fetch eligible unpinned public videos uploaded at least 3 hours ago with views under max threshold, excluding monetized creators
+    // 2. Fetch eligible unpinned public videos uploaded at least 3 hours ago with views under 50, excluding monetized creators
     const videoQuery = {
       visibility: 'public',
       isPinned: { $ne: true }, // Only unpinned videos should increase views
-      views: { $lt: 290 },
+      views: { $lt: 50 },
       createdAt: { $lte: threeHoursAgo },
     };
 
@@ -78,14 +78,15 @@ const processAutoHourlyBoost = async () => {
       const targetCap = getTargetCap(video._id);
       const currentViews = Math.round(Number(video.views) || 0);
 
-      // Skip if video has already reached or exceeded its unique cap
-      if (currentViews >= targetCap) {
+      // Skip if video has already reached or exceeded its unique cap or ceiling of 50
+      if (currentViews >= targetCap || currentViews >= 50) {
         continue;
       }
 
-      // Generate random whole integer views (1, 2, or 3)
-      const randomViews = Math.floor(Math.random() * 3) + 1;
-      const finalAddedViews = Math.min(randomViews, targetCap - currentViews);
+      // Generate random whole integer views (1 or 2)
+      const randomViews = Math.floor(Math.random() * 2) + 1;
+      const maxAllowedCap = Math.min(targetCap, 50);
+      const finalAddedViews = Math.min(randomViews, maxAllowedCap - currentViews);
 
       if (finalAddedViews <= 0) {
         continue;

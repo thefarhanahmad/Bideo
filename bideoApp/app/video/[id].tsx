@@ -23,6 +23,7 @@ import HashtagText from '../../components/HashtagText';
 
 const FALLBACK_IMAGE = 'https://via.placeholder.com/80x80.png?text=User';
 const REQUIRED_WATCH_TIME = 3; // 3 seconds minimum watch time to count a view
+const MIDROLL_INTERVAL_SECONDS = 300; // 5 minutes (300 seconds) mid-roll ad interval
 
 export default function VideoScreen() {
   const { id, fromChannelId } = useLocalSearchParams<{ id: string; fromChannelId?: string }>();
@@ -77,6 +78,8 @@ export default function VideoScreen() {
   const [showingAd, setShowingAd] = useState(false);
   const [adCompleted, setAdCompleted] = useState(false);
   const adCompletedRef = useRef(false);
+  const isPostRollRef = useRef(false);
+  const postRollTriggeredRef = useRef(false);
   const triggeredMidrollsRef = useRef<Set<number>>(new Set());
 
   // Description and comments bottom sheet states
@@ -111,6 +114,12 @@ export default function VideoScreen() {
     if (!video?.videoUrl) return;
     setShowingAd(false);
     try {
+      if (isPostRollRef.current) {
+        // Post-roll ad finished: video reached the end, leave video finished gracefully
+        isPostRollRef.current = false;
+        return;
+      }
+
       if (!adCompletedRef.current) {
         // Initial pre-roll ad finished: load source into player and start playback
         adCompletedRef.current = true;
@@ -130,11 +139,32 @@ export default function VideoScreen() {
     }
   }, [video?.videoUrl, player]);
 
+  // Listen for video completion event from expo-video to trigger post-roll ad
+  useEffect(() => {
+    if (!player) return;
+    const sub = (player as any).addListener?.('playToEnd', () => {
+      if (adCompletedRef.current && !postRollTriggeredRef.current) {
+        postRollTriggeredRef.current = true;
+        isPostRollRef.current = true;
+        try {
+          player.pause();
+        } catch {}
+        setShowingAd(true);
+      }
+    });
+
+    return () => {
+      sub?.remove?.();
+    };
+  }, [player]);
+
   useEffect(() => {
     if (id) {
       viewRecordedRef.current = false;
       watchTimeRef.current = 0;
       adCompletedRef.current = false;
+      isPostRollRef.current = false;
+      postRollTriggeredRef.current = false;
       triggeredMidrollsRef.current.clear();
       loadVideoData();
     }
@@ -151,6 +181,8 @@ export default function VideoScreen() {
 
     // Reset ad state and show AdMob interstitial ad first
     adCompletedRef.current = false;
+    isPostRollRef.current = false;
+    postRollTriggeredRef.current = false;
     triggeredMidrollsRef.current.clear();
     setAdCompleted(false);
     setShowingAd(true);
@@ -163,13 +195,13 @@ export default function VideoScreen() {
     const interval = setInterval(() => {
       try {
         if (player && player.playing && !showingAd) {
-          // Mid-roll ad check: show an interstitial ad every 8 minutes (480s) on long videos
-          if (adCompletedRef.current && player.currentTime >= 480) {
-            const currentSlot = Math.floor(player.currentTime / 480);
+          // Mid-roll ad check: show an interstitial ad every 5 minutes (300s) on long videos
+          if (adCompletedRef.current && player.currentTime >= MIDROLL_INTERVAL_SECONDS) {
+            const currentSlot = Math.floor(player.currentTime / MIDROLL_INTERVAL_SECONDS);
             if (currentSlot >= 1 && !triggeredMidrollsRef.current.has(currentSlot)) {
               const duration = player.duration || video.duration || 0;
-              // Ensure video is at least 8 minutes long and has at least 30s remaining
-              if (duration >= 480 && (duration - player.currentTime) > 30) {
+              // Ensure video is at least 5 minutes long and has at least 20s remaining
+              if (duration >= MIDROLL_INTERVAL_SECONDS && (duration - player.currentTime) > 20) {
                 triggeredMidrollsRef.current.add(currentSlot);
                 try {
                   player.pause();
@@ -179,10 +211,27 @@ export default function VideoScreen() {
             }
           }
 
-          // If user restarted/replayed video from start after previous view was recorded, allow a new view
+          // Post-roll ad check: trigger immediately when video reaches completion
+          const videoDuration = player.duration || video.duration || 0;
+          if (
+            adCompletedRef.current &&
+            !postRollTriggeredRef.current &&
+            videoDuration > 5 &&
+            player.currentTime >= (videoDuration - 0.8)
+          ) {
+            postRollTriggeredRef.current = true;
+            isPostRollRef.current = true;
+            try {
+              player.pause();
+            } catch {}
+            setShowingAd(true);
+          }
+
+          // If user restarted/replayed video from start after previous view was recorded, allow a new view and reset post-roll ad
           if (viewRecordedRef.current && player.currentTime < 1 && watchTimeRef.current >= REQUIRED_WATCH_TIME) {
             viewRecordedRef.current = false;
             watchTimeRef.current = 0;
+            postRollTriggeredRef.current = false;
           }
 
           if (!viewRecordedRef.current) {

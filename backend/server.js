@@ -27,7 +27,7 @@ initAutoBoostScheduler();
 // Initialize automated weekly orphan media garbage collection
 initOrphanMediaScheduler();
 
-// Initialize 24-hour wallet credit settlement scheduler
+// Initialize daily 12:00 AM midnight wallet credit settlement scheduler
 initWalletSettlementScheduler();
 
 // Initialize video boost queue scheduler (evaluates and promotes pinned video boosts)

@@ -2,14 +2,30 @@ const WalletCredit = require('../models/WalletCredit');
 const User = require('../models/User');
 
 /**
- * Queue a wallet reward credit with a 24-hour settlement maturity.
+ * Helper to calculate the upcoming 12:00 AM Midnight (00:00:00) in Indian Standard Time (Asia/Kolkata).
+ * All views and earnings accumulated during the day mature at 12:00 AM midnight sharp.
+ */
+const getNextMidnightIST = (fromDate = new Date()) => {
+  const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+  const istTime = new Date(fromDate.getTime() + IST_OFFSET_MS);
+
+  // Advance to next calendar day at 00:00:00.000 in IST
+  istTime.setUTCDate(istTime.getUTCDate() + 1);
+  istTime.setUTCHours(0, 0, 0, 0);
+
+  // Return back as standard UTC Date
+  return new Date(istTime.getTime() - IST_OFFSET_MS);
+};
+
+/**
+ * Queue a wallet reward credit to be settled at 12:00 AM Midnight IST.
  * Atomically increases user's pendingBalance so it is immediately visible as pending.
  */
-exports.queueWalletCredit = async ({ userId, videoId = null, amount, source = 'video_view', meta = {}, delayHours = 24 }) => {
+exports.queueWalletCredit = async ({ userId, videoId = null, amount, source = 'video_view', meta = {}, availableAt = null }) => {
   if (!userId || !amount || amount <= 0) return null;
 
   const numericAmount = Math.round(Number(amount) * 10000) / 10000;
-  const availableAt = new Date(Date.now() + delayHours * 60 * 60 * 1000);
+  const settlementDate = availableAt instanceof Date ? availableAt : getNextMidnightIST();
 
   const credit = await WalletCredit.create({
     user: userId,
@@ -18,7 +34,7 @@ exports.queueWalletCredit = async ({ userId, videoId = null, amount, source = 'v
     source,
     status: 'pending',
     isCredited: false,
-    availableAt,
+    availableAt: settlementDate,
     meta,
   });
 
@@ -30,58 +46,73 @@ exports.queueWalletCredit = async ({ userId, videoId = null, amount, source = 'v
   return credit;
 };
 
+// Concurrency lock to ensure only one settlement batch runs at any given moment
+let isSettling = false;
+
 /**
- * Settle all matured pending credits (availableAt <= now).
+ * Settle a safe, manageable batch of matured pending credits (availableAt <= now).
  * Strictly guarantees no double crediting via atomic findOneAndUpdate with status/isCredited guard.
+ * Processes in gentle batches (default 100) so server CPU and MongoDB stay calm and the app never lags.
  */
-exports.processPendingWalletCredits = async () => {
+exports.processPendingWalletCredits = async (batchLimit = 100) => {
+  if (isSettling) {
+    return { settledCount: 0, settledAmount: 0, busy: true };
+  }
+  isSettling = true;
+
   try {
     const now = new Date();
-    // Fetch batch of matured pending credits
+    // Fetch a single safe batch of matured pending credits
     const dueCredits = await WalletCredit.find({
       status: 'pending',
       isCredited: false,
       availableAt: { $lte: now },
     })
-      .limit(500)
+      .limit(batchLimit)
       .lean();
 
-    if (!dueCredits.length) return { settledCount: 0, settledAmount: 0 };
+    if (!dueCredits.length) {
+      return { settledCount: 0, settledAmount: 0 };
+    }
 
     let settledCount = 0;
     let settledAmount = 0;
 
     for (const credit of dueCredits) {
-      // 1. Atomic status transition guard prevents double processing
-      const claim = await WalletCredit.findOneAndUpdate(
-        {
-          _id: credit._id,
-          status: 'pending',
-          isCredited: false,
-        },
-        {
-          $set: {
-            status: 'credited',
-            isCredited: true,
-            creditedAt: new Date(),
+      try {
+        // 1. Atomic status transition guard prevents double processing
+        const claim = await WalletCredit.findOneAndUpdate(
+          {
+            _id: credit._id,
+            status: 'pending',
+            isCredited: false,
           },
-        },
-        { new: true }
-      );
-
-      // 2. Only proceed if THIS execution succeeded in transitioning status
-      if (claim) {
-        const roundedAmount = Math.round(credit.amount * 100) / 100;
-        await User.findByIdAndUpdate(credit.user, {
-          $inc: {
-            walletBalance: roundedAmount,
-            totalEarnings: roundedAmount,
-            pendingBalance: -credit.amount,
+          {
+            $set: {
+              status: 'credited',
+              isCredited: true,
+              creditedAt: new Date(),
+            },
           },
-        });
+          { new: true }
+        );
 
-        settledCount++;
-        settledAmount += credit.amount;
+        // 2. Only proceed if THIS execution succeeded in transitioning status
+        if (claim) {
+          const roundedAmount = Math.round(credit.amount * 100) / 100;
+          await User.findByIdAndUpdate(credit.user, {
+            $inc: {
+              walletBalance: roundedAmount,
+              totalEarnings: roundedAmount,
+              pendingBalance: -credit.amount,
+            },
+          });
+
+          settledCount++;
+          settledAmount += credit.amount;
+        }
+      } catch (itemErr) {
+        console.error(`[WalletSettlement] Error settling credit ${credit._id}:`, itemErr.message);
       }
     }
 
@@ -90,8 +121,10 @@ exports.processPendingWalletCredits = async () => {
 
     return { settledCount, settledAmount: Math.round(settledAmount * 100) / 100 };
   } catch (err) {
-    console.error('Error processing pending wallet credits:', err);
+    console.error('[WalletSettlement] Error processing pending wallet credits:', err);
     return { error: err.message };
+  } finally {
+    isSettling = false;
   }
 };
 
