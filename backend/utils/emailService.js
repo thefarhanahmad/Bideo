@@ -201,7 +201,7 @@ const sendViaBrevo = async ({ to, subject, html, text }) => {
   });
 
   const fromName = process.env.EMAIL_FROM_NAME || 'Bideo';
-  const fromEmail = process.env.BREVO_FROM_EMAIL || user;
+  const fromEmail = process.env.BREVO_FROM_EMAIL || process.env.GMAIL_USER || user;
   return transporter.sendMail({
     from: `"${fromName}" <${fromEmail}>`,
     to,
