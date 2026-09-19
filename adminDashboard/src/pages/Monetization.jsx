@@ -40,6 +40,12 @@ const Monetization = () => {
   const [showMonetizedDetailsModal, setShowMonetizedDetailsModal] = useState(false);
   const [copiedField, setCopiedField] = useState(null);
 
+  // Bulk selection states for applications
+  const [selectedAppIds, setSelectedAppIds] = useState([]);
+  const [showBulkApproveModal, setShowBulkApproveModal] = useState(false);
+  const [showApproveAllModal, setShowApproveAllModal] = useState(false);
+  const [bulkLoading, setBulkLoading] = useState(false);
+
   // URL-synced search, filter (active tab), and pagination
   const { search, setSearch, filter: activeTab, setFilter: setActiveTab, page, setPage, limit, setLimit } =
     useTableParams({ defaultFilter: "videos", defaultLimit: 10 });
@@ -125,6 +131,60 @@ const Monetization = () => {
     }, search ? 300 : 0);
     return () => clearTimeout(timer);
   }, [fetchData, activeTab, page, limit, search]);
+
+  useEffect(() => {
+    setSelectedAppIds([]);
+  }, [activeTab, page, limit, search]);
+
+  const handleToggleSelectApp = (appId) => {
+    setSelectedAppIds((prev) =>
+      prev.includes(appId) ? prev.filter((id) => id !== appId) : [...prev, appId]
+    );
+  };
+
+  const isAllOnPageSelected =
+    applications.length > 0 &&
+    applications.every((app) => selectedAppIds.includes(app._id));
+
+  const handleToggleSelectAllOnPage = () => {
+    if (isAllOnPageSelected) {
+      const pageAppIds = applications.map((a) => a._id);
+      setSelectedAppIds((prev) => prev.filter((id) => !pageAppIds.includes(id)));
+    } else {
+      const pageAppIds = applications.map((a) => a._id);
+      setSelectedAppIds((prev) => Array.from(new Set([...prev, ...pageAppIds])));
+    }
+  };
+
+  const handleBulkApproveSubmit = async (approveAll = false) => {
+    setBulkLoading(true);
+    try {
+      const token = localStorage.getItem("admin_token");
+      const payload = approveAll
+        ? { status: "approved", approveAll: true }
+        : { status: "approved", applicationIds: selectedAppIds };
+
+      const res = await fetch(`${API}/api/admin/monetization-applications/bulk-review`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Bulk approval failed");
+
+      setShowBulkApproveModal(false);
+      setShowApproveAllModal(false);
+      setSelectedAppIds([]);
+      await fetchData(activeTab, page, limit, search);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setBulkLoading(false);
+    }
+  };
 
   const formatDate = (date) => {
     if (!date) return "-";
@@ -453,97 +513,181 @@ const Monetization = () => {
 
           {/* TAB 2: Applications */}
           {activeTab === "applications" && (
-            <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-card min-w-0">
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[960px] text-sm">
-                  <thead>
-                    <tr className="border-b border-line bg-surface/60 text-left text-xs uppercase tracking-wider text-muted">
-                      <th className="p-4 font-semibold">Creator</th>
-                      <th className="p-4 font-semibold">Contact</th>
-                      <th className="p-4 font-semibold">Aadhaar Card</th>
-                      <th className="p-4 font-semibold">UPI ID</th>
-                      <th className="p-4 font-semibold">Bank details</th>
-                      <th className="p-4 font-semibold">Applied Date</th>
-                      <th className="p-4 text-right font-semibold">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {applications.map((app) => (
-                      <tr key={app._id} className="border-t border-line align-top hover:bg-surface/50 transition-colors">
-                        <td className="p-4">
-                          <div className="flex items-center gap-3">
-                            <img
-                              src={resolveMediaUrl(app.user?.avatar)}
-                              alt="avatar"
-                              loading="lazy"
-                              className="h-10 w-10 shrink-0 rounded-full bg-surface object-cover border border-line"
-                              onError={(e) => {
-                                e.currentTarget.src = "https://via.placeholder.com/80x80.png?text=User";
-                              }}
-                            />
-                            <div>
-                              <div className="font-semibold text-ink">{app.name}</div>
-                              <div className="text-xs text-muted">@{app.user?.channelName || app.user?.name}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="p-4 text-muted whitespace-nowrap text-xs">
-                          <div>{app.phone}</div>
-                          <div className="text-muted mt-0.5">{app.user?.email}</div>
-                        </td>
-                        <td className="p-4 font-mono text-ink whitespace-nowrap text-xs">{app.adharNumber || "-"}</td>
-                        <td className="p-4 font-mono text-brand whitespace-nowrap text-xs">{app.upiId || "-"}</td>
-                        <td className="p-4 text-xs text-muted">
-                          <div className="font-semibold text-ink">{app.bankDetails?.bankName}</div>
-                          <div>A/C: {app.bankDetails?.accountNumber}</div>
-                          <div>IFSC: {app.bankDetails?.ifscCode}</div>
-                        </td>
-                        <td className="p-4 text-muted whitespace-nowrap text-xs">{formatDate(app.createdAt)}</td>
-                        <td className="p-4">
-                          <div className="flex justify-end gap-1.5 whitespace-nowrap">
-                            <button
-                              onClick={() => {
-                                setSelectedApp(app);
-                                setShowApproveApp(true);
-                              }}
-                              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors"
-                            >
-                              Approve
-                            </button>
-                            <button
-                              onClick={() => {
-                                setSelectedApp(app);
-                                setRejectReason("");
-                                setShowRejectApp(true);
-                              }}
-                              className="rounded-lg bg-red-50 border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 transition-colors"
-                            >
-                              Reject
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {applications.length === 0 && (
-                      <tr>
-                        <td colSpan="7" className="p-8 text-center text-muted">
-                          No pending monetization applications.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+            <div className="space-y-3">
+              {/* Bulk Action Controls */}
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-line shadow-card">
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-semibold text-ink">
+                    <input
+                      type="checkbox"
+                      checked={isAllOnPageSelected}
+                      onChange={handleToggleSelectAllOnPage}
+                      className="h-4 w-4 rounded border-line text-brand focus:ring-brand cursor-pointer"
+                    />
+                    <span>Select Page ({applications.length})</span>
+                  </label>
+                  {selectedAppIds.length > 0 && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-bold text-brand border border-brand/20">
+                      {selectedAppIds.length} selected
+                    </span>
+                  )}
+                  {selectedAppIds.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAppIds([])}
+                      className="text-xs text-muted hover:text-ink underline transition-colors"
+                    >
+                      Clear Selection
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={selectedAppIds.length === 0}
+                    onClick={() => setShowBulkApproveModal(true)}
+                    className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-all shadow-sm ${
+                      selectedAppIds.length > 0
+                        ? "bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-600/20 cursor-pointer"
+                        : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                    }`}
+                  >
+                    <span>✓ Approve Selected ({selectedAppIds.length})</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={applications.length === 0 && counts.applications === 0}
+                    onClick={() => setShowApproveAllModal(true)}
+                    className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-all shadow-sm ${
+                      (counts.applications > 0 || applications.length > 0)
+                        ? "bg-brand text-white hover:bg-brand-dark shadow-brand/20 cursor-pointer"
+                        : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                    }`}
+                  >
+                    <span>⚡ Approve All Pending ({counts.applications || applications.length})</span>
+                  </button>
+                </div>
               </div>
 
-              {/* Pagination */}
-              <Pagination
-                currentPage={page}
-                totalPages={totalPages}
-                totalItems={totalItems}
-                pageSize={limit}
-                onPageChange={setPage}
-                onPageSizeChange={setLimit}
-              />
+              <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-card min-w-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[960px] text-sm">
+                    <thead>
+                      <tr className="border-b border-line bg-surface/60 text-left text-xs uppercase tracking-wider text-muted">
+                        <th className="p-4 w-12 text-center">
+                          <input
+                            type="checkbox"
+                            checked={isAllOnPageSelected}
+                            onChange={handleToggleSelectAllOnPage}
+                            className="h-4 w-4 rounded border-line text-brand focus:ring-brand cursor-pointer"
+                            title="Select all on this page"
+                          />
+                        </th>
+                        <th className="p-4 font-semibold">Creator</th>
+                        <th className="p-4 font-semibold">Contact</th>
+                        <th className="p-4 font-semibold">Aadhaar Card</th>
+                        <th className="p-4 font-semibold">UPI ID</th>
+                        <th className="p-4 font-semibold">Bank details</th>
+                        <th className="p-4 font-semibold">Applied Date</th>
+                        <th className="p-4 text-right font-semibold">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {applications.map((app) => {
+                        const isSelected = selectedAppIds.includes(app._id);
+                        return (
+                          <tr
+                            key={app._id}
+                            className={`border-t border-line align-top transition-colors ${
+                              isSelected ? "bg-brand/5" : "hover:bg-surface/50"
+                            }`}
+                          >
+                            <td className="p-4 text-center">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => handleToggleSelectApp(app._id)}
+                                className="h-4 w-4 rounded border-line text-brand focus:ring-brand cursor-pointer mt-1"
+                              />
+                            </td>
+                            <td className="p-4">
+                              <div className="flex items-center gap-3">
+                                <img
+                                  src={resolveMediaUrl(app.user?.avatar)}
+                                  alt="avatar"
+                                  loading="lazy"
+                                  className="h-10 w-10 shrink-0 rounded-full bg-surface object-cover border border-line"
+                                  onError={(e) => {
+                                    e.currentTarget.src = "https://via.placeholder.com/80x80.png?text=User";
+                                  }}
+                                />
+                                <div>
+                                  <div className="font-semibold text-ink">{app.name}</div>
+                                  <div className="text-xs text-muted">@{app.user?.channelName || app.user?.name}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-4 text-muted whitespace-nowrap text-xs">
+                              <div>{app.phone}</div>
+                              <div className="text-muted mt-0.5">{app.user?.email}</div>
+                            </td>
+                            <td className="p-4 font-mono text-ink whitespace-nowrap text-xs">{app.adharNumber || "-"}</td>
+                            <td className="p-4 font-mono text-brand whitespace-nowrap text-xs">{app.upiId || "-"}</td>
+                            <td className="p-4 text-xs text-muted">
+                              <div className="font-semibold text-ink">{app.bankDetails?.bankName}</div>
+                              <div>A/C: {app.bankDetails?.accountNumber}</div>
+                              <div>IFSC: {app.bankDetails?.ifscCode}</div>
+                            </td>
+                            <td className="p-4 text-muted whitespace-nowrap text-xs">{formatDate(app.createdAt)}</td>
+                            <td className="p-4">
+                              <div className="flex justify-end gap-1.5 whitespace-nowrap">
+                                <button
+                                  onClick={() => {
+                                    setSelectedApp(app);
+                                    setShowApproveApp(true);
+                                  }}
+                                  className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors"
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setSelectedApp(app);
+                                    setRejectReason("");
+                                    setShowRejectApp(true);
+                                  }}
+                                  className="rounded-lg bg-red-50 border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 transition-colors"
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {applications.length === 0 && (
+                        <tr>
+                          <td colSpan="8" className="p-8 text-center text-muted">
+                            No pending monetization applications.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination */}
+                <Pagination
+                  currentPage={page}
+                  totalPages={totalPages}
+                  totalItems={totalItems}
+                  pageSize={limit}
+                  onPageChange={setPage}
+                  onPageSizeChange={setLimit}
+                />
+              </div>
             </div>
           )}
 
@@ -731,6 +875,80 @@ const Monetization = () => {
               </button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {/* Bulk Approve Selected Modal */}
+      {showBulkApproveModal && (
+        <Modal
+          title="Bulk Approve Selected Applications"
+          onClose={() => {
+            if (!bulkLoading) setShowBulkApproveModal(false);
+          }}
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-ink">
+              Are you sure you want to approve <strong>{selectedAppIds.length}</strong> selected creator monetization application(s)?
+            </p>
+            <p className="text-xs text-muted">
+              These creators will immediately be activated as monetized partners and earn revenue for their video views.
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={bulkLoading}
+                onClick={() => setShowBulkApproveModal(false)}
+                className="rounded-full bg-surface px-4 py-2 text-sm font-semibold text-ink hover:bg-line disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={bulkLoading}
+                onClick={() => handleBulkApproveSubmit(false)}
+                className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-brand hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {bulkLoading ? "Approving..." : `Confirm & Approve (${selectedAppIds.length})`}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Approve All Pending Applications Modal */}
+      {showApproveAllModal && (
+        <Modal
+          title="Approve All Pending Applications"
+          onClose={() => {
+            if (!bulkLoading) setShowApproveAllModal(false);
+          }}
+        >
+          <div className="space-y-4">
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+              ⚠️ <strong>Notice:</strong> This will approve <strong>ALL</strong> pending monetization applications across the platform ({counts.applications || totalItems} total).
+            </div>
+            <p className="text-sm text-ink">
+              Are you sure you want to approve all pending creator applications? All pending creators will immediately gain access to monetization and view earnings.
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={bulkLoading}
+                onClick={() => setShowApproveAllModal(false)}
+                className="rounded-full bg-surface px-4 py-2 text-sm font-semibold text-ink hover:bg-line disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={bulkLoading}
+                onClick={() => handleBulkApproveSubmit(true)}
+                className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white shadow-brand hover:bg-brand-dark disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {bulkLoading ? "Approving All..." : "Confirm & Approve All"}
+              </button>
+            </div>
+          </div>
         </Modal>
       )}
 

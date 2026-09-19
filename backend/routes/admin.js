@@ -8,6 +8,7 @@ const {
   reviewVideoMonetization,
   getMonetizationApplications,
   reviewMonetizationApplication,
+  bulkReviewMonetizationApplications,
   getWithdrawals,
   processWithdrawal,
   boostVideoEngagement,
@@ -47,6 +48,7 @@ router.post('/videos/boost-engagement', boostVideoEngagement);
 router.get('/videos/pending-reviews', getPendingVideoReviews);
 router.put('/videos/:id/review', reviewVideoMonetization);
 router.get('/monetization-applications', getMonetizationApplications);
+router.put('/monetization-applications/bulk-review', bulkReviewMonetizationApplications);
 router.put('/users/:userId/review-monetization', reviewMonetizationApplication);
 
 // Creator Withdrawals / Payouts

@@ -12,6 +12,7 @@ const Post = require('../models/Post');
 const WalletCredit = require('../models/WalletCredit');
 const VideoBoost = require('../models/VideoBoost');
 const CoinTransaction = require('../models/CoinTransaction');
+const Notification = require('../models/Notification');
 const { processPendingWalletCredits } = require('../services/walletSettlementService');
 const { processBoostQueue } = require('../utils/boostQueueScheduler');
 
@@ -784,7 +785,77 @@ exports.reviewMonetizationApplication = async (req, res, next) => {
     );
 
     if (!application) return res.status(404).json({ success: false, message: 'Application not found for this user' });
+
+    if (status === 'approved') {
+      Notification.create({
+        recipient: req.params.userId,
+        actor: req.user.id,
+        type: 'system',
+        message: 'Congratulations! Your channel monetization application has been approved. You are now earning from video views! 🎉',
+      }).catch(() => {});
+    }
+
     res.status(200).json({ success: true, data: application });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Bulk review monetization applications (approve multiple, selected, or all)
+// @route   PUT /api/admin/monetization-applications/bulk-review
+// @access  Private/Admin
+exports.bulkReviewMonetizationApplications = async (req, res, next) => {
+  try {
+    const { status, applicationIds, userIds, approveAll, reviewMessage } = req.body;
+    if (!status || !['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid status: approved or rejected' });
+    }
+
+    let filter = {};
+
+    if (approveAll === true || approveAll === 'true') {
+      filter = { status: 'pending' };
+    } else if (Array.isArray(applicationIds) && applicationIds.length > 0) {
+      filter = { _id: { $in: applicationIds } };
+    } else if (Array.isArray(userIds) && userIds.length > 0) {
+      filter = { user: { $in: userIds } };
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide applicationIds, userIds, or set approveAll to true',
+      });
+    }
+
+    const updateData = {
+      status,
+      updatedAt: Date.now(),
+    };
+    if (reviewMessage !== undefined) {
+      updateData.reviewMessage = reviewMessage;
+    }
+
+    const appsToUpdate = await MonetizationApplication.find(filter).select('user').lean();
+    const result = await MonetizationApplication.updateMany(filter, { $set: updateData });
+
+    if (status === 'approved') {
+      for (const app of appsToUpdate) {
+        if (app.user) {
+          Notification.create({
+            recipient: app.user,
+            actor: req.user.id,
+            type: 'system',
+            message: 'Congratulations! Your channel monetization application has been approved. You are now earning from video views! 🎉',
+          }).catch(() => {});
+        }
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      modifiedCount: result.modifiedCount || 0,
+      matchedCount: result.matchedCount || 0,
+      message: `Successfully ${status} ${result.modifiedCount || 0} application(s).`,
+    });
   } catch (err) {
     next(err);
   }
