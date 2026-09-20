@@ -13,6 +13,10 @@ const Playlist = require("../models/Playlist");
 const fs = require("fs");
 const { saveLocalFile, deleteLocalFile } = require("../utils/localUpload");
 const {
+  rankAndShuffleVideos,
+  shuffle,
+} = require("../utils/recommendation");
+const {
   sendPushForEvent,
   notifyFollowersOfUpload,
   checkAndNotifyViewMilestone,
