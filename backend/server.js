@@ -14,6 +14,7 @@ const { initOrphanMediaScheduler } = require("./utils/orphanMediaScheduler");
 const { initWalletSettlementScheduler } = require("./utils/walletSettlementScheduler");
 const { initBoostQueueScheduler } = require("./utils/boostQueueScheduler");
 const { initVerifiedBadgeScheduler } = require("./utils/verifiedBadgeScheduler");
+const { initMonetizationScheduler } = require("./utils/monetizationScheduler");
 
 // Connect to database
 connectDB();
@@ -35,6 +36,9 @@ initBoostQueueScheduler();
 
 // Initialize 1-month verified badge expiration scheduler
 initVerifiedBadgeScheduler();
+
+// Initialize 48-hour monetization auto-approval scheduler
+initMonetizationScheduler();
 
 const PORT = process.env.PORT || 5000;
 
