@@ -23,6 +23,7 @@ import { chatService } from '../../services/api';
 import { requestOnlineStatus } from '../../services/socket';
 import VerifiedBadge from '../../components/VerifiedBadge';
 import AuthModal from '../../components/AuthModal';
+import { AppAdBanner } from '../../components/AppAds';
 import { hapticSelection, hapticLight } from '../../utils/haptics';
 
 const FALLBACK_AVATAR = 'https://via.placeholder.com/100x100.png?text=User';
@@ -556,6 +557,11 @@ export default function ChatListScreen() {
         />
       )}
 
+      {/* Bottom Sticky Banner Ad */}
+      <View style={styles.bottomBannerWrapper}>
+        <AppAdBanner containerStyle={styles.bottomBannerContainer} />
+      </View>
+
       <AuthModal
         visible={authModalVisible}
         onClose={() => {
@@ -946,5 +952,17 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontSize: 14,
     fontWeight: '700',
+  },
+  bottomBannerWrapper: {
+    width: '100%',
+    backgroundColor: Colors.white,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bottomBannerContainer: {
+    paddingVertical: 4,
+    marginVertical: 0,
   },
 });

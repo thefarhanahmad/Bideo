@@ -59,13 +59,14 @@ export const ADMOB_IDS = {
 
 interface AppAdBannerProps {
   size?: any;
+  containerStyle?: any;
 }
 
 /**
  * Banner ad that returns null when running in Expo Go (no native module available)
  * or if the ad failed to fill.
  */
-export const AppAdBanner: React.FC<AppAdBannerProps> = ({ size }: AppAdBannerProps) => {
+export const AppAdBanner: React.FC<AppAdBannerProps> = ({ size, containerStyle }: AppAdBannerProps) => {
   const isExpoGo =
     Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
   if (isExpoGo) return null;
@@ -94,7 +95,7 @@ export const AppAdBanner: React.FC<AppAdBannerProps> = ({ size }: AppAdBannerPro
     const unitId = isTestingAds ? (TestIds?.BANNER || TEST_BANNER_ID) : ADMOB_IDS.BANNER;
 
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, containerStyle]}>
         <BannerAd
           key={`${unitId}-${refreshKey}`}
           unitId={unitId}
