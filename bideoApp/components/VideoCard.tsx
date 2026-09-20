@@ -15,6 +15,7 @@ import { RootState } from '../redux/store';
 import VerifiedBadge from './VerifiedBadge';
 import HashtagText from './HashtagText';
 import { shareVideo } from '../utils/shareHelper';
+import ShareModal from './ShareModal';
 
 const FALLBACK_IMAGE = 'https://via.placeholder.com/640x360?text=No+Image';
 const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
@@ -49,6 +50,7 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, onMenuPress, onPlaylistPre
   const insets = useSafeAreaInsets();
   const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
   const [menuVisible, setMenuVisible] = useState(false);
+  const [shareModalVisible, setShareModalVisible] = useState(false);
 
   const openMenu = () => {
     hapticSelection();
@@ -68,13 +70,10 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, onMenuPress, onPlaylistPre
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
-  const handleShare = async () => {
+  const handleShare = () => {
     setMenuVisible(false);
-    await shareVideo({
-      _id: video._id,
-      title: video.title,
-      isShort: Boolean(video.isShort),
-    });
+    hapticSelection();
+    setShareModalVisible(true);
   };
 
   const handleReport = () => {
@@ -247,6 +246,20 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, onMenuPress, onPlaylistPre
           </Pressable>
         </Pressable>
       </Modal>
+
+      <ShareModal
+        visible={shareModalVisible}
+        onClose={() => setShareModalVisible(false)}
+        item={{
+          type: 'video',
+          _id: video._id,
+          title: video.title,
+          thumbnail: video.thumbnail,
+          isShort: Boolean(video.isShort),
+          owner: video.owner,
+          duration: video.duration,
+        }}
+      />
     </TouchableOpacity>
   );
 };

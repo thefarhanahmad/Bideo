@@ -16,6 +16,7 @@ import AuthModal from './AuthModal';
 import VerifiedBadge from './VerifiedBadge';
 import HashtagText from './HashtagText';
 import { sharePost } from '../utils/shareHelper';
+import ShareModal from './ShareModal';
 
 const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
 
@@ -33,18 +34,16 @@ const PostCard = ({ post, onDelete }: PostCardProps) => {
   const [showComments, setShowComments] = useState(false);
   const [authModalVisible, setAuthModalVisible] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
+  const [shareModalVisible, setShareModalVisible] = useState(false);
 
   const owner = post.owner || {};
   const isLiked = likes.includes(user?._id);
   const isOwner = user?._id === owner?._id;
 
-  const handleShare = async () => {
+  const handleShare = () => {
     setMenuVisible(false);
-    await sharePost({
-      _id: post._id,
-      text: post.text,
-      authorName: owner?.channelName || owner?.name,
-    });
+    hapticLight();
+    setShareModalVisible(true);
   };
 
   const handleLike = async () => {
@@ -225,6 +224,20 @@ const PostCard = ({ post, onDelete }: PostCardProps) => {
           </ScrollView>
         </View>
       </Modal>
+
+      <ShareModal
+        visible={shareModalVisible}
+        onClose={() => setShareModalVisible(false)}
+        item={{
+          type: 'post',
+          _id: post._id,
+          text: post.text,
+          imageUrl: post.imageUrl || post.image,
+          authorName: owner?.channelName || owner?.name,
+          owner: owner,
+          author: owner,
+        }}
+      />
     </View>
   );
 };

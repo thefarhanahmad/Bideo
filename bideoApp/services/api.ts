@@ -182,4 +182,55 @@ export const userService = {
   },
 };
 
+export const chatService = {
+  getConversations: async () => {
+    const response = await api.get('/chat/conversations');
+    return response.data?.data || [];
+  },
+  getConversationById: async (id: string) => {
+    const response = await api.get(`/chat/conversations/${id}`);
+    return response.data?.data;
+  },
+  getOrCreateConversation: async (recipientId: string) => {
+    const response = await api.post('/chat/conversations', { recipientId });
+    return response.data?.data;
+  },
+  getMessages: async (conversationId: string, page = 1, limit = 50) => {
+    const response = await api.get(`/chat/conversations/${conversationId}/messages`, {
+      params: { page, limit },
+    });
+    return response.data;
+  },
+  sendMessage: async (data: {
+    conversationId?: string;
+    recipientId?: string;
+    text?: string;
+    videoId?: string;
+    postId?: string;
+  }) => {
+    const response = await api.post('/chat/messages', data);
+    return response.data?.data;
+  },
+  markAsRead: async (conversationId: string) => {
+    const response = await api.put(`/chat/conversations/${conversationId}/read`);
+    return response.data;
+  },
+  acceptChat: async (conversationId: string) => {
+    const response = await api.post(`/chat/conversations/${conversationId}/accept`);
+    return response.data?.data;
+  },
+  blockUser: async (conversationId: string) => {
+    const response = await api.post(`/chat/conversations/${conversationId}/block`);
+    return response.data?.data;
+  },
+  unblockUser: async (conversationId: string) => {
+    const response = await api.post(`/chat/conversations/${conversationId}/unblock`);
+    return response.data?.data;
+  },
+  getUnreadCount: async () => {
+    const response = await api.get('/chat/unread-count');
+    return response.data?.count || 0;
+  },
+};
+
 export default api;

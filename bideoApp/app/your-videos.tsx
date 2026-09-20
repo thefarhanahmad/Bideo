@@ -8,6 +8,7 @@ import Colors from '../constants/Colors';
 import api from '../services/api';
 import { formatTimeAgo, formatViews } from '../utils/formatDate';
 import { shareVideo } from '../utils/shareHelper';
+import ShareModal from '../components/ShareModal';
 
 export default function YourVideosScreen() {
   const router = useRouter();
@@ -16,6 +17,7 @@ export default function YourVideosScreen() {
   const [loading, setLoading] = useState(true);
   const [selectedVideo, setSelectedVideo] = useState<any>(null);
   const [menuVisible, setMenuVisible] = useState(false);
+  const [shareModalVisible, setShareModalVisible] = useState(false);
   const [filter, setFilter] = useState<'videos' | 'shorts'>('videos');
 
   useFocusEffect(
@@ -84,14 +86,10 @@ export default function YourVideosScreen() {
     );
   };
 
-  const handleShare = async () => {
+  const handleShare = () => {
     if (!selectedVideo) return;
     setMenuVisible(false);
-    await shareVideo({
-      _id: selectedVideo._id,
-      title: selectedVideo.title,
-      isShort: Boolean(selectedVideo.isShort),
-    });
+    setShareModalVisible(true);
   };
 
   const handleEdit = () => {
@@ -240,6 +238,23 @@ export default function YourVideosScreen() {
           </View>
         </Pressable>
       </Modal>
+
+      <ShareModal
+        visible={shareModalVisible}
+        onClose={() => setShareModalVisible(false)}
+        item={
+          selectedVideo
+            ? {
+                type: 'video',
+                _id: selectedVideo._id,
+                title: selectedVideo.title,
+                thumbnail: selectedVideo.thumbnail,
+                isShort: Boolean(selectedVideo.isShort),
+                duration: selectedVideo.duration,
+              }
+            : null
+        }
+      />
     </View>
   );
 }

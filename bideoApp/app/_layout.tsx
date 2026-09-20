@@ -11,6 +11,8 @@ import { loginSuccess, loginStart, loginFailure, logout } from '../redux/slices/
 import { AlertHost, showAlert } from '../components/AppAlert';
 import Constants from 'expo-constants';
 import { registerForPushNotificationsAsync, setupNotificationListeners } from '../services/notifications';
+import { initSocket, disconnectSocket } from '../services/socket';
+import { AppState, AppStateStatus } from 'react-native';
 
 // Keep native splash screen visible while app initializes
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -175,6 +177,30 @@ function NotificationManager({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function ChatPresenceManager({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated } = useSelector((state: RootState) => state.auth);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      initSocket();
+    } else {
+      disconnectSocket();
+    }
+
+    const appStateSubscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active' && isAuthenticated) {
+        initSocket();
+      }
+    });
+
+    return () => {
+      appStateSubscription.remove();
+    };
+  }, [isAuthenticated]);
+
+  return <>{children}</>;
+}
+
 export default function RootLayout() {
   const handleAppReady = useCallback(async () => {
     try {
@@ -190,18 +216,21 @@ export default function RootLayout() {
         <Startup onReady={handleAppReady} />
         <DeletionGuard>
           <NotificationManager>
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="(tabs)" />
-              <Stack.Screen name="video/[id]" options={{ presentation: 'modal' }} />
-              <Stack.Screen name="channel/[id]" />
-              <Stack.Screen name="notifications" />
-              <Stack.Screen name="upload-video" />
-              <Stack.Screen name="upload-post" />
-              <Stack.Screen name="settings/privacy" />
-              <Stack.Screen name="settings/delete-profile" />
-              <Stack.Screen name="account-recovery" />
-            </Stack>
-            <AlertHost />
+            <ChatPresenceManager>
+              <Stack screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="(tabs)" />
+                <Stack.Screen name="video/[id]" options={{ presentation: 'modal' }} />
+                <Stack.Screen name="channel/[id]" />
+                <Stack.Screen name="notifications" />
+                <Stack.Screen name="chat" />
+                <Stack.Screen name="upload-video" />
+                <Stack.Screen name="upload-post" />
+                <Stack.Screen name="settings/privacy" />
+                <Stack.Screen name="settings/delete-profile" />
+                <Stack.Screen name="account-recovery" />
+              </Stack>
+              <AlertHost />
+            </ChatPresenceManager>
           </NotificationManager>
         </DeletionGuard>
       </Provider>

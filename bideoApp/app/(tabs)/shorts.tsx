@@ -19,6 +19,7 @@ import { hapticLight } from '../../utils/haptics';
 import { AppInterstitialAd } from '../../components/AppAds';
 import HashtagText from '../../components/HashtagText';
 import { shareVideo } from '../../utils/shareHelper';
+import ShareModal from '../../components/ShareModal';
 
 const shuffleArray = <T,>(array: T[]): T[] => {
   const shuffled = [...array];
@@ -77,6 +78,8 @@ export default function ShortsScreen() {
   const [selectedShort, setSelectedShort] = useState<any>(null);
   const [reportModalVisible, setReportModalVisible] = useState(false);
   const [reportReason, setReportReason] = useState('');
+  const [shareModalVisible, setShareModalVisible] = useState(false);
+  const [sharingShort, setSharingShort] = useState<any>(null);
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) {
@@ -338,13 +341,11 @@ export default function ShortsScreen() {
     }
   };
 
-  const handleShare = async (short: any) => {
+  const handleShare = (short: any) => {
     if (!short) return;
-    await shareVideo({
-      _id: short._id,
-      title: short.title,
-      isShort: true,
-    });
+    hapticLight();
+    setSharingShort(short);
+    setShareModalVisible(true);
   };
 
   const handleCommentClick = (shortOrId: any) => {
@@ -564,6 +565,27 @@ export default function ShortsScreen() {
           </View>
         </View>
       </Modal>
+ 
+      <ShareModal
+        visible={shareModalVisible}
+        onClose={() => {
+          setShareModalVisible(false);
+          setSharingShort(null);
+        }}
+        item={
+          sharingShort
+            ? {
+                type: 'video',
+                _id: sharingShort._id,
+                title: sharingShort.title,
+                thumbnail: sharingShort.thumbnail,
+                isShort: true,
+                owner: sharingShort.owner,
+                duration: sharingShort.duration,
+              }
+            : null
+        }
+      />
 
       <FlatList
         ref={flatListRef}

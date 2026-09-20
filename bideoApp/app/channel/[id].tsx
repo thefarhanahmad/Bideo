@@ -4,9 +4,9 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, 
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Colors from '../../constants/Colors';
-import api from '../../services/api';
+import api, { chatService } from '../../services/api';
 import PostCard from '../../components/PostCard';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../../redux/store';
@@ -16,6 +16,7 @@ import VerifiedBadge from '../../components/VerifiedBadge';
 import { formatTimeAgo, formatViews } from '../../utils/formatDate';
 import { hapticLight } from '../../utils/haptics';
 import { shareChannel, shareVideo } from '../../utils/shareHelper';
+import ShareModal from '../../components/ShareModal';
 
 const { width } = Dimensions.get('window');
 const FALLBACK_AVATAR = 'https://via.placeholder.com/100x100.png?text=User';
@@ -37,6 +38,7 @@ export default function ChannelScreen() {
   const [authModalVisible, setAuthModalVisible] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<any>(null);
   const [menuVisible, setMenuVisible] = useState(false);
+  const [shareModalVisible, setShareModalVisible] = useState(false);
 
   useEffect(() => {
     loadChannel(filter, sort);
@@ -114,6 +116,23 @@ export default function ChannelScreen() {
     });
   };
 
+  const handleChat = async () => {
+    if (!isAuthenticated) {
+      setAuthModalVisible(true);
+      return;
+    }
+    const targetUserId = channel?._id || id;
+    if (!targetUserId) return;
+    try {
+      const conv = await chatService.getOrCreateConversation(targetUserId);
+      if (conv?._id) {
+        router.push(`/chat/${conv._id}`);
+      }
+    } catch (err: any) {
+      showAlert('Chat', err?.response?.data?.message || 'Failed to open chat');
+    }
+  };
+
   const openMenu = (video: any) => {
     setSelectedVideo(video);
     setMenuVisible(true);
@@ -125,14 +144,11 @@ export default function ChannelScreen() {
     router.push({ pathname: '/upload-video', params: { editId: videoId }});
   };
 
-  const handleShareVideo = async () => {
+  const handleShareVideo = () => {
     if (!selectedVideo) return;
     setMenuVisible(false);
-    await shareVideo({
-      _id: selectedVideo._id,
-      title: selectedVideo.title,
-      isShort: Boolean(selectedVideo.isShort),
-    });
+    hapticLight();
+    setShareModalVisible(true);
   };
 
   const handleDeleteVideo = async () => {
@@ -398,6 +414,7 @@ export default function ChannelScreen() {
               <View style={styles.actionRow}>
                 {isOwner ? (
                   <TouchableOpacity style={styles.editBtn} onPress={() => router.push('/edit-channel')}>
+                    <Ionicons name="pencil-outline" size={17} color={Colors.text} style={{ marginRight: 6 }} />
                     <Text style={styles.editBtnText}>Edit Channel</Text>
                   </TouchableOpacity>
                 ) : (
@@ -405,13 +422,33 @@ export default function ChannelScreen() {
                     style={[styles.followBtn, channel?.isFollowing && styles.followedBtn]} 
                     onPress={handleFollow}
                   >
+                    {channel?.isFollowing ? (
+                      <MaterialCommunityIcons 
+                        name="account-check" 
+                        size={19} 
+                        color={Colors.text} 
+                        style={{ marginRight: 6 }}
+                      />
+                    ) : (
+                      <Ionicons 
+                        name="person-add-outline" 
+                        size={18} 
+                        color={Colors.white} 
+                        style={{ marginRight: 6 }}
+                      />
+                    )}
                     <Text style={[styles.followBtnText, channel?.isFollowing && styles.followedBtnText]}>
                       {channel?.isFollowing ? 'Following' : 'Follow'}
                     </Text>
                   </TouchableOpacity>
                 )}
+                {!isOwner && (
+                  <TouchableOpacity style={styles.iconActionBtn} onPress={handleChat}>
+                    <Ionicons name="chatbubble-ellipses-outline" size={20} color={Colors.text} />
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity style={styles.iconActionBtn} onPress={handleShare}>
-                  <Ionicons name="share-social-outline" size={22} color={Colors.text} />
+                  <Ionicons name="share-social-outline" size={20} color={Colors.text} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -515,6 +552,24 @@ export default function ChannelScreen() {
           </View>
         </Pressable>
       </Modal>
+
+      <ShareModal
+        visible={shareModalVisible}
+        onClose={() => setShareModalVisible(false)}
+        item={
+          selectedVideo
+            ? {
+                type: 'video',
+                _id: selectedVideo._id,
+                title: selectedVideo.title,
+                thumbnail: selectedVideo.thumbnail,
+                isShort: Boolean(selectedVideo.isShort),
+                owner: channel,
+                duration: selectedVideo.duration,
+              }
+            : null
+        }
+      />
     </View>
   );
 }
@@ -622,6 +677,7 @@ const styles = StyleSheet.create({
   },
   followBtn: {
     flex: 1,
+    flexDirection: 'row',
     backgroundColor: Colors.primary,
     height: 44,
     borderRadius: 22,
@@ -648,6 +704,7 @@ const styles = StyleSheet.create({
   },
   editBtn: {
     flex: 1,
+    flexDirection: 'row',
     backgroundColor: '#F2F2F2',
     height: 44,
     borderRadius: 22,

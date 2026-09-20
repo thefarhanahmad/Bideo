@@ -21,6 +21,7 @@ import { hapticLight } from '../../utils/haptics';
 import { AppInterstitialAd, AppAdBanner } from '../../components/AppAds';
 import HashtagText from '../../components/HashtagText';
 import { shareVideo } from '../../utils/shareHelper';
+import ShareModal from '../../components/ShareModal';
 
 const FALLBACK_IMAGE = 'https://via.placeholder.com/80x80.png?text=User';
 const REQUIRED_WATCH_TIME = 3; // 3 seconds minimum watch time to count a view
@@ -81,6 +82,7 @@ export default function VideoScreen() {
   // Description and comments bottom sheet states
   const [descriptionModalVisible, setDescriptionModalVisible] = useState(false);
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
+  const [shareModalVisible, setShareModalVisible] = useState(false);
   const [previewComment, setPreviewComment] = useState<any>(null);
   const [commentsCount, setCommentsCount] = useState<number>(0);
 
@@ -398,12 +400,9 @@ export default function VideoScreen() {
     }
   };
 
-  const handleShare = async () => {
-    await shareVideo({
-      _id: video?._id || (id as string),
-      title: video?.title,
-      isShort: Boolean(video?.isShort),
-    });
+  const handleShare = () => {
+    hapticLight();
+    setShareModalVisible(true);
   };
 
   const handleFollow = async () => {
@@ -765,6 +764,24 @@ export default function VideoScreen() {
           </View>
         </View>
       </Modal>
+
+      <ShareModal
+        visible={shareModalVisible}
+        onClose={() => setShareModalVisible(false)}
+        item={
+          video
+            ? {
+                type: 'video',
+                _id: video._id || (id as string),
+                title: video.title,
+                thumbnail: video.thumbnail,
+                isShort: Boolean(video.isShort),
+                owner: video.owner,
+                duration: video.duration,
+              }
+            : null
+        }
+      />
     </View>
   );
 }

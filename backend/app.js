@@ -32,6 +32,7 @@ const channels = require("./routes/channels");
 const ads = require("./routes/ads");
 const seo = require("./routes/seo");
 const boost = require("./routes/boost");
+const chat = require("./routes/chat");
 
 // Middlewares
 app.use(express.json({ limit: "10mb" }));
@@ -97,6 +98,7 @@ app.use("/api/posts", posts);
 app.use("/api/channels", channels);
 app.use("/api/ads", ads);
 app.use("/api/boost", boost);
+app.use("/api/chat", chat);
 app.use("/", seo);
 app.use("/api", seo);
 
