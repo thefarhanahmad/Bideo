@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -68,8 +68,8 @@ export default function ChatRoomScreen() {
     const onShow = (e: any) => {
       setKeyboardHeight(e.endCoordinates.height);
       setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 80);
+        flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+      }, 50);
     };
 
     const onHide = () => {
@@ -135,6 +135,9 @@ export default function ChatRoomScreen() {
           if (prev.some((m) => m._id === newMsg._id)) return prev;
           return [...prev, newMsg];
         });
+        setTimeout(() => {
+          flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+        }, 50);
 
         // If active, mark as read immediately
         chatService.markAsRead(conversationId).catch(() => {});
@@ -256,6 +259,9 @@ export default function ChatRoomScreen() {
           if (prev.some((m) => m._id === newMsg._id)) return prev;
           return [...prev, newMsg];
         });
+        setTimeout(() => {
+          flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+        }, 50);
       }
     } catch (err: any) {
       showAlert('Error', err?.response?.data?.message || 'Failed to send message');
@@ -417,6 +423,10 @@ export default function ChatRoomScreen() {
       showAlert('Link Error', 'Unable to open this link: ' + url);
     }
   };
+
+  const reversedMessages = useMemo(() => {
+    return [...messages].reverse();
+  }, [messages]);
 
   const renderMessageBubble = ({ item }: { item: any }) => {
     const isMine =
@@ -762,16 +772,15 @@ export default function ChatRoomScreen() {
         ) : (
           <FlatList
             ref={flatListRef}
-            data={messages}
+            data={reversedMessages}
+            inverted
             keyExtractor={(item, index) => item._id || String(index)}
             renderItem={renderMessageBubble}
             contentContainerStyle={styles.messagesList}
             keyboardDismissMode="on-drag"
             keyboardShouldPersistTaps="handled"
-            onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-            onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
             ListEmptyComponent={
-              <View style={styles.emptyMessages}>
+              <View style={[styles.emptyMessages, { transform: [{ scaleY: -1 }] }]}>
                 <Ionicons name="chatbubble-ellipses-outline" size={48} color={Colors.textGray} />
                 <Text style={styles.emptyText}>
                   Send a message to start chatting with {other?.channelName || other?.name}!
@@ -1043,8 +1052,8 @@ const styles = StyleSheet.create({
   },
   messagesList: {
     paddingHorizontal: 14,
-    paddingVertical: 14,
-    flexGrow: 1,
+    paddingTop: 8,
+    paddingBottom: 14,
   },
   emptyMessages: {
     flex: 1,

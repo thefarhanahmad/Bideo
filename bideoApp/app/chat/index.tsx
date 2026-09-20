@@ -733,43 +733,31 @@ const styles = StyleSheet.create({
 
   // List & Items
   mainList: {
-    backgroundColor: '#F8F9FA',
+    backgroundColor: Colors.white,
     flex: 1,
   },
   listContent: {
-    paddingTop: 8,
     paddingBottom: 28,
   },
   emptyListContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    backgroundColor: '#F8F9FA',
+    backgroundColor: Colors.white,
   },
   convItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 13,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     backgroundColor: Colors.white,
-    marginHorizontal: 12,
-    marginVertical: 4.5,
-    borderRadius: 14,
-    borderWidth: 1.2,
-    borderColor: '#E2E8F0',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 1.5 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 1.5,
   },
   convItemUnread: {
-    backgroundColor: '#FFFDF9',
-    borderColor: '#FDBA74',
-    borderLeftWidth: 3.5,
-    borderLeftColor: Colors.primary,
+    backgroundColor: '#FAFAFA',
   },
   separator: {
-    height: 0,
+    height: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.06)',
+    marginHorizontal: 16,
   },
   avatarWrapper: {
     position: 'relative',
