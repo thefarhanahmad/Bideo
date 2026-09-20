@@ -641,7 +641,8 @@ exports.getVideos = async (req, res, next) => {
       let chosenIds = [];
 
       // If Home feed (no explicit type or filter), ensure a balanced mix of long videos and shorts
-      if (!req.query.type && !req.query.filter) {
+      const isHomeFeed = !req.query.type && !req.query.filter;
+      if (isHomeFeed) {
         const longRegular = regularCandidates.filter((v) => !v.isShort);
         const shortRegular = regularCandidates.filter((v) => v.isShort);
 
@@ -697,14 +698,22 @@ exports.getVideos = async (req, res, next) => {
 
       const results = await decorateVideos(orderedVideos, req);
 
+      let finalData = results;
+      if (isHomeFeed && req.query.includeVideoUrl !== "true") {
+        finalData = results.map((v) => {
+          const { videoUrl, ...rest } = v;
+          return rest;
+        });
+      }
+
       return res.status(200).json({
         success: true,
-        count: results.length,
+        count: finalData.length,
         total,
         page,
         pages: Math.ceil(total / limit) || 1,
         filterCounts: null,
-        data: results,
+        data: finalData,
       });
     }
 

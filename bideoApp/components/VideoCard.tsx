@@ -391,4 +391,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default VideoCard;
+export default React.memo(VideoCard);

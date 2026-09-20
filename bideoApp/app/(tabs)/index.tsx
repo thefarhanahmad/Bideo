@@ -7,10 +7,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { useFocusEffect, useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '../../constants/Colors';
 import VideoCard from '../../components/VideoCard';
 import PostCard from '../../components/PostCard';
 import CategoryList from '../../components/CategoryList';
+import { VideoListSkeleton } from '../../components/ListStates';
 import { videoService, categoryService } from '../../services/api';
 import { fetchVideosStart, fetchVideosSuccess, appendVideos, fetchVideosFailure } from '../../redux/slices/videoSlice';
 import { RootState } from '../../redux/store';
@@ -20,59 +22,7 @@ import PlaylistModal from '../../components/PlaylistModal';
 import { formatViews } from '../../utils/formatDate';
 import { AppAdBanner, AppNativeAd } from '../../components/AppAds';
 
-const SAMPLE_VIDEOS = [
-  {
-    _id: '1',
-    title: 'How To Earn money with youtube from day one 🚀',
-    thumbnail: 'https://instagram.fblr14-1.fna.fbcdn.net/v/t51.82787-19/683793881_18351517948215879_3075963706721152161_n.jpg?efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLmRqYW5nby4xMDgwLmMyIn0&_nc_ht=instagram.fblr14-1.fna.fbcdn.net&_nc_cat=103&_nc_oc=Q6cZ2gFsDBpHkWema8qY4QkhinxORUc93F9Wy6CMTJzt0UxuzFhkFay8IfmQkiLqwdowab8&_nc_ohc=XnL1huEZ2EIQ7kNvwHPmoRb&_nc_gid=LfzUtg5yBmFjJs41K8zqxA&edm=AOmX9WgBAAAA&ccb=7-5&oh=00_Af7Q1IjKnik3TD3pZLnEJ2OHGALRv70O0-p-iJB2zuYNJA&oe=6A04FEBB&_nc_sid=bfaa47',
-    views: 285000,
-    duration: 742,
-    createdAt: new Date().toISOString(),
-    category: 'Education',
-    owner: {
-      name: 'Irfan Technical',
-      channelName: 'Irfan Technical',
-      avatar: 'https://instagram.fblr14-1.fna.fbcdn.net/v/t51.82787-19/683793881_18351517948215879_3075963706721152161_n.jpg?efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLmRqYW5nby4xMDgwLmMyIn0&_nc_ht=instagram.fblr14-1.fna.fbcdn.net&_nc_cat=103&_nc_oc=Q6cZ2gFsDBpHkWema8qY4QkhinxORUc93F9Wy6CMTJzt0UxuzFhkFay8IfmQkiLqwdowab8&_nc_ohc=XnL1huEZ2EIQ7kNvwHPmoRb&_nc_gid=LfzUtg5yBmFjJs41K8zqxA&edm=AOmX9WgBAAAA&ccb=7-5&oh=00_Af7Q1IjKnik3TD3pZLnEJ2OHGALRv70O0-p-iJB2zuYNJA&oe=6A04FEBB&_nc_sid=bfaa47',
-    }
-  },
-  {
-    _id: '2',
-    title: 'Hyderabad Vlog 🇮🇳 | Charminar, Biryani & Night Street Life',
-    thumbnail: 'https://instagram.fblr14-1.fna.fbcdn.net/v/t51.82787-19/541493858_18319939237215842_3331823820218590243_n.jpg?efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLmRqYW5nby4xMDgwLmMyIn0&_nc_ht=instagram.fblr14-1.fna.fbcdn.net&_nc_cat=102&_nc_oc=Q6cZ2gFKUTa7axaZK7rtRCiKv-B-UoJx10n8GUkorsb6NDn19cUClcGKxP6VoCWPrx_FR7A&_nc_ohc=JxcAavXR2ckQ7kNvwGoOA7a&_nc_gid=73mQnu13SN0avJDEBTaXcw&edm=APoiHPcBAAAA&ccb=7-5&oh=00_Af6GV2Qol-SvuujoFJdVJr0hBDFXY1XQ7Z5guw8KZvV0cQ&oe=6A050634&_nc_sid=22de04',
-    views: 850000,
-    duration: 1230,
-    createdAt: new Date().toISOString(),
-    category: 'Vlog',
-    owner: {
-      name: 'Ataul Vlogs',
-      channelName: 'Ataul Vlogs',
-      avatar: 'https://instagram.fblr14-1.fna.fbcdn.net/v/t51.82787-19/541493858_18319939237215842_3331823820218590243_n.jpg?efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLmRqYW5nby4xMDgwLmMyIn0&_nc_ht=instagram.fblr14-1.fna.fbcdn.net&_nc_cat=102&_nc_oc=Q6cZ2gFKUTa7axaZK7rtRCiKv-B-UoJx10n8GUkorsb6NDn19cUClcGKxP6VoCWPrx_FR7A&_nc_ohc=JxcAavXR2ckQ7kNvwGoOA7a&_nc_gid=73mQnu13SN0avJDEBTaXcw&edm=APoiHPcBAAAA&ccb=7-5&oh=00_Af6GV2Qol-SvuujoFJdVJr0hBDFXY1XQ7Z5guw8KZvV0cQ&oe=6A050634&_nc_sid=22de04',
-    }
-  },
-  {
-    _id: '3',
-    title: 'Top 10 Tech Gadgets You Need in 2026',
-    thumbnail: 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=800&q=80',
-    views: 2500000,
-    duration: 900,
-    createdAt: new Date().toISOString(),
-    category: 'Tech',
-    owner: {
-      name: 'Tech Master',
-      channelName: 'Tech Master',
-      avatar: 'https://i.pravatar.cc/150?u=tech',
-    }
-  }
-];
-
-const shuffleArray = <T,>(array: T[]): T[] => {
-  const shuffled = [...array];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-  return shuffled;
-};
+const CACHED_VIDEOS_STORAGE_KEY = 'bideo_cached_home_videos';
 
 export default function HomeScreen() {
   const dispatch = useDispatch();
@@ -117,6 +67,21 @@ export default function HomeScreen() {
   const [reportReason, setReportReason] = useState('');
 
   useEffect(() => {
+    // 1. Instant cache hydration: if cached videos exist from previous sessions, display immediately (0ms)
+    AsyncStorage.getItem(CACHED_VIDEOS_STORAGE_KEY)
+      .then((cachedStr) => {
+        if (cachedStr) {
+          try {
+            const cached = JSON.parse(cachedStr);
+            if (Array.isArray(cached) && cached.length > 0) {
+              dispatch(fetchVideosSuccess(cached));
+            }
+          } catch {}
+        }
+      })
+      .catch(() => {});
+
+    // 2. Fetch fresh videos from server
     loadVideos();
     loadPosts();
     loadCategories();
@@ -124,7 +89,9 @@ export default function HomeScreen() {
 
   const loadVideos = async () => {
     try {
-      dispatch(fetchVideosStart());
+      if (!videos || videos.length === 0) {
+        dispatch(fetchVideosStart());
+      }
       setPage(1);
       hasMore.current = true;
       isFetchingMore.current = false;
@@ -137,15 +104,19 @@ export default function HomeScreen() {
         }));
         const pinned = normalized.filter((v: any) => v.isPinned);
         const regular = normalized.filter((v: any) => !v.isPinned);
-        dispatch(fetchVideosSuccess([...pinned, ...regular]));
+        const finalVideos = [...pinned, ...regular];
+        dispatch(fetchVideosSuccess(finalVideos));
         if (data.length < 50) hasMore.current = false;
+
+        // Persist real videos locally for instant offline/cold launch
+        AsyncStorage.setItem(CACHED_VIDEOS_STORAGE_KEY, JSON.stringify(finalVideos)).catch(() => {});
       } else {
-        dispatch(fetchVideosSuccess(shuffleArray(SAMPLE_VIDEOS)));
+        dispatch(fetchVideosSuccess([]));
         hasMore.current = false;
       }
     } catch (err: any) {
       console.error('Error fetching videos:', err);
-      dispatch(fetchVideosSuccess(shuffleArray(SAMPLE_VIDEOS)));
+      dispatch(fetchVideosFailure(err?.message || 'Failed to load videos.'));
       hasMore.current = false;
     }
   };
@@ -230,6 +201,19 @@ export default function HomeScreen() {
   const handleDeletePost = (postId: string) => {
     setPosts((prev) => prev.filter((p) => p._id !== postId));
   };
+
+  const handlePlaylistPress = useCallback((videoId: string) => {
+    if (!isAuthenticated) return setAuthModalVisible(true);
+    const v = videos.find((item: any) => item._id === videoId);
+    setSelectedVideo(v || { _id: videoId });
+    setPlaylistModalVisible(true);
+  }, [isAuthenticated, videos]);
+
+  const handleReportPress = useCallback((v: any) => {
+    if (!isAuthenticated) return setAuthModalVisible(true);
+    setSelectedVideo(v);
+    setReportModalVisible(true);
+  }, [isAuthenticated]);
 
   const filteredVideos = selectedCategory === 'All'
     ? videos
@@ -383,9 +367,13 @@ export default function HomeScreen() {
         onSelectCategory={handleSelectCategory}
       />
       {(selectedCategory === 'Posts' ? (postsLoading && posts.length === 0) : (loading && videos.length === 0)) ? (
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-        </View>
+        selectedCategory === 'Posts' ? (
+          <View style={styles.centerContainer}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+          </View>
+        ) : (
+          <VideoListSkeleton count={4} />
+        )
       ) : (
         <FlatList
           ref={flatListRef}
@@ -407,16 +395,8 @@ export default function HomeScreen() {
             return (
               <VideoCard
                 video={item}
-                onPlaylistPress={(id) => {
-                  if (!isAuthenticated) return setAuthModalVisible(true);
-                  setSelectedVideo(item);
-                  setPlaylistModalVisible(true);
-                }}
-                onReportPress={(v) => {
-                  if (!isAuthenticated) return setAuthModalVisible(true);
-                  setSelectedVideo(v);
-                  setReportModalVisible(true);
-                }}
+                onPlaylistPress={handlePlaylistPress}
+                onReportPress={handleReportPress}
               />
             );
           }}
@@ -426,10 +406,10 @@ export default function HomeScreen() {
           onRefresh={handleRefresh}
           onEndReached={selectedCategory === 'Posts' ? undefined : loadMoreVideos}
           onEndReachedThreshold={0.5}
-          removeClippedSubviews={false}
-          initialNumToRender={6}
-          maxToRenderPerBatch={6}
-          windowSize={9}
+          removeClippedSubviews={Platform.OS === 'android'}
+          initialNumToRender={4}
+          maxToRenderPerBatch={4}
+          windowSize={5}
           ListFooterComponent={
             loadingMore && selectedCategory !== 'Posts' ? (
               <View style={{ paddingVertical: 18, alignItems: 'center' }}>
@@ -438,11 +418,27 @@ export default function HomeScreen() {
             ) : null
           }
           ListEmptyComponent={
-            <View style={styles.centerContainer}>
-              <Text style={styles.emptyText}>
-                {selectedCategory === 'Posts' ? 'No posts found' : 'No videos found'}
-              </Text>
-            </View>
+            selectedCategory !== 'Posts' && error ? (
+              <View style={styles.errorContainer}>
+                <View style={styles.errorIconCircle}>
+                  <Ionicons name="cloud-offline-outline" size={38} color={Colors.primary} />
+                </View>
+                <Text style={styles.errorTitle}>Slow or No Connection</Text>
+                <Text style={styles.errorSubtitle}>
+                  Unable to load videos. Please check your network and try again.
+                </Text>
+                <TouchableOpacity style={styles.retryBtn} onPress={handleRefresh} activeOpacity={0.85}>
+                  <Ionicons name="refresh" size={16} color={Colors.white} />
+                  <Text style={styles.retryBtnText}>Retry</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.centerContainer}>
+                <Text style={styles.emptyText}>
+                  {selectedCategory === 'Posts' ? 'No posts found' : 'No videos found'}
+                </Text>
+              </View>
+            )
           }
         />
       )}
@@ -520,6 +516,54 @@ const styles = StyleSheet.create({
   emptyText: {
     color: Colors.textGray,
     fontSize: 16,
+  },
+  errorContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 24,
+  },
+  errorIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#FFF4EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.text,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  errorSubtitle: {
+    fontSize: 14,
+    color: Colors.textGray,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary,
+    paddingVertical: 10,
+    paddingHorizontal: 22,
+    borderRadius: 22,
+    gap: 6,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  retryBtnText: {
+    color: Colors.white,
+    fontSize: 15,
+    fontWeight: '700',
   },
   modalOverlay: {
     flex: 1,
