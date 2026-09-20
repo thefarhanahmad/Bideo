@@ -18,6 +18,7 @@ import {
   TrendingUpIcon,
   RocketIcon,
   ServerIcon,
+  MessageSquareIcon,
 } from "./Icons";
 
 const nav = [
@@ -26,6 +27,7 @@ const nav = [
   { to: "/admin/categories", label: "Categories", icon: TagIcon },
   { to: "/admin/videos", label: "Videos", icon: PlayIcon },
   { to: "/admin/server-videos", label: "Server Videos", icon: ServerIcon },
+  { to: "/admin/conversations", label: "Conversations", icon: MessageSquareIcon },
   { to: "/admin/reports", label: "Reports", icon: FlagIcon },
   { to: "/admin/ads", label: "Ads", icon: TvIcon },
   { to: "/admin/monetization", label: "Monetization", icon: WalletIcon },

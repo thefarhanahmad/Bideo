@@ -25,6 +25,7 @@ import UserEarnings from './pages/UserEarnings';
 import Boost from './pages/Boost';
 import Payouts from './pages/Payouts';
 import ErrorLogs from './pages/ErrorLogs';
+import Conversations from './pages/Conversations';
 import './App.css';
 
 const PrivateRoute = ({ children }) => {
@@ -62,6 +63,7 @@ function App() {
           <Route path="categories" element={<Categories />} />
           <Route path="videos" element={<Videos />} />
           <Route path="server-videos" element={<ServerVideos />} />
+          <Route path="conversations" element={<Conversations />} />
           <Route path="reports" element={<Reports />} />
           <Route path="ads" element={<Ads />} />
           <Route path="monetization" element={<Monetization />} />

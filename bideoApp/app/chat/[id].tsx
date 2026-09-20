@@ -39,7 +39,12 @@ const FALLBACK_THUMBNAIL = 'https://via.placeholder.com/640x360.png?text=Bideo';
 
 export default function ChatRoomScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{
+    id: string;
+    name?: string;
+    avatar?: string;
+    isVerified?: string;
+  }>();
   const conversationId = Array.isArray(params.id) ? params.id[0] : params.id;
   const { user, isAuthenticated } = useSelector((state: RootState) => state.auth);
 
@@ -340,6 +345,10 @@ export default function ChatRoomScreen() {
   };
 
   const other = conversation?.otherParticipant;
+  const displayName = other?.channelName || other?.name || params.name || 'Chat';
+  const rawAvatar = other?.avatar || params.avatar;
+  const displayAvatar = rawAvatar ? resolveMediaUrl(rawAvatar) : FALLBACK_AVATAR;
+  const isVerifiedUser = Boolean(other?.isVerified ?? (params.isVerified === '1'));
   const isInitiator = conversation?.initiator?.toString() === currentUserId;
   const isPendingForMe = conversation?.status === 'pending' && !isInitiator;
   const isBlocked = conversation?.status === 'blocked';
@@ -668,10 +677,10 @@ export default function ChatRoomScreen() {
           >
             <View style={styles.avatarWrapper}>
               <Image
-                source={{ uri: other?.avatar || FALLBACK_AVATAR }}
+                source={{ uri: displayAvatar }}
                 style={styles.headerAvatar}
                 contentFit="cover"
-                transition={150}
+                transition={0}
               />
               {isOtherOnline && <View style={styles.headerOnlineBadge} />}
             </View>
@@ -679,9 +688,9 @@ export default function ChatRoomScreen() {
             <View style={styles.headerTitleContainer}>
               <View style={styles.nameRow}>
                 <Text style={styles.headerName} numberOfLines={1}>
-                  {other?.channelName || other?.name || 'Chat'}
+                  {displayName}
                 </Text>
-                {Boolean(other?.isVerified) && (
+                {isVerifiedUser && (
                   <VerifiedBadge size={14} style={{ marginLeft: 4 }} />
                 )}
               </View>
@@ -765,30 +774,30 @@ export default function ChatRoomScreen() {
         )}
 
         {/* Message Stream */}
-        {loading ? (
-          <View style={styles.centerContainer}>
-            <ActivityIndicator size="large" color={Colors.primary} />
-          </View>
-        ) : (
-          <FlatList
-            ref={flatListRef}
-            data={reversedMessages}
-            inverted
-            keyExtractor={(item, index) => item._id || String(index)}
-            renderItem={renderMessageBubble}
-            contentContainerStyle={styles.messagesList}
-            keyboardDismissMode="on-drag"
-            keyboardShouldPersistTaps="handled"
-            ListEmptyComponent={
+        <FlatList
+          ref={flatListRef}
+          data={reversedMessages}
+          inverted
+          keyExtractor={(item, index) => item._id || String(index)}
+          renderItem={renderMessageBubble}
+          contentContainerStyle={styles.messagesList}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+          ListEmptyComponent={
+            loading && messages.length === 0 ? (
+              <View style={[styles.emptyMessages, { transform: [{ scaleY: -1 }], paddingVertical: 40 }]}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+              </View>
+            ) : (
               <View style={[styles.emptyMessages, { transform: [{ scaleY: -1 }] }]}>
                 <Ionicons name="chatbubble-ellipses-outline" size={48} color={Colors.textGray} />
                 <Text style={styles.emptyText}>
-                  Send a message to start chatting with {other?.channelName || other?.name}!
+                  Send a message to start chatting with {displayName}!
                 </Text>
               </View>
-            }
-          />
-        )}
+            )
+          }
+        />
 
         {/* Typing Bar Footer */}
         {isOtherTyping && (

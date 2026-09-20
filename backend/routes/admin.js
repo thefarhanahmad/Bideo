@@ -22,6 +22,9 @@ const {
   getAdminPosts,
   getAdminBoostData,
   getAdminUserBoostDetails,
+  getAdminConversations,
+  getAdminConversationMessages,
+  deleteAdminConversation,
 } = require('../controllers/admin');
 const { protect, authorize } = require('../middlewares/auth');
 
@@ -62,5 +65,10 @@ router.get('/error-logs', getErrorLogs);
 router.delete('/error-logs/clear-resolved', clearResolvedErrorLogs);
 router.put('/error-logs/:id', updateErrorLog);
 router.delete('/error-logs/:id', deleteErrorLog);
+
+// User Conversations Monitoring & Moderation
+router.get('/conversations', getAdminConversations);
+router.get('/conversations/:id/messages', getAdminConversationMessages);
+router.delete('/conversations/:id', deleteAdminConversation);
 
 module.exports = router;

@@ -126,7 +126,14 @@ export default function ChannelScreen() {
     try {
       const conv = await chatService.getOrCreateConversation(targetUserId);
       if (conv?._id) {
-        router.push(`/chat/${conv._id}`);
+        router.push({
+          pathname: `/chat/${conv._id}`,
+          params: {
+            name: channel?.channelName || channel?.name || '',
+            avatar: channel?.avatar || '',
+            isVerified: channel?.isVerified ? '1' : '0',
+          },
+        });
       }
     } catch (err: any) {
       showAlert('Chat', err?.response?.data?.message || 'Failed to open chat');

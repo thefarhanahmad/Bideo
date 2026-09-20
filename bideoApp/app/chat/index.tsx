@@ -226,7 +226,14 @@ export default function ChatListScreen() {
         onPress={() => {
           hapticLight();
           DeviceEventEmitter.emit('chatViewed');
-          router.push(`/chat/${item._id}`);
+          router.push({
+            pathname: `/chat/${item._id}`,
+            params: {
+              name: other?.channelName || other?.name || '',
+              avatar: other?.avatar || '',
+              isVerified: other?.isVerified ? '1' : '0',
+            },
+          });
         }}
       >
         {/* Avatar + Online Indicator */}
@@ -383,7 +390,14 @@ export default function ChatListScreen() {
                   activeOpacity={0.75}
                   onPress={() => {
                     hapticLight();
-                    router.push(`/chat/${c._id}`);
+                    router.push({
+                      pathname: `/chat/${c._id}`,
+                      params: {
+                        name: other?.channelName || other?.name || '',
+                        avatar: other?.avatar || '',
+                        isVerified: other?.isVerified ? '1' : '0',
+                      },
+                    });
                   }}
                 >
                   <View style={styles.onlineAvatarWrapper}>

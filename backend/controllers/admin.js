@@ -9,6 +9,8 @@ const WithdrawalRequest = require('../models/WithdrawalRequest');
 const ErrorLog = require('../models/ErrorLog');
 const Ad = require('../models/Ad');
 const Post = require('../models/Post');
+const Conversation = require('../models/Conversation');
+const Message = require('../models/Message');
 const WalletCredit = require('../models/WalletCredit');
 const VideoBoost = require('../models/VideoBoost');
 const CoinTransaction = require('../models/CoinTransaction');
@@ -2325,5 +2327,160 @@ exports.getAdminUserBoostDetails = async (req, res, next) => {
   }
 };
 
+// @desc    Get all conversations with filters, search, and pagination
+// @route   GET /api/admin/conversations
+// @access  Private/Admin
+exports.getAdminConversations = async (req, res, next) => {
+  try {
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
+    const skip = (page - 1) * limit;
+    const { status, search } = req.query;
 
+    let query = {};
 
+    // Filter by status if specified and not 'all'
+    if (status && status !== 'all') {
+      query.status = status;
+    }
+
+    // Filter by search query across participant names, emails, phones, channelNames, or message text
+    if (search && search.trim()) {
+      const term = search.trim();
+      const matchingUsers = await User.find({
+        $or: [
+          { name: { $regex: term, $options: 'i' } },
+          { channelName: { $regex: term, $options: 'i' } },
+          { email: { $regex: term, $options: 'i' } },
+          { phone: { $regex: term, $options: 'i' } },
+        ],
+      }).select('_id');
+
+      const matchingUserIds = matchingUsers.map((u) => u._id);
+
+      query.$or = [
+        { participants: { $in: matchingUserIds } },
+        { 'lastMessage.text': { $regex: term, $options: 'i' } },
+      ];
+    }
+
+    // Compute status counts for filter tabs
+    const [allCount, acceptedCount, pendingCount, blockedCount] = await Promise.all([
+      Conversation.countDocuments({}),
+      Conversation.countDocuments({ status: 'accepted' }),
+      Conversation.countDocuments({ status: 'pending' }),
+      Conversation.countDocuments({ status: 'blocked' }),
+    ]);
+
+    const total = await Conversation.countDocuments(query);
+    const conversations = await Conversation.find(query)
+      .populate('participants', 'name channelName avatar email phone isVerified role')
+      .populate('initiator', 'name channelName avatar email isVerified')
+      .populate('blockedBy', 'name channelName')
+      .populate('lastMessage.sender', 'name channelName avatar')
+      .sort({ updatedAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    // Attach total message count for each conversation
+    const convIds = conversations.map((c) => c._id);
+    const messageCounts = await Message.aggregate([
+      { $match: { conversationId: { $in: convIds } } },
+      { $group: { _id: '$conversationId', count: { $sum: 1 } } },
+    ]);
+    const countMap = {};
+    messageCounts.forEach((m) => {
+      countMap[m._id.toString()] = m.count;
+    });
+
+    const data = conversations.map((conv) => ({
+      ...conv,
+      totalMessages: countMap[conv._id.toString()] || 0,
+    }));
+
+    res.status(200).json({
+      success: true,
+      data,
+      total,
+      page,
+      pages: Math.ceil(total / limit) || 1,
+      filterCounts: {
+        all: allCount,
+        accepted: acceptedCount,
+        pending: pendingCount,
+        blocked: blockedCount,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Get all messages for a specific conversation (Admin Moderation)
+// @route   GET /api/admin/conversations/:id/messages
+// @access  Private/Admin
+exports.getAdminConversationMessages = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const conversation = await Conversation.findById(id)
+      .populate('participants', 'name channelName avatar email phone isVerified role')
+      .populate('initiator', 'name channelName avatar email isVerified')
+      .populate('blockedBy', 'name channelName')
+      .lean();
+
+    if (!conversation) {
+      return res.status(404).json({ success: false, message: 'Conversation not found' });
+    }
+
+    const messages = await Message.find({ conversationId: id })
+      .populate('sender', 'name channelName avatar email isVerified')
+      .populate('recipient', 'name channelName avatar email isVerified')
+      .populate({
+        path: 'video',
+        select: 'title thumbnail duration isShort owner',
+        populate: { path: 'owner', select: 'name channelName avatar isVerified' },
+      })
+      .populate({
+        path: 'post',
+        select: 'text image imageUrl author',
+        populate: { path: 'author', select: 'name channelName avatar isVerified' },
+      })
+      .sort({ createdAt: 1 })
+      .lean();
+
+    res.status(200).json({
+      success: true,
+      conversation,
+      data: messages,
+      total: messages.length,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Delete a conversation and all its messages (Admin Moderation)
+// @route   DELETE /api/admin/conversations/:id
+// @access  Private/Admin
+exports.deleteAdminConversation = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const conversation = await Conversation.findById(id);
+    if (!conversation) {
+      return res.status(404).json({ success: false, message: 'Conversation not found' });
+    }
+
+    await Promise.all([
+      Conversation.findByIdAndDelete(id),
+      Message.deleteMany({ conversationId: id }),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      message: 'Conversation and all associated messages have been deleted.',
+    });
+  } catch (err) {
+    next(err);
+  }
+};
