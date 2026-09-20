@@ -8,7 +8,7 @@ directly from `app.json`!
 
 Current Version:
   • Version Name : 1.0.6
-  • Version Code : 14  (Previous Play Store release was 13 / 1.0.5)
+  • Version Code : 15  (Previous Play Store release was 13 / 1.0.5)
 
 To automatically bump version for a new release in the future:
   Open terminal in `D:\Bideo\bideoApp` and run:
