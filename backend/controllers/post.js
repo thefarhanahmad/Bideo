@@ -6,7 +6,7 @@ const Notification = require('../models/Notification');
 const Comment = require('../models/Comment');
 const { saveLocalFile, deleteLocalFile } = require('../utils/localUpload');
 const { getUserInterestProfile, rankAndShufflePosts } = require('../utils/recommendation');
-const { sendPushForEvent } = require('../utils/pushNotification');
+const { sendPushForEvent, notifyFollowersOfUpload } = require('../utils/pushNotification');
 const { schedulePostModeration } = require('../services/moderationService');
 
 const createNotification = async ({ recipient, actor, type, video, post, comment, message }) => {
@@ -142,6 +142,12 @@ exports.createPost = async (req, res, next) => {
 
     // Schedule 10-second automated adult content audit
     schedulePostModeration(post, 10000);
+
+    // Asynchronously notify creator's followers of the new post
+    notifyFollowersOfUpload({
+      creatorId: req.user.id,
+      post,
+    }).catch((notifErr) => console.error('Failed to notify followers of post upload:', notifErr));
 
     res.status(201).json({ success: true, data: post });
   } catch (err) {

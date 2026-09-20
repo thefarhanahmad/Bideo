@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Follower = require('../models/Follower');
 const User = require('../models/User');
+const { notifyAndPush, checkAndNotifyFollowerMilestone } = require('../utils/pushNotification');
 
 // @desc    Follow a channel
 // @route   POST /api/followers/:channelId
@@ -55,13 +56,31 @@ exports.follow = async (req, res, next) => {
     });
 
     // Update counts atomically without triggering full document schema validation
-    await User.findByIdAndUpdate(channelId, {
-      $inc: { followersCount: 1 }
-    });
+    const updatedChannel = await User.findByIdAndUpdate(
+      channelId,
+      { $inc: { followersCount: 1 } },
+      { new: true }
+    );
 
     await User.findByIdAndUpdate(followerId, {
       $addToSet: { followingChannels: channelId }
     });
+
+    // Send in-app notification & push notification to channel owner
+    notifyAndPush({
+      recipient: channelId,
+      actor: followerId,
+      type: 'new_follower',
+      message: `${req.user.channelName || req.user.name} started following your channel`,
+    }).catch(() => {});
+
+    // Check if channel reached a follower milestone (e.g. 10, 50, 100, 1000...)
+    if (updatedChannel?.followersCount) {
+      checkAndNotifyFollowerMilestone({
+        channelId,
+        followersCount: updatedChannel.followersCount,
+      }).catch(() => {});
+    }
 
     res.status(201).json({
       success: true,

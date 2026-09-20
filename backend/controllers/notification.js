@@ -4,8 +4,9 @@ const User = require('../models/User');
 exports.getNotifications = async (req, res, next) => {
   try {
     const notifications = await Notification.find({ recipient: req.user.id })
-      .populate('actor', 'name avatar channelName')
-      .populate('video', 'title thumbnail')
+      .populate('actor', 'name avatar channelName isVerified')
+      .populate('video', 'title thumbnail duration isShort')
+      .populate('post', 'text image imageUrl')
       .populate('comment', 'text')
       .sort('-createdAt')
       .limit(100);

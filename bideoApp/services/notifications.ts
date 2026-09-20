@@ -121,23 +121,21 @@ export function setupNotificationListeners(router: any) {
     .then((response) => {
       if (response) {
         const data = response.notification.request.content.data;
-        if (data?.videoId) {
-          setTimeout(() => {
-            try {
-              router.push(`/video/${data.videoId}`);
-            } catch (err) {
-              console.error('Error navigating on cold-start notification:', err);
-            }
-          }, 800);
-        } else if (data?.screen) {
-          setTimeout(() => {
-            try {
+        setTimeout(() => {
+          try {
+            if (data?.screen) {
               router.push(data.screen);
-            } catch (err) {
-              console.error('Error navigating on cold-start notification:', err);
+            } else if (data?.videoId) {
+              router.push(`/video/${data.videoId}`);
+            } else if (data?.postId) {
+              router.push(`/post/${data.postId}`);
+            } else if (data?.channelId) {
+              router.push(`/channel/${data.channelId}`);
             }
-          }, 800);
-        }
+          } catch (err) {
+            console.error('Error navigating on cold-start notification:', err);
+          }
+        }, 800);
       }
     })
     .catch(() => {});
@@ -148,10 +146,14 @@ export function setupNotificationListeners(router: any) {
       const data = response.notification.request.content.data;
       console.log('User tapped push notification with data:', data);
 
-      if (data?.videoId) {
-        router.push(`/video/${data.videoId}`);
-      } else if (data?.screen) {
+      if (data?.screen) {
         router.push(data.screen);
+      } else if (data?.videoId) {
+        router.push(`/video/${data.videoId}`);
+      } else if (data?.postId) {
+        router.push(`/post/${data.postId}`);
+      } else if (data?.channelId) {
+        router.push(`/channel/${data.channelId}`);
       } else {
         router.push('/notifications');
       }

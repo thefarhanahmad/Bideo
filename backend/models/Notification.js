@@ -10,11 +10,24 @@ const notificationSchema = new mongoose.Schema({
   actor: {
     type: mongoose.Schema.ObjectId,
     ref: 'User',
-    required: true,
+    default: null,
   },
   type: {
     type: String,
-    enum: ['video_like', 'video_comment', 'comment_like', 'comment_reply', 'comment_heart', 'post_like', 'post_comment', 'system'],
+    enum: [
+      'video_like',
+      'video_comment',
+      'comment_like',
+      'comment_reply',
+      'comment_heart',
+      'post_like',
+      'post_comment',
+      'new_follower',
+      'video_upload',
+      'post_upload',
+      'milestone',
+      'system',
+    ],
     required: true,
   },
   video: {

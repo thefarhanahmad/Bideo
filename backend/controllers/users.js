@@ -15,6 +15,7 @@ const MonetizationApplication = require('../models/MonetizationApplication');
 const WithdrawalRequest = require('../models/WithdrawalRequest');
 const VideoView = require('../models/VideoView');
 const Notification = require('../models/Notification');
+const { notifyAndPush } = require('../utils/pushNotification');
 const { getUserEarningsSummary, processPendingWalletCredits, getRewardRates } = require('../services/walletSettlementService');
 
 const escapeRegex = (str) => {
@@ -944,11 +945,12 @@ exports.getLikedVideos = async (req, res, next) => {
     const user = await User.findById(req.user.id).populate({
       path: 'likedVideos',
       populate: [
-        { path: 'owner', select: 'name channelName avatar' },
+        { path: 'owner', select: 'name channelName avatar isVerified' },
         { path: 'category', select: 'name' },
       ],
     });
-    const validLiked = (user?.likedVideos || []).filter(Boolean);
+    // Reverse array so the most recently liked video is at index 0 (first)
+    const validLiked = (user?.likedVideos || []).filter(Boolean).reverse();
     res.status(200).json({ success: true, data: validLiked });
   } catch (err) {
     next(err);
@@ -1635,13 +1637,25 @@ exports.watchReviewAd = async (req, res, next) => {
     if (autoPassed) {
       const videoTitle = review.video?.title || 'Your video';
       const notifMsg = `🎉 "${videoTitle}" has been approved for monetization (${required}/${required} ads completed)! (${passedVideosCount}/3 passed)`;
-      Notification.create({
+      notifyAndPush({
         recipient: userId,
-        actor: userId,
+        actor: null,
         type: 'system',
         video: review.video?._id || review.video,
+        title: 'Video Monetization Approved! 🎉',
         message: notifMsg,
       }).catch(() => {});
+
+      // If user hit 3 passed videos, unlock monetization application milestone
+      if (step1Completed && passedVideosCount === 3) {
+        notifyAndPush({
+          recipient: userId,
+          actor: null,
+          type: 'milestone',
+          title: 'Monetization Eligibility Unlocked! ⭐',
+          message: '⭐ You have completed all 3 video reviews! You are now eligible to apply for Creator Monetization and earn revenue from views. Tap here to apply!',
+        }).catch(() => {});
+      }
     }
 
     const remainingToPass = Math.max(0, required - newCount);

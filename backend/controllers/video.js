@@ -12,8 +12,11 @@ const Comment = require("../models/Comment");
 const Playlist = require("../models/Playlist");
 const fs = require("fs");
 const { saveLocalFile, deleteLocalFile } = require("../utils/localUpload");
-const { getUserInterestProfile, rankAndShuffleVideos, shuffle } = require("../utils/recommendation");
-const { sendPushForEvent } = require("../utils/pushNotification");
+const {
+  sendPushForEvent,
+  notifyFollowersOfUpload,
+  checkAndNotifyViewMilestone,
+} = require("../utils/pushNotification");
 const { scheduleVideoModeration } = require("../services/moderationService");
 const {
   queueWalletCredit,
@@ -910,6 +913,14 @@ exports.recordView = async (req, res, next) => {
       { new: true },
     );
 
+    // Check if video reached a view milestone (e.g. 100, 500, 1000, 5000 views...)
+    if (updatedVideo && video.owner) {
+      checkAndNotifyViewMilestone({
+        creatorId: video.owner,
+        video: updatedVideo,
+      }).catch(() => {});
+    }
+
     // Real-time earnings: credit distinct long video vs short video rates ONLY when a real viewer (not the creator) watches
     const isSelfView =
       userId && video.owner && userId.toString() === video.owner.toString();
@@ -1027,7 +1038,10 @@ exports.toggleLike = async (req, res, next) => {
         { new: true }
       );
       await User.findByIdAndUpdate(req.user.id, {
-        $addToSet: { likedVideos: video._id },
+        $pull: { likedVideos: video._id },
+      });
+      await User.findByIdAndUpdate(req.user.id, {
+        $push: { likedVideos: video._id },
       });
       await createNotification({
         recipient: video.owner,
@@ -1232,6 +1246,12 @@ exports.uploadVideo = async (req, res, next) => {
 
     // Automatically audit for adult/NSFW content and purge within 10 seconds if detected
     scheduleVideoModeration(video, 10000);
+
+    // Asynchronously notify creator's followers of the new video upload
+    notifyFollowersOfUpload({
+      creatorId: targetOwnerId,
+      video,
+    }).catch((notifErr) => console.error("Failed to notify followers of video upload:", notifErr));
 
     res.status(201).json({ success: true, data: video });
   } catch (err) {

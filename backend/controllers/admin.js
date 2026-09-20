@@ -15,6 +15,7 @@ const WalletCredit = require('../models/WalletCredit');
 const VideoBoost = require('../models/VideoBoost');
 const CoinTransaction = require('../models/CoinTransaction');
 const Notification = require('../models/Notification');
+const { notifyAndPush, sendPushNotification } = require('../utils/pushNotification');
 const { processPendingWalletCredits } = require('../services/walletSettlementService');
 const { processBoostQueue } = require('../utils/boostQueueScheduler');
 
@@ -789,11 +790,20 @@ exports.reviewMonetizationApplication = async (req, res, next) => {
     if (!application) return res.status(404).json({ success: false, message: 'Application not found for this user' });
 
     if (status === 'approved') {
-      Notification.create({
+      notifyAndPush({
         recipient: req.params.userId,
         actor: req.user.id,
         type: 'system',
+        title: 'Monetization Approved! ⭐',
         message: 'Congratulations! Your channel monetization application has been approved. You are now earning from video views! 🎉',
+      }).catch(() => {});
+    } else if (status === 'rejected') {
+      notifyAndPush({
+        recipient: req.params.userId,
+        actor: req.user.id,
+        type: 'system',
+        title: 'Monetization Application Update',
+        message: reviewMessage ? `Monetization update: ${reviewMessage}` : 'Your monetization application requires changes. Please check details in your dashboard.',
       }).catch(() => {});
     }
 
@@ -1036,6 +1046,14 @@ exports.processWithdrawal = async (req, res, next) => {
       withdrawal.adminNote = adminNote || 'Payment transferred successfully';
       withdrawal.processedAt = Date.now();
       await withdrawal.save();
+
+      notifyAndPush({
+        recipient: withdrawal.user?._id || withdrawal.user,
+        actor: req.user.id,
+        type: 'system',
+        title: 'Payout Processed! 💸',
+        message: `Your withdrawal of ₹${withdrawal.amount} has been processed and transferred successfully.`,
+      }).catch(() => {});
     } else if (action === 'reject') {
       withdrawal.status = 'rejected';
       withdrawal.adminNote = adminNote || 'Withdrawal rejected by admin';
@@ -1048,6 +1066,14 @@ exports.processWithdrawal = async (req, res, next) => {
           $inc: { walletBalance: withdrawal.amount },
         });
       }
+
+      notifyAndPush({
+        recipient: withdrawal.user?._id || withdrawal.user,
+        actor: req.user.id,
+        type: 'system',
+        title: 'Withdrawal Update',
+        message: `Your withdrawal request for ₹${withdrawal.amount} was rejected (${withdrawal.adminNote}). The amount has been refunded to your wallet.`,
+      }).catch(() => {});
     } else {
       return res.status(400).json({ success: false, message: 'Invalid action. Must be approve or reject' });
     }
