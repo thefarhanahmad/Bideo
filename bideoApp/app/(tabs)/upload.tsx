@@ -68,15 +68,31 @@ export default function UploadScreen() {
   if (showChannelPrompt) {
     return (
       <View style={styles.center}>
-        <Ionicons name="megaphone-outline" size={80} color={Colors.primary} />
-        <Text style={styles.promptTitle}>Channel Required</Text>
-        <Text style={styles.promptText}>You need to create a channel name before you can upload videos.</Text>
-        <TouchableOpacity
-          style={styles.actionBtn}
-          onPress={() => router.push('/edit-channel')}
-        >
-          <Text style={styles.actionBtnText}>Create Channel</Text>
-        </TouchableOpacity>
+        <View style={styles.promptCard}>
+          <View style={styles.iconCircle}>
+            <Ionicons name="megaphone" size={48} color={Colors.primary} />
+          </View>
+          <Text style={styles.promptTitle}>Channel Required</Text>
+          <Text style={styles.promptSubtitle}>
+            You need to create a channel name before you can upload videos, shorts, and community posts.
+          </Text>
+          <TouchableOpacity
+            style={styles.mainLoginBtn}
+            onPress={() => {
+              hapticSelection();
+              router.push('/edit-channel');
+            }}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.mainLoginBtnText}>Create Channel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.secondaryBtn}
+            onPress={() => router.replace('/')}
+          >
+            <Text style={styles.secondaryBtnText}>Maybe Later</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -84,19 +100,33 @@ export default function UploadScreen() {
   if (showEmailPrompt) {
     return (
       <View style={styles.center}>
-        <View style={[styles.iconCircle, { backgroundColor: '#EEF2FF', borderColor: '#C7D2FE', borderWidth: 1 }]}>
-          <Ionicons name="mail-unread-outline" size={48} color={Colors.primary} />
+        <View style={styles.promptCard}>
+          <View style={styles.iconCircle}>
+            <Ionicons name="mail-unread-outline" size={42} color={Colors.primary} />
+          </View>
+          <Text style={styles.promptTitle}>Email Verification Required</Text>
+          <Text style={styles.promptSubtitle}>
+            Please verify your Gmail address to unlock uploading videos, shorts, and community posts.
+          </Text>
+
+          <TouchableOpacity
+            style={styles.mainLoginBtn}
+            onPress={() => {
+              hapticSelection();
+              router.push('/edit-channel');
+            }}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.mainLoginBtnText}>Verify Gmail</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.secondaryBtn}
+            onPress={() => router.replace('/')}
+          >
+            <Text style={styles.secondaryBtnText}>Maybe Later</Text>
+          </TouchableOpacity>
         </View>
-        <Text style={styles.promptTitle}>Email Verification Required</Text>
-        <Text style={styles.promptText}>
-          To upload videos, shorts, and community posts, please add and verify your Gmail address in your profile.
-        </Text>
-        <TouchableOpacity
-          style={styles.actionBtn}
-          onPress={() => router.push('/edit-channel')}
-        >
-          <Text style={styles.actionBtnText}>Add & Verify Email</Text>
-        </TouchableOpacity>
       </View>
     );
   }
@@ -250,30 +280,36 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
-  actionBtn: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 30,
-    paddingVertical: 12,
-    borderRadius: 25,
-    marginTop: 20,
-  },
-  actionBtnText: {
-    color: Colors.white,
-    fontWeight: 'bold',
-    fontSize: 16,
+  promptCard: {
+    backgroundColor: Colors.white,
+    paddingHorizontal: 24,
+    paddingVertical: 28,
+    borderRadius: 24,
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 360,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   promptTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 20,
+    fontWeight: '800',
     color: Colors.text,
-    marginTop: 20,
+    textAlign: 'center',
+    marginBottom: 8,
   },
-  promptText: {
-    fontSize: 16,
+  promptSubtitle: {
+    fontSize: 14,
     color: Colors.textGray,
     textAlign: 'center',
-    marginTop: 10,
-    paddingHorizontal: 20,
+    lineHeight: 21,
+    marginBottom: 24,
+    paddingHorizontal: 10,
   },
   createSubtitle: {
     fontSize: 14,

@@ -409,10 +409,10 @@ export default function EditChannelScreen() {
         {/* Form Section */}
         <View style={styles.formCard}>
           <View style={styles.inputGroup}>
-            <Text style={styles.fieldLabel}>Display Name</Text>
+            <Text style={styles.fieldLabel}>Username</Text>
             <TextInput
               style={styles.textInput}
-              placeholder="Your public name"
+              placeholder="Your username"
               placeholderTextColor={Colors.textGray}
               value={name}
               onChangeText={setName}
@@ -423,12 +423,36 @@ export default function EditChannelScreen() {
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Text style={[styles.fieldLabel, { marginBottom: 0 }]}>Channel Name</Text>
-                {isChannelNameLocked && (
-                  <View style={styles.lockedBadge}>
-                    <Ionicons name="lock-closed" size={11} color="#B45309" />
-                    <Text style={styles.lockedBadgeText}>Locked</Text>
-                  </View>
-                )}
+                <TouchableOpacity
+                  onPress={() => {
+                    hapticSelection();
+                    if (isChannelNameLocked) {
+                      showAlert(
+                        'Channel Name Locked',
+                        `Channel name can only be changed once every 60 days. You will be able to edit it again in ${daysRemaining} day${daysRemaining === 1 ? '' : 's'} (on ${nextAllowedDateStr}).`
+                      );
+                    } else if (!isCreateMode && editCount === 0) {
+                      showAlert(
+                        'Channel Name Policy',
+                        'You can change your channel name once. After this edit, you will only be able to change it again after 60 days.'
+                      );
+                    } else if (isCreateMode) {
+                      showAlert(
+                        'Channel Name Policy',
+                        'Choose your channel name. You will be able to change it once after creation, and then once every 60 days.'
+                      );
+                    } else {
+                      showAlert(
+                        'Channel Name Policy',
+                        'Changing your channel name now will lock it for the next 60 days.'
+                      );
+                    }
+                  }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={{ marginLeft: 6 }}
+                >
+                  <Ionicons name="information-circle-outline" size={17} color={isChannelNameLocked ? '#B45309' : Colors.textGray} />
+                </TouchableOpacity>
               </View>
               {!isChannelNameLocked && (
                 <Text style={{ fontSize: 11, color: channelName.length >= 25 ? Colors.error : Colors.textGray, fontWeight: '600' }}>
@@ -457,35 +481,93 @@ export default function EditChannelScreen() {
                 onChangeText={setChannelName}
               />
             )}
+          </View>
 
-            {/* Helper & Warning text below Channel Name */}
-            {isChannelNameLocked ? (
-              <View style={styles.warningBox}>
-                <Ionicons name="time-outline" size={15} color="#D97706" style={{ marginTop: 1, marginRight: 6 }} />
-                <Text style={styles.warningBoxText}>
-                  Channel name is locked. You will be able to change it after 60 days (in <Text style={{ fontWeight: '700' }}>{daysRemaining} day{daysRemaining === 1 ? '' : 's'}</Text> on {nextAllowedDateStr}).
-                </Text>
+          {/* Gmail Verification Section right after Channel Name */}
+          <View style={styles.inputGroup}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={[styles.fieldLabel, { marginBottom: 0 }]}>Gmail</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    hapticSelection();
+                    showAlert(
+                      'Gmail Verification',
+                      isEmailVerified
+                        ? 'Your Gmail is verified. Creator upload privileges are active on this channel.'
+                        : 'Add and verify your Gmail address to unlock uploading videos, shorts, and community posts.'
+                    );
+                  }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={{ marginLeft: 6 }}
+                >
+                  <Ionicons name="information-circle-outline" size={17} color={Colors.textGray} />
+                </TouchableOpacity>
               </View>
-            ) : !isCreateMode && editCount === 0 ? (
-              <View style={styles.infoBox}>
-                <Ionicons name="information-circle-outline" size={15} color={Colors.primary} style={{ marginTop: 1, marginRight: 6 }} />
-                <Text style={styles.infoBoxText}>
-                  You can change your channel name once. After this edit, you will only be able to change it again after 60 days.
-                </Text>
-              </View>
-            ) : isCreateMode ? (
-              <View style={styles.infoBox}>
-                <Ionicons name="information-circle-outline" size={15} color={Colors.textGray} style={{ marginTop: 1, marginRight: 6 }} />
-                <Text style={[styles.infoBoxText, { color: Colors.textGray }]}>
-                  Choose your channel name. You will be able to change it once after creation, and then once every 60 days.
-                </Text>
+              {isEmailVerified && (
+                <View style={styles.verifiedEmailBadge}>
+                  <Ionicons name="checkmark-circle" size={13} color="#059669" />
+                  <Text style={styles.verifiedEmailBadgeText}>Verified</Text>
+                </View>
+              )}
+            </View>
+
+            {isEmailVerified && !isEditingEmail ? (
+              <View>
+                <View style={[styles.textInput, { justifyContent: 'center' }]}>
+                  <Text style={{ fontSize: 15, color: Colors.text, fontWeight: '500' }}>{emailInput}</Text>
+                </View>
+                <View style={styles.sendOtpRow}>
+                  <TouchableOpacity
+                    style={styles.smallSendOtpBtn}
+                    onPress={() => {
+                      hapticSelection();
+                      setIsEditingEmail(true);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.smallSendOtpBtnText}>Change</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             ) : (
-              <View style={styles.warningBox}>
-                <Ionicons name="alert-circle-outline" size={15} color="#D97706" style={{ marginTop: 1, marginRight: 6 }} />
-                <Text style={styles.warningBoxText}>
-                  Changing your channel name now will lock it for the next 60 days.
-                </Text>
+              <View>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="Enter your Gmail address"
+                  placeholderTextColor={Colors.textGray}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  value={emailInput}
+                  onChangeText={setEmailInput}
+                />
+                <View style={styles.sendOtpRow}>
+                  {isEmailVerified && (
+                    <TouchableOpacity
+                      style={styles.cancelEditBtn}
+                      onPress={() => {
+                        hapticSelection();
+                        setEmailInput(user?.email || '');
+                        setIsEditingEmail(false);
+                      }}
+                    >
+                      <Text style={styles.cancelEditBtnText}>Cancel</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity
+                    style={[styles.smallSendOtpBtn, (!emailInput.trim() || sendingOtp) && styles.disabledBtn]}
+                    onPress={handleSendOtp}
+                    disabled={!emailInput.trim() || sendingOtp}
+                    activeOpacity={0.8}
+                  >
+                    {sendingOtp ? (
+                      <ActivityIndicator size="small" color={Colors.white} />
+                    ) : (
+                      <Text style={styles.smallSendOtpBtnText}>Send OTP</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
             )}
           </View>
@@ -502,92 +584,6 @@ export default function EditChannelScreen() {
               onChangeText={setAbout}
             />
           </View>
-        </View>
-
-        {/* Creator Email Verification Card */}
-        <View style={styles.formCard}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Ionicons name="mail" size={18} color={Colors.primary} style={{ marginRight: 6 }} />
-              <Text style={[styles.fieldLabel, { marginBottom: 0 }]}>Creator Email Verification</Text>
-            </View>
-            {isEmailVerified ? (
-              <View style={styles.verifiedEmailBadge}>
-                <Ionicons name="checkmark-circle" size={14} color="#059669" />
-                <Text style={styles.verifiedEmailBadgeText}>Verified</Text>
-              </View>
-            ) : (
-              <View style={styles.unverifiedEmailBadge}>
-                <Ionicons name="alert-circle" size={13} color="#D97706" />
-                <Text style={styles.unverifiedEmailBadgeText}>Required to Upload</Text>
-              </View>
-            )}
-          </View>
-
-          <Text style={{ fontSize: 12, color: Colors.textGray, marginBottom: 12, lineHeight: 17 }}>
-            {isEmailVerified
-              ? 'Your email is verified. Creator upload privileges are active on this channel.'
-              : 'Add and verify your Gmail address to unlock uploading videos, shorts, and posts.'}
-          </Text>
-
-          {isEmailVerified && !isEditingEmail ? (
-            <View style={styles.verifiedEmailRow}>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.verifiedEmailText} numberOfLines={1}>{emailInput}</Text>
-                <Text style={{ fontSize: 11, color: '#059669', fontWeight: '600', marginTop: 2 }}>✓ Verified for creator uploads</Text>
-              </View>
-              <TouchableOpacity
-                style={styles.changeEmailBtn}
-                onPress={() => {
-                  hapticSelection();
-                  setIsEditingEmail(true);
-                }}
-              >
-                <Text style={styles.changeEmailBtnText}>Change</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={{ gap: 10 }}>
-              <TextInput
-                style={styles.textInput}
-                placeholder="Enter your Gmail address (e.g. name@gmail.com)"
-                placeholderTextColor={Colors.textGray}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                value={emailInput}
-                onChangeText={setEmailInput}
-              />
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                {isEmailVerified && (
-                  <TouchableOpacity
-                    style={styles.cancelEditEmailBtn}
-                    onPress={() => {
-                      hapticSelection();
-                      setEmailInput(user?.email || '');
-                      setIsEditingEmail(false);
-                    }}
-                  >
-                    <Text style={styles.cancelEditEmailBtnText}>Cancel</Text>
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity
-                  style={[styles.sendOtpBtn, (!emailInput.trim() || sendingOtp) && styles.disabledBtn]}
-                  onPress={handleSendOtp}
-                  disabled={!emailInput.trim() || sendingOtp}
-                >
-                  {sendingOtp ? (
-                    <ActivityIndicator size="small" color={Colors.white} />
-                  ) : (
-                    <>
-                      <Ionicons name="paper-plane-outline" size={15} color={Colors.white} style={{ marginRight: 6 }} />
-                      <Text style={styles.sendOtpBtnText}>Send 6-Digit Code</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
         </View>
 
         <TouchableOpacity 
@@ -933,76 +929,34 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#059669',
   },
-  unverifiedEmailBadge: {
+  sendOtpRow: {
     flexDirection: 'row',
+    justifyContent: 'flex-end',
     alignItems: 'center',
-    backgroundColor: '#FFFBEB',
-    borderColor: '#FDE68A',
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-    gap: 4,
+    marginTop: 8,
+    gap: 8,
   },
-  unverifiedEmailBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#D97706',
-  },
-  verifiedEmailRow: {
-    flexDirection: 'row',
+  smallSendOtpBtn: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 6,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    padding: 12,
+    justifyContent: 'center',
   },
-  verifiedEmailText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.text,
-  },
-  changeEmailBtn: {
-    backgroundColor: '#EEF2FF',
-    borderColor: '#C7D2FE',
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  changeEmailBtnText: {
+  smallSendOtpBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    color: Colors.primary,
+    color: Colors.white,
   },
-  cancelEditEmailBtn: {
-    flex: 1,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+  cancelEditBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 7,
   },
-  cancelEditEmailBtnText: {
-    fontSize: 13,
+  cancelEditBtnText: {
+    fontSize: 12,
     fontWeight: '600',
     color: Colors.textGray,
-  },
-  sendOtpBtn: {
-    flex: 2,
-    flexDirection: 'row',
-    backgroundColor: Colors.primary,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sendOtpBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.white,
   },
   modalOverlay: {
     flex: 1,

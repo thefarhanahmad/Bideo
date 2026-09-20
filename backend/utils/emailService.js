@@ -14,144 +14,111 @@ const generateOtpHtmlTemplate = ({ otp, name, purposeTitle }) => {
   const currentYear = new Date().getFullYear();
   return `
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light only" />
+  <meta name="supported-color-schemes" content="light" />
   <title>Bideo Verification Code</title>
   <style>
     body {
       margin: 0;
       padding: 0;
-      background-color: #f4f6fb;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      color: #1e293b;
-      -webkit-font-smoothing: antialiased;
-    }
-    .email-container {
-      max-width: 540px;
-      margin: 36px auto;
-      background: #ffffff;
-      border-radius: 16px;
-      overflow: hidden;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
-      border: 1px solid #e2e8f0;
-    }
-    .header {
-      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-      padding: 32px 24px;
-      text-align: center;
-    }
-    .brand-title {
-      color: #ffffff;
-      font-size: 28px;
-      font-weight: 800;
-      letter-spacing: -0.5px;
-      margin: 0;
-    }
-    .brand-subtitle {
-      color: #e0e7ff;
-      font-size: 13px;
-      font-weight: 500;
-      margin-top: 6px;
-      margin-bottom: 0;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-    .content {
-      padding: 36px 32px;
-    }
-    .greeting {
-      font-size: 18px;
-      font-weight: 700;
-      color: #0f172a;
-      margin-top: 0;
-      margin-bottom: 12px;
-    }
-    .message {
-      font-size: 15px;
-      line-height: 1.6;
-      color: #475569;
-      margin-bottom: 24px;
-    }
-    .otp-box-wrapper {
-      text-align: center;
-      margin: 28px 0;
-    }
-    .otp-box {
-      display: inline-block;
-      background: #f8fafc;
-      border: 2px dashed #6366f1;
-      border-radius: 12px;
-      padding: 18px 36px;
-      letter-spacing: 8px;
-      font-size: 36px;
-      font-weight: 800;
-      font-family: 'Courier New', Courier, monospace;
-      color: #4f46e5;
-    }
-    .expiry-badge {
-      display: inline-block;
-      margin-top: 10px;
-      font-size: 12px;
-      font-weight: 600;
-      color: #ea580c;
-      background: #fff7ed;
-      border: 1px solid #fed7aa;
-      padding: 4px 12px;
-      border-radius: 9999px;
-    }
-    .security-notice {
       background-color: #f1f5f9;
-      border-left: 4px solid #64748b;
-      padding: 14px 16px;
-      border-radius: 0 8px 8px 0;
-      font-size: 13px;
-      color: #475569;
-      margin-top: 24px;
-    }
-    .footer {
-      border-top: 1px solid #e2e8f0;
-      background: #f8fafc;
-      padding: 20px 24px;
-      text-align: center;
-      font-size: 12px;
-      color: #94a3b8;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
     }
   </style>
 </head>
-<body>
-  <div class="email-container">
-    <div class="header">
-      <h1 class="brand-title">Bideo</h1>
-      <p class="brand-subtitle">Creator Security Verification</p>
-    </div>
-    <div class="content">
-      <h2 class="greeting">Hello ${name ? name : 'Creator'},</h2>
-      <p class="message">
-        You recently requested a verification code for your Bideo account to <strong>${purposeTitle || 'verify your email address'}</strong>.
-      </p>
+<body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #f1f5f9; padding: 24px 12px;">
+    <tr>
+      <td align="center">
+        <!-- Main Email Card (Max 440px for mobile perfection) -->
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width: 440px; width: 100%; background-color: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #fed7aa; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);">
+          <!-- Orange Header with White Logo Pill -->
+          <tr>
+            <td align="center" style="background: linear-gradient(135deg, #FF7A00 0%, #EA580C 100%); background-color: #FF7A00; padding: 24px 20px 20px; text-align: center;">
+              <!-- White Logo Container (Guarantees perfect visibility in both light & dark mode) -->
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 0 auto;">
+                <tr>
+                  <td align="center" style="background-color: #ffffff; background: #ffffff !important; border-radius: 12px; padding: 10px 22px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12); border: 1px solid #fed7aa;">
+                    <a href="https://bideo.in" target="_blank" style="text-decoration: none; display: block;">
+                      <img 
+                        src="https://bideo.in/assets/logo-csgcheGF.png" 
+                        alt="Bideo" 
+                        width="135" 
+                        style="display: block; margin: 0 auto; width: 135px; max-width: 135px; height: auto; border: 0; outline: none; text-decoration: none;" 
+                      />
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin: 10px 0 0 0; color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.4px;">
+                Creator Security Verification
+              </p>
+            </td>
+          </tr>
 
-      <div class="otp-box-wrapper">
-        <div class="otp-box">${otp}</div>
-        <div>
-          <span class="expiry-badge">⏱ Expires in 10 minutes</span>
-        </div>
-      </div>
+          <!-- Content Section -->
+          <tr>
+            <td style="padding: 26px 22px 20px; background-color: #ffffff; text-align: center;">
+              <h2 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 700; color: #0f172a; text-align: center;">
+                Hello ${name ? name : 'Creator'},
+              </h2>
+              <p style="margin: 0 0 20px 0; font-size: 14px; line-height: 1.5; color: #475569; text-align: center;">
+                Use the 6-digit verification code below to <strong>${purposeTitle || 'verify your email address'}</strong>.
+              </p>
 
-      <p class="message" style="margin-bottom: 0;">
-        Enter this 6-digit code in the Bideo mobile app to complete your verification and unlock creator upload privileges.
-      </p>
+              <!-- Compact Centered OTP Box (Fixed width to avoid stretching on phone) -->
+              <div style="text-align: center; margin: 18px auto 22px; width: 100%;">
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 0 auto;">
+                  <tr>
+                    <td align="center" style="background-color: #fff7ed; border: 2px solid #f97316; border-radius: 12px; padding: 12px 24px; text-align: center; box-shadow: 0 2px 6px rgba(249, 115, 22, 0.1);">
+                      <span style="font-size: 32px; font-weight: 800; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, monospace; color: #ea580c; letter-spacing: 6px; text-indent: 6px; display: inline-block;">
+                        ${otp}
+                      </span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td align="center" style="padding-top: 8px;">
+                      <span style="display: inline-block; font-size: 11px; font-weight: 600; color: #c2410c; background-color: #ffedd5; border: 1px solid #fed7aa; padding: 3px 12px; border-radius: 20px;">
+                        ⏱ Valid for 10 minutes
+                      </span>
+                    </td>
+                  </tr>
+                </table>
+              </div>
 
-      <div class="security-notice">
-        <strong>Security Notice:</strong> Never share this code with anyone. Bideo representatives will never ask for your verification code. If you did not make this request, you can safely ignore this email.
-      </div>
-    </div>
-    <div class="footer">
-      &copy; ${currentYear} Bideo. All rights reserved.<br />
-      This is an automated security transmission. Please do not reply directly to this email.
-    </div>
-  </div>
+              <p style="margin: 0 0 16px 0; font-size: 13px; line-height: 1.5; color: #64748b; text-align: center;">
+                Enter this code in the Bideo app to complete your verification and unlock creator upload privileges.
+              </p>
+
+              <!-- Security Notice -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top: 16px;">
+                <tr>
+                  <td style="background-color: #fffbeb; border-left: 3px solid #f59e0b; border-radius: 0 6px 6px 0; padding: 10px 12px; text-align: left;">
+                    <p style="margin: 0; font-size: 11px; line-height: 1.4; color: #92400e;">
+                      <strong>Security Tip:</strong> Never share this code with anyone. Bideo representatives will never ask for your verification code.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #f8fafc; padding: 14px 20px; text-align: center; border-top: 1px solid #fed7aa; font-size: 11px; color: #94a3b8; line-height: 1.4;">
+              &copy; ${currentYear} Bideo. All rights reserved.<br />
+              This is an automated security transmission. Please do not reply.
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>
 `;
