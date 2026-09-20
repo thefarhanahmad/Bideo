@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions } from
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import Constants from 'expo-constants';
 import Colors from '../../constants/Colors';
 
 const { width } = Dimensions.get('window');
@@ -34,7 +35,7 @@ export default function AboutScreen() {
            <Text style={styles.appName}>Bideo</Text>
            <Text style={styles.appTagline}>Connecting Creators across India</Text>
            <View style={styles.versionBadge}>
-              <Text style={styles.versionText}>v1.0.0</Text>
+              <Text style={styles.versionText}>v{Constants.expoConfig?.version || '1.0.6'}</Text>
            </View>
         </View>
 
