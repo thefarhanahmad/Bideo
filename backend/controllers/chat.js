@@ -11,25 +11,28 @@ const { sendPushNotification } = require('../utils/pushNotification');
  */
 function formatConversation(conv, currentUserId) {
   const currentUserIdStr = currentUserId.toString();
-  const otherParticipant = conv.participants.find(
-    (p) => p && p._id && p._id.toString() !== currentUserIdStr
-  ) || null;
+  const otherParticipant = (conv.participants || []).find((p) => {
+    const pId = (p?._id || p)?.toString();
+    return pId && pId !== currentUserIdStr;
+  }) || null;
 
   const unreadMap = conv.unreadCounts instanceof Map 
     ? conv.unreadCounts 
     : new Map(Object.entries(conv.unreadCounts || {}));
   const unreadCount = unreadMap.get(currentUserIdStr) || 0;
 
+  const otherId = (otherParticipant?._id || otherParticipant)?.toString() || null;
+
   return {
     _id: conv._id,
     participants: conv.participants,
     otherParticipant: otherParticipant ? {
-      _id: otherParticipant._id,
-      name: otherParticipant.name,
-      channelName: otherParticipant.channelName || otherParticipant.name,
-      avatar: otherParticipant.avatar,
-      isVerified: otherParticipant.isVerified,
-      isOnline: isUserOnline(otherParticipant._id),
+      _id: otherId,
+      name: otherParticipant.name || '',
+      channelName: otherParticipant.channelName || otherParticipant.name || '',
+      avatar: otherParticipant.avatar || null,
+      isVerified: Boolean(otherParticipant.isVerified),
+      isOnline: isUserOnline(otherId),
     } : null,
     initiator: conv.initiator,
     status: conv.status,
@@ -358,8 +361,10 @@ exports.sendMessage = async (req, res, next) => {
     // Socket.io Real-time dispatch
     const io = getIO();
     if (io) {
-      // 1. Broadcast new message to conversation room
+      // 1. Broadcast new message to conversation room and directly to both users' personal rooms
       io.to(`conversation:${conversation._id}`).emit('new_message', populatedMessage);
+      io.to(`user:${recipient._id}`).emit('new_message', populatedMessage);
+      io.to(`user:${currentUserId}`).emit('new_message', populatedMessage);
 
       // 2. Broadcast conversation updated event to both users' personal rooms
       const formattedForSender = formatConversation(conversation, currentUserId);
@@ -413,7 +418,7 @@ exports.markAsRead = async (req, res, next) => {
     const conversation = await Conversation.findOne({
       _id: conversationId,
       participants: currentUserId,
-    });
+    }).populate('participants', '_id name channelName avatar isVerified');
 
     if (!conversation) {
       return res.status(404).json({ success: false, message: 'Conversation not found' });
@@ -431,22 +436,53 @@ exports.markAsRead = async (req, res, next) => {
       }
     );
 
-    // Reset unread count for current user
-    if (conversation.unreadCounts) {
-      conversation.unreadCounts.set(currentUserId.toString(), 0);
-      await conversation.save();
+    // Update conversation lastMessage.isRead so conversation list displays double tick
+    if (conversation.lastMessage) {
+      const senderStr = (conversation.lastMessage.sender?._id || conversation.lastMessage.sender)?.toString();
+      if (senderStr && senderStr !== currentUserId.toString()) {
+        conversation.lastMessage.isRead = true;
+      }
     }
+
+    // Reset unread count for current user
+    if (!conversation.unreadCounts) {
+      conversation.unreadCounts = new Map();
+    }
+    conversation.unreadCounts.set(currentUserId.toString(), 0);
+    await conversation.save();
 
     // Notify other participant via socket that messages were read
     const io = getIO();
     if (io) {
+      // 1. Notify conversation room (for inside chat tick update)
       io.to(`conversation:${conversationId}`).emit('messages_read', {
         conversationId,
         readBy: currentUserId,
       });
 
+      // 2. Identify the other participant (the sender of unread messages)
+      const otherParticipant = (conversation.participants || []).find(
+        (p) => (p?._id || p)?.toString() !== currentUserId.toString()
+      );
+      const otherId = (otherParticipant?._id || otherParticipant)?.toString();
+
+      if (otherId) {
+        // Send messages_read to other user's personal room so both their chat room & chat list update ticks
+        io.to(`user:${otherId}`).emit('messages_read', {
+          conversationId,
+          readBy: currentUserId,
+        });
+
+        const formattedForSender = formatConversation(conversation, otherId);
+        io.to(`user:${otherId}`).emit('conversation_updated', formattedForSender);
+      }
+
+      // 3. Notify current user's room
+      const formattedForReader = formatConversation(conversation, currentUserId);
+      io.to(`user:${currentUserId.toString()}`).emit('conversation_updated', formattedForReader);
+
       const totalUnread = await exports.computeTotalUnreadCount(currentUserId);
-      io.to(`user:${currentUserId}`).emit('unread_chat_count', { count: totalUnread });
+      io.to(`user:${currentUserId.toString()}`).emit('unread_chat_count', { count: totalUnread });
     }
 
     res.status(200).json({ success: true, message: 'Messages marked as read' });

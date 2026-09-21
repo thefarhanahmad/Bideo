@@ -190,6 +190,8 @@ function ChatPresenceManager({ children }: { children: React.ReactNode }) {
     const appStateSubscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
       if (nextAppState === 'active' && isAuthenticated) {
         initSocket();
+      } else if (nextAppState.match(/inactive|background/)) {
+        disconnectSocket();
       }
     });
 

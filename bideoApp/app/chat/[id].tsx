@@ -62,6 +62,7 @@ export default function ChatRoomScreen() {
 
   const flatListRef = useRef<FlatList>(null);
   const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const otherParticipantIdRef = useRef<string | null>(null);
 
   const currentUserId = user?._id?.toString() || user?.id?.toString() || '';
 
@@ -103,9 +104,14 @@ export default function ChatRoomScreen() {
       if (convData) {
         setConversation(convData);
         if (convData.otherParticipant?._id) {
-          requestOnlineStatus([convData.otherParticipant._id], (status) => {
-            if (status && status[convData.otherParticipant._id] !== undefined) {
-              setIsOtherOnline(Boolean(status[convData.otherParticipant._id]));
+          const targetId = convData.otherParticipant._id.toString();
+          otherParticipantIdRef.current = targetId;
+          if (convData.otherParticipant.isOnline !== undefined) {
+            setIsOtherOnline(Boolean(convData.otherParticipant.isOnline));
+          }
+          requestOnlineStatus([targetId], (status) => {
+            if (status && status[targetId] !== undefined) {
+              setIsOtherOnline(Boolean(status[targetId]));
             }
           });
         }
@@ -135,7 +141,12 @@ export default function ChatRoomScreen() {
 
     // Socket Event Subscriptions
     const subMsg = DeviceEventEmitter.addListener('chatMessageReceived', (newMsg: any) => {
-      if (newMsg?.conversationId?.toString() === conversationId?.toString()) {
+      const msgConvId =
+        (newMsg?.conversationId || newMsg?.conversation)?._id ||
+        newMsg?.conversationId ||
+        newMsg?.conversation;
+
+      if (msgConvId?.toString() === conversationId?.toString()) {
         setMessages((prev) => {
           if (prev.some((m) => m._id === newMsg._id)) return prev;
           return [...prev, newMsg];
@@ -144,7 +155,7 @@ export default function ChatRoomScreen() {
           flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
         }, 50);
 
-        // If active, mark as read immediately
+        // If active in screen, mark as read immediately
         chatService.markAsRead(conversationId).catch(() => {});
         DeviceEventEmitter.emit('chatViewed');
       }
@@ -155,7 +166,7 @@ export default function ChatRoomScreen() {
       (data: { conversationId: string; senderId: string; isTyping: boolean }) => {
         if (
           data?.conversationId?.toString() === conversationId?.toString() &&
-          data.senderId !== currentUserId
+          data.senderId?.toString() !== currentUserId
         ) {
           setIsOtherTyping(Boolean(data.isTyping));
         }
@@ -165,14 +176,39 @@ export default function ChatRoomScreen() {
     const subStatus = DeviceEventEmitter.addListener(
       'chatUserStatusChanged',
       (data: { userId: string; isOnline: boolean }) => {
-        if (
-          conversation?.otherParticipant?._id &&
-          data?.userId?.toString() === conversation.otherParticipant._id.toString()
-        ) {
+        const targetId = otherParticipantIdRef.current;
+        if (targetId && data?.userId?.toString() === targetId) {
           setIsOtherOnline(Boolean(data.isOnline));
         }
       }
     );
+
+    const subOnlineStatus = DeviceEventEmitter.addListener(
+      'chatOnlineUsersStatus',
+      (statusMap: Record<string, boolean>) => {
+        const targetId = otherParticipantIdRef.current;
+        if (targetId && statusMap && statusMap[targetId] !== undefined) {
+          setIsOtherOnline(Boolean(statusMap[targetId]));
+        }
+      }
+    );
+
+    const subSocketConnected = DeviceEventEmitter.addListener('socketConnected', () => {
+      if (conversationId) {
+        joinConversationRoom(conversationId);
+      }
+      const targetId = otherParticipantIdRef.current;
+      if (targetId) {
+        requestOnlineStatus([targetId], (status) => {
+          if (status && status[targetId] !== undefined) {
+            setIsOtherOnline(Boolean(status[targetId]));
+          }
+        });
+      }
+      if (conversationId) {
+        chatService.markAsRead(conversationId).catch(() => {});
+      }
+    });
 
     const subConvStatus = DeviceEventEmitter.addListener(
       'chatConversationStatusChanged',
@@ -182,8 +218,8 @@ export default function ChatRoomScreen() {
             ...prev,
             status: data.status,
             blockedBy: data.blockedBy ?? prev?.blockedBy,
-            isBlockedByMe: data.status === 'blocked' && data.blockedBy === currentUserId,
-            isBlockedByOther: data.status === 'blocked' && data.blockedBy !== currentUserId,
+            isBlockedByMe: data.status === 'blocked' && data.blockedBy?.toString() === currentUserId,
+            isBlockedByOther: data.status === 'blocked' && data.blockedBy?.toString() !== currentUserId,
           }));
         }
       }
@@ -194,14 +230,13 @@ export default function ChatRoomScreen() {
       (data: { conversationId: string; readBy: string }) => {
         if (
           data?.conversationId?.toString() === conversationId?.toString() &&
-          data.readBy !== currentUserId
+          data.readBy?.toString() !== currentUserId
         ) {
           setMessages((prev) =>
-            prev.map((m) =>
-              m.sender?._id === currentUserId || m.sender === currentUserId
-                ? { ...m, isRead: true }
-                : m
-            )
+            prev.map((m) => {
+              const senderId = (m.sender?._id || m.sender)?.toString();
+              return senderId === currentUserId ? { ...m, isRead: true } : m;
+            })
           );
         }
       }
@@ -214,22 +249,25 @@ export default function ChatRoomScreen() {
       subMsg.remove();
       subTyping.remove();
       subStatus.remove();
+      subOnlineStatus.remove();
+      subSocketConnected.remove();
       subConvStatus.remove();
       subRead.remove();
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
     };
-  }, [conversationId, currentUserId, loadData, conversation?.otherParticipant?._id]);
+  }, [conversationId, currentUserId, loadData]);
 
   // Handle typing debounce
   const handleInputChange = (text: string) => {
     setInputText(text);
 
-    if (conversation?.otherParticipant?._id && conversationId) {
-      emitTyping(conversationId, conversation.otherParticipant._id, true);
+    const targetId = otherParticipantIdRef.current || conversation?.otherParticipant?._id;
+    if (targetId && conversationId) {
+      emitTyping(conversationId, targetId.toString(), true);
 
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
       typingTimerRef.current = setTimeout(() => {
-        emitTyping(conversationId, conversation.otherParticipant._id, false);
+        emitTyping(conversationId, targetId.toString(), false);
       }, 1500);
     }
   };

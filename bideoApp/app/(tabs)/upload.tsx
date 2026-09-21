@@ -24,7 +24,7 @@ export default function UploadScreen() {
         } else if (!user?.channelName) {
           setShowChannelPrompt(true);
           setShowEmailPrompt(false);
-        } else if (!user?.isEmailVerified) {
+        } else if (!user?.email || !user.email.trim()) {
           setShowChannelPrompt(false);
           setShowEmailPrompt(true);
         } else {
@@ -32,7 +32,7 @@ export default function UploadScreen() {
           setShowEmailPrompt(false);
         }
       }
-    }, [isAuthenticated, authLoading, user?.channelName, user?.isEmailVerified])
+    }, [isAuthenticated, authLoading, user?.channelName, user?.email])
   );
 
   if (!isAuthenticated) {
@@ -104,9 +104,9 @@ export default function UploadScreen() {
           <View style={styles.iconCircle}>
             <Ionicons name="mail-unread-outline" size={42} color={Colors.primary} />
           </View>
-          <Text style={styles.promptTitle}>Email Verification Required</Text>
+          <Text style={styles.promptTitle}>Email Required</Text>
           <Text style={styles.promptSubtitle}>
-            Please verify your Gmail address to unlock uploading videos, shorts, and community posts.
+            Please add your Gmail address in your profile to unlock uploading videos, shorts, and community posts.
           </Text>
 
           <TouchableOpacity
@@ -117,7 +117,7 @@ export default function UploadScreen() {
             }}
             activeOpacity={0.85}
           >
-            <Text style={styles.mainLoginBtnText}>Verify Gmail</Text>
+            <Text style={styles.mainLoginBtnText}>Add Gmail</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -150,13 +150,13 @@ export default function UploadScreen() {
             activeOpacity={0.85}
             onPress={() => {
               hapticSelection();
-              if (!user?.isEmailVerified) {
+              if (!user?.email || !user.email.trim()) {
                 showAlert(
-                  'Email Verification Required',
-                  'To upload content on Bideo, please verify your Gmail address in your profile.',
+                  'Email Required',
+                  'To upload content on Bideo, please add your Gmail address in your profile.',
                   [
                     { text: 'Cancel', style: 'cancel' },
-                    { text: 'Verify Email', onPress: () => router.push('/edit-channel') },
+                    { text: 'Add Email', onPress: () => router.push('/edit-channel') },
                   ]
                 );
                 return;

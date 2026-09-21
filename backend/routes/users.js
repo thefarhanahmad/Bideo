@@ -30,6 +30,7 @@ const {
   toggleBlockUser,
   sendEmailOtp,
   verifyEmailOtp,
+  updateEmail,
 } = require('../controllers/users');
 const { protect, authorize, softProtect } = require('../middlewares/auth');
 
@@ -42,6 +43,7 @@ router.post('/web-deletion-request', requestWebDeletion);
 
 router.use(protect);
 
+router.put('/email', updateEmail);
 router.post('/send-email-otp', sendEmailOtp);
 router.post('/verify-email-otp', verifyEmailOtp);
 

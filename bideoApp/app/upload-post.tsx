@@ -18,13 +18,13 @@ export default function UploadPostScreen() {
   const { editPostId } = useLocalSearchParams<{ editPostId?: string }>();
 
   useEffect(() => {
-    if (user && !user.isEmailVerified) {
+    if (user && (!user.email || !user.email.trim())) {
       showAlert(
-        'Email Verification Required',
-        'To upload community posts on Bideo, please verify your Gmail address in your profile.',
+        'Email Required',
+        'To upload community posts on Bideo, please add your Gmail address in your profile.',
         [
           { text: 'Go Back', style: 'cancel', onPress: () => router.back() },
-          { text: 'Verify Email', onPress: () => router.replace('/edit-channel') },
+          { text: 'Add Email', onPress: () => router.replace('/edit-channel') },
         ]
       );
     }

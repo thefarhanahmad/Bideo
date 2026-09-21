@@ -129,6 +129,12 @@ exports.loginWithPhone = async (req, res, next) => {
       await user.save().catch(() => {});
     }
 
+    // Ensure any user who already has an email is marked as verified for backward-compatibility with older app versions
+    if (user.email && !user.isEmailVerified) {
+      user.isEmailVerified = true;
+      await user.save().catch(() => {});
+    }
+
     sendTokenResponse(user, 200, res);
   } catch (err) {
     next(err);
@@ -279,7 +285,7 @@ exports.updateChannel = async (req, res, next) => {
   let oldCoverToDelete = null;
 
   try {
-    const { name, channelName, about } = req.body;
+    const { name, channelName, about, email } = req.body;
     let avatar = req.body.avatar ? normalizeAvatar(req.body.avatar) : undefined;
     let coverImage = req.body.coverImage;
 
@@ -368,6 +374,36 @@ exports.updateChannel = async (req, res, next) => {
       }
     }
 
+    let trimmedEmail = undefined;
+    if (email !== undefined) {
+      if (typeof email === 'string' && email.trim().length > 0) {
+        trimmedEmail = email.trim().toLowerCase();
+        const emailRegex = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/;
+        if (!emailRegex.test(trimmedEmail)) {
+          if (savedAvatarUrl) deleteLocalFile(savedAvatarUrl);
+          if (savedCoverImageUrl) deleteLocalFile(savedCoverImageUrl);
+          return res.status(400).json({
+            success: false,
+            message: 'Please provide a valid email address.',
+          });
+        }
+
+        const existingEmail = await User.findOne({
+          _id: { $ne: user._id },
+          email: trimmedEmail,
+        });
+
+        if (existingEmail) {
+          if (savedAvatarUrl) deleteLocalFile(savedAvatarUrl);
+          if (savedCoverImageUrl) deleteLocalFile(savedCoverImageUrl);
+          return res.status(400).json({
+            success: false,
+            message: 'This email address is already linked to another account.',
+          });
+        }
+      }
+    }
+
     const updateData = {};
     if (typeof name === 'string' && name.trim()) {
       updateData.name = name.trim();
@@ -377,6 +413,12 @@ exports.updateChannel = async (req, res, next) => {
     }
     if (avatar !== undefined) updateData.avatar = avatar;
     if (coverImage !== undefined) updateData.coverImage = coverImage;
+
+    if (trimmedEmail !== undefined && trimmedEmail !== user.email) {
+      updateData.email = trimmedEmail;
+      // Mark verified so older app versions automatically allow uploads without prompting OTP
+      updateData.isEmailVerified = true;
+    }
 
     if (shouldUpdateChannelName && trimmedChannelName) {
       updateData.channelName = trimmedChannelName;
@@ -413,6 +455,8 @@ exports.updateChannel = async (req, res, next) => {
       let duplicateMessage = 'Channel name already exists. Please choose a different channel name.';
       if (err.message && err.message.includes('name_1')) {
         duplicateMessage = 'Username already exists. Please choose another username.';
+      } else if (err.message && err.message.includes('email_1')) {
+        duplicateMessage = 'This email address is already linked to another account.';
       }
       return res.status(400).json({
         success: false,
@@ -429,6 +473,10 @@ exports.updateChannel = async (req, res, next) => {
 exports.getMe = async (req, res, next) => {
   try {
     const user = await User.findById(req.user.id);
+    if (user && user.email && !user.isEmailVerified) {
+      user.isEmailVerified = true;
+      await user.save().catch(() => {});
+    }
 
     res.status(200).json({
       success: true,

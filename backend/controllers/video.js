@@ -1129,8 +1129,9 @@ exports.uploadVideo = async (req, res, next) => {
     });
   }
 
-  // Creator Email Verification Enforcement
-  if (req.user && req.user.role !== 'admin' && !req.user.isEmailVerified) {
+  // Creator Email Enforcement (Requires email added; verification not required)
+  const userEmail = req.user?.email ? String(req.user.email).trim() : '';
+  if (req.user && req.user.role !== 'admin' && !userEmail) {
     if (req.files) {
       if (req.files.video && req.files.video[0]?.path) {
         try { require('fs').unlinkSync(req.files.video[0].path); } catch {}
@@ -1141,8 +1142,8 @@ exports.uploadVideo = async (req, res, next) => {
     }
     return res.status(403).json({
       success: false,
-      code: 'EMAIL_VERIFICATION_REQUIRED',
-      message: 'Please add and verify your email address in your profile before uploading videos or shorts.',
+      code: 'EMAIL_REQUIRED',
+      message: 'Please add your email address in your profile before uploading videos or shorts.',
     });
   }
 

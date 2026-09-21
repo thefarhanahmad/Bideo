@@ -1855,4 +1855,65 @@ exports.verifyEmailOtp = async (req, res, next) => {
   }
 };
 
+// @desc    Update user's email directly (no OTP required)
+// @route   PUT /api/users/email
+// @access  Private
+exports.updateEmail = async (req, res, next) => {
+  try {
+    const rawEmail = String(req.body.email || '').trim().toLowerCase();
 
+    if (!rawEmail) {
+      return res.status(400).json({ success: false, message: 'Please provide an email address' });
+    }
+
+    const emailRegex = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/;
+    if (!emailRegex.test(rawEmail)) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid email address' });
+    }
+
+    const existingUser = await User.findOne({
+      email: rawEmail,
+      _id: { $ne: req.user.id },
+    });
+
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: 'This email address is already linked to another Bideo account.',
+      });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    if (user.email !== rawEmail) {
+      user.email = rawEmail;
+      user.isEmailVerified = true;
+      await user.save();
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Email updated successfully. You can upload videos and posts now!',
+      data: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        isEmailVerified: user.isEmailVerified,
+        channelName: user.channelName,
+        phone: user.phone,
+        avatar: user.avatar,
+      },
+    });
+  } catch (err) {
+    if (err.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'This email address is already linked to another Bideo account.',
+      });
+    }
+    next(err);
+  }
+};

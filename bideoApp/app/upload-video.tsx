@@ -22,13 +22,13 @@ export default function UploadVideoScreen() {
   const { editId, type } = useLocalSearchParams<{ editId?: string; type?: 'video' | 'short' }>();
 
   useEffect(() => {
-    if (user && !user.isEmailVerified) {
+    if (user && (!user.email || !user.email.trim())) {
       showAlert(
-        'Email Verification Required',
-        'To upload videos or shorts on Bideo, please verify your Gmail address in your profile.',
+        'Email Required',
+        'To upload videos or shorts on Bideo, please add your Gmail address in your profile.',
         [
           { text: 'Go Back', style: 'cancel', onPress: () => router.back() },
-          { text: 'Verify Email', onPress: () => router.replace('/edit-channel') },
+          { text: 'Add Email', onPress: () => router.replace('/edit-channel') },
         ]
       );
     }

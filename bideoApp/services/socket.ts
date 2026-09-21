@@ -5,21 +5,28 @@ import api from './api';
 
 let socket: Socket | null = null;
 let currentToken: string | null = null;
+let isConnecting = false;
+let activeConversationId: string | null = null;
+const pendingOnlineUserIds = new Set<string>();
 
 export const getSocketUrl = (): string => {
   const apiBase = api.defaults.baseURL || process.env.EXPO_PUBLIC_API_URL || 'https://bideo.in/api';
   return apiBase.replace(/\/api\/?$/, '');
 };
 
-export const initSocket = async (): Promise<Socket | null> => {
+export const initSocket = async (tokenOverride?: string): Promise<Socket | null> => {
   try {
-    const token = await AsyncStorage.getItem('token');
+    const token = tokenOverride || (await AsyncStorage.getItem('token'));
     if (!token) {
       disconnectSocket();
       return null;
     }
 
     if (socket && socket.connected && currentToken === token) {
+      return socket;
+    }
+
+    if (isConnecting) {
       return socket;
     }
 
@@ -30,22 +37,35 @@ export const initSocket = async (): Promise<Socket | null> => {
 
     const socketUrl = getSocketUrl();
     currentToken = token;
+    isConnecting = true;
 
     socket = io(socketUrl, {
       auth: { token },
+      query: { token },
       transports: ['websocket', 'polling'],
       reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 2000,
-      timeout: 10000,
+      reconnectionAttempts: 20,
+      reconnectionDelay: 1500,
+      timeout: 15000,
     });
 
     socket.on('connect', () => {
+      isConnecting = false;
       console.log('⚡ Socket connected successfully to:', socketUrl);
+
+      // Re-join active conversation screen if open
+      if (activeConversationId) {
+        socket?.emit('join_conversation', { conversationId: activeConversationId });
+      }
+
+      // Flush pending presence queries
+      flushPendingOnlineStatus();
+
       DeviceEventEmitter.emit('socketConnected');
     });
 
     socket.on('connect_error', (err) => {
+      isConnecting = false;
       console.log('Socket connect error:', err?.message || err);
     });
 
@@ -83,12 +103,14 @@ export const initSocket = async (): Promise<Socket | null> => {
     });
 
     socket.on('disconnect', (reason) => {
+      isConnecting = false;
       console.log('Socket disconnected:', reason);
       DeviceEventEmitter.emit('socketDisconnected');
     });
 
     return socket;
   } catch (err) {
+    isConnecting = false;
     console.error('Failed to init socket:', err);
     return null;
   }
@@ -103,17 +125,26 @@ export const disconnectSocket = () => {
     socket.disconnect();
     socket = null;
     currentToken = null;
+    isConnecting = false;
   }
 };
 
 export const joinConversationRoom = (conversationId: string) => {
-  if (socket && socket.connected && conversationId) {
+  if (!conversationId) return;
+  activeConversationId = conversationId;
+  if (socket && socket.connected) {
     socket.emit('join_conversation', { conversationId });
+  } else {
+    initSocket();
   }
 };
 
 export const leaveConversationRoom = (conversationId: string) => {
-  if (socket && socket.connected && conversationId) {
+  if (!conversationId) return;
+  if (activeConversationId === conversationId) {
+    activeConversationId = null;
+  }
+  if (socket && socket.connected) {
     socket.emit('leave_conversation', { conversationId });
   }
 };
@@ -124,8 +155,30 @@ export const emitTyping = (conversationId: string, recipientId: string, isTyping
   }
 };
 
+const flushPendingOnlineStatus = () => {
+  if (!socket || !socket.connected || pendingOnlineUserIds.size === 0) return;
+  const ids = Array.from(pendingOnlineUserIds);
+  pendingOnlineUserIds.clear();
+  socket.emit('check_online_users', ids, (statusMap: Record<string, boolean>) => {
+    if (statusMap) {
+      DeviceEventEmitter.emit('chatOnlineUsersStatus', statusMap);
+    }
+  });
+};
+
 export const requestOnlineStatus = (userIds: string[], callback?: (status: Record<string, boolean>) => void) => {
-  if (socket && socket.connected && userIds.length > 0) {
+  if (!Array.isArray(userIds) || userIds.length === 0) return;
+  userIds.forEach((id) => {
+    if (id) pendingOnlineUserIds.add(id.toString());
+  });
+
+  if (socket && socket.connected) {
+    flushPendingOnlineStatus();
+  } else {
+    initSocket();
+  }
+
+  if (callback && socket && socket.connected) {
     socket.emit('check_online_users', userIds, callback);
   }
 };

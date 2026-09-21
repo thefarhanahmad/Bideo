@@ -56,9 +56,15 @@ sudo docker run --rm \
   -v /var/www/bideo:/host_dist \
   bideo-frontend sh -c "cp -a /usr/share/nginx/html/. /host_dist/"
 
-# 7. Reload Host Nginx
-echo "⚙️ Reloading host Nginx..."
-sudo systemctl reload nginx
+# 7. Apply Nginx Configuration & Reload
+if [ -f ./update-nginx.sh ]; then
+    echo "⚙️ Updating host Nginx configuration (including Socket.IO)..."
+    chmod +x ./update-nginx.sh
+    sudo ./update-nginx.sh
+else
+    echo "⚙️ Reloading host Nginx..."
+    sudo systemctl reload nginx
+fi
 
 # 8. Automatic Docker Storage Housekeeping
 echo "🧹 Pruning old dangling images and build artifacts..."

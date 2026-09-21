@@ -172,6 +172,10 @@ export const authService = {
 };
 
 export const userService = {
+  updateEmail: async (email: string) => {
+    const response = await api.put('/users/email', { email });
+    return response.data;
+  },
   sendEmailOtp: async (email: string) => {
     const response = await api.post('/users/send-email-otp', { email });
     return response.data;

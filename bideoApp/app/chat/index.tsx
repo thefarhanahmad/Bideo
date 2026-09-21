@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -76,6 +76,8 @@ export default function ChatListScreen() {
   const [onlineMap, setOnlineMap] = useState<Record<string, boolean>>({});
 
   const currentUserId = user?._id?.toString() || user?.id?.toString() || '';
+  const conversationsRef = useRef<any[]>([]);
+  conversationsRef.current = conversations;
 
   const loadConversations = useCallback(async (isRefresh = false) => {
     if (!isAuthenticated) {
@@ -93,7 +95,7 @@ export default function ChatListScreen() {
         // Gather participant user IDs to query live presence status
         const participantIds = data
           .map((c) => c.otherParticipant?._id)
-          .filter(Boolean) as string[];
+          .filter((id) => id && id.toString() !== currentUserId) as string[];
 
         if (participantIds.length > 0) {
           requestOnlineStatus(participantIds, (status) => {
@@ -109,7 +111,7 @@ export default function ChatListScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, currentUserId]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -124,8 +126,9 @@ export default function ChatListScreen() {
     });
 
     const subConv = DeviceEventEmitter.addListener('chatConversationUpdated', (updatedConv: any) => {
+      if (!updatedConv?._id) return;
       setConversations((prev) => {
-        const index = prev.findIndex((c) => c._id === updatedConv._id);
+        const index = prev.findIndex((c) => c._id?.toString() === updatedConv._id?.toString());
         if (index > -1) {
           const updated = [...prev];
           updated[index] = { ...updated[index], ...updatedConv };
@@ -135,15 +138,22 @@ export default function ChatListScreen() {
         }
         return [updatedConv, ...prev];
       });
+
+      if (updatedConv.otherParticipant?._id) {
+        const otherId = updatedConv.otherParticipant._id.toString();
+        if (updatedConv.otherParticipant.isOnline !== undefined) {
+          setOnlineMap((prev) => ({ ...prev, [otherId]: Boolean(updatedConv.otherParticipant.isOnline) }));
+        }
+      }
     });
 
     const subStatus = DeviceEventEmitter.addListener(
       'chatUserStatusChanged',
       (data: { userId: string; isOnline: boolean }) => {
-        if (data?.userId) {
+        if (data?.userId && data.userId.toString() !== currentUserId) {
           setOnlineMap((prev) => ({
             ...prev,
-            [data.userId]: data.isOnline,
+            [data.userId.toString()]: Boolean(data.isOnline),
           }));
         }
       }
@@ -158,13 +168,56 @@ export default function ChatListScreen() {
       }
     );
 
+    const subSocket = DeviceEventEmitter.addListener('socketConnected', () => {
+      loadConversations(true);
+      const participantIds = conversationsRef.current
+        .map((c: any) => c.otherParticipant?._id)
+        .filter((id: any) => id && id.toString() !== currentUserId) as string[];
+      if (participantIds.length > 0) {
+        requestOnlineStatus(participantIds);
+      }
+    });
+
+    const subRead = DeviceEventEmitter.addListener(
+      'chatMessagesRead',
+      (data: { conversationId: string; readBy: string }) => {
+        if (data?.conversationId) {
+          const isReadByMe = data.readBy?.toString() === currentUserId;
+          setConversations((prev) =>
+            prev.map((c) => {
+              if (c._id?.toString() === data.conversationId.toString()) {
+                return {
+                  ...c,
+                  unreadCount: isReadByMe ? 0 : c.unreadCount,
+                  lastMessage: c.lastMessage
+                    ? {
+                        ...c.lastMessage,
+                        isRead: true,
+                      }
+                    : c.lastMessage,
+                };
+              }
+              return c;
+            })
+          );
+        }
+      }
+    );
+
+    const subChatViewed = DeviceEventEmitter.addListener('chatViewed', () => {
+      loadConversations(true);
+    });
+
     return () => {
       subMsg.remove();
       subConv.remove();
       subStatus.remove();
       subOnlineStatus.remove();
+      subSocket.remove();
+      subRead.remove();
+      subChatViewed.remove();
     };
-  }, [isAuthenticated, loadConversations]);
+  }, [isAuthenticated, loadConversations, currentUserId]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -174,10 +227,15 @@ export default function ChatListScreen() {
   // Online / Active users list
   const onlineConversations = useMemo(() => {
     return conversations.filter((c) => {
-      const otherId = c.otherParticipant?._id;
-      return otherId && Boolean(onlineMap[otherId] ?? c.otherParticipant.isOnline);
+      const otherId = c.otherParticipant?._id?.toString();
+      if (!otherId || otherId === currentUserId) return false;
+      const isOnline =
+        onlineMap[otherId] !== undefined
+          ? Boolean(onlineMap[otherId])
+          : Boolean(c.otherParticipant?.isOnline);
+      return isOnline;
     });
-  }, [conversations, onlineMap]);
+  }, [conversations, onlineMap, currentUserId]);
 
   // Total unread count across all chats
   const totalUnreadCount = useMemo(() => {
@@ -213,7 +271,12 @@ export default function ChatListScreen() {
 
   const renderConversationItem = ({ item }: { item: any }) => {
     const other = item.otherParticipant;
-    const isOnline = Boolean(other?._id && (onlineMap[other._id] ?? other.isOnline));
+    const otherId = other?._id?.toString();
+    const isOnline = Boolean(
+      otherId &&
+      otherId !== currentUserId &&
+      (onlineMap[otherId] !== undefined ? onlineMap[otherId] : other?.isOnline)
+    );
     const unreadCount = item.unreadCount || 0;
     const isPending = item.status === 'pending';
     const isBlocked = item.status === 'blocked';

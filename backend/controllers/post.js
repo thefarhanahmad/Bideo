@@ -89,14 +89,15 @@ exports.createPost = async (req, res, next) => {
   try {
     // Secondary safety check in controller
     if (req.user && req.user.role !== 'admin') {
-      if (!req.user.isEmailVerified) {
+      const userEmail = req.user?.email ? String(req.user.email).trim() : '';
+      if (!userEmail) {
         if (req.file && req.file.path) {
           try { require('fs').unlinkSync(req.file.path); } catch {}
         }
         return res.status(403).json({
           success: false,
-          code: 'EMAIL_VERIFICATION_REQUIRED',
-          message: 'Please add and verify your email address in your profile before uploading community posts.',
+          code: 'EMAIL_REQUIRED',
+          message: 'Please add your email address in your profile before uploading community posts.',
         });
       }
 
