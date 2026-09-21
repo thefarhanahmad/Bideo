@@ -7,8 +7,8 @@ The Android build system now automatically reads `versionName` and `versionCode`
 directly from `app.json`!
 
 Current Version:
-  • Version Name : 1.0.6
-  • Version Code : 15  (Previous Play Store release was 13 / 1.0.5)
+  • Version Name : 1.0.7
+  • Version Code : 16  (Previous Play Store release was 15 / 1.0.6)
 
 To automatically bump version for a new release in the future:
   Open terminal in `D:\Bideo\bideoApp` and run:
