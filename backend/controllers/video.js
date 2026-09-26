@@ -10,6 +10,7 @@ const VideoMonetizationReview = require("../models/VideoMonetizationReview");
 const MonetizationApplication = require("../models/MonetizationApplication");
 const Comment = require("../models/Comment");
 const Playlist = require("../models/Playlist");
+const CoinTransaction = require("../models/CoinTransaction");
 const fs = require("fs");
 const { saveLocalFile, deleteLocalFile } = require("../utils/localUpload");
 const {
@@ -951,6 +952,7 @@ exports.recordView = async (req, res, next) => {
         success: true,
         message: "Repeat view within 5h cooldown window",
         views: video.views,
+        viewerCoinsEarned: 0,
       });
     }
 
@@ -980,9 +982,44 @@ exports.recordView = async (req, res, next) => {
       }).catch(() => {});
     }
 
-    // Real-time earnings: credit distinct long video vs short video rates ONLY when a real viewer (not the creator) watches
     const isSelfView =
       userId && video.owner && userId.toString() === video.owner.toString();
+
+    // Reward logged-in viewer with coins for watching short video:
+    // Dynamic reward: 0.5 or 1 coin per valid view (not repeat view, not creator self-view)
+    let viewerCoinsEarned = 0;
+    let viewerTotalCoins = undefined;
+    const isShortVideo = video.isShort === true || video.isShort === "true";
+
+    if (isShortVideo && userId && !isSelfView) {
+      try {
+        const coinReward = Math.random() < 0.5 ? 1 : 0.5;
+        const updatedViewer = await User.findByIdAndUpdate(
+          userId,
+          { $inc: { coins: coinReward } },
+          { new: true },
+        );
+        if (updatedViewer) {
+          viewerCoinsEarned = coinReward;
+          viewerTotalCoins = Math.round(updatedViewer.coins * 10) / 10;
+          await CoinTransaction.create({
+            user: userId,
+            type: "watch_reward",
+            amount: coinReward,
+            balanceAfter: viewerTotalCoins,
+            description: `Watched short: ${video.title ? video.title.slice(0, 30) : "Short video"}`,
+            metadata: {
+              videoId: video._id,
+              videoType: "short",
+            },
+          });
+        }
+      } catch (coinErr) {
+        console.error("Failed to credit short viewer coins:", coinErr);
+      }
+    }
+
+    // Real-time earnings: credit distinct long video vs short video rates ONLY when a real viewer (not the creator) watches
     if (video.owner && !isSelfView) {
       try {
         const isMonetized = await MonetizationApplication.exists({
@@ -990,7 +1027,6 @@ exports.recordView = async (req, res, next) => {
           status: "approved",
         });
         if (isMonetized) {
-          const isShortVideo = video.isShort === true || video.isShort === "true";
           const { longRate, shortRate } = getRewardRates();
           const rewardPerView = isShortVideo ? shortRate : longRate;
 
@@ -1017,6 +1053,123 @@ exports.recordView = async (req, res, next) => {
     res.status(200).json({
       success: true,
       views: updatedVideo ? updatedVideo.views : video.views + 1,
+      viewerCoinsEarned,
+      viewerTotalCoins,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// In-memory sliding cooldown map for long video watch-time coin rewards
+const watchRewardCooldowns = new Map();
+
+exports.recordWatchTime = async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Video not found" });
+    }
+
+    const video = await Video.findById(req.params.id);
+    if (!video) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Video not found" });
+    }
+
+    const userId = req.user?._id;
+    if (!userId) {
+      // Unauthenticated viewers skip rewards silently
+      return res.status(200).json({
+        success: true,
+        message: "Unauthenticated viewer, skipped coin reward",
+        coinsEarned: 0,
+      });
+    }
+
+    const isShortVideo = video.isShort === true || video.isShort === "true";
+    if (isShortVideo) {
+      // Shorts are rewarded per view, not per watch minute
+      return res.status(200).json({
+        success: true,
+        message: "Shorts are rewarded per view",
+        coinsEarned: 0,
+      });
+    }
+
+    const isSelfView =
+      video.owner && userId.toString() === video.owner.toString();
+    if (isSelfView) {
+      // Creators do not earn viewer coins from watching their own videos
+      return res.status(200).json({
+        success: true,
+        message: "Creator self-view skipped",
+        coinsEarned: 0,
+      });
+    }
+
+    // Cooldown check (minimum 45 seconds between 1-minute rewards for the same user & video)
+    const cooldownKey = `${userId.toString()}_${video._id.toString()}`;
+    const now = Date.now();
+    const lastRewardTime = watchRewardCooldowns.get(cooldownKey) || 0;
+    const MIN_INTERVAL_MS = 45 * 1000; // 45 seconds tolerance for 60s watch time
+
+    if (now - lastRewardTime < MIN_INTERVAL_MS) {
+      return res.status(200).json({
+        success: true,
+        message: "Watch reward cooldown active",
+        coinsEarned: 0,
+      });
+    }
+
+    // Periodically clean up memory map if it grows large
+    if (watchRewardCooldowns.size > 5000) {
+      const cutoff = now - 2 * 60 * 60 * 1000;
+      for (const [k, ts] of watchRewardCooldowns.entries()) {
+        if (ts < cutoff) watchRewardCooldowns.delete(k);
+      }
+    }
+
+    watchRewardCooldowns.set(cooldownKey, now);
+
+    const coinsEarned = 1;
+    const updatedViewer = await User.findByIdAndUpdate(
+      userId,
+      { $inc: { coins: coinsEarned } },
+      { new: true },
+    );
+
+    if (!updatedViewer) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
+
+    const totalCoins = Math.round(updatedViewer.coins * 10) / 10;
+
+    try {
+      await CoinTransaction.create({
+        user: userId,
+        type: "watch_reward",
+        amount: coinsEarned,
+        balanceAfter: totalCoins,
+        description: `Watched 1 minute: ${video.title ? video.title.slice(0, 30) : "Video"}`,
+        metadata: {
+          videoId: video._id,
+          videoType: "long",
+          seconds: 60,
+        },
+      });
+    } catch (txErr) {
+      console.error("Failed to log CoinTransaction for watch reward:", txErr);
+    }
+
+    return res.status(200).json({
+      success: true,
+      coinsEarned,
+      totalCoins,
     });
   } catch (err) {
     next(err);

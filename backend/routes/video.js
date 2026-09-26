@@ -12,6 +12,7 @@ const {
   getMyVideos,
   getFollowedVideos,
   recordView,
+  recordWatchTime,
   reportVideo,
 } = require('../controllers/video');
 const { protect, softProtect } = require('../middlewares/auth');
@@ -32,6 +33,7 @@ router.get('/followed', protect, getFollowedVideos);
 router.post('/:id/like', protect, toggleLike);
 router.post('/:id/dislike', protect, toggleDislike);
 router.post('/:id/view', softProtect, recordView);
+router.post('/:id/watch-time', softProtect, recordWatchTime);
 router.post('/:id/report', protect, reportVideo);
 
 router.post('/upload', protect, uploadMaintenance, upload.fields([

@@ -9,7 +9,7 @@ const coinTransactionSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['ad_reward', 'boost_spend', 'verified_badge_spend', 'admin_adjustment'],
+    enum: ['ad_reward', 'boost_spend', 'verified_badge_spend', 'admin_adjustment', 'watch_reward'],
     required: true,
   },
   amount: {

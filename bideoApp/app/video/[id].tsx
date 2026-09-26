@@ -2,14 +2,16 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, FlatList, Share, useWindowDimensions, StatusBar, BackHandler, Modal, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '../../constants/Colors';
 import { RootState } from '../../redux/store';
+import { updateUser } from '../../redux/slices/authSlice';
 import api, { videoService } from '../../services/api';
 import VideoCard from '../../components/VideoCard';
 import CommentList from '../../components/CommentList';
@@ -33,7 +35,9 @@ export default function VideoScreen() {
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const playerHeight = Math.round((windowWidth * 9) / 16);
+  const dispatch = useDispatch();
   const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
+  const watchSecondsForCoinRef = useRef(0);
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) {
@@ -160,6 +164,7 @@ export default function VideoScreen() {
     if (id) {
       viewRecordedRef.current = false;
       watchTimeRef.current = 0;
+      watchSecondsForCoinRef.current = 0;
       adCompletedRef.current = false;
       isPostRollRef.current = false;
       postRollTriggeredRef.current = false;
@@ -247,6 +252,37 @@ export default function VideoScreen() {
                   if (res?.views) {
                     setVideo((prev: any) => prev ? { ...prev, views: res.views } : prev);
                   }
+                  if (res?.viewerCoinsEarned > 0 && res?.viewerTotalCoins !== undefined) {
+                    dispatch(updateUser({ coins: res.viewerTotalCoins }));
+                    AsyncStorage.getItem('cached_user').then((raw) => {
+                      if (raw) {
+                        const parsed = JSON.parse(raw);
+                        AsyncStorage.setItem('cached_user', JSON.stringify({ ...parsed, coins: res.viewerTotalCoins })).catch(() => {});
+                      }
+                    }).catch(() => {});
+                  }
+                })
+                .catch(() => {});
+            }
+          }
+
+          // Active watch time coin reward for long videos: 1 minute (60s) = 1 coin for logged-in viewer
+          const isShortVideo = video?.isShort === true || video?.isShort === 'true';
+          if (isAuthenticated && !isShortVideo) {
+            watchSecondsForCoinRef.current += 1;
+            if (watchSecondsForCoinRef.current >= 60) {
+              watchSecondsForCoinRef.current = 0;
+              videoService.recordWatchTime(video._id, 60)
+                .then((res: any) => {
+                  if (res?.coinsEarned > 0 && res?.totalCoins !== undefined) {
+                    dispatch(updateUser({ coins: res.totalCoins }));
+                    AsyncStorage.getItem('cached_user').then((raw) => {
+                      if (raw) {
+                        const parsed = JSON.parse(raw);
+                        AsyncStorage.setItem('cached_user', JSON.stringify({ ...parsed, coins: res.totalCoins })).catch(() => {});
+                      }
+                    }).catch(() => {});
+                  }
                 })
                 .catch(() => {});
             }
@@ -256,13 +292,14 @@ export default function VideoScreen() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [video?._id, player, showingAd]);
+  }, [video?._id, player, showingAd, isAuthenticated, video?.isShort, dispatch]);
 
   useFocusEffect(
     useCallback(() => {
       // Whenever the screen gains focus (e.g., reopened from home), reset tracking state
       viewRecordedRef.current = false;
       watchTimeRef.current = 0;
+      watchSecondsForCoinRef.current = 0;
       if (id) {
         loadVideoData();
       }

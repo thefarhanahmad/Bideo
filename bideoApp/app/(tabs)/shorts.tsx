@@ -7,8 +7,10 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { useIsFocused } from '@react-navigation/native';
 import Colors from '../../constants/Colors';
 import api, { videoService } from '../../services/api';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../../redux/store';
+import { updateUser } from '../../redux/slices/authSlice';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import AuthModal from '../../components/AuthModal';
 import CommentList from '../../components/CommentList';
 import VerifiedBadge from '../../components/VerifiedBadge';
@@ -56,8 +58,21 @@ const { height: WINDOW_HEIGHT, width: WINDOW_WIDTH } = Dimensions.get('window');
 
 export default function ShortsScreen() {
   const insets = useSafeAreaInsets();
+  const dispatch = useDispatch();
   const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
   const router = useRouter();
+
+  const handleCoinsEarned = useCallback((totalCoins: number) => {
+    if (totalCoins !== undefined) {
+      dispatch(updateUser({ coins: totalCoins }));
+      AsyncStorage.getItem('cached_user').then((raw) => {
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          AsyncStorage.setItem('cached_user', JSON.stringify({ ...parsed, coins: totalCoins })).catch(() => {});
+        }
+      }).catch(() => {});
+    }
+  }, [dispatch]);
   const { initialShortId, fromChannelId } = useLocalSearchParams<{ initialShortId?: string; fromChannelId?: string }>();
   const isFocused = useIsFocused();
   const [shorts, setShorts] = useState<any[]>([]);
@@ -438,7 +453,6 @@ export default function ShortsScreen() {
       setActiveVideoIndex(idx);
       const cur = shortsRef.current[idx];
       if (cur && cur._id && !cur.isAd) {
-        videoService.recordView(cur._id).catch(() => {});
         if (isAuthenticated) {
           api.post('/users/history', { videoId: cur._id }).catch(() => {});
         }
@@ -639,6 +653,7 @@ export default function ShortsScreen() {
               onShare={handleShare}
               onMenuClick={handleMenuClick}
               onFollow={handleFollow}
+              onCoinsEarned={handleCoinsEarned}
             />
           );
         }}
@@ -672,7 +687,7 @@ const ShortAdItem = ({ containerHeight, insets, isActive, onComplete, showBackBu
   );
 };
 
-const ShortItem = ({ item, index, activeVideoIndex, containerHeight, isFocused, insets, user, showBackButton, onBack, onLike, onDoubleTapLike, onCommentClick, onShare, onMenuClick, onFollow }: any) => {
+const ShortItem = ({ item, index, activeVideoIndex, containerHeight, isFocused, insets, user, showBackButton, onBack, onLike, onDoubleTapLike, onCommentClick, onShare, onMenuClick, onFollow, onCoinsEarned }: any) => {
   const router = useRouter();
   const player = useVideoPlayer(item.videoUrl, (p) => {
     p.loop = true;
@@ -750,7 +765,13 @@ const ShortItem = ({ item, index, activeVideoIndex, containerHeight, isFocused, 
 
             if (watchTimeRef.current >= targetTime) {
               viewRecordedRef.current = true;
-              videoService.recordView(item._id).catch(() => {});
+              videoService.recordView(item._id)
+                .then((res: any) => {
+                  if (res?.viewerCoinsEarned > 0 && res?.viewerTotalCoins !== undefined && onCoinsEarned) {
+                    onCoinsEarned(res.viewerTotalCoins, res.viewerCoinsEarned);
+                  }
+                })
+                .catch(() => {});
             }
           }
         }
@@ -758,7 +779,7 @@ const ShortItem = ({ item, index, activeVideoIndex, containerHeight, isFocused, 
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isActive, isPaused, item?._id, player]);
+  }, [isActive, isPaused, item?._id, player, onCoinsEarned]);
 
   const togglePlayPause = () => {
     const newPausedState = !isPaused;

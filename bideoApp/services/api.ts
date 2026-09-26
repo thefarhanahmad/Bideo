@@ -142,6 +142,17 @@ export const videoService = {
     });
     return response.data;
   },
+  recordWatchTime: async (id: string, seconds: number = 60) => {
+    let deviceId = await AsyncStorage.getItem('device_id');
+    if (!deviceId) {
+      deviceId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      await AsyncStorage.setItem('device_id', deviceId);
+    }
+    const response = await api.post(`/videos/${id}/watch-time`, { seconds, deviceId }, {
+      headers: { 'X-Device-Id': deviceId },
+    });
+    return response.data;
+  },
 };
 
 export const categoryService = {
