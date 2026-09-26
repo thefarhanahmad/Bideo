@@ -48,6 +48,10 @@ Notifications.setNotificationHandler({
   },
 });
 
+let lastNavKey = '';
+let lastNavTime = 0;
+let lastHandledNotificationId: string | null = null;
+
 /**
  * Robust notification navigation handler that resolves videos, shorts, posts, channels, and chats
  */
@@ -75,6 +79,25 @@ export function handleNotificationNavigation(router: any, data: any) {
     (typeof data.screen === 'string'
       ? data.screen.match(/\/chat\/([a-zA-Z0-9_-]+)/)?.[1]
       : null);
+
+  const navKey = conversationId
+    ? `chat:${conversationId}`
+    : videoId
+    ? `video:${isShort ? 'short' : 'long'}:${videoId}`
+    : postId
+    ? `post:${postId}`
+    : channelId
+    ? `channel:${channelId}`
+    : data.screen || 'notifications';
+
+  const now = Date.now();
+  // Prevent duplicate navigation within 1.5 seconds for the same destination
+  if (navKey === lastNavKey && now - lastNavTime < 1500) {
+    console.log('Debouncing duplicate push navigation to:', navKey);
+    return;
+  }
+  lastNavKey = navKey;
+  lastNavTime = now;
 
   try {
     if (conversationId) {
@@ -201,6 +224,13 @@ export function setupNotificationListeners(router: any) {
   Notifications.getLastNotificationResponseAsync()
     .then((response) => {
       if (response) {
+        const notifId = response.notification?.request?.identifier;
+        if (notifId && notifId === lastHandledNotificationId) {
+          return;
+        }
+        if (notifId) {
+          lastHandledNotificationId = notifId;
+        }
         const data = response.notification.request.content.data;
         setTimeout(() => {
           handleNotificationNavigation(router, data);
@@ -212,6 +242,13 @@ export function setupNotificationListeners(router: any) {
   // Listener for when a user clicks/taps the notification while app is running/backgrounded
   const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
     try {
+      const notifId = response.notification?.request?.identifier;
+      if (notifId && notifId === lastHandledNotificationId) {
+        return;
+      }
+      if (notifId) {
+        lastHandledNotificationId = notifId;
+      }
       const data = response.notification.request.content.data;
       console.log('User tapped push notification with data:', data);
       handleNotificationNavigation(router, data);

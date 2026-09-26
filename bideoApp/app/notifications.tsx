@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, DeviceEventEmitter } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
@@ -21,6 +21,7 @@ export default function NotificationsScreen() {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [authModalVisible, setAuthModalVisible] = useState(false);
+  const isNavigatingRef = useRef(false);
 
   const loadNotifications = useCallback(async () => {
     if (!isAuthenticated) return;
@@ -48,6 +49,12 @@ export default function NotificationsScreen() {
   }, [isAuthenticated, loadNotifications]);
 
   const openItem = async (item: any) => {
+    if (isNavigatingRef.current) return;
+    isNavigatingRef.current = true;
+    setTimeout(() => {
+      isNavigatingRef.current = false;
+    }, 1200);
+
     if (!item.read) {
       api.put(`/notifications/${item._id}/read`).catch(() => {});
       setItems((prev) =>

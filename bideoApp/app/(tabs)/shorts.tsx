@@ -127,14 +127,13 @@ export default function ShortsScreen() {
 
     const syncTargetShort = async () => {
       // Check if it's already in the loaded list
-      const existingIndex = shorts.findIndex((s) => s._id === initialShortId);
-      if (existingIndex !== -1) {
-        if (existingIndex !== activeVideoIndex) {
-          setActiveVideoIndex(existingIndex);
-        }
+      const existing = shortsRef.current.find((s) => s._id === initialShortId);
+      if (existing) {
+        setShorts((prev) => [existing, ...prev.filter((s) => s._id !== initialShortId)]);
+        setActiveVideoIndex(0);
         setTimeout(() => {
-          flatListRef.current?.scrollToIndex({ index: existingIndex, animated: false });
-        }, 80);
+          flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+        }, 50);
         return;
       }
 
@@ -146,8 +145,8 @@ export default function ShortsScreen() {
           setShorts((prev) => [formatted, ...prev.filter((s) => s._id !== initialShortId)]);
           setActiveVideoIndex(0);
           setTimeout(() => {
-            flatListRef.current?.scrollToIndex({ index: 0, animated: false });
-          }, 80);
+            flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+          }, 50);
         }
       } catch (err) {
         console.error('Failed to fetch initial short by id:', err);
@@ -218,8 +217,8 @@ export default function ShortsScreen() {
         const finalIdx = index !== -1 ? index : 0;
         setActiveVideoIndex(finalIdx);
         setTimeout(() => {
-          flatListRef.current?.scrollToIndex({ index: finalIdx, animated: false });
-        }, 100);
+          flatListRef.current?.scrollToOffset({ offset: finalIdx * containerHeight, animated: false });
+        }, 50);
       }
     } catch (e) {
       console.log('Failed to load shorts', e);
@@ -623,6 +622,9 @@ export default function ShortsScreen() {
           offset: containerHeight * index,
           index,
         })}
+        onScrollToIndexFailed={(info) => {
+          flatListRef.current?.scrollToOffset({ offset: info.index * containerHeight, animated: false });
+        }}
         renderItem={({ item, index }) => {
           if (item.isAd) {
             return (
