@@ -343,6 +343,45 @@ const Users = () => {
     });
   };
 
+  const promptToggleMonetize = (u) => {
+    const isMonetizing = !u.isMonetized;
+    setConfirmDialog({
+      title: isMonetizing ? "Directly Monetize Channel" : "Revoke Channel Monetization",
+      message: isMonetizing
+        ? `Are you sure you want to directly approve monetization for "${u.name || "this user"}" (@${u.channelName || u.name || "channel"})? This will immediately enable monetization and video view earnings without requiring 3 video audits or verification documents. They can start earning from day 1!`
+        : `Are you sure you want to revoke monetization for "${u.name || "this user"}"? They will stop earning from video views until re-enabled.`,
+      confirmText: isMonetizing ? "Approve Monetization" : "Revoke Monetization",
+      confirmClass: isMonetizing
+        ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+        : "bg-rose-600 hover:bg-rose-700 text-white",
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          const token = localStorage.getItem("admin_token");
+          const res = await fetch(`${API_URL}/api/users/${u._id}/monetize`, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            credentials: "include",
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.message || "Failed to update channel monetization");
+          await fetchUsers();
+        } catch (err) {
+          setConfirmDialog({
+            title: "Error",
+            message: err.message,
+            confirmText: "OK",
+            confirmClass: "bg-brand hover:bg-brand-dark text-white",
+            onConfirm: () => setConfirmDialog(null),
+          });
+        }
+      },
+    });
+  };
+
   const calculateDaysRemaining = (scheduledDateStr) => {
     if (!scheduledDateStr) return "Pending";
     const diff = new Date(scheduledDateStr).getTime() - Date.now();
@@ -612,6 +651,23 @@ const Users = () => {
                             )
                           ) : (
                             <>
+                              <button
+                                type="button"
+                                onClick={() => promptToggleMonetize(u)}
+                                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
+                                  u.isMonetized
+                                    ? "bg-emerald-50 border border-emerald-300 text-emerald-700 hover:bg-emerald-100"
+                                    : "bg-emerald-600 border border-emerald-600 text-white hover:bg-emerald-700 shadow-xs"
+                                }`}
+                                title={
+                                  u.isMonetized
+                                    ? "Channel is monetized — click to revoke"
+                                    : "Click to directly monetize channel and enable earnings from day 1"
+                                }
+                              >
+                                {u.isMonetized ? "✓ Monetized" : "+ Monetize"}
+                              </button>
+
                               {u.role !== "admin" && (
                                 <button
                                   onClick={() => promptToggleBlock(u)}

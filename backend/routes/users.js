@@ -28,6 +28,7 @@ const {
   requestWebDeletion,
   toggleVerifyUser,
   toggleBlockUser,
+  toggleMonetizeUser,
   sendEmailOtp,
   verifyEmailOtp,
   updateEmail,
@@ -70,6 +71,7 @@ router.post('/:id/cancel-deletion', cancelDeletionByAdmin);
 router.post('/:id/reject-recovery', rejectRecoveryByAdmin);
 router.put('/:id/verify', toggleVerifyUser);
 router.put('/:id/block', toggleBlockUser);
+router.put('/:id/monetize', toggleMonetizeUser);
 
 router.route('/').get(getUsers).post(createUser);
 router.route('/:id').get(getUser).put(updateUser).delete(deleteUser);

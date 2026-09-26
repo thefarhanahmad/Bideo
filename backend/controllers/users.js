@@ -880,6 +880,82 @@ exports.toggleBlockUser = async (req, res, next) => {
   }
 };
 
+// @desc    Directly monetize or unmonetize user channel (Admin)
+// @route   PUT /api/users/:id/monetize
+// @access  Private/Admin
+exports.toggleMonetizeUser = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    let application = await MonetizationApplication.findOne({ user: user._id });
+    const isCurrentlyMonetized = application && application.status === 'approved';
+
+    if (isCurrentlyMonetized) {
+      application.status = 'rejected';
+      application.reviewMessage = 'Monetization revoked by Administrator';
+      application.updatedAt = Date.now();
+      await application.save();
+
+      notifyAndPush({
+        recipient: user._id,
+        actor: req.user.id,
+        type: 'system',
+        title: 'Monetization Status Update',
+        message: 'Your channel monetization status has been updated by administrator.',
+      }).catch(() => {});
+
+      return res.status(200).json({
+        success: true,
+        isMonetized: false,
+        message: `Monetization revoked for ${user.channelName || user.name}`,
+        data: application,
+      });
+    } else {
+      if (application) {
+        application.status = 'approved';
+        application.reviewMessage = 'Directly approved by Administrator';
+        application.updatedAt = Date.now();
+        await application.save();
+      } else {
+        application = await MonetizationApplication.create({
+          user: user._id,
+          status: 'approved',
+          name: user.name || user.channelName || 'Direct Monetized User',
+          phone: user.phone || '0000000000',
+          adharNumber: 'DIRECT_APPROVED',
+          upiId: user.email || '',
+          bankDetails: {
+            bankName: 'Direct Approved by Admin',
+            accountNumber: 'DIRECT_APPROVED',
+            ifscCode: 'DIRECT0001',
+          },
+          reviewMessage: 'Directly approved by Administrator',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        });
+      }
+
+      notifyAndPush({
+        recipient: user._id,
+        actor: req.user.id,
+        type: 'system',
+        title: 'Monetization Approved! ⭐',
+        message: 'Congratulations! Your channel monetization has been approved. You are now earning from video views! 🎉',
+      }).catch(() => {});
+
+      return res.status(200).json({
+        success: true,
+        isMonetized: true,
+        message: `Channel ${user.channelName || user.name} is now directly monetized!`,
+        data: application,
+      });
+    }
+  } catch (err) {
+    next(err);
+  }
+};
+
 // @desc    Add video to watch history
 // @route   POST /api/users/history
 // @access  Private
@@ -1072,11 +1148,16 @@ exports.getMonetizationStatus = async (req, res, next) => {
 
     // 2. Count passed videos
     const passedVideosCount = reviews.filter(r => r.status === 'passed').length;
-    const step1Completed = passedVideosCount >= 3;
+    let step1Completed = passedVideosCount >= 3;
 
     // 3. Fetch monetization application
     const application = await MonetizationApplication.findOne({ user: userId });
     const step2Completed = application ? application.status === 'approved' : false;
+
+    // If channel is approved for monetization by Admin, step 1 is automatically satisfied
+    if (step2Completed) {
+      step1Completed = true;
+    }
 
     // 4. Settle any matured credits and fetch user earnings breakdown
     await processPendingWalletCredits().catch(() => {});
