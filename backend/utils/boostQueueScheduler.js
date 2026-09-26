@@ -4,11 +4,13 @@ const VideoBoost = require('../models/VideoBoost');
 const Notification = require('../models/Notification');
 const { sendPushForEvent } = require('./pushNotification');
 
+const MAX_ACTIVE_BOOSTS = 4;
+
 /**
  * Evaluates and rotates the pinned video boost queue:
  * 1. Completes expired active boosts and unpins their videos.
- * 2. Promotes the next queued boost to active status, pinning the video.
- * 3. Recalculates queue positions and estimated start times for all queued items.
+ * 2. Promotes the next queued boosts to active status (up to 4 concurrent active slots).
+ * 3. Recalculates queue positions and estimated start times across all 4 slots for queued items.
  */
 const processBoostQueue = async () => {
   try {
@@ -31,21 +33,24 @@ const processBoostQueue = async () => {
       });
     }
 
-    // 2. Check if there is an active boost running
-    let activeBoost = await VideoBoost.findOne({
+    // 2. Fetch currently running active boosts
+    let activeBoosts = await VideoBoost.find({
       status: 'active',
       expiresAt: { $gt: now },
     }).populate('video', 'title');
 
-    // If no active boost is running, activate the oldest queued boost
-    if (!activeBoost) {
-      const nextBoost = await VideoBoost.findOne({
+    // 3. Promote queued boosts if any of the 4 concurrent highlight slots are open
+    const slotsAvailable = MAX_ACTIVE_BOOSTS - activeBoosts.length;
+
+    if (slotsAvailable > 0) {
+      const nextBoosts = await VideoBoost.find({
         status: 'queued',
       })
         .sort({ createdAt: 1 })
+        .limit(slotsAvailable)
         .populate('video', 'title');
 
-      if (nextBoost) {
+      for (const nextBoost of nextBoosts) {
         nextBoost.status = 'active';
         nextBoost.startedAt = now;
         nextBoost.expiresAt = new Date(now.getTime() + nextBoost.durationHours * 3600 * 1000);
@@ -59,12 +64,12 @@ const processBoostQueue = async () => {
           boostType: 'user',
         });
 
-        activeBoost = nextBoost;
+        activeBoosts.push(nextBoost);
 
-        // Send notification to the creator
+        // Send push & in-app notification to the creator
         try {
           const videoTitle = nextBoost.video?.title || 'Your video';
-          const message = `🚀 "${videoTitle}" is now pinned at the top of the Home Feed for ${nextBoost.durationHours} hours!`;
+          const message = `🚀 "${videoTitle}" is now pinned in the top highlights on the Home Feed for ${nextBoost.durationHours} hours!`;
           await Notification.create({
             recipient: nextBoost.user,
             actor: nextBoost.user,
@@ -85,22 +90,26 @@ const processBoostQueue = async () => {
       }
     }
 
-    // 3. Recalculate queue positions and estimated start times for all remaining queued boosts
-    const queuedBoosts = await VideoBoost.find({
+    // 4. Recalculate queue positions and estimated start times across all 4 slots for remaining queued boosts
+    const remainingQueued = await VideoBoost.find({
       status: 'queued',
     }).sort({ createdAt: 1 });
 
-    let cursorTime = activeBoost && activeBoost.expiresAt
-      ? new Date(activeBoost.expiresAt.getTime())
-      : new Date(now.getTime());
+    const slotEndTimes = activeBoosts.map((b) => new Date(b.expiresAt).getTime());
+    while (slotEndTimes.length < MAX_ACTIVE_BOOSTS) {
+      slotEndTimes.push(now.getTime());
+    }
 
-    for (let i = 0; i < queuedBoosts.length; i++) {
-      const qBoost = queuedBoosts[i];
+    for (let i = 0; i < remainingQueued.length; i++) {
+      const qBoost = remainingQueued[i];
+      const minSlotIdx = slotEndTimes.indexOf(Math.min(...slotEndTimes));
+      const startTime = new Date(Math.max(now.getTime(), slotEndTimes[minSlotIdx]));
+
       qBoost.queuePosition = i + 1;
-      qBoost.estimatedStartTime = new Date(cursorTime.getTime());
+      qBoost.estimatedStartTime = startTime;
       await qBoost.save();
 
-      cursorTime = new Date(cursorTime.getTime() + qBoost.durationHours * 3600 * 1000);
+      slotEndTimes[minSlotIdx] = startTime.getTime() + qBoost.durationHours * 3600 * 1000;
     }
   } catch (err) {
     console.error('Error processing video boost queue:', err);

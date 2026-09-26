@@ -73,8 +73,17 @@ export default function BoostScreen() {
   const [submittingBoost, setSubmittingBoost] = useState(false);
 
   const [activeRemainingSecs, setActiveRemainingSecs] = useState<number>(0);
+  const [nowTick, setNowTick] = useState<number>(Date.now());
 
   const cooldownIntervalRef = useRef<any>(null);
+
+  // Live timer tick for all active boost countdowns
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNowTick(Date.now());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -331,6 +340,9 @@ export default function BoostScreen() {
   const dailyAds = data?.dailyAds || { watched: 0, total: 16, remaining: 16, canWatch: false, sessionCount: 0 };
   const canBoostNow = userCoins >= 100;
   const activeBoost = data?.activeBoost;
+  const userActiveBoosts: any[] = (data?.activeBoosts && data.activeBoosts.length > 0)
+    ? data.activeBoosts
+    : (activeBoost ? [activeBoost] : []);
   const queuedBoosts = data?.queuedBoosts || [];
 
   const filteredVideos = eligibleVideos.filter((v) =>
@@ -687,47 +699,59 @@ export default function BoostScreen() {
             )}
           </View>
 
-          {/* Active Live Highlighted Video (if any) */}
-          {activeBoost && (
-            <View style={styles.activeBoostCard}>
-              <View style={styles.activeBadgeRow}>
-                <View style={styles.liveBadge}>
-                  <View style={styles.liveDot} />
-                  <Text style={styles.liveBadgeText}>LIVE ON FEED</Text>
-                </View>
-                <Text style={styles.remainingTimeText}>
-                  Ends in {formatCountdown(activeRemainingSecs || activeBoost.remainingSeconds)}
-                </Text>
-              </View>
+          {/* Active Live Highlighted Videos (supports multiple up to 4) */}
+          {userActiveBoosts.length > 0 && (
+            <View style={{ marginBottom: 16 }}>
+              {userActiveBoosts.map((ab: any, idx: number) => {
+                const expiresMs = ab.expiresAt ? new Date(ab.expiresAt).getTime() : 0;
+                const remSecs = expiresMs > 0
+                  ? Math.max(0, Math.ceil((expiresMs - nowTick) / 1000))
+                  : (ab.remainingSeconds || 0);
+                const totalSecs = (ab.durationHours || 1) * 3600;
+                const progressRatio = Math.max(5, Math.min(100, (remSecs / totalSecs) * 100));
 
-              <View style={styles.boostVideoRow}>
-                {activeBoost.video?.thumbnail && (
-                  <Image source={{ uri: activeBoost.video.thumbnail }} style={styles.boostThumb} contentFit="cover" />
-                )}
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={styles.boostVidTitle} numberOfLines={2}>
-                    {activeBoost.video?.title || 'Highlighted Video'}
-                  </Text>
-                  <Text style={styles.boostVidMeta}>
-                    {formatViews(activeBoost.video?.views || 0)} views • {activeBoost.durationHours}h Tier
-                  </Text>
-                </View>
-              </View>
+                return (
+                  <View key={ab._id || idx} style={[styles.activeBoostCard, idx > 0 && { marginTop: 12, marginBottom: 0 }]}>
+                    <View style={styles.activeBadgeRow}>
+                      <View style={styles.liveBadge}>
+                        <View style={styles.liveDot} />
+                        <Text style={styles.liveBadgeText}>
+                          {userActiveBoosts.length > 1 ? `LIVE ON FEED (${idx + 1}/${userActiveBoosts.length})` : 'LIVE ON FEED'}
+                        </Text>
+                      </View>
+                      <Text style={styles.remainingTimeText}>
+                        Ends in {formatCountdown(remSecs)}
+                      </Text>
+                    </View>
 
-              {/* Progress bar */}
-              <View style={styles.progressBarWrap}>
-                <View
-                  style={[
-                    styles.progressBarFill,
-                    {
-                      width: `${Math.max(
-                        5,
-                        Math.min(100, ((activeRemainingSecs || activeBoost.remainingSeconds) / (activeBoost.durationHours * 3600)) * 100)
-                      )}%`,
-                    },
-                  ]}
-                />
-              </View>
+                    <View style={styles.boostVideoRow}>
+                      {ab.video?.thumbnail && (
+                        <Image source={{ uri: ab.video.thumbnail }} style={styles.boostThumb} contentFit="cover" />
+                      )}
+                      <View style={{ flex: 1, marginLeft: 12 }}>
+                        <Text style={styles.boostVidTitle} numberOfLines={2}>
+                          {ab.video?.title || 'Highlighted Video'}
+                        </Text>
+                        <Text style={styles.boostVidMeta}>
+                          {formatViews(ab.video?.views || 0)} views • {ab.durationHours}h Tier
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Progress bar */}
+                    <View style={styles.progressBarWrap}>
+                      <View
+                        style={[
+                          styles.progressBarFill,
+                          {
+                            width: `${progressRatio}%`,
+                          },
+                        ]}
+                      />
+                    </View>
+                  </View>
+                );
+              })}
             </View>
           )}
 
@@ -799,19 +823,21 @@ export default function BoostScreen() {
               </View>
             </View>
 
-            {/* Line 2: Live video */}
+            {/* Line 2: Live highlights */}
             <View style={styles.globalQueueItem}>
-              {data?.globalQueue?.currentActive ? (
+              {(data?.globalQueue?.activeCount || 0) > 0 ? (
                 <>
                   <View style={[styles.globalQueueIconWrap, styles.globalQueueLiveIconWrap]}>
                     <View style={styles.globalQueueLiveDot} />
                   </View>
-                  <Text style={styles.globalQueueLiveLabel}>Live video:</Text>
+                  <Text style={styles.globalQueueLiveLabel}>Live highlights:</Text>
                   <View style={styles.globalQueueLiveBadge}>
-                    <Text style={styles.globalQueueLiveBadgeText}>LIVE</Text>
+                    <Text style={styles.globalQueueLiveBadgeText}>{data?.globalQueue?.activeCount || 1}/4 LIVE</Text>
                   </View>
                   <Text style={styles.globalQueueLiveTitle} numberOfLines={1}>
-                    "{data.globalQueue.currentActive.videoTitle || 'Active Video'}"
+                    {(data?.globalQueue?.activeCount || 1) > 1
+                      ? `${data?.globalQueue?.activeCount} videos live (shuffled on refresh)`
+                      : `"${data?.globalQueue?.activeHighlights?.[0]?.videoTitle || data?.globalQueue?.currentActive?.videoTitle || 'Active Video'}"`}
                   </Text>
                 </>
               ) : (
@@ -819,16 +845,33 @@ export default function BoostScreen() {
                   <View style={[styles.globalQueueIconWrap, styles.globalQueueOpenIconWrap]}>
                     <Ionicons name="flash" size={13} color="#2E7D32" />
                   </View>
-                  <Text style={styles.globalQueueLiveLabel}>Live video:</Text>
+                  <Text style={styles.globalQueueLiveLabel}>Live highlights:</Text>
                   <View style={styles.globalQueueOpenBadge}>
-                    <Text style={styles.globalQueueOpenBadgeText}>OPEN</Text>
+                    <Text style={styles.globalQueueOpenBadgeText}>0/4 ACTIVE</Text>
                   </View>
                   <Text style={styles.globalQueueOpenText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
-                    Slot open! Highlight goes live immediately
+                    All 4 slots open! Highlight goes live immediately
                   </Text>
                 </>
               )}
             </View>
+
+            {/* If multiple global highlights are live, display all of them */}
+            {data?.globalQueue?.activeHighlights && data.globalQueue.activeHighlights.length > 1 && (
+              <View style={styles.globalHighlightsWrap}>
+                {data.globalQueue.activeHighlights.map((hl: any, i: number) => (
+                  <View key={hl._id || i} style={styles.globalHighlightRow}>
+                    <View style={styles.globalHighlightDot} />
+                    <Text style={styles.globalHighlightTitle} numberOfLines={1}>
+                      {hl.videoTitle || 'Highlighted Video'}
+                    </Text>
+                    <Text style={styles.globalHighlightChannel} numberOfLines={1}>
+                      @{hl.channelName || 'creator'}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
         </ScrollView>
       )}
@@ -1073,9 +1116,9 @@ export default function BoostScreen() {
             <View style={styles.queueNoteBox}>
               <Ionicons name="information-circle-outline" size={16} color="#666" />
               <Text style={styles.queueNoteText}>
-                {data?.globalQueue?.totalQueued === 0 && !data?.globalQueue?.currentActive
-                  ? 'Your video will be highlighted at the top of the Home Feed immediately!'
-                  : 'A video is currently live. Your video is scheduled Up Next and will go live automatically right after!'}
+                {data?.globalQueue?.totalQueued === 0 && (data?.globalQueue?.activeCount !== undefined ? data.globalQueue.activeCount < 4 : !data?.globalQueue?.currentActive)
+                  ? 'A highlight slot is open! Your video will be pinned in the top highlights on the Home Feed immediately!'
+                  : 'All 4 highlight slots are currently live. Your video is queued and will go live automatically as soon as a slot opens!'}
               </Text>
             </View>
 
@@ -1800,6 +1843,36 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#2E7D32',
     flex: 1,
+  },
+  globalHighlightsWrap: {
+    backgroundColor: Colors.white,
+    borderRadius: 10,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: '#F0E5F7',
+    gap: 6,
+  },
+  globalHighlightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  globalHighlightDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#2E7D32',
+  },
+  globalHighlightTitle: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#222222',
+    flex: 1,
+  },
+  globalHighlightChannel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#8E24AA',
   },
 
   // Modal styles

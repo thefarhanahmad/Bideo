@@ -19,6 +19,8 @@ const BOOST_TIERS = {
   24: { hours: 24, coins: 1000, label: '24 Hours', discount: 'Save 1,400 coins' },
 };
 
+const MAX_ACTIVE_BOOSTS = 4;
+
 /**
  * Helper to normalize and get user ad limits & cooldown status
  * Production-grade: 3 ads instant, 10 min session cooldown, and 16 ads resets after 1 hour.
@@ -128,12 +130,16 @@ exports.getBoostStatus = async (req, res) => {
       await user.save();
     }
 
-    // Fetch user's active boost
-    const activeBoost = await VideoBoost.findOne({
+    // Fetch user's active boosts (supports multiple up to 4)
+    const userActiveBoosts = await VideoBoost.find({
       user: req.user.id,
       status: 'active',
       expiresAt: { $gt: new Date() },
-    }).populate('video', 'title thumbnail views duration');
+    })
+      .sort({ startedAt: -1 })
+      .populate('video', 'title thumbnail views duration');
+
+    const activeBoost = userActiveBoosts[0] || null;
 
     // Fetch user's queued boosts
     const queuedBoosts = await VideoBoost.find({
@@ -145,12 +151,14 @@ exports.getBoostStatus = async (req, res) => {
 
     // Global queue stats
     const totalQueuedCount = await VideoBoost.countDocuments({ status: 'queued' });
-    const globalActiveBoost = await VideoBoost.findOne({
+    const globalActiveBoosts = await VideoBoost.find({
       status: 'active',
       expiresAt: { $gt: new Date() },
     })
       .populate('video', 'title thumbnail')
       .populate('user', 'name channelName');
+
+    const globalActiveBoost = globalActiveBoosts[0] || null;
 
     res.status(200).json({
       success: true,
@@ -184,6 +192,15 @@ exports.getBoostStatus = async (req, res) => {
               remainingSeconds: Math.max(0, Math.ceil((new Date(activeBoost.expiresAt).getTime() - Date.now()) / 1000)),
             }
           : null,
+        activeBoosts: userActiveBoosts.map((b) => ({
+          _id: b._id,
+          video: b.video,
+          coinsSpent: b.coinsSpent,
+          durationHours: b.durationHours,
+          startedAt: b.startedAt,
+          expiresAt: b.expiresAt,
+          remainingSeconds: Math.max(0, Math.ceil((new Date(b.expiresAt).getTime() - Date.now()) / 1000)),
+        })),
         queuedBoosts: queuedBoosts.map((b) => ({
           _id: b._id,
           video: b.video,
@@ -194,6 +211,14 @@ exports.getBoostStatus = async (req, res) => {
         })),
         globalQueue: {
           totalQueued: totalQueuedCount,
+          activeCount: globalActiveBoosts.length,
+          maxSlots: MAX_ACTIVE_BOOSTS,
+          isFull: globalActiveBoosts.length >= MAX_ACTIVE_BOOSTS,
+          activeHighlights: globalActiveBoosts.map((b) => ({
+            videoTitle: b.video?.title,
+            channelName: b.user?.channelName || b.user?.name,
+            expiresAt: b.expiresAt,
+          })),
           currentActive: globalActiveBoost
             ? {
                 videoTitle: globalActiveBoost.video?.title,
@@ -388,15 +413,15 @@ exports.createVideoBoost = async (req, res) => {
     await processBoostQueue();
 
     const now = new Date();
-    const currentActive = await VideoBoost.findOne({
+    const activeBoostsCount = await VideoBoost.countDocuments({
       status: 'active',
       expiresAt: { $gt: now },
     });
 
     let newBoost;
 
-    if (!currentActive) {
-      // Immediately activate
+    if (activeBoostsCount < MAX_ACTIVE_BOOSTS) {
+      // Immediately activate because there is an open slot (up to 4 concurrent)
       const expiresAt = new Date(now.getTime() + tier.hours * 3600 * 1000);
       newBoost = await VideoBoost.create({
         video: video._id,
@@ -416,13 +441,30 @@ exports.createVideoBoost = async (req, res) => {
         boostType: 'user',
       });
     } else {
-      // Queue behind existing boosts
-      const lastQueued = await VideoBoost.findOne({ status: 'queued' }).sort({ estimatedStartTime: -1 });
-      const baseTime = lastQueued && lastQueued.estimatedStartTime
-        ? new Date(new Date(lastQueued.estimatedStartTime).getTime() + lastQueued.durationHours * 3600 * 1000)
-        : new Date(currentActive.expiresAt.getTime());
+      // All 4 slots are full; queue behind existing boosts across the 4 slots
+      const activeBoosts = await VideoBoost.find({
+        status: 'active',
+        expiresAt: { $gt: now },
+      }).select('expiresAt');
 
-      const queuedCount = await VideoBoost.countDocuments({ status: 'queued' });
+      const queuedBoosts = await VideoBoost.find({
+        status: 'queued',
+      }).select('durationHours');
+
+      const slotEndTimes = activeBoosts.map((b) => new Date(b.expiresAt).getTime());
+      while (slotEndTimes.length < MAX_ACTIVE_BOOSTS) {
+        slotEndTimes.push(now.getTime());
+      }
+
+      for (const q of queuedBoosts) {
+        const minSlotIdx = slotEndTimes.indexOf(Math.min(...slotEndTimes));
+        const startTime = Math.max(now.getTime(), slotEndTimes[minSlotIdx]);
+        slotEndTimes[minSlotIdx] = startTime + q.durationHours * 3600 * 1000;
+      }
+
+      const nextMinSlot = Math.min(...slotEndTimes);
+      const estimatedStartTime = new Date(Math.max(now.getTime(), nextMinSlot));
+      const queuedCount = queuedBoosts.length;
 
       newBoost = await VideoBoost.create({
         video: video._id,
@@ -431,7 +473,7 @@ exports.createVideoBoost = async (req, res) => {
         durationHours: tier.hours,
         status: 'queued',
         queuePosition: queuedCount + 1,
-        estimatedStartTime: baseTime,
+        estimatedStartTime,
       });
     }
 
@@ -441,7 +483,7 @@ exports.createVideoBoost = async (req, res) => {
     res.status(201).json({
       success: true,
       message: newBoost.status === 'active'
-        ? `🚀 Success! "${video.title}" is now pinned at the top of the Home Feed!`
+        ? `🚀 Success! "${video.title}" is now pinned in the top highlights on the Home Feed!`
         : `⏳ Success! "${video.title}" is queued (Position #${newBoost.queuePosition}).`,
       data: {
         boost: newBoost,

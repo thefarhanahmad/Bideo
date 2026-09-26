@@ -634,16 +634,75 @@ exports.getVideos = async (req, res, next) => {
 
     if (isFeedRequest) {
       // Pure randomized feed across the entire eligible database collection
-      // Query candidate video metadata (IDs, pinned status, short vs long)
-      const candidates = await Video.find(query).select("_id isPinned isShort").lean();
+      // Query candidate video metadata (IDs, pinned status, short vs long, boostType, boostExpiresAt)
+      const candidates = await Video.find(query)
+        .select("_id isPinned isShort boostType boostExpiresAt")
+        .lean();
       const total = candidates.length;
 
+      const now = new Date();
       const pinnedCandidates = candidates.filter(
         (v) => v.isPinned === true || v.isPinned === "true",
       );
-      const regularCandidates = candidates.filter(
+      const rawRegularCandidates = candidates.filter(
         (v) => !v.isPinned && v.isPinned !== "true",
       );
+
+      // Distinguish between Admin-pinned videos and User-boosted videos:
+      // 1. Admin pinned: boostType === 'admin', or not a user boost and has no boostExpiresAt
+      const adminPinnedCandidates = pinnedCandidates.filter(
+        (v) => v.boostType === "admin" || (!v.boostExpiresAt && v.boostType !== "user"),
+      );
+
+      // 2. User boosted: boostType === 'user' or has boostExpiresAt (and not expired)
+      const userPinnedCandidates = pinnedCandidates.filter((v) => {
+        if (v.boostType === "admin") return false;
+        const isUserBoost = v.boostType === "user" || Boolean(v.boostExpiresAt);
+        if (!isUserBoost) return false;
+        return !v.boostExpiresAt || new Date(v.boostExpiresAt) > now;
+      });
+
+      // Up to 4 user-boosted videos, shuffled on each page 1 request
+      // so all boosted videos get equal chance to appear at Position #1, #3, #4, #5 upon refresh
+      const shuffledUserPinned = shuffle(userPinnedCandidates).slice(0, 4);
+
+      // Build ordered pinned highlights:
+      // - If Admin pinned video exists: Admin pinned video is FIXED at Position #2 (index 1) without shuffling.
+      // - Shuffled user boosted videos occupy Positions #1, #3, #4, #5.
+      // - If no Admin pinned video exists: user boosted videos occupy Positions #1, #2, #3, #4 shuffled.
+      // - If no user boosts exist: Admin pinned video is at Position #1.
+      let orderedPinned = [];
+
+      if (adminPinnedCandidates.length > 0) {
+        const primaryAdmin = adminPinnedCandidates[0];
+        if (shuffledUserPinned.length >= 1) {
+          // Position 1: 1st shuffled user boosted video
+          // Position 2: Admin-pinned video (fixed at position #2)
+          // Position 3, 4, 5: Remaining shuffled user boosted videos
+          orderedPinned = [
+            shuffledUserPinned[0]._id,
+            primaryAdmin._id,
+            ...shuffledUserPinned.slice(1).map((v) => v._id),
+          ];
+        } else {
+          // 0 user boosts: admin pinned video at Position 1
+          orderedPinned = [primaryAdmin._id];
+        }
+
+        // If multiple videos were pinned by admin, place secondary admin videos after user boosts
+        if (adminPinnedCandidates.length > 1) {
+          orderedPinned.push(...adminPinnedCandidates.slice(1).map((v) => v._id));
+        }
+      } else {
+        orderedPinned = shuffledUserPinned.map((v) => v._id);
+      }
+
+      const pinnedList = page === 1 ? orderedPinned : [];
+
+      // If any pinned videos remain beyond the selected list, include them in regular feed so no videos are dropped
+      const pinnedIdSet = new Set(orderedPinned.map((id) => id.toString()));
+      const extraPinned = pinnedCandidates.filter((v) => !pinnedIdSet.has(v._id.toString()));
+      const regularCandidates = [...rawRegularCandidates, ...extraPinned];
 
       let chosenIds = [];
 
@@ -669,9 +728,6 @@ exports.getVideos = async (req, res, next) => {
         const selectedLong = shuffledLong.slice(longSkip, longSkip + targetLong);
         const selectedShorts = shuffledShorts.slice(shortSkip, shortSkip + targetShorts);
 
-        // Pinned videos appear on page 1 at the top
-        const pinnedList = page === 1 ? pinnedCandidates.map((v) => v._id) : [];
-
         chosenIds = [
           ...pinnedList,
           ...selectedLong.map((v) => v._id),
@@ -680,7 +736,6 @@ exports.getVideos = async (req, res, next) => {
       } else {
         // Targeted feed (e.g. Shorts tab type='short' or category filter)
         const shuffledRegular = shuffle(regularCandidates);
-        const pinnedList = page === 1 ? pinnedCandidates.map((v) => v._id) : [];
         const effectiveLimit = Math.max(0, limit - pinnedList.length);
         const regularSkip = (page - 1) * limit;
 
@@ -1233,6 +1288,8 @@ exports.uploadVideo = async (req, res, next) => {
       duration: duration,
       isShort: uploadType === "short",
       isPinned,
+      boostType: isPinned ? "admin" : "none",
+      boostExpiresAt: null,
       aspectRatio,
       owner: targetOwnerId,
       visibility: req.body.visibility || "public",
@@ -1332,8 +1389,13 @@ exports.updateVideo = async (req, res, next) => {
     }
 
     if (isAdmin && req.body.isPinned !== undefined) {
-      updates.isPinned =
+      const pinned =
         req.body.isPinned === "true" || req.body.isPinned === true;
+      updates.isPinned = pinned;
+      updates.boostType = pinned ? "admin" : "none";
+      if (!pinned) {
+        updates.boostExpiresAt = null;
+      }
     }
 
     if (req.body.duration !== undefined && req.body.duration !== null) {
