@@ -67,6 +67,10 @@ const userSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  followingCount: {
+    type: Number,
+    default: 0,
+  },
   followingChannels: [
     {
       type: mongoose.Schema.ObjectId,

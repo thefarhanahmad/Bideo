@@ -132,10 +132,25 @@ exports.createPost = async (req, res, next) => {
     const originalImageSize = Number(req.body.originalImageSize || 0);
     const compressedImageSize = req.file ? req.file.size : 0;
 
+    let ownerId = req.user.id;
+    if (req.user && req.user.role === 'admin' && req.body.owner && mongoose.isValidObjectId(req.body.owner)) {
+      ownerId = req.body.owner;
+    }
+
+    let previewMedia = null;
+    if (req.body.previewMedia) {
+      try {
+        previewMedia = typeof req.body.previewMedia === 'string'
+          ? JSON.parse(req.body.previewMedia)
+          : req.body.previewMedia;
+      } catch {}
+    }
+
     const post = await Post.create({
-      owner: req.user.id,
+      owner: ownerId,
       text,
       imageUrl,
+      previewMedia,
       visibility: req.body.visibility || 'public',
       originalImageSize,
       compressedImageSize,
@@ -146,7 +161,7 @@ exports.createPost = async (req, res, next) => {
 
     // Asynchronously notify creator's followers of the new post
     notifyFollowersOfUpload({
-      creatorId: req.user.id,
+      creatorId: ownerId,
       post,
     }).catch((notifErr) => console.error('Failed to notify followers of post upload:', notifErr));
 
@@ -199,6 +214,17 @@ exports.updatePost = async (req, res, next) => {
 
     post.text = text;
     post.imageUrl = imageUrl;
+    if (req.body.previewMedia !== undefined) {
+      if (!req.body.previewMedia || req.body.previewMedia === 'null') {
+        post.previewMedia = undefined;
+      } else {
+        try {
+          post.previewMedia = typeof req.body.previewMedia === 'string'
+            ? JSON.parse(req.body.previewMedia)
+            : req.body.previewMedia;
+        } catch {}
+      }
+    }
     if (req.body.visibility) post.visibility = req.body.visibility;
     await post.save();
 

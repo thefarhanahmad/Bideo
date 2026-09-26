@@ -100,6 +100,7 @@ const Videos = ({ isServerOnly = false }) => {
   const [showDeletePost, setShowDeletePost] = useState(false);
   const [deletingPost, setDeletingPost] = useState(null);
   const [postSubmitting, setPostSubmitting] = useState(false);
+  const [showAddPost, setShowAddPost] = useState(false);
 
   const [showAdd, setShowAdd] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
@@ -321,6 +322,30 @@ const Videos = ({ isServerOnly = false }) => {
     return () => clearTimeout(timer);
   }, [fetchVideos, fetchPosts, search, activeTab]);
 
+  const handleCreatePost = async (formData) => {
+    setPostSubmitting(true);
+    try {
+      const token = localStorage.getItem("admin_token");
+      const res = await fetch(`${API}/api/posts`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to create community post");
+      setShowAddPost(false);
+      await fetchPosts();
+      await fetchPostsCount();
+    } catch (err) {
+      alert(err.message || "Failed to upload community post");
+    } finally {
+      setPostSubmitting(false);
+    }
+  };
+
   const handleUpdatePost = async (id, payload, isFormData = false) => {
     setPostSubmitting(true);
     try {
@@ -408,10 +433,10 @@ const Videos = ({ isServerOnly = false }) => {
   }, [fetchUsers]);
 
   useEffect(() => {
-    if (showAdd || showEdit) {
+    if (showAdd || showEdit || showAddPost) {
       fetchUsers();
     }
-  }, [showAdd, showEdit, fetchUsers]);
+  }, [showAdd, showEdit, showAddPost, fetchUsers]);
 
   const handleUpload = async (formData) => {
     const token = localStorage.getItem("admin_token");
@@ -673,32 +698,81 @@ const Videos = ({ isServerOnly = false }) => {
               </button>
             )}
             {isServerOnly ? (
-              activeTab !== "posts" && (
+              activeTab === "posts" ? (
                 <button
                   type="button"
                   onClick={() => {
                     fetchUsers();
-                    fetchCategories();
-                    setShowAdd(true);
+                    setShowAddPost(true);
                   }}
                   className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-emerald-700"
-                  title="Upload video or short directly to local server VPS disk (bypasses Cloudflare R2, zero cloud cost)"
                 >
-                  <span>🖥️ + Upload to Server ({activeTab === "shorts" ? "Short" : "Video"})</span>
+                  <span>📝 + Upload Community Post</span>
                 </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      fetchUsers();
+                      setShowAddPost(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-line bg-surface px-3 py-2 text-xs sm:text-sm font-semibold text-ink shadow-xs transition-all hover:-translate-y-0.5 hover:bg-surface/80"
+                    title="Upload community post"
+                  >
+                    <span>📝 + Post</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      fetchUsers();
+                      fetchCategories();
+                      setShowAdd(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-emerald-700"
+                    title="Upload video or short directly to local server VPS disk (bypasses Cloudflare R2, zero cloud cost)"
+                  >
+                    <span>🖥️ + Upload to Server ({activeTab === "shorts" ? "Short" : "Video"})</span>
+                  </button>
+                </>
               )
             ) : (
-              activeTab !== "posts" && (
+              activeTab === "posts" ? (
                 <button
+                  type="button"
                   onClick={() => {
                     fetchUsers();
-                    fetchCategories();
-                    setShowAdd(true);
+                    setShowAddPost(true);
                   }}
                   className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-brand transition-all hover:-translate-y-0.5 hover:bg-brand-dark"
                 >
-                  <span>+ Upload {activeTab === "shorts" ? "Short" : "Video"}</span>
+                  <span>+ Upload Community Post</span>
                 </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      fetchUsers();
+                      setShowAddPost(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-line bg-surface px-3 py-2 text-xs sm:text-sm font-semibold text-ink shadow-xs transition-all hover:-translate-y-0.5 hover:bg-surface/80"
+                    title="Upload community post"
+                  >
+                    <span>📝 + Post</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      fetchUsers();
+                      fetchCategories();
+                      setShowAdd(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-brand transition-all hover:-translate-y-0.5 hover:bg-brand-dark"
+                  >
+                    <span>+ Upload {activeTab === "shorts" ? "Short" : "Video"}</span>
+                  </button>
+                </>
               )
             )}
           </div>
@@ -1130,6 +1204,26 @@ const Videos = ({ isServerOnly = false }) => {
             isServerOnly={isServerOnly}
             onSubmit={handleUpload}
             onCancel={() => setShowAdd(false)}
+            onSwitchToPost={() => {
+              setShowAdd(false);
+              setShowAddPost(true);
+            }}
+          />
+        </Modal>
+      )}
+
+      {showAddPost && (
+        <Modal
+          title={isServerOnly ? "Upload Community Post (Direct Server Disk)" : "Upload Community Post"}
+          maxWidth="max-w-lg"
+          onClose={() => setShowAddPost(false)}
+        >
+          <CreatePostForm
+            users={users}
+            isServerOnly={isServerOnly}
+            onSubmit={handleCreatePost}
+            onCancel={() => setShowAddPost(false)}
+            submitting={postSubmitting}
           />
         </Modal>
       )}
@@ -1474,6 +1568,174 @@ const EditPostForm = ({ post, onSubmit, onCancel, submitting }) => {
   );
 };
 
+const CreatePostForm = ({ users = [], isServerOnly = false, onSubmit, onCancel, submitting }) => {
+  const [owner, setOwner] = useState("");
+  const [text, setText] = useState("");
+  const [visibility, setVisibility] = useState("public");
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [error, setError] = useState(null);
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setImageFile(file);
+      setImagePreview(URL.createObjectURL(file));
+      setError(null);
+    }
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!text.trim() && !imageFile) {
+      setError("Please provide post text or an image.");
+      return;
+    }
+    setError(null);
+    const formData = new FormData();
+    formData.append("text", text.trim());
+    formData.append("visibility", visibility);
+    if (owner) {
+      formData.append("owner", owner);
+    }
+    if (imageFile) {
+      formData.append("image", imageFile);
+      if (imageFile.size) {
+        formData.append("originalImageSize", String(imageFile.size));
+      }
+    }
+    onSubmit(formData);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {isServerOnly && (
+        <div className="rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-950 flex items-start gap-2">
+          <span>🖥️</span>
+          <span>Post media will be stored directly on local server disk (VPS) bypassing cloud storage billing.</span>
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-600">
+          ⚠️ {error}
+        </div>
+      )}
+
+      <div>
+        <label className="block text-xs font-bold uppercase tracking-wider text-muted mb-1.5">
+          Creator / Channel
+        </label>
+        <ChannelSelect
+          value={owner}
+          onChange={setOwner}
+          disabled={submitting}
+          placeholder="Default (Admin Account)"
+        />
+        <span className="block text-[11px] text-muted mt-1">
+          Post on behalf of any creator channel or leave blank to post as Admin.
+        </span>
+      </div>
+
+      <div>
+        <div className="flex justify-between items-center mb-1.5">
+          <label className="block text-xs font-bold uppercase tracking-wider text-muted">
+            Post Text Content
+          </label>
+          <span className={`text-[11px] font-medium ${text.length >= 2000 ? "text-red-500 font-bold" : "text-muted"}`}>
+            {text.length}/2000
+          </span>
+        </div>
+        <textarea
+          rows={4}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Share an update, announcement, or paste a link to a video/short/channel... (links show rich previews)"
+          disabled={submitting}
+          className="w-full rounded-xl border border-line p-3 text-sm text-ink focus:border-brand focus:outline-hidden"
+        />
+      </div>
+
+      <div>
+        <label className="block text-xs font-bold uppercase tracking-wider text-muted mb-1.5">
+          Attached Image (Optional)
+        </label>
+        {imagePreview && (
+          <div className="relative mb-2 inline-block">
+            <img
+              src={imagePreview}
+              alt="Post preview"
+              className="h-32 w-auto max-w-full rounded-xl object-cover border border-line"
+            />
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={() => {
+                setImageFile(null);
+                setImagePreview(null);
+              }}
+              className="absolute -top-2 -right-2 rounded-full bg-red-600 text-white p-1 text-xs hover:bg-red-700 shadow-sm"
+              title="Remove image"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+        <input
+          type="file"
+          accept="image/*"
+          onChange={handleFileChange}
+          disabled={submitting}
+          className="block w-full text-xs text-muted file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-brand-50 file:text-brand hover:file:bg-brand-100 cursor-pointer"
+        />
+      </div>
+
+      <div>
+        <label className="block text-xs font-bold uppercase tracking-wider text-muted mb-1.5">
+          Visibility
+        </label>
+        <select
+          value={visibility}
+          onChange={(e) => setVisibility(e.target.value)}
+          disabled={submitting}
+          className="w-full rounded-xl border border-line p-2.5 text-sm text-ink focus:border-brand focus:outline-hidden"
+        >
+          <option value="public">Public (Visible in Community feed & channel)</option>
+          <option value="private">Private (Hidden / Draft)</option>
+        </select>
+      </div>
+
+      <div className="flex justify-end gap-2 pt-3 border-t border-line">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={submitting}
+          className="rounded-full bg-surface px-4 py-2 text-sm font-semibold text-ink hover:bg-line transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={submitting}
+          className="rounded-full bg-brand px-6 py-2 text-sm font-semibold text-white shadow-brand hover:bg-brand-dark transition-colors disabled:opacity-50 flex items-center gap-2"
+        >
+          {submitting ? (
+            <>
+              <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span>Publishing Post...</span>
+            </>
+          ) : (
+            <span>Publish Post</span>
+          )}
+        </button>
+      </div>
+    </form>
+  );
+};
+
 const inputClass =
   "mt-1.5 w-full rounded-lg border border-line p-2.5 outline-none transition-colors focus:border-brand focus:ring-2 focus:ring-brand/20 text-sm";
 
@@ -1484,6 +1746,7 @@ const UploadForm = ({
   isServerOnly = false,
   onSubmit,
   onCancel,
+  onSwitchToPost,
 }) => {
   const [uploadType, setUploadType] = useState(defaultType);
   const [title, setTitle] = useState("");
@@ -1602,30 +1865,41 @@ const UploadForm = ({
 
       <div>
         <label className="block text-sm font-medium text-ink mb-1.5">Format</label>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <button
             type="button"
             disabled={uploading}
             onClick={() => setUploadType("video")}
-            className={`py-2 px-3 text-xs font-semibold rounded-xl border transition-all text-center flex items-center justify-center gap-1.5 ${
+            className={`py-2 px-2 text-xs font-semibold rounded-xl border transition-all text-center flex items-center justify-center gap-1 ${
               uploadType === "video"
                 ? "bg-brand text-white border-brand shadow-sm"
                 : "bg-surface text-ink border-line hover:bg-surface/80"
             }`}
           >
-            <span>🎬 Regular Video (Landscape)</span>
+            <span>🎬 Video</span>
           </button>
           <button
             type="button"
             disabled={uploading}
             onClick={() => setUploadType("short")}
-            className={`py-2 px-3 text-xs font-semibold rounded-xl border transition-all text-center flex items-center justify-center gap-1.5 ${
+            className={`py-2 px-2 text-xs font-semibold rounded-xl border transition-all text-center flex items-center justify-center gap-1 ${
               uploadType === "short"
                 ? "bg-brand text-white border-brand shadow-sm"
                 : "bg-surface text-ink border-line hover:bg-surface/80"
             }`}
           >
-            <span>📱 Short (Portrait 9:16)</span>
+            <span>📱 Short</span>
+          </button>
+          <button
+            type="button"
+            disabled={uploading}
+            onClick={() => {
+              if (onSwitchToPost) onSwitchToPost();
+            }}
+            className="py-2 px-2 text-xs font-semibold rounded-xl border border-line bg-surface text-ink hover:bg-brand-50 hover:text-brand hover:border-brand/40 transition-all text-center flex items-center justify-center gap-1"
+            title="Upload Community Post"
+          >
+            <span>📝 Post</span>
           </button>
         </div>
       </div>

@@ -34,6 +34,7 @@ import {
 import VerifiedBadge from '../../components/VerifiedBadge';
 import { showAlert } from '../../components/AppAlert';
 import { hapticLight, hapticSelection } from '../../utils/haptics';
+import { AppAdBanner } from '../../components/AppAds';
 
 const FALLBACK_AVATAR = 'https://via.placeholder.com/100x100.png?text=User';
 const FALLBACK_THUMBNAIL = 'https://via.placeholder.com/640x360.png?text=Bideo';
@@ -819,6 +820,9 @@ export default function ChatRoomScreen() {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.white} />
 
+      {/* Top Banner Ad */}
+      <AppAdBanner containerStyle={styles.topBannerContainer} />
+
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
@@ -1171,6 +1175,16 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: Colors.white,
+  },
+  topBannerContainer: {
+    width: '100%',
+    backgroundColor: Colors.white,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#F0F0F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 0,
+    paddingVertical: 2,
   },
   header: {
     flexDirection: 'row',

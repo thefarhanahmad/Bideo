@@ -20,7 +20,7 @@ import Colors from '../constants/Colors';
 import api from '../services/api';
 import { showAlert } from '../components/AppAlert';
 import { formatViews, formatDuration } from '../utils/formatDate';
-import { loadAndShowRewardedAd, AppAdBanner } from '../components/AppAds';
+import { loadAndShowRewardedAd, AppAdBanner, AppInterstitialAd } from '../components/AppAds';
 import { RootState } from '../redux/store';
 import { updateUser } from '../redux/slices/authSlice';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -42,6 +42,7 @@ export default function BoostScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [data, setData] = useState<any>(null);
+  const [showInterstitialAd, setShowInterstitialAd] = useState(true);
 
   // Ad Watching States
   const [isAdLoading, setIsAdLoading] = useState(false);
@@ -1299,6 +1300,8 @@ export default function BoostScreen() {
           </View>
         </View>
       </Modal>
+
+      <AppInterstitialAd visible={showInterstitialAd} onClose={() => setShowInterstitialAd(false)} />
     </View>
   );
 }

@@ -43,8 +43,13 @@ exports.follow = async (req, res, next) => {
       );
 
       await User.findByIdAndUpdate(followerId, {
-        $pull: { followingChannels: channelId }
+        $pull: { followingChannels: channelId },
+        $inc: { followingCount: -1 }
       });
+      await User.updateOne(
+        { _id: followerId, followingCount: { $lt: 0 } },
+        { $set: { followingCount: 0 } }
+      );
 
       return res.status(200).json({ success: true, message: 'Unfollowed successfully' });
     }
@@ -63,7 +68,8 @@ exports.follow = async (req, res, next) => {
     );
 
     await User.findByIdAndUpdate(followerId, {
-      $addToSet: { followingChannels: channelId }
+      $addToSet: { followingChannels: channelId },
+      $inc: { followingCount: 1 }
     });
 
     // Send in-app notification & push notification to channel owner

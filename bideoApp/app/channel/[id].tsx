@@ -367,6 +367,8 @@ export default function ChannelScreen() {
                           channelId: channel?._id || id,
                           channelName: channel?.channelName || channel?.name || 'Channel',
                           initialTab: 'followers',
+                          initialFollowersCount: String(channel?.followersCount ?? 0),
+                          initialFollowingCount: String(channel?.followingCount ?? 0),
                         },
                       })
                     }
@@ -387,6 +389,8 @@ export default function ChannelScreen() {
                           channelId: channel?._id || id,
                           channelName: channel?.channelName || channel?.name || 'Channel',
                           initialTab: 'followings',
+                          initialFollowersCount: String(channel?.followersCount ?? 0),
+                          initialFollowingCount: String(channel?.followingCount ?? 0),
                         },
                       })
                     }

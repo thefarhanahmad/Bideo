@@ -17,6 +17,7 @@ import VerifiedBadge from './VerifiedBadge';
 import HashtagText from './HashtagText';
 import { sharePost } from '../utils/shareHelper';
 import ShareModal from './ShareModal';
+import { PostLinkPreview } from './PostLinkPreview';
 
 const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
 
@@ -129,6 +130,11 @@ const PostCard = ({ post, onDelete }: PostCardProps) => {
       </View>
 
       {!!post.text && <HashtagText text={post.text} style={styles.text} />}
+      <PostLinkPreview
+        previewData={post.previewMedia}
+        text={post.text}
+        style={styles.linkPreviewContainer}
+      />
       {!!post.imageUrl && (
         <Image
           source={{ uri: resolveMediaUrl(post.imageUrl) }}
@@ -251,6 +257,9 @@ const styles = StyleSheet.create({
     borderRadius: 0,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
+  },
+  linkPreviewContainer: {
+    marginVertical: 4,
   },
   header: {
     flexDirection: 'row',

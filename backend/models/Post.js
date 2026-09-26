@@ -12,6 +12,20 @@ const postSchema = new mongoose.Schema({
     maxlength: [2000, 'Post cannot be more than 2000 characters'],
   },
   imageUrl: String,
+  previewMedia: {
+    mediaType: {
+      type: String,
+      enum: ['video', 'short', 'channel', 'post'],
+    },
+    targetId: String,
+    title: String,
+    subtitle: String,
+    image: String,
+    channelName: String,
+    avatar: String,
+    isVerified: Boolean,
+    url: String,
+  },
   visibility: {
     type: String,
     enum: ['public', 'private', 'unlisted'],

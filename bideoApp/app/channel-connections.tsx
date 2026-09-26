@@ -21,6 +21,7 @@ import { RootState } from '../redux/store';
 import VerifiedBadge from '../components/VerifiedBadge';
 import AuthModal from '../components/AuthModal';
 import { hapticLight } from '../utils/haptics';
+import { formatViews } from '../utils/formatDate';
 
 const FALLBACK_AVATAR = 'https://via.placeholder.com/100x100.png?text=User';
 
@@ -42,6 +43,8 @@ export default function ChannelConnectionsScreen() {
     channelId?: string;
     channelName?: string;
     initialTab?: 'followers' | 'followings';
+    initialFollowersCount?: string;
+    initialFollowingCount?: string;
   }>();
 
   const channelId = params.channelId || '';
@@ -52,6 +55,21 @@ export default function ChannelConnectionsScreen() {
   const [activeTab, setActiveTab] = useState<'followers' | 'followings'>(initialTab);
   const [followers, setFollowers] = useState<ConnectionUser[]>([]);
   const [followings, setFollowings] = useState<ConnectionUser[]>([]);
+  const [totalFollowers, setTotalFollowers] = useState<number>(() => {
+    const val = Number(params.initialFollowersCount);
+    return isNaN(val) ? 0 : val;
+  });
+  const [totalFollowings, setTotalFollowings] = useState<number>(() => {
+    const val = Number(params.initialFollowingCount);
+    return isNaN(val) ? 0 : val;
+  });
+
+  const [followersPage, setFollowersPage] = useState(1);
+  const [followingsPage, setFollowingsPage] = useState(1);
+  const [hasMoreFollowers, setHasMoreFollowers] = useState(true);
+  const [hasMoreFollowings, setHasMoreFollowings] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -62,16 +80,32 @@ export default function ChannelConnectionsScreen() {
     if (!channelId) return;
     try {
       const [followersRes, followingsRes] = await Promise.all([
-        api.get(`/followers/${channelId}/followers`),
-        api.get(`/followers/${channelId}/followings`),
+        api.get(`/followers/${channelId}/followers?page=1&limit=50`),
+        api.get(`/followers/${channelId}/followings?page=1&limit=50`),
       ]);
 
       if (followersRes.data?.success) {
-        setFollowers(followersRes.data.data || []);
+        const list = followersRes.data.data || [];
+        setFollowers(list);
+        if (typeof followersRes.data.total === 'number') {
+          setTotalFollowers(followersRes.data.total);
+          setHasMoreFollowers(list.length < followersRes.data.total);
+        } else {
+          setHasMoreFollowers(list.length >= 50);
+        }
       }
       if (followingsRes.data?.success) {
-        setFollowings(followingsRes.data.data || []);
+        const list = followingsRes.data.data || [];
+        setFollowings(list);
+        if (typeof followingsRes.data.total === 'number') {
+          setTotalFollowings(followingsRes.data.total);
+          setHasMoreFollowings(list.length < followingsRes.data.total);
+        } else {
+          setHasMoreFollowings(list.length >= 50);
+        }
       }
+      setFollowersPage(1);
+      setFollowingsPage(1);
     } catch (err) {
       console.error('Failed to load connections:', err);
     } finally {
@@ -88,6 +122,94 @@ export default function ChannelConnectionsScreen() {
     setRefreshing(true);
     loadData();
   }, [loadData]);
+
+  const handleLoadMore = useCallback(async () => {
+    if (loadingMore || loading || refreshing) return;
+    if (searchQuery.trim()) return;
+
+    if (activeTab === 'followers') {
+      if (!hasMoreFollowers) return;
+      setLoadingMore(true);
+      const nextPage = followersPage + 1;
+      try {
+        const res = await api.get(`/followers/${channelId}/followers?page=${nextPage}&limit=50`);
+        if (res.data?.success) {
+          const newItems = res.data.data || [];
+          if (newItems.length > 0) {
+            setFollowers((prev) => {
+              const existingIds = new Set(prev.map((i) => i._id));
+              const uniqueNew = newItems.filter((i: ConnectionUser) => !existingIds.has(i._id));
+              return [...prev, ...uniqueNew];
+            });
+            setFollowersPage(nextPage);
+          }
+          if (typeof res.data.total === 'number') {
+            setTotalFollowers(res.data.total);
+          }
+          if (newItems.length < 50) {
+            setHasMoreFollowers(false);
+          } else if (typeof res.data.total === 'number') {
+            setHasMoreFollowers((followers.length + newItems.length) < res.data.total);
+          } else {
+            setHasMoreFollowers(true);
+          }
+        } else {
+          setHasMoreFollowers(false);
+        }
+      } catch (err) {
+        console.error('Failed to load more followers:', err);
+      } finally {
+        setLoadingMore(false);
+      }
+    } else {
+      if (!hasMoreFollowings) return;
+      setLoadingMore(true);
+      const nextPage = followingsPage + 1;
+      try {
+        const res = await api.get(`/followers/${channelId}/followings?page=${nextPage}&limit=50`);
+        if (res.data?.success) {
+          const newItems = res.data.data || [];
+          if (newItems.length > 0) {
+            setFollowings((prev) => {
+              const existingIds = new Set(prev.map((i) => i._id));
+              const uniqueNew = newItems.filter((i: ConnectionUser) => !existingIds.has(i._id));
+              return [...prev, ...uniqueNew];
+            });
+            setFollowingsPage(nextPage);
+          }
+          if (typeof res.data.total === 'number') {
+            setTotalFollowings(res.data.total);
+          }
+          if (newItems.length < 50) {
+            setHasMoreFollowings(false);
+          } else if (typeof res.data.total === 'number') {
+            setHasMoreFollowings((followings.length + newItems.length) < res.data.total);
+          } else {
+            setHasMoreFollowings(true);
+          }
+        } else {
+          setHasMoreFollowings(false);
+        }
+      } catch (err) {
+        console.error('Failed to load more followings:', err);
+      } finally {
+        setLoadingMore(false);
+      }
+    }
+  }, [
+    loadingMore,
+    loading,
+    refreshing,
+    searchQuery,
+    activeTab,
+    hasMoreFollowers,
+    followersPage,
+    followers.length,
+    hasMoreFollowings,
+    followingsPage,
+    followings.length,
+    channelId,
+  ]);
 
   const handleToggleFollow = async (targetUser: ConnectionUser) => {
     if (!isAuthenticated) {
@@ -109,6 +231,12 @@ export default function ChannelConnectionsScreen() {
     );
     setFollowingInProgress((prev) => ({ ...prev, [targetId]: true }));
 
+    // If viewing own channel, followings count changes accordingly
+    const isViewingSelf = (currentUser?._id?.toString() || currentUser?.id?.toString()) === channelId?.toString();
+    if (isViewingSelf) {
+      setTotalFollowings((prev) => Math.max(0, prev + (prevStatus ? -1 : 1)));
+    }
+
     try {
       await api.post(`/followers/${targetId}`);
     } catch (err) {
@@ -119,6 +247,9 @@ export default function ChannelConnectionsScreen() {
       setFollowings((prev) =>
         prev.map((item) => (item._id === targetId ? { ...item, isFollowing: prevStatus } : item))
       );
+      if (isViewingSelf) {
+        setTotalFollowings((prev) => Math.max(0, prev + (prevStatus ? 1 : -1)));
+      }
     } finally {
       setFollowingInProgress((prev) => ({ ...prev, [targetId]: false }));
     }
@@ -230,7 +361,7 @@ export default function ChannelConnectionsScreen() {
           activeOpacity={0.8}
         >
           <Text style={[styles.tabText, activeTab === 'followers' && styles.activeTabText]}>
-            {followers.length} Followers
+            {formatViews(totalFollowers)} Followers
           </Text>
         </TouchableOpacity>
 
@@ -240,7 +371,7 @@ export default function ChannelConnectionsScreen() {
           activeOpacity={0.8}
         >
           <Text style={[styles.tabText, activeTab === 'followings' && styles.activeTabText]}>
-            {followings.length} Following
+            {formatViews(totalFollowings)} Following
           </Text>
         </TouchableOpacity>
       </View>
@@ -297,6 +428,15 @@ export default function ChannelConnectionsScreen() {
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={{ paddingVertical: 16, alignItems: 'center', justifyContent: 'center' }}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+              </View>
+            ) : null
+          }
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

@@ -11,6 +11,7 @@ import api from '../services/api';
 import { showAlert } from '../components/AppAlert';
 import Constants from 'expo-constants';
 import MentionSuggestions from '../components/MentionSuggestions';
+import { PostLinkPreview, PreviewData, detectBideoLink } from '../components/PostLinkPreview';
 
 export default function UploadPostScreen() {
   const router = useRouter();
@@ -38,12 +39,29 @@ export default function UploadPostScreen() {
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
+  // Link preview state
+  const [previewData, setPreviewData] = useState<PreviewData | null>(null);
+  const [dismissedPreview, setDismissedPreview] = useState(false);
+  const lastDetectedUrlRef = useRef<string | null>(null);
+
   // @mention autocomplete states
   const [mentionQuery, setMentionQuery] = useState('');
   const [mentionActive, setMentionActive] = useState(false);
 
   const handleTextChange = (newText: string) => {
     setPostText(newText);
+
+    // Auto-detect Bideo URLs for live preview
+    const detected = detectBideoLink(newText);
+    if (detected) {
+      if (detected.matchedUrl !== lastDetectedUrlRef.current) {
+        lastDetectedUrlRef.current = detected.matchedUrl;
+        setDismissedPreview(false);
+      }
+    } else {
+      lastDetectedUrlRef.current = null;
+    }
+
     const match = newText.match(/@([a-zA-Z0-9_\u0600-\u06FF\u0900-\u097F.-]*)$/);
     if (match) {
       setMentionActive(true);
@@ -74,6 +92,10 @@ export default function UploadPostScreen() {
         const p = res.data.data;
         setPostText(p.text || '');
         setVisibility(p.visibility || 'public');
+        if (p.previewMedia) {
+          setPreviewData(p.previewMedia);
+          setDismissedPreview(false);
+        }
         if (p.imageUrl) {
           setPostImage({ uri: p.imageUrl } as ImagePicker.ImagePickerAsset);
         }
@@ -106,8 +128,8 @@ export default function UploadPostScreen() {
   };
 
   const handlePostUpload = async () => {
-    if (!postText.trim() && !postImage) {
-      showAlert('Error', 'Add text or an image for your post');
+    if (!postText.trim() && !postImage && !previewData) {
+      showAlert('Error', 'Add text, a link, or an image for your post');
       return;
     }
     setUploading(true);
@@ -137,6 +159,9 @@ export default function UploadPostScreen() {
       const formData = new FormData();
       formData.append('text', postText);
       formData.append('visibility', visibility);
+      if (previewData && !dismissedPreview) {
+        formData.append('previewMedia', JSON.stringify(previewData));
+      }
       if (postImage && postImage.fileSize) {
         formData.append('originalImageSize', String(postImage.fileSize));
       }
@@ -175,6 +200,7 @@ export default function UploadPostScreen() {
     setUploading(true);
     setUploadProgress(0);
     try {
+      const previewPayload = previewData && !dismissedPreview ? JSON.stringify(previewData) : '';
       if (postImageChanged && postImage) {
         let finalImgUri = postImage.uri;
         const isExpoGo = Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
@@ -198,6 +224,11 @@ export default function UploadPostScreen() {
         const formData = new FormData();
         formData.append('text', postText);
         formData.append('visibility', visibility);
+        if (previewPayload) {
+          formData.append('previewMedia', previewPayload);
+        } else {
+          formData.append('previewMedia', 'null');
+        }
         if (postImage && postImage.fileSize) {
           formData.append('originalImageSize', String(postImage.fileSize));
         }
@@ -210,7 +241,11 @@ export default function UploadPostScreen() {
           },
         });
       } else {
-        await api.put(`/posts/${editPostId}`, { text: postText, visibility });
+        await api.put(`/posts/${editPostId}`, {
+          text: postText,
+          visibility,
+          previewMedia: previewPayload ? JSON.parse(previewPayload) : null,
+        });
       }
       showAlert('Success', 'Post updated successfully!');
       router.replace('/');
@@ -269,7 +304,20 @@ export default function UploadPostScreen() {
           onClose={() => setMentionActive(false)}
         />
 
-        <Text style={styles.label}>Image</Text>
+        {/* Live Link Preview (Video, Short, Channel, Post) */}
+        {!dismissedPreview && (
+          <PostLinkPreview
+            text={postText}
+            previewData={previewData}
+            onPreviewLoaded={(p) => setPreviewData(p)}
+            onRemove={() => {
+              setDismissedPreview(true);
+              setPreviewData(null);
+            }}
+          />
+        )}
+
+        <Text style={styles.label}>Image (Optional)</Text>
         <TouchableOpacity style={[styles.picker, styles.thumbnailPicker]} onPress={pickPostImage}>
           {postImage ? (
             <Image source={{ uri: postImage.uri }} style={styles.thumbnailPreview} contentFit="cover" transition={200} />
