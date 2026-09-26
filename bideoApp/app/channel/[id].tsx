@@ -13,7 +13,7 @@ import { RootState } from '../../redux/store';
 import { updateUser } from '../../redux/slices/authSlice';
 import AuthModal from '../../components/AuthModal';
 import VerifiedBadge from '../../components/VerifiedBadge';
-import { formatTimeAgo, formatViews } from '../../utils/formatDate';
+import { formatTimeAgo, formatViews, formatJoinedDate } from '../../utils/formatDate';
 import { hapticLight } from '../../utils/haptics';
 import { shareChannel, shareVideo } from '../../utils/shareHelper';
 import ShareModal, { ShareModalItem } from '../../components/ShareModal';
@@ -36,6 +36,7 @@ export default function ChannelScreen() {
   const [sort, setSort] = useState<'latest' | 'popular' | 'oldest'>('latest');
   const [error, setError] = useState<string | null>(null);
   const [authModalVisible, setAuthModalVisible] = useState(false);
+  const [aboutModalVisible, setAboutModalVisible] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<any>(null);
   const [menuVisible, setMenuVisible] = useState(false);
   const [shareModalVisible, setShareModalVisible] = useState(false);
@@ -429,12 +430,20 @@ export default function ChannelScreen() {
                   </View>
                 )}
                 
-                {!!channel?.about && (
-                  <TouchableOpacity activeOpacity={0.7} style={styles.aboutContainer} onPress={() => showAlert('About', channel.about)}>
-                    <Text style={styles.aboutPreview} numberOfLines={2}>
-                      {channel.about}
+                {(!!channel?.about || !!channel?.createdAt) && (
+                  <TouchableOpacity 
+                    activeOpacity={0.7} 
+                    style={styles.aboutContainer} 
+                    onPress={() => setAboutModalVisible(true)}
+                  >
+                    {!!channel?.about && (
+                      <Text style={styles.aboutPreview} numberOfLines={2}>
+                        {channel.about}
+                      </Text>
+                    )}
+                    <Text style={styles.moreAboutText}>
+                      more <Ionicons name="chevron-forward" size={10} color={Colors.textGray} />
                     </Text>
-                    <Text style={styles.moreAboutText}>more <Ionicons name="chevron-forward" size={10} color={Colors.textGray} /></Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -589,6 +598,63 @@ export default function ChannelScreen() {
         }}
         item={shareItem}
       />
+
+      {/* Channel Details / About Modal */}
+      <Modal
+        visible={aboutModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAboutModalVisible(false)}
+      >
+        <Pressable 
+          style={styles.aboutModalOverlay} 
+          onPress={() => setAboutModalVisible(false)}
+        >
+          <Pressable style={styles.aboutModalContent} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.aboutModalHeader}>
+              <Text style={styles.aboutModalTitle}>About this channel</Text>
+              <TouchableOpacity onPress={() => setAboutModalVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close" size={24} color={Colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.aboutModalScroll}>
+              {/* Description Section */}
+              <View style={styles.aboutSection}>
+                <Text style={styles.aboutSectionTitle}>Description</Text>
+                <Text style={styles.aboutFullText}>
+                  {channel?.about ? channel.about : 'No description provided.'}
+                </Text>
+              </View>
+
+              {/* Channel Details Section */}
+              <View style={styles.aboutSection}>
+                <Text style={styles.aboutSectionTitle}>Channel details</Text>
+                
+                {!!channel?.createdAt && (
+                  <View style={styles.detailRow}>
+                    <Ionicons name="calendar-outline" size={20} color={Colors.textGray} style={styles.detailIcon} />
+                    <View style={styles.detailTextContainer}>
+                      <Text style={styles.detailLabel}>Joined</Text>
+                      <Text style={styles.detailValue}>{formatJoinedDate(channel.createdAt)}</Text>
+                    </View>
+                  </View>
+                )}
+
+                {Boolean(channel?.isVerified) && (
+                  <View style={styles.detailRow}>
+                    <Ionicons name="checkmark-circle" size={20} color="#2196F3" style={styles.detailIcon} />
+                    <View style={styles.detailTextContainer}>
+                      <Text style={styles.detailLabel}>Verified</Text>
+                      <Text style={styles.detailValue}>Verified Channel</Text>
+                    </View>
+                  </View>
+                )}
+              </View>
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -673,7 +739,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   aboutContainer: {
-    marginTop: 12,
+    marginTop: 8,
   },
   aboutPreview: {
     fontSize: 13,
@@ -1053,5 +1119,79 @@ const styles = StyleSheet.create({
   },
   tabBadgeTextActive: {
     color: Colors.primary,
+  },
+
+  // About / Channel Details Modal
+  aboutModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  aboutModalContent: {
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '75%',
+    paddingBottom: 24,
+  },
+  aboutModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  aboutModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  aboutModalScroll: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 20,
+  },
+  aboutSection: {
+    marginBottom: 20,
+  },
+  aboutSectionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.text,
+    marginBottom: 10,
+  },
+  aboutFullText: {
+    fontSize: 14,
+    color: Colors.text,
+    lineHeight: 21,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  detailIcon: {
+    width: 28,
+  },
+  detailTextContainer: {
+    flex: 1,
+    marginLeft: 8,
+  },
+  detailLabel: {
+    fontSize: 11,
+    color: Colors.textGray,
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  detailValue: {
+    fontSize: 14,
+    color: Colors.text,
+    fontWeight: '500',
   },
 });

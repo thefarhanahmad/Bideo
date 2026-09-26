@@ -74,3 +74,11 @@ export const formatDuration = (seconds: number | string | undefined | null): str
   const secs = Math.floor(totalSecs % 60);
   return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 };
+
+export const formatJoinedDate = (date: string | Date | undefined | null): string => {
+  if (!date) return '';
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+};
+
