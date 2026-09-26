@@ -129,8 +129,10 @@ async function notifyAndPush({ recipient, actor, type, video, post, comment, mes
 
     if (video) {
       const vidId = (video._id || video).toString();
+      const isShort = video.isShort === true || video.isShort === 'true';
       pushData.videoId = vidId;
-      pushData.screen = `/video/${vidId}`;
+      pushData.isShort = isShort;
+      pushData.screen = isShort ? `/shorts?initialShortId=${vidId}` : `/video/${vidId}`;
     }
     if (post) {
       const pId = (post._id || post).toString();
@@ -214,8 +216,10 @@ async function sendPushForEvent({ recipient, actor, type, video, post, comment, 
 
     if (video) {
       const vidId = (video._id || video).toString();
+      const isShort = video.isShort === true || video.isShort === 'true';
       pushData.videoId = vidId;
-      pushData.screen = `/video/${vidId}`;
+      pushData.isShort = isShort;
+      pushData.screen = isShort ? `/shorts?initialShortId=${vidId}` : `/video/${vidId}`;
     }
     if (post) {
       const pId = (post._id || post).toString();
@@ -309,7 +313,8 @@ async function notifyFollowersOfUpload({ creatorId, video, post }) {
       pushData = {
         type: 'video_upload',
         videoId: video._id.toString(),
-        screen: isShort ? '/shorts' : `/video/${video._id}`,
+        isShort,
+        screen: isShort ? `/shorts?initialShortId=${video._id}` : `/video/${video._id}`,
       };
     } else if (post) {
       const cleanSnippet = post.text ? (post.text.length > 50 ? `${post.text.substring(0, 50)}...` : post.text) : 'Shared a new post';

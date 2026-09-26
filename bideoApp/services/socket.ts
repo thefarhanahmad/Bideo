@@ -102,6 +102,14 @@ export const initSocket = async (tokenOverride?: string): Promise<Socket | null>
       DeviceEventEmitter.emit('chatMessagesRead', data);
     });
 
+    socket.on('message_unsent', (data) => {
+      DeviceEventEmitter.emit('chatMessageUnsent', data);
+    });
+
+    socket.on('message_deleted_for_me', (data) => {
+      DeviceEventEmitter.emit('chatMessageDeletedForMe', data);
+    });
+
     socket.on('disconnect', (reason) => {
       isConnecting = false;
       console.log('Socket disconnected:', reason);
@@ -147,6 +155,10 @@ export const leaveConversationRoom = (conversationId: string) => {
   if (socket && socket.connected) {
     socket.emit('leave_conversation', { conversationId });
   }
+};
+
+export const getActiveConversationId = (): string | null => {
+  return activeConversationId;
 };
 
 export const emitTyping = (conversationId: string, recipientId: string, isTyping: boolean) => {

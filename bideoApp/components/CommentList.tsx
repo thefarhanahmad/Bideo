@@ -41,6 +41,8 @@ const CommentList: React.FC<CommentListProps> = ({ videoId, postId, contentOwner
   const [replySubmitting, setReplySubmitting] = useState(false);
   const replyInputRef = useRef<TextInput>(null);
 
+  const [filter, setFilter] = useState<'all' | 'newest' | 'oldest'>('all');
+
   const getCleanId = (val: any): string => {
     if (!val) return '';
     if (typeof val === 'string') return val;
@@ -85,17 +87,60 @@ const CommentList: React.FC<CommentListProps> = ({ videoId, postId, contentOwner
     }
   }, [replyTarget]);
 
-  const fetchComments = async (silent = false) => {
+  const fetchComments = async (silent = false, currentFilter = filter) => {
     try {
       if (!silent) setLoading(true);
-      const params = videoId ? { videoId } : { postId };
+      const params: any = videoId ? { videoId } : { postId };
+      if (currentFilter !== 'all') {
+        params.sort = currentFilter;
+      }
       const response = await api.get('/comments', { params });
-      setComments(response.data.data || []);
+      const rawComments = response.data?.data || [];
+
+      // Deduplicate comments in frontend as well: hide duplicate comments, show only first comment
+      const seen = new Set();
+      const chronoSorted = [...rawComments].sort(
+        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      );
+      const firstIds = new Set();
+      for (const c of chronoSorted) {
+        const uId = (c.user?._id || c.user)?.toString();
+        const tKey = (c.text || '').trim().toLowerCase();
+        const key = `${uId}___${tKey}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          firstIds.add(c._id?.toString());
+        }
+      }
+
+      let deduped = rawComments.filter((c: any) => firstIds.has(c._id?.toString()));
+
+      if (currentFilter === 'oldest') {
+        deduped.sort((a: any, b: any) => {
+          if (a.isPinned && !b.isPinned) return -1;
+          if (!a.isPinned && b.isPinned) return 1;
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        });
+      } else {
+        deduped.sort((a: any, b: any) => {
+          if (a.isPinned && !b.isPinned) return -1;
+          if (!a.isPinned && b.isPinned) return 1;
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        });
+      }
+
+      setComments(deduped);
     } catch (err) {
       console.error('Failed to fetch comments', err);
     } finally {
       if (!silent) setLoading(false);
     }
+  };
+
+  const handleFilterChange = (newFilter: 'all' | 'newest' | 'oldest') => {
+    if (newFilter === filter) return;
+    setFilter(newFilter);
+    fetchComments(false, newFilter);
   };
 
   const handleAddComment = async () => {
@@ -255,7 +300,28 @@ const CommentList: React.FC<CommentListProps> = ({ videoId, postId, contentOwner
 
   return (
     <View style={styles.container}>
-      <Text style={styles.headerText}>{comments.length} Comments</Text>
+      <View style={styles.headerRow}>
+        <Text style={styles.headerText}>{comments.length} Comments</Text>
+        <View style={styles.filterRow}>
+          {(['all', 'newest', 'oldest'] as const).map((tab) => (
+            <TouchableOpacity
+              key={tab}
+              style={[styles.filterPill, filter === tab && styles.filterPillActive]}
+              onPress={() => handleFilterChange(tab)}
+              activeOpacity={0.75}
+            >
+              <Text
+                style={[
+                  styles.filterPillText,
+                  filter === tab && styles.filterPillTextActive,
+                ]}
+              >
+                {tab === 'all' ? 'All' : tab === 'newest' ? 'Newest' : 'Oldest'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
 
       <View style={styles.inputSection}>
         <View style={styles.inputContainer}>
@@ -648,7 +714,37 @@ const CommentItem = ({
 
 const styles = StyleSheet.create({
   container: { padding: 12, paddingBottom: 24 },
-  headerText: { fontSize: 16, fontWeight: 'bold', marginBottom: 16 },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  headerText: { fontSize: 16, fontWeight: 'bold' },
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 20,
+    padding: 3,
+  },
+  filterPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 16,
+  },
+  filterPillActive: {
+    backgroundColor: Colors.primary,
+  },
+  filterPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textGray,
+  },
+  filterPillTextActive: {
+    color: Colors.white,
+    fontWeight: '700',
+  },
   inputSection: { marginBottom: 12 },
   inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f9f9f9', borderRadius: 20, paddingHorizontal: 15, paddingVertical: 8, borderWidth: 1, borderColor: Colors.border },
   input: { flex: 1, fontSize: 14, color: Colors.text, maxHeight: 100 },

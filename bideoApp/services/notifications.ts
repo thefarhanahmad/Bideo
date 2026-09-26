@@ -4,17 +4,98 @@ import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from './api';
+import { getActiveConversationId } from './socket';
 
-// 1. Configure foreground notification behavior
+// 1. Configure foreground notification behavior: suppress if user is logged out or inside active chat
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
+  handleNotification: async (notification) => {
+    // If user is completely logged out, never show foreground alert/sound
+    const token = await AsyncStorage.getItem('token');
+    if (!token) {
+      return {
+        shouldShowAlert: false,
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+        shouldShowBanner: false,
+        shouldShowList: false,
+      };
+    }
+
+    const data = (notification?.request?.content?.data || {}) as Record<string, any>;
+    const activeConv = getActiveConversationId();
+
+    if (
+      activeConv &&
+      (data?.conversationId?.toString() === activeConv ||
+        (typeof data?.screen === 'string' && data.screen.includes(`/chat/${activeConv}`)))
+    ) {
+      return {
+        shouldShowAlert: false,
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+        shouldShowBanner: false,
+        shouldShowList: false,
+      };
+    }
+
+    return {
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    };
+  },
 });
+
+/**
+ * Robust notification navigation handler that resolves videos, shorts, posts, channels, and chats
+ */
+export function handleNotificationNavigation(router: any, data: any) {
+  if (!data || !router) return;
+
+  const isShort = data.isShort === true || data.isShort === 'true';
+  const videoId =
+    data.videoId ||
+    (typeof data.screen === 'string'
+      ? data.screen.match(/(?:\/video\/|\/v\/|initialShortId=)([a-zA-Z0-9_-]+)/)?.[1]
+      : null);
+  const postId =
+    data.postId ||
+    (typeof data.screen === 'string'
+      ? data.screen.match(/(?:\/post\/|\/p\/)([a-zA-Z0-9_-]+)/)?.[1]
+      : null);
+  const channelId =
+    data.channelId ||
+    (typeof data.screen === 'string'
+      ? data.screen.match(/(?:\/channel\/|\/c\/)([a-zA-Z0-9_-]+)/)?.[1]
+      : null);
+  const conversationId =
+    data.conversationId ||
+    (typeof data.screen === 'string'
+      ? data.screen.match(/\/chat\/([a-zA-Z0-9_-]+)/)?.[1]
+      : null);
+
+  try {
+    if (conversationId) {
+      router.push(`/chat/${conversationId}`);
+    } else if ((isShort || (typeof data.screen === 'string' && data.screen.includes('/shorts'))) && videoId) {
+      router.push({ pathname: '/shorts', params: { initialShortId: videoId } });
+    } else if (videoId) {
+      router.push(`/video/${videoId}`);
+    } else if (postId) {
+      router.push(`/post/${postId}`);
+    } else if (channelId) {
+      router.push(`/channel/${channelId}`);
+    } else if (data.screen) {
+      router.push(data.screen);
+    } else {
+      router.push('/notifications');
+    }
+  } catch (err) {
+    console.error('Error executing notification navigation:', err);
+  }
+}
 
 /**
  * Register device with Expo & backend for real mobile push notifications
@@ -122,19 +203,7 @@ export function setupNotificationListeners(router: any) {
       if (response) {
         const data = response.notification.request.content.data;
         setTimeout(() => {
-          try {
-            if (data?.screen) {
-              router.push(data.screen);
-            } else if (data?.videoId) {
-              router.push(`/video/${data.videoId}`);
-            } else if (data?.postId) {
-              router.push(`/post/${data.postId}`);
-            } else if (data?.channelId) {
-              router.push(`/channel/${data.channelId}`);
-            }
-          } catch (err) {
-            console.error('Error navigating on cold-start notification:', err);
-          }
+          handleNotificationNavigation(router, data);
         }, 800);
       }
     })
@@ -145,18 +214,7 @@ export function setupNotificationListeners(router: any) {
     try {
       const data = response.notification.request.content.data;
       console.log('User tapped push notification with data:', data);
-
-      if (data?.screen) {
-        router.push(data.screen);
-      } else if (data?.videoId) {
-        router.push(`/video/${data.videoId}`);
-      } else if (data?.postId) {
-        router.push(`/post/${data.postId}`);
-      } else if (data?.channelId) {
-        router.push(`/channel/${data.channelId}`);
-      } else {
-        router.push('/notifications');
-      }
+      handleNotificationNavigation(router, data);
     } catch (err) {
       console.error('Error handling notification tap navigation:', err);
     }

@@ -21,6 +21,7 @@ import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSelector } from 'react-redux';
+import * as Clipboard from 'expo-clipboard';
 import Colors from '../../constants/Colors';
 import { RootState } from '../../redux/store';
 import { chatService, resolveMediaUrl } from '../../services/api';
@@ -56,6 +57,8 @@ export default function ChatRoomScreen() {
   const [isOtherOnline, setIsOtherOnline] = useState(false);
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState<any | null>(null);
+  const [messageActionModalVisible, setMessageActionModalVisible] = useState(false);
 
   const insets = useSafeAreaInsets();
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -242,6 +245,24 @@ export default function ChatRoomScreen() {
       }
     );
 
+    const subUnsend = DeviceEventEmitter.addListener(
+      'chatMessageUnsent',
+      (data: { conversationId: string; messageId: string }) => {
+        if (data?.conversationId?.toString() === conversationId?.toString()) {
+          setMessages((prev) => prev.filter((m) => m._id !== data.messageId));
+        }
+      }
+    );
+
+    const subDeleteForMe = DeviceEventEmitter.addListener(
+      'chatMessageDeletedForMe',
+      (data: { conversationId: string; messageId: string }) => {
+        if (data?.conversationId?.toString() === conversationId?.toString()) {
+          setMessages((prev) => prev.filter((m) => m._id !== data.messageId));
+        }
+      }
+    );
+
     return () => {
       if (conversationId) {
         leaveConversationRoom(conversationId);
@@ -253,6 +274,8 @@ export default function ChatRoomScreen() {
       subSocketConnected.remove();
       subConvStatus.remove();
       subRead.remove();
+      subUnsend.remove();
+      subDeleteForMe.remove();
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
     };
   }, [conversationId, currentUserId, loadData]);
@@ -328,6 +351,99 @@ export default function ChatRoomScreen() {
     } catch (err: any) {
       showAlert('Error', err?.response?.data?.message || 'Failed to accept chat');
     }
+  };
+
+  // Decline message request
+  const handleDecline = () => {
+    Alert.alert(
+      'Decline Request',
+      'Are you sure you want to decline this chat request? It will be removed from your chat list.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Decline',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              hapticSelection();
+              await chatService.declineChat(conversationId);
+              router.back();
+            } catch (err: any) {
+              showAlert('Error', err?.response?.data?.message || 'Failed to decline chat');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Unsend message for everyone
+  const handleUnsendMessage = () => {
+    if (!selectedMessage) return;
+    const msgId = selectedMessage._id;
+    setMessageActionModalVisible(false);
+    setSelectedMessage(null);
+
+    Alert.alert(
+      'Unsend Message',
+      'Are you sure you want to unsend this message? It will be removed for everyone in this chat.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Unsend',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              hapticSelection();
+              await chatService.unsendMessage(msgId);
+              setMessages((prev) => prev.filter((m) => m._id !== msgId));
+            } catch (err: any) {
+              showAlert('Error', err?.response?.data?.message || 'Failed to unsend message');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Delete message for current user only
+  const handleDeleteMessage = () => {
+    if (!selectedMessage) return;
+    const msgId = selectedMessage._id;
+    setMessageActionModalVisible(false);
+    setSelectedMessage(null);
+
+    Alert.alert(
+      'Delete Message',
+      'This message will be deleted for you. Other participants will still be able to see it.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete for me',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              hapticSelection();
+              await chatService.deleteMessage(msgId);
+              setMessages((prev) => prev.filter((m) => m._id !== msgId));
+            } catch (err: any) {
+              showAlert('Error', err?.response?.data?.message || 'Failed to delete message');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Copy message text to clipboard
+  const handleCopyMessageText = async () => {
+    if (!selectedMessage?.text) return;
+    try {
+      await Clipboard.setStringAsync(selectedMessage.text);
+      hapticLight();
+    } catch {}
+    setMessageActionModalVisible(false);
+    setSelectedMessage(null);
   };
 
   // Block user
@@ -504,13 +620,22 @@ export default function ChatRoomScreen() {
           isMine ? styles.bubbleWrapperRight : styles.bubbleWrapperLeft,
         ]}
       >
-        <View
-          style={[
-            styles.bubble,
-            isMine ? styles.bubbleRight : styles.bubbleLeft,
-            (hasVideo || hasPost) && styles.bubbleWithMedia,
-          ]}
+        <TouchableOpacity
+          activeOpacity={0.92}
+          onLongPress={() => {
+            hapticSelection();
+            setSelectedMessage(item);
+            setMessageActionModalVisible(true);
+          }}
+          delayLongPress={280}
         >
+          <View
+            style={[
+              styles.bubble,
+              isMine ? styles.bubbleRight : styles.bubbleLeft,
+              (hasVideo || hasPost) && styles.bubbleWithMedia,
+            ]}
+          >
           {/* Embedded Video Card */}
           {hasVideo && (
             <TouchableOpacity
@@ -685,6 +810,7 @@ export default function ChatRoomScreen() {
             )}
           </View>
         </View>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -760,7 +886,7 @@ export default function ChatRoomScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
       >
-        {/* First Message Restriction Banner (Requirement 6) */}
+        {/* First Message Restriction Banner */}
         {isPendingForMe && (
           <View style={styles.requestBanner}>
             <View style={styles.requestInfoRow}>
@@ -768,11 +894,20 @@ export default function ChatRoomScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.requestTitle}>Message Request</Text>
                 <Text style={styles.requestSubtitle}>
-                  {other?.channelName || other?.name} wants to chat with you. You can accept to reply or block this user.
+                  {other?.channelName || other?.name} wants to chat with you. You must accept to reply back.
                 </Text>
               </View>
             </View>
             <View style={styles.requestActionRow}>
+              <TouchableOpacity
+                style={styles.declineActionButton}
+                onPress={handleDecline}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="close-circle-outline" size={16} color={Colors.text} style={{ marginRight: 4 }} />
+                <Text style={styles.declineActionText}>Decline</Text>
+              </TouchableOpacity>
+
               <TouchableOpacity
                 style={styles.blockActionButton}
                 onPress={handleBlock}
@@ -788,7 +923,7 @@ export default function ChatRoomScreen() {
                 activeOpacity={0.8}
               >
                 <Ionicons name="checkmark" size={16} color={Colors.white} style={{ marginRight: 4 }} />
-                <Text style={styles.continueActionText}>Continue</Text>
+                <Text style={styles.continueActionText}>Accept</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -866,6 +1001,8 @@ export default function ChatRoomScreen() {
                 ? 'You blocked this user'
                 : isBlockedByOther
                 ? 'You cannot message this user'
+                : isPendingForMe
+                ? 'Accept request to reply...'
                 : 'Type a message...'
             }
             placeholderTextColor={Colors.textGray}
@@ -873,17 +1010,17 @@ export default function ChatRoomScreen() {
             onChangeText={handleInputChange}
             multiline
             maxLength={2000}
-            editable={!isBlocked}
-            style={[styles.input, isBlocked && styles.inputDisabled]}
+            editable={!isBlocked && !isPendingForMe}
+            style={[styles.input, (isBlocked || isPendingForMe) && styles.inputDisabled]}
           />
 
           <TouchableOpacity
             style={[
               styles.sendButton,
-              (!inputText.trim() || sending || isBlocked) && styles.sendButtonDisabled,
+              (!inputText.trim() || sending || isBlocked || isPendingForMe) && styles.sendButtonDisabled,
             ]}
             onPress={handleSend}
-            disabled={!inputText.trim() || sending || isBlocked}
+            disabled={!inputText.trim() || sending || isBlocked || isPendingForMe}
             activeOpacity={0.8}
           >
             {sending ? (
@@ -930,6 +1067,99 @@ export default function ChatRoomScreen() {
                 <Text style={[styles.menuOptionText, { color: '#EF4444' }]}>Block User</Text>
               </TouchableOpacity>
             )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Message Actions Modal (Instagram-style Unsend & Delete) */}
+      <Modal
+        visible={messageActionModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setMessageActionModalVisible(false);
+          setSelectedMessage(null);
+        }}
+      >
+        <TouchableOpacity
+          style={styles.actionSheetOverlay}
+          activeOpacity={1}
+          onPress={() => {
+            setMessageActionModalVisible(false);
+            setSelectedMessage(null);
+          }}
+        >
+          <View style={styles.actionSheetContainer}>
+            <View style={styles.actionSheetGrabber} />
+
+            {Boolean(selectedMessage?.text) && (
+              <View style={styles.actionSheetSnippetBox}>
+                <Text style={styles.actionSheetSnippetText} numberOfLines={2}>
+                  "{selectedMessage?.text}"
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.actionSheetButtonsGroup}>
+              {/* Unsend - only for current user's sent messages */}
+              {((selectedMessage?.sender?._id || selectedMessage?.sender)?.toString() === currentUserId) && (
+                <TouchableOpacity
+                  style={styles.actionSheetItem}
+                  onPress={handleUnsendMessage}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="arrow-undo-outline" size={20} color="#EF4444" style={{ marginRight: 12 }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.actionSheetItemText, { color: '#EF4444', fontWeight: '700' }]}>
+                      Unsend
+                    </Text>
+                    <Text style={styles.actionSheetItemSubtext}>
+                      Remove message for everyone
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+
+              {/* Delete for you - available on any message */}
+              <TouchableOpacity
+                style={styles.actionSheetItem}
+                onPress={handleDeleteMessage}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="trash-outline" size={20} color="#DC2626" style={{ marginRight: 12 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.actionSheetItemText, { color: '#DC2626' }]}>
+                    Delete for you
+                  </Text>
+                  <Text style={styles.actionSheetItemSubtext}>
+                    Remove message only for you
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Copy Text */}
+              {Boolean(selectedMessage?.text) && (
+                <TouchableOpacity
+                  style={styles.actionSheetItem}
+                  onPress={handleCopyMessageText}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="copy-outline" size={20} color={Colors.text} style={{ marginRight: 12 }} />
+                  <Text style={styles.actionSheetItemText}>Copy Text</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <TouchableOpacity
+              style={styles.actionSheetCancelBtn}
+              onPress={() => {
+                setMessageActionModalVisible(false);
+                setSelectedMessage(null);
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.actionSheetCancelText}>Cancel</Text>
+            </TouchableOpacity>
           </View>
         </TouchableOpacity>
       </Modal>
@@ -1050,13 +1280,28 @@ const styles = StyleSheet.create({
   requestActionRow: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    gap: 10,
+    gap: 8,
+  },
+  declineActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  declineActionText: {
+    color: Colors.text,
+    fontWeight: '700',
+    fontSize: 13,
   },
   blockActionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FEE2E2',
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
   },
@@ -1069,7 +1314,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.primary,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
   },
@@ -1407,6 +1652,77 @@ const styles = StyleSheet.create({
   menuOptionText: {
     fontSize: 14,
     fontWeight: '600',
+    color: Colors.text,
+  },
+  actionSheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  actionSheetContainer: {
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 18,
+    paddingTop: 10,
+    paddingBottom: 28,
+  },
+  actionSheetGrabber: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#D1D5DB',
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+  actionSheetSnippetBox: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  actionSheetSnippetText: {
+    fontSize: 13,
+    color: Colors.textGray,
+    fontStyle: 'italic',
+  },
+  actionSheetButtonsGroup: {
+    borderRadius: 14,
+    backgroundColor: '#F9FAFB',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+    marginBottom: 12,
+  },
+  actionSheetItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E5E7EB',
+  },
+  actionSheetItemText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  actionSheetItemSubtext: {
+    fontSize: 11,
+    color: Colors.textGray,
+    marginTop: 2,
+  },
+  actionSheetCancelBtn: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  actionSheetCancelText: {
+    fontSize: 15,
+    fontWeight: '700',
     color: Colors.text,
   },
 });

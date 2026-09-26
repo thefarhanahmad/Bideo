@@ -16,7 +16,7 @@ router.post('/reset-password', authLimiter, resetPassword);
 router.get('/me', protect, getMe);
 router.put('/channel', protect, upload.fields([{ name: 'avatar', maxCount: 1 }, { name: 'coverImage', maxCount: 1 }]), updateChannel);
 router.put('/push-token', protect, updatePushToken);
-router.delete('/push-token', protect, removePushToken);
+router.delete('/push-token', softProtect, removePushToken);
 router.post('/push-token-log', softProtect, logPushDiagnostic);
 
 module.exports = router;

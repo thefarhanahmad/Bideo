@@ -19,27 +19,70 @@ const createNotification = async ({ recipient, actor, type, video, post, comment
 // @access  Public
 exports.getComments = async (req, res, next) => {
   try {
-    const { videoId, postId } = req.query;
+    const { videoId, postId, sort } = req.query;
     const query = {};
     if (videoId) query.video = videoId;
     else if (postId) query.post = postId;
     else query.video = req.params.videoId; // fallback for old route
 
     const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
+
+    // Sort order: oldest -> '-isPinned createdAt', newest / all -> '-isPinned -createdAt'
+    const sortOrder = sort === 'oldest' ? '-isPinned createdAt' : '-isPinned -createdAt';
+
     const comments = await Comment.find(query)
       .populate('user', 'name avatar channelName isVerified')
       .populate('pinnedBy', 'name avatar channelName isVerified')
       .populate('lovedBy', 'name avatar channelName isVerified')
       .populate('replies.user', 'name avatar channelName isVerified')
       .populate('replies.lovedBy', 'name avatar channelName isVerified')
-      .sort('-isPinned -createdAt')
+      .sort(sortOrder)
       .limit(limit)
       .lean();
 
+    // Deduplicate comments: if duplicate comments exist (same user + identical text), hide duplicates, show only first comment
+    const seenComments = new Set();
+    const chronoSorted = [...comments].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    const firstCommentIds = new Set();
+
+    for (const c of chronoSorted) {
+      const userId = (c.user?._id || c.user)?.toString();
+      const textKey = (c.text || '').trim().toLowerCase();
+      const key = `${userId}___${textKey}`;
+      if (!seenComments.has(key)) {
+        seenComments.add(key);
+        firstCommentIds.add(c._id.toString());
+      }
+    }
+
+    let uniqueComments = comments.filter((c) => firstCommentIds.has(c._id.toString()));
+
+    // Also deduplicate replies inside each comment
+    uniqueComments = uniqueComments.map((c) => {
+      if (Array.isArray(c.replies) && c.replies.length > 1) {
+        const seenReplies = new Set();
+        const chronoReplies = [...c.replies].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+        const firstReplyIds = new Set();
+        for (const r of chronoReplies) {
+          const rUserId = (r.user?._id || r.user)?.toString();
+          const rTextKey = (r.text || '').trim().toLowerCase();
+          const rKey = `${rUserId}___${rTextKey}`;
+          if (!seenReplies.has(rKey)) {
+            seenReplies.add(rKey);
+            firstReplyIds.add(r._id ? r._id.toString() : rKey);
+          }
+        }
+        c.replies = c.replies.filter((r) =>
+          firstReplyIds.has(r._id ? r._id.toString() : `${(r.user?._id || r.user)?.toString()}___${(r.text || '').trim().toLowerCase()}`)
+        );
+      }
+      return c;
+    });
+
     res.status(200).json({
       success: true,
-      count: comments.length,
-      data: comments,
+      count: uniqueComments.length,
+      data: uniqueComments,
     });
   } catch (err) {
     next(err);
@@ -52,6 +95,11 @@ exports.getComments = async (req, res, next) => {
 exports.addComment = async (req, res, next) => {
   try {
     req.body.user = req.user.id;
+    const cleanText = (req.body.text || '').trim();
+    if (!cleanText) {
+      return res.status(400).json({ success: false, message: 'Please add some text' });
+    }
+    req.body.text = cleanText;
 
     let parent;
     let type;
@@ -69,6 +117,22 @@ exports.addComment = async (req, res, next) => {
 
     if (!parent) {
       return res.status(404).json({ success: false, message: 'Video or Post not found' });
+    }
+
+    // Check if an identical duplicate comment already exists by this user
+    const existingDuplicate = await Comment.findOne({
+      user: req.user.id,
+      ...(req.body.video ? { video: req.body.video } : { post: req.body.post }),
+      text: cleanText,
+    }).populate('user', 'name avatar channelName isVerified');
+
+    if (existingDuplicate) {
+      // Duplicate identified - return existing first comment
+      return res.status(200).json({
+        success: true,
+        data: existingDuplicate,
+        isDuplicate: true,
+      });
     }
 
     const comment = await Comment.create(req.body);
@@ -137,6 +201,16 @@ exports.addReply = async (req, res, next) => {
 
     const comment = await Comment.findById(req.params.id);
     if (!comment) return res.status(404).json({ success: false, message: 'Comment not found' });
+
+    // Check if duplicate reply exists
+    const existingReply = comment.replies.find(
+      (r) => r.user?.toString() === req.user.id.toString() && r.text?.trim().toLowerCase() === text.toLowerCase()
+    );
+    if (existingReply) {
+      await comment.populate('replies.user', 'name avatar channelName isVerified');
+      const populatedReply = comment.replies.id(existingReply._id);
+      return res.status(200).json({ success: true, data: populatedReply, isDuplicate: true });
+    }
 
     comment.replies.push({ user: req.user.id, text });
     await comment.save();

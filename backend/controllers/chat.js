@@ -176,7 +176,10 @@ exports.getMessages = async (req, res, next) => {
     const limit = parseInt(req.query.limit, 10) || 50;
     const skip = (page - 1) * limit;
 
-    const messages = await Message.find({ conversationId: conversation._id })
+    const messages = await Message.find({
+      conversationId: conversation._id,
+      deletedFor: { $ne: currentUserId },
+    })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
@@ -193,7 +196,10 @@ exports.getMessages = async (req, res, next) => {
       })
       .lean();
 
-    const total = await Message.countDocuments({ conversationId: conversation._id });
+    const total = await Message.countDocuments({
+      conversationId: conversation._id,
+      deletedFor: { $ne: currentUserId },
+    });
 
     res.status(200).json({
       success: true,
@@ -661,3 +667,189 @@ exports.getUnreadCount = async (req, res, next) => {
     next(err);
   }
 };
+
+/**
+ * @desc    Decline/reject a chat request (removes from user's active conversations)
+ * @route   POST /api/chat/conversations/:id/decline
+ * @access  Private
+ */
+exports.declineChat = async (req, res, next) => {
+  try {
+    const currentUserId = req.user._id;
+    const conversationId = req.params.id;
+
+    const conversation = await Conversation.findOne({
+      _id: conversationId,
+      participants: currentUserId,
+    });
+
+    if (!conversation) {
+      return res.status(404).json({ success: false, message: 'Conversation not found' });
+    }
+
+    // Add current user to deletedFor so it disappears from inbox
+    if (!conversation.deletedFor) conversation.deletedFor = [];
+    if (!conversation.deletedFor.some((id) => id.toString() === currentUserId.toString())) {
+      conversation.deletedFor.push(currentUserId);
+    }
+
+    // Reset unread counts for current user
+    if (conversation.unreadCounts) {
+      if (conversation.unreadCounts instanceof Map) {
+        conversation.unreadCounts.set(currentUserId.toString(), 0);
+      } else {
+        conversation.unreadCounts[currentUserId.toString()] = 0;
+      }
+    }
+
+    await conversation.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Chat request declined',
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * @desc    Unsend a message (removes completely from both sides)
+ * @route   POST /api/chat/messages/:id/unsend
+ * @access  Private
+ */
+exports.unsendMessage = async (req, res, next) => {
+  try {
+    const currentUserId = req.user._id;
+    const messageId = req.params.id;
+
+    const message = await Message.findById(messageId);
+    if (!message) {
+      return res.status(404).json({ success: false, message: 'Message not found' });
+    }
+
+    // Only sender can unsend
+    if (message.sender.toString() !== currentUserId.toString()) {
+      return res.status(403).json({ success: false, message: 'You can only unsend your own messages' });
+    }
+
+    const conversationId = message.conversationId;
+    const recipientId = message.recipient;
+
+    // Delete message permanently from database
+    await Message.findByIdAndDelete(messageId);
+
+    // Update conversation lastMessage
+    const conversation = await Conversation.findById(conversationId);
+    if (conversation) {
+      const latestRemaining = await Message.findOne({
+        conversationId,
+      })
+        .sort({ createdAt: -1 })
+        .populate('video', 'title')
+        .populate('post', 'text');
+
+      if (latestRemaining) {
+        let preview = latestRemaining.text || '';
+        if (latestRemaining.video) preview = `🎥 ${latestRemaining.video.title || 'Video'}`;
+        else if (latestRemaining.post) preview = `📝 ${latestRemaining.post.text ? latestRemaining.post.text.slice(0, 40) : 'Post'}`;
+
+        conversation.lastMessage = {
+          text: preview,
+          sender: latestRemaining.sender,
+          createdAt: latestRemaining.createdAt,
+          isRead: latestRemaining.isRead,
+        };
+      } else {
+        conversation.lastMessage = {
+          text: '',
+          sender: null,
+          createdAt: conversation.createdAt,
+          isRead: true,
+        };
+      }
+
+      await conversation.save();
+
+      // Dispatch socket events to conversation room and both users' rooms
+      const io = getIO();
+      if (io) {
+        io.to(`conversation:${conversationId}`).emit('message_unsent', {
+          messageId,
+          conversationId,
+        });
+        io.to(`user:${currentUserId}`).emit('message_unsent', {
+          messageId,
+          conversationId,
+        });
+        io.to(`user:${recipientId}`).emit('message_unsent', {
+          messageId,
+          conversationId,
+        });
+
+        const formattedSender = formatConversation(conversation, currentUserId);
+        const formattedRecipient = formatConversation(conversation, recipientId);
+        io.to(`user:${currentUserId}`).emit('conversation_updated', formattedSender);
+        io.to(`user:${recipientId}`).emit('conversation_updated', formattedRecipient);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Message unsent successfully',
+      data: { messageId, conversationId },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * @desc    Delete a message only for the current user
+ * @route   POST /api/chat/messages/:id/delete
+ * @access  Private
+ */
+exports.deleteMessageForMe = async (req, res, next) => {
+  try {
+    const currentUserId = req.user._id;
+    const messageId = req.params.id;
+
+    const message = await Message.findById(messageId);
+    if (!message) {
+      return res.status(404).json({ success: false, message: 'Message not found' });
+    }
+
+    // Verify user is a participant
+    const isParticipant =
+      message.sender.toString() === currentUserId.toString() ||
+      message.recipient.toString() === currentUserId.toString();
+
+    if (!isParticipant) {
+      return res.status(403).json({ success: false, message: 'Not authorized to delete this message' });
+    }
+
+    // Add user to message.deletedFor
+    if (!message.deletedFor) message.deletedFor = [];
+    if (!message.deletedFor.some((id) => id.toString() === currentUserId.toString())) {
+      message.deletedFor.push(currentUserId);
+      await message.save();
+    }
+
+    const io = getIO();
+    if (io) {
+      io.to(`user:${currentUserId}`).emit('message_deleted_for_me', {
+        messageId,
+        conversationId: message.conversationId,
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Message deleted for you',
+      data: { messageId, conversationId: message.conversationId },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+

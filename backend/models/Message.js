@@ -44,6 +44,12 @@ const messageSchema = new mongoose.Schema(
       ref: 'Post',
       default: null,
     },
+    deletedFor: [
+      {
+        type: mongoose.Schema.ObjectId,
+        ref: 'User',
+      },
+    ],
   },
   {
     timestamps: true,
@@ -54,6 +60,7 @@ const messageSchema = new mongoose.Schema(
 
 // High performance compound indexes for chat history queries and unread aggregation
 messageSchema.index({ conversationId: 1, createdAt: -1 });
+messageSchema.index({ conversationId: 1, deletedFor: 1, createdAt: -1 });
 messageSchema.index({ recipient: 1, isRead: 1 });
 
 module.exports = mongoose.model('Message', messageSchema);

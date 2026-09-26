@@ -22,19 +22,27 @@ import Colors from '../constants/Colors';
 import { RootState } from '../redux/store';
 import { chatService, resolveMediaUrl } from '../services/api';
 import { requestOnlineStatus } from '../services/socket';
-import { shareVideo, sharePost } from '../utils/shareHelper';
+import { shareVideo, sharePost, shareChannel } from '../utils/shareHelper';
 import VerifiedBadge from './VerifiedBadge';
 import AuthModal from './AuthModal';
+import { AppAdBanner } from './AppAds';
+import { formatViews } from '../utils/formatDate';
 import { hapticLight, hapticSelection } from '../utils/haptics';
 
 const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
 const FALLBACK_THUMBNAIL = 'https://via.placeholder.com/320x180.png?text=Bideo';
 
 export interface ShareModalItem {
-  type: 'video' | 'post';
+  type: 'video' | 'post' | 'channel';
   _id: string;
   title?: string;
   text?: string;
+  name?: string;
+  channelName?: string;
+  avatar?: string;
+  about?: string;
+  followersCount?: number;
+  isVerified?: boolean;
   thumbnail?: string;
   imageUrl?: string;
   isShort?: boolean;
@@ -115,22 +123,29 @@ export default function ShareModal({ visible, onClose, item }: ShareModalProps) 
   if (!item) return null;
 
   const isVideo = item.type === 'video';
+  const isPost = item.type === 'post';
+  const isChannel = item.type === 'channel';
+
   const shareUrl = isVideo
     ? `https://bideo.in/v/${item._id}`
-    : `https://bideo.in/p/${item._id}`;
+    : isPost
+    ? `https://bideo.in/p/${item._id}`
+    : `https://bideo.in/channel/${item._id}`;
 
-  const creatorName =
-    item.owner?.channelName ||
-    item.owner?.name ||
-    item.author?.channelName ||
-    item.author?.name ||
-    'Creator';
+  const creatorName = isChannel
+    ? item.channelName || item.name || 'Channel'
+    : item.owner?.channelName ||
+      item.owner?.name ||
+      item.author?.channelName ||
+      item.author?.name ||
+      'Creator';
 
-  const previewThumbnail =
-    item.thumbnail ||
-    item.imageUrl ||
-    (isVideo ? resolveMediaUrl(item.thumbnail) : resolveMediaUrl(item.imageUrl)) ||
-    FALLBACK_THUMBNAIL;
+  const previewThumbnail = isChannel
+    ? (item.avatar ? resolveMediaUrl(item.avatar) : FALLBACK_AVATAR)
+    : item.thumbnail ||
+      item.imageUrl ||
+      (isVideo ? resolveMediaUrl(item.thumbnail) : resolveMediaUrl(item.imageUrl)) ||
+      FALLBACK_THUMBNAIL;
 
   // Send item directly to a conversation
   const handleSendToChat = async (conv: any) => {
@@ -144,7 +159,7 @@ export default function ShareModal({ visible, onClose, item }: ShareModalProps) 
       await chatService.sendMessage({
         conversationId: convId,
         videoId: isVideo ? item._id : undefined,
-        postId: !isVideo ? item._id : undefined,
+        postId: isPost ? item._id : undefined,
         text: shareUrl,
       });
 
@@ -171,6 +186,27 @@ export default function ShareModal({ visible, onClose, item }: ShareModalProps) 
   // WhatsApp share
   const handleWhatsAppShare = async () => {
     onClose();
+
+    if (isChannel) {
+      const cleanName = (item.channelName || item.name || 'Creator').trim();
+      const text = `${shareUrl}\n\nCheck out @${cleanName} on Bideo`;
+      const whatsappUrl = `whatsapp://send?text=${encodeURIComponent(text)}`;
+      try {
+        const canOpen = await Linking.canOpenURL(whatsappUrl);
+        if (canOpen) {
+          await Linking.openURL(whatsappUrl);
+          return;
+        }
+      } catch {}
+
+      await shareChannel({
+        _id: item._id,
+        name: item.name,
+        channelName: item.channelName,
+      });
+      return;
+    }
+
     const cleanTitle = (item.title || item.text || '').trim();
     const contentType = isVideo ? (item.isShort ? 'Short' : 'Video') : 'Post';
     const text = cleanTitle
@@ -199,7 +235,13 @@ export default function ShareModal({ visible, onClose, item }: ShareModalProps) 
   // Native More Share
   const handleMoreShare = async () => {
     onClose();
-    if (isVideo) {
+    if (isChannel) {
+      await shareChannel({
+        _id: item._id,
+        name: item.name,
+        channelName: item.channelName,
+      });
+    } else if (isVideo) {
       await shareVideo({ _id: item._id, title: item.title, isShort: item.isShort });
     } else {
       await sharePost({ _id: item._id, text: item.text, authorName: creatorName });
@@ -214,10 +256,10 @@ export default function ShareModal({ visible, onClose, item }: ShareModalProps) 
       statusBarTranslucent
       onRequestClose={onClose}
     >
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable
-          style={[styles.sheetContainer, { paddingBottom: Math.max(insets.bottom, 14) + 8 }]}
-          onPress={(e) => e.stopPropagation()}
+      <View style={styles.overlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View
+          style={[styles.sheetContainer, { paddingBottom: Math.max(insets.bottom, 10) + 4 }]}
         >
           {/* Grabber */}
           <View style={styles.grabber} />
@@ -238,27 +280,45 @@ export default function ShareModal({ visible, onClose, item }: ShareModalProps) 
           <View style={styles.previewCard}>
             <Image
               source={{ uri: previewThumbnail }}
-              style={styles.previewImage}
+              style={[styles.previewImage, isChannel && styles.previewAvatar]}
               contentFit="cover"
               transition={120}
             />
             <View style={styles.previewMeta}>
               <View style={styles.previewTypeRow}>
                 <Ionicons
-                  name={isVideo ? (item.isShort ? 'flash' : 'videocam') : 'document-text'}
+                  name={
+                    isChannel
+                      ? 'person-circle-outline'
+                      : isVideo
+                      ? item.isShort
+                        ? 'flash'
+                        : 'videocam'
+                      : 'document-text'
+                  }
                   size={13}
                   color={Colors.primary}
                   style={{ marginRight: 4 }}
                 />
                 <Text style={styles.previewTypeBadge}>
-                  {isVideo ? (item.isShort ? 'Short' : 'Video') : 'Community Post'}
+                  {isChannel
+                    ? 'Channel'
+                    : isVideo
+                    ? item.isShort
+                      ? 'Short'
+                      : 'Video'
+                    : 'Community Post'}
                 </Text>
               </View>
               <Text style={styles.previewTitle} numberOfLines={2}>
-                {item.title || item.text || 'Bideo Content'}
+                {isChannel
+                  ? item.channelName || item.name || 'Channel'
+                  : item.title || item.text || 'Bideo Content'}
               </Text>
               <Text style={styles.previewCreator} numberOfLines={1}>
-                by {creatorName}
+                {isChannel
+                  ? `${formatViews(item.followersCount || 0)} followers`
+                  : `by ${creatorName}`}
               </Text>
             </View>
           </View>
@@ -315,13 +375,16 @@ export default function ShareModal({ visible, onClose, item }: ShareModalProps) 
                   </View>
                 )}
 
-                {/* Vertical list of contacts */}
+                {/* Vertical list of contacts - scrollable */}
                 <FlatList
                   data={filteredChats}
                   keyExtractor={(c) => c._id}
                   style={styles.chatsList}
-                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={styles.chatsListContent}
+                  showsVerticalScrollIndicator={true}
+                  nestedScrollEnabled={true}
                   keyboardShouldPersistTaps="handled"
+                  keyboardDismissMode="on-drag"
                   renderItem={({ item: conv }) => {
                     const other = conv.otherParticipant;
                     const isOnline = Boolean(other?._id && onlineMap[other._id]);
@@ -436,8 +499,13 @@ export default function ShareModal({ visible, onClose, item }: ShareModalProps) 
               </TouchableOpacity>
             </View>
           </View>
-        </Pressable>
-      </Pressable>
+
+          {/* Bottom Banner Ad */}
+          <View style={styles.bottomBannerWrapper}>
+            <AppAdBanner containerStyle={styles.bottomBannerContainer} />
+          </View>
+        </View>
+      </View>
 
       <AuthModal
         visible={authModalVisible}
@@ -515,6 +583,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: '#E5E7EB',
   },
+  previewAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
   previewMeta: {
     flex: 1,
     marginLeft: 12,
@@ -577,7 +650,10 @@ const styles = StyleSheet.create({
     color: Colors.text,
   },
   chatsList: {
-    maxHeight: 190,
+    maxHeight: 200,
+  },
+  chatsListContent: {
+    paddingBottom: 4,
   },
   chatRow: {
     flexDirection: 'row',
@@ -752,5 +828,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.text,
     textAlign: 'center',
+  },
+  bottomBannerWrapper: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    paddingTop: 4,
+  },
+  bottomBannerContainer: {
+    paddingVertical: 2,
+    marginVertical: 0,
   },
 });

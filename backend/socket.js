@@ -103,9 +103,9 @@ function initSocket(server) {
     });
 
     // When client enters a conversation screen
-    socket.on('join_conversation', ({ conversationId }) => {
-      if (!conversationId) return;
-      const convId = conversationId.toString();
+    socket.on('join_conversation', (payload) => {
+      const convId = (typeof payload === 'object' ? payload?.conversationId : payload)?.toString();
+      if (!convId) return;
       socket.join(`conversation:${convId}`);
 
       let convSet = socketConversations.get(socket.id);
@@ -117,9 +117,9 @@ function initSocket(server) {
     });
 
     // When client leaves a conversation screen
-    socket.on('leave_conversation', ({ conversationId }) => {
-      if (!conversationId) return;
-      const convId = conversationId.toString();
+    socket.on('leave_conversation', (payload) => {
+      const convId = (typeof payload === 'object' ? payload?.conversationId : payload)?.toString();
+      if (!convId) return;
       socket.leave(`conversation:${convId}`);
 
       const convSet = socketConversations.get(socket.id);
@@ -187,6 +187,19 @@ function isUserInConversation(userId, conversationId) {
   const userSockets = onlineUsers.get(idStr);
   if (!userSockets || userSockets.size === 0) return false;
 
+  // 1. Direct Socket.IO room adapter check (most accurate source of truth)
+  if (ioInstance && ioInstance.sockets && ioInstance.sockets.adapter) {
+    const room = ioInstance.sockets.adapter.rooms.get(`conversation:${convIdStr}`);
+    if (room && room.size > 0) {
+      for (const socketId of userSockets) {
+        if (room.has(socketId)) {
+          return true;
+        }
+      }
+    }
+  }
+
+  // 2. Active conversations Map check
   for (const socketId of userSockets) {
     const activeConvs = socketConversations.get(socketId);
     if (activeConvs && activeConvs.has(convIdStr)) {

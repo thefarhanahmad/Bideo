@@ -16,7 +16,7 @@ import VerifiedBadge from '../../components/VerifiedBadge';
 import { formatTimeAgo, formatViews } from '../../utils/formatDate';
 import { hapticLight } from '../../utils/haptics';
 import { shareChannel, shareVideo } from '../../utils/shareHelper';
-import ShareModal from '../../components/ShareModal';
+import ShareModal, { ShareModalItem } from '../../components/ShareModal';
 
 const { width } = Dimensions.get('window');
 const FALLBACK_AVATAR = 'https://via.placeholder.com/100x100.png?text=User';
@@ -39,6 +39,7 @@ export default function ChannelScreen() {
   const [selectedVideo, setSelectedVideo] = useState<any>(null);
   const [menuVisible, setMenuVisible] = useState(false);
   const [shareModalVisible, setShareModalVisible] = useState(false);
+  const [shareItem, setShareItem] = useState<ShareModalItem | null>(null);
 
   useEffect(() => {
     loadChannel(filter, sort);
@@ -107,13 +108,20 @@ export default function ChannelScreen() {
     }
   };
 
-  const handleShare = async () => {
+  const handleShare = () => {
     if (!channel) return;
-    await shareChannel({
-      _id: channel._id,
+    hapticLight();
+    setShareItem({
+      type: 'channel',
+      _id: channel._id || id,
       name: channel.name,
       channelName: channel.channelName,
+      avatar: channel.avatar,
+      about: channel.about,
+      followersCount: channel.followersCount,
+      isVerified: channel.isVerified,
     });
+    setShareModalVisible(true);
   };
 
   const handleChat = async () => {
@@ -155,6 +163,15 @@ export default function ChannelScreen() {
     if (!selectedVideo) return;
     setMenuVisible(false);
     hapticLight();
+    setShareItem({
+      type: 'video',
+      _id: selectedVideo._id,
+      title: selectedVideo.title,
+      thumbnail: selectedVideo.thumbnail,
+      isShort: Boolean(selectedVideo.isShort),
+      owner: channel,
+      duration: selectedVideo.duration,
+    });
     setShareModalVisible(true);
   };
 
@@ -562,20 +579,11 @@ export default function ChannelScreen() {
 
       <ShareModal
         visible={shareModalVisible}
-        onClose={() => setShareModalVisible(false)}
-        item={
-          selectedVideo
-            ? {
-                type: 'video',
-                _id: selectedVideo._id,
-                title: selectedVideo.title,
-                thumbnail: selectedVideo.thumbnail,
-                isShort: Boolean(selectedVideo.isShort),
-                owner: channel,
-                duration: selectedVideo.duration,
-              }
-            : null
-        }
+        onClose={() => {
+          setShareModalVisible(false);
+          setShareItem(null);
+        }}
+        item={shareItem}
       />
     </View>
   );

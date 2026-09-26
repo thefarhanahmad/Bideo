@@ -543,6 +543,21 @@ exports.updatePushToken = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Valid pushToken is required' });
     }
 
+    // 1. Remove this device push token from ANY OTHER user accounts (e.g. previous user on this device)
+    await User.updateMany(
+      { _id: { $ne: req.user.id } },
+      {
+        $pull: { pushTokens: pushToken },
+      }
+    );
+    await User.updateMany(
+      { _id: { $ne: req.user.id }, pushToken: pushToken },
+      {
+        $set: { pushToken: null },
+      }
+    );
+
+    // 2. Associate token with the current authenticated user
     await User.findByIdAndUpdate(req.user.id, {
       pushToken,
       $addToSet: { pushTokens: pushToken },
@@ -556,18 +571,50 @@ exports.updatePushToken = async (req, res, next) => {
 
 // @desc    Remove device push notification token on logout
 // @route   DELETE /api/auth/push-token
-// @access  Private
+// @access  Private / Soft
 exports.removePushToken = async (req, res, next) => {
   try {
-    const { pushToken } = req.body;
-    const update = {};
-    if (pushToken) {
-      update.$pull = { pushTokens: pushToken };
-    }
+    const { pushToken } = req.body || {};
+    const userId = req.user ? req.user.id : null;
 
-    await User.findByIdAndUpdate(req.user.id, {
-      ...(pushToken ? update : { pushToken: null, pushTokens: [] }),
-    });
+    if (userId) {
+      if (pushToken && typeof pushToken === 'string') {
+        // Remove this specific device token from the logging out user
+        await User.findByIdAndUpdate(userId, {
+          $pull: { pushTokens: pushToken },
+        });
+        await User.updateOne(
+          { _id: userId, pushToken: pushToken },
+          { $set: { pushToken: null } }
+        );
+
+        // Also purge this device token globally across all accounts
+        await User.updateMany(
+          { pushToken: pushToken },
+          { $set: { pushToken: null } }
+        );
+        await User.updateMany(
+          {},
+          { $pull: { pushTokens: pushToken } }
+        );
+      } else {
+        // Clear active push token for this user
+        await User.findByIdAndUpdate(userId, {
+          pushToken: null,
+          pushTokens: [],
+        });
+      }
+    } else if (pushToken && typeof pushToken === 'string') {
+      // Unauthenticated / expired session: purge this device push token across all accounts
+      await User.updateMany(
+        { pushToken: pushToken },
+        { $set: { pushToken: null } }
+      );
+      await User.updateMany(
+        {},
+        { $pull: { pushTokens: pushToken } }
+      );
+    }
 
     res.status(200).json({ success: true, data: {} });
   } catch (err) {

@@ -71,14 +71,17 @@ export const setAuthToken = (token?: string | null) => {
 export const clearAuthSession = async () => {
   try {
     const pushToken = await AsyncStorage.getItem('push_token');
-    if (pushToken) {
-      await api.delete('/auth/push-token', { data: { pushToken } }).catch(() => {});
-    }
+    // Always call backend to revoke this device's push token while auth header is present
+    await api.delete('/auth/push-token', { data: { pushToken: pushToken || undefined } }).catch(() => {});
     await AsyncStorage.multiRemove(['token', 'cached_user', 'push_token']);
   } catch {
     // ignore
   }
   setAuthToken(null);
+  try {
+    const { disconnectSocket } = require('./socket');
+    disconnectSocket();
+  } catch {}
 };
 
 export const resolveMediaUrl = (url?: string | null): string => {
@@ -223,6 +226,10 @@ export const chatService = {
     const response = await api.post(`/chat/conversations/${conversationId}/accept`);
     return response.data?.data;
   },
+  declineChat: async (conversationId: string) => {
+    const response = await api.post(`/chat/conversations/${conversationId}/decline`);
+    return response.data;
+  },
   blockUser: async (conversationId: string) => {
     const response = await api.post(`/chat/conversations/${conversationId}/block`);
     return response.data?.data;
@@ -230,6 +237,14 @@ export const chatService = {
   unblockUser: async (conversationId: string) => {
     const response = await api.post(`/chat/conversations/${conversationId}/unblock`);
     return response.data?.data;
+  },
+  unsendMessage: async (messageId: string) => {
+    const response = await api.post(`/chat/messages/${messageId}/unsend`);
+    return response.data;
+  },
+  deleteMessage: async (messageId: string) => {
+    const response = await api.post(`/chat/messages/${messageId}/delete`);
+    return response.data;
   },
   getUnreadCount: async () => {
     const response = await api.get('/chat/unread-count');

@@ -11,6 +11,7 @@ import { formatTimeAgo } from '../utils/formatDate';
 import { RootState } from '../redux/store';
 import AuthModal from '../components/AuthModal';
 import VerifiedBadge from '../components/VerifiedBadge';
+import { AppAdBanner } from '../components/AppAds';
 
 const FALLBACK_AVATAR = 'https://via.placeholder.com/100x100.png?text=User';
 
@@ -54,24 +55,39 @@ export default function NotificationsScreen() {
       );
     }
 
-    if (item.video?._id) {
-      if (item.video.isShort) {
-        router.push({ pathname: '/shorts', params: { initialShortId: item.video._id } });
+    const videoObj = item.video;
+    const postObj = item.post;
+    const actorObj = item.actor;
+
+    if (videoObj) {
+      const vidId = (videoObj._id || videoObj).toString();
+      const isShort = Boolean(videoObj.isShort);
+      if (isShort) {
+        router.push({ pathname: '/shorts', params: { initialShortId: vidId } });
       } else {
-        router.push(`/video/${item.video._id}`);
+        router.push(`/video/${vidId}`);
       }
-    } else if (item.post?._id) {
-      router.push(`/post/${item.post._id}`);
-    } else if (item.video) {
-      router.push(`/video/${item.video}`);
-    } else if (item.post) {
-      router.push(`/post/${item.post}`);
-    } else if (item.type === 'new_follower' && (item.actor?._id || item.actor)) {
-      router.push(`/channel/${item.actor?._id || item.actor}`);
-    } else if (item.type === 'milestone') {
-      if (item.video) router.push(`/video/${item.video}`);
-      else router.push('/(tabs)');
-    } else if (item.type === 'system') {
+      return;
+    }
+
+    if (postObj) {
+      const pId = (postObj._id || postObj).toString();
+      router.push(`/post/${pId}`);
+      return;
+    }
+
+    if (item.type === 'new_follower' && actorObj) {
+      const actId = (actorObj._id || actorObj).toString();
+      router.push(`/channel/${actId}`);
+      return;
+    }
+
+    if (item.type === 'milestone') {
+      router.push('/(tabs)');
+      return;
+    }
+
+    if (item.type === 'system') {
       const msg = (item.message || '').toLowerCase();
       if (msg.includes('monetiz')) {
         router.push('/monetization');
@@ -80,8 +96,13 @@ export default function NotificationsScreen() {
       } else {
         router.push('/(tabs)');
       }
-    } else if (item.actor?._id || item.actor) {
-      router.push(`/channel/${item.actor?._id || item.actor}`);
+      return;
+    }
+
+    if (actorObj) {
+      const actId = (actorObj._id || actorObj).toString();
+      router.push(`/channel/${actId}`);
+      return;
     }
   };
 
@@ -237,6 +258,11 @@ export default function NotificationsScreen() {
           onRefresh={loadNotifications}
         />
       )}
+
+      {/* Bottom Sticky Banner Ad */}
+      <View style={styles.bottomBannerWrapper}>
+        <AppAdBanner containerStyle={styles.bottomBannerContainer} />
+      </View>
     </View>
   );
 }
@@ -357,5 +383,17 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontSize: 15,
     fontWeight: '700',
+  },
+  bottomBannerWrapper: {
+    width: '100%',
+    backgroundColor: Colors.white,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bottomBannerContainer: {
+    paddingVertical: 4,
+    marginVertical: 0,
   },
 });
