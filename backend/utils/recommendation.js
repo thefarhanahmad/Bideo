@@ -163,6 +163,8 @@ const rankAndShufflePosts = (posts) => {
 
 module.exports = {
   shuffle,
+  extractKeywords,
+  STOP_WORDS,
   getUserInterestProfile,
   rankAndShuffleVideos,
   rankAndShufflePosts,

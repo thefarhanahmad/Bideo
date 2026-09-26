@@ -1443,11 +1443,13 @@ exports.uploadVideo = async (req, res, next) => {
     // Automatically audit for adult/NSFW content and purge within 10 seconds if detected
     scheduleVideoModeration(video, 10000);
 
-    // Asynchronously notify creator's followers of the new video upload
-    notifyFollowersOfUpload({
-      creatorId: targetOwnerId,
-      video,
-    }).catch((notifErr) => console.error("Failed to notify followers of video upload:", notifErr));
+    // Asynchronously notify creator's followers and interested non-followers of the new video upload
+    setImmediate(() => {
+      notifyFollowersOfUpload({
+        creatorId: targetOwnerId,
+        video,
+      }).catch((notifErr) => console.error("Failed to notify followers of video upload:", notifErr));
+    });
 
     res.status(201).json({ success: true, data: video });
   } catch (err) {

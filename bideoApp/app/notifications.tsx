@@ -229,12 +229,19 @@ export default function NotificationsScreen() {
                 {/* Message & Content Details */}
                 <View style={styles.itemText}>
                   <Text style={styles.message} numberOfLines={3}>
-                    {item.actor?.channelName || item.actor?.name ? (
-                      <Text style={styles.actorName}>
-                        {item.actor.channelName || item.actor.name}{' '}
-                      </Text>
-                    ) : null}
-                    {item.message || 'New activity on your content'}
+                    {(() => {
+                      const actorName = item.actor?.channelName || item.actor?.name;
+                      const msg = item.message || 'New activity on your content';
+                      if (actorName && (msg.toLowerCase().startsWith(actorName.toLowerCase()) || msg.toLowerCase().startsWith('recommended'))) {
+                        return msg;
+                      }
+                      return (
+                        <>
+                          {actorName ? <Text style={styles.actorName}>{actorName} </Text> : null}
+                          {msg}
+                        </>
+                      );
+                    })()}
                   </Text>
                   <Text style={styles.time}>{formatTimeAgo(item.createdAt)}</Text>
                 </View>

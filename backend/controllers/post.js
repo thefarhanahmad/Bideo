@@ -147,10 +147,12 @@ exports.createPost = async (req, res, next) => {
     schedulePostModeration(post, 10000);
 
     // Asynchronously notify creator's followers of the new post
-    notifyFollowersOfUpload({
-      creatorId: ownerId,
-      post,
-    }).catch((notifErr) => console.error('Failed to notify followers of post upload:', notifErr));
+    setImmediate(() => {
+      notifyFollowersOfUpload({
+        creatorId: ownerId,
+        post,
+      }).catch((notifErr) => console.error('Failed to notify followers of post upload:', notifErr));
+    });
 
     res.status(201).json({ success: true, data: post });
   } catch (err) {

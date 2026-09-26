@@ -4,6 +4,7 @@ const Video = require('../models/Video');
 const Post = require('../models/Post');
 const Comment = require('../models/Comment');
 const Follower = require('../models/Follower');
+const { extractKeywords } = require('./recommendation');
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
@@ -91,6 +92,11 @@ async function sendBatchPushNotifications(messages, recipientIdToClean = null) {
       }
     } catch (batchErr) {
       console.error('Failed to send Expo push batch:', batchErr?.message || batchErr);
+    }
+
+    // Gentle 50ms pause between chunks to respect Expo rate limits and avoid socket congestion
+    if (i + CHUNK_SIZE < messages.length) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
     }
   }
 }
@@ -376,8 +382,192 @@ async function notifyFollowersOfUpload({ creatorId, video, post }) {
     if (pushMessages.length > 0) {
       await sendBatchPushNotifications(pushMessages);
     }
+
+    // 4. Asynchronously notify interested non-followers whose watch history matches video keywords
+    if (video) {
+      notifyInterestedNonFollowersOfUpload({
+        creatorId,
+        video,
+        followerIds,
+      }).catch((nonFollowerErr) =>
+        console.error('Failed to notify interested non-followers of upload:', nonFollowerErr?.message || nonFollowerErr)
+      );
+    }
   } catch (err) {
     console.error('Failed to notify followers of upload:', err?.message || err);
+  }
+}
+
+/**
+ * Automatically notify interested non-followers whose watch history (last 10 videos)
+ * matches keywords from the newly uploaded video.
+ * Designed to be production-grade, indexed, non-blocking, and anti-spam protected.
+ */
+async function notifyInterestedNonFollowersOfUpload({ creatorId, video, followerIds = [] }) {
+  if (!creatorId || !video) return;
+
+  try {
+    const creator = await User.findById(creatorId).select('name channelName').lean();
+    if (!creator) return;
+    const creatorName = creator.channelName || creator.name || 'A creator';
+
+    // 1. Extract meaningful topic keywords from the uploaded video
+    const titleKeywords = extractKeywords(video.title || '');
+    const descKeywords = extractKeywords(video.description || '');
+    const tagKeywords = Array.isArray(video.tags)
+      ? video.tags.map((t) => (typeof t === 'string' ? t.toLowerCase().trim() : '')).filter(Boolean)
+      : [];
+
+    const combinedKeywords = Array.from(new Set([...titleKeywords, ...tagKeywords, ...descKeywords])).slice(0, 8);
+    if (combinedKeywords.length === 0 && !video.category) {
+      return;
+    }
+
+    // 2. Find system videos that share these keywords or category (indexed query)
+    const videoQueryOr = [];
+    if (combinedKeywords.length > 0) {
+      videoQueryOr.push({ tags: { $in: combinedKeywords } });
+      const keywordRegexes = combinedKeywords.map((kw) => new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'));
+      videoQueryOr.push({ title: { $in: keywordRegexes } });
+    }
+    if (video.category) {
+      videoQueryOr.push({ category: video.category });
+    }
+
+    const matchingVideos = await Video.find({
+      _id: { $ne: video._id },
+      visibility: 'public',
+      $or: videoQueryOr,
+    })
+      .select('_id')
+      .sort({ views: -1, createdAt: -1 })
+      .limit(100)
+      .lean();
+
+    if (!matchingVideos || matchingVideos.length === 0) {
+      return;
+    }
+
+    const matchingVideoIds = matchingVideos.map((v) => v._id);
+    const matchingVideoIdSet = new Set(matchingVideoIds.map((id) => id.toString()));
+
+    // 3. Exclude followers, the creator, and blocked users
+    const excludedUserIds = new Set(followerIds.map((id) => id.toString()));
+    excludedUserIds.add(creatorId.toString());
+
+    // 4. Query candidate non-followers whose watchHistory contains any of matchingVideoIds
+    const candidateUsers = await User.find({
+      _id: { $nin: Array.from(excludedUserIds) },
+      isBlocked: { $ne: true },
+      watchHistory: { $in: matchingVideoIds },
+    })
+      .select('_id watchHistory pushToken pushTokens')
+      .limit(1200)
+      .lean();
+
+    if (!candidateUsers || candidateUsers.length === 0) {
+      return;
+    }
+
+    // 5. Strict verification: Check that at least one matching video is in the user's LAST 10 watched videos
+    // Safe cap of 500 qualified non-followers (configurable via .env if needed)
+    const MAX_NON_FOLLOWER_NOTIFICATIONS = parseInt(process.env.MAX_RECOMMENDED_NOTIF_COUNT, 10) || 500;
+    const qualifiedUserIds = [];
+    const qualifiedUsersMap = new Map();
+
+    for (const u of candidateUsers) {
+      if (qualifiedUserIds.length >= MAX_NON_FOLLOWER_NOTIFICATIONS) break;
+
+      const last10Watched = (u.watchHistory || []).slice(0, 10);
+      const hasRecentMatch = last10Watched.some((vidId) =>
+        matchingVideoIdSet.has(vidId ? vidId.toString() : '')
+      );
+
+      if (hasRecentMatch) {
+        qualifiedUserIds.push(u._id);
+        qualifiedUsersMap.set(u._id.toString(), u);
+      }
+    }
+
+    if (qualifiedUserIds.length === 0) {
+      return;
+    }
+
+    // 6. Anti-Spam frequency cap: Filter out users who already received a video notification in the last 6 hours
+    const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
+    const recentNotifUsers = await Notification.distinct('recipient', {
+      recipient: { $in: qualifiedUserIds },
+      type: 'video_upload',
+      createdAt: { $gte: sixHoursAgo },
+    });
+    const recentNotifUserSet = new Set(recentNotifUsers.map((id) => id.toString()));
+
+    const targetUserIds = qualifiedUserIds.filter((uid) => !recentNotifUserSet.has(uid.toString()));
+    if (targetUserIds.length === 0) {
+      return;
+    }
+
+    // 7. Prepare notification payload
+    const isShort = video.isShort === true || video.isShort === 'true';
+    const cleanTitle = video.title
+      ? video.title.length > 40
+        ? `${video.title.substring(0, 40)}...`
+        : video.title
+      : 'a new video';
+
+    const notifMessage = `Recommended for you: ${creatorName} uploaded a new ${isShort ? 'Short' : 'video'}: "${cleanTitle}"`;
+    const pushTitle = `💡 Recommended for you`;
+    const pushBody = `${creatorName} uploaded: "${cleanTitle}"`;
+    const pushData = {
+      type: 'video_upload',
+      videoId: video._id.toString(),
+      isShort,
+      screen: isShort ? `/shorts?initialShortId=${video._id}` : `/video/${video._id}`,
+    };
+
+    // 8. Batch insert in-app notifications
+    const notificationsToInsert = targetUserIds.map((uId) => ({
+      recipient: uId,
+      actor: creatorId,
+      type: 'video_upload',
+      video: video._id,
+      message: notifMessage,
+    }));
+
+    await Notification.insertMany(notificationsToInsert, { ordered: false }).catch(() => {});
+
+    // 9. Batch send push notifications to mobile devices with push tokens
+    const pushMessages = [];
+    targetUserIds.forEach((uId) => {
+      const u = qualifiedUsersMap.get(uId.toString());
+      if (!u) return;
+
+      const tokens = new Set();
+      if (u.pushToken) tokens.add(u.pushToken);
+      if (Array.isArray(u.pushTokens)) {
+        u.pushTokens.forEach((t) => t && tokens.add(t));
+      }
+
+      tokens.forEach((to) => {
+        if (typeof to === 'string' && (to.startsWith('ExponentPushToken[') || to.startsWith('ExpoPushToken['))) {
+          pushMessages.push({
+            to,
+            sound: 'default',
+            title: pushTitle,
+            body: pushBody,
+            data: pushData,
+            priority: 'high',
+            channelId: 'default',
+          });
+        }
+      });
+    });
+
+    if (pushMessages.length > 0) {
+      await sendBatchPushNotifications(pushMessages);
+    }
+  } catch (err) {
+    console.error('Failed to notify interested non-followers of upload:', err?.message || err);
   }
 }
 
@@ -435,6 +625,7 @@ module.exports = {
   notifyAndPush,
   sendPushForEvent,
   notifyFollowersOfUpload,
+  notifyInterestedNonFollowersOfUpload,
   checkAndNotifyFollowerMilestone,
   checkAndNotifyViewMilestone,
 };

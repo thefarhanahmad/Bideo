@@ -251,5 +251,6 @@ userSchema.methods.getSignedJwtToken = function () {
 };
 
 userSchema.index({ isVerified: 1, verifiedSource: 1, verifiedUntil: 1 });
+userSchema.index({ watchHistory: 1 });
 
 module.exports = mongoose.model('User', userSchema);
