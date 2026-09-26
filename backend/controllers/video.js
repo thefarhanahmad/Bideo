@@ -1183,25 +1183,6 @@ exports.uploadVideo = async (req, res, next) => {
       message: 'Video & Shorts upload is temporarily under scheduled maintenance while we upgrade our cloud storage servers. Uploads will be back shortly. Thank you for your patience and support! 🙏',
     });
   }
-
-  // Creator Email Enforcement (Requires email added; verification not required)
-  const userEmail = req.user?.email ? String(req.user.email).trim() : '';
-  if (req.user && req.user.role !== 'admin' && !userEmail) {
-    if (req.files) {
-      if (req.files.video && req.files.video[0]?.path) {
-        try { require('fs').unlinkSync(req.files.video[0].path); } catch {}
-      }
-      if (req.files.thumbnail && req.files.thumbnail[0]?.path) {
-        try { require('fs').unlinkSync(req.files.thumbnail[0].path); } catch {}
-      }
-    }
-    return res.status(403).json({
-      success: false,
-      code: 'EMAIL_REQUIRED',
-      message: 'Please add your email address in your profile before uploading videos or shorts.',
-    });
-  }
-
   try {
     if (!req.files || !req.files.video || !req.files.video[0]) {
       return res

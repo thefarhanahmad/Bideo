@@ -120,10 +120,7 @@ export default function EditChannelScreen() {
     } catch (err: any) {
       hapticLight();
       const msg = err.response?.data?.message || 'Failed to send verification email. Please try again.';
-      showAlert(
-        'Unable to Send Code',
-        `${msg}\n\nNote: You can simply tap "Publish Changes" below to save your email. Once saved, you can upload videos and shorts immediately!`
-      );
+      showAlert('Unable to Send Code', msg);
     } finally {
       setSendingOtp(false);
     }
@@ -134,7 +131,7 @@ export default function EditChannelScreen() {
     const trimmedOtp = otpCode.trim();
 
     if (!trimmedOtp || trimmedOtp.length !== 6) {
-      showAlert('Invalid Code', 'Please enter the 6-digit verification code sent to your email.');
+      showAlert('Invalid Code', 'Please enter the 6-digit verification code.');
       return;
     }
 
@@ -161,7 +158,7 @@ export default function EditChannelScreen() {
         }
       } catch {}
 
-      showAlert('Email Verified! 🎉', 'Your creator email has been verified. You can now upload videos, shorts, and community posts!');
+      showAlert('Email Verified! 🎉', 'Your Gmail address has been verified.');
     } catch (err: any) {
       hapticLight();
       const msg = err.response?.data?.message || 'Verification failed. Please check the code and try again.';
@@ -242,7 +239,7 @@ export default function EditChannelScreen() {
     if (trimmedEmail) {
       const emailRegex = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/;
       if (!emailRegex.test(trimmedEmail)) {
-        showAlert('Invalid Email', 'Please enter a valid Gmail address.');
+        showAlert('Invalid Email', 'Please enter a valid email address.');
         return;
       }
     }
@@ -255,9 +252,7 @@ export default function EditChannelScreen() {
       formData.append('name', name.trim());
       formData.append('channelName', trimmedChannelName);
       formData.append('about', about);
-      if (trimmedEmail) {
-        formData.append('email', trimmedEmail);
-      }
+      formData.append('email', trimmedEmail);
       
       const isLocalAvatar = avatar?.startsWith('file://') || avatar?.startsWith('content://');
       const isRemoteAvatar = avatar?.startsWith('http://') || avatar?.startsWith('https://');
@@ -498,29 +493,10 @@ export default function EditChannelScreen() {
             )}
           </View>
 
-          {/* Gmail Section right after Channel Name */}
+          {/* Gmail Section */}
           <View style={styles.inputGroup}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Text style={[styles.fieldLabel, { marginBottom: 0 }]}>Gmail / Email</Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    hapticSelection();
-                    showAlert(
-                      'Gmail / Email',
-                      isEmailVerified
-                        ? 'Your Gmail is verified. Creator upload privileges are active on this channel.'
-                        : user?.email
-                        ? 'Your email is saved and creator upload privileges are active! You can optionally verify with OTP anytime.'
-                        : 'Add your Gmail address to unlock uploading videos, shorts, and community posts. No verification required right now.'
-                    );
-                  }}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  style={{ marginLeft: 6 }}
-                >
-                  <Ionicons name="information-circle-outline" size={17} color={Colors.textGray} />
-                </TouchableOpacity>
-              </View>
+              <Text style={[styles.fieldLabel, { marginBottom: 0 }]}>Gmail</Text>
               {isEmailVerified ? (
                 <View style={styles.verifiedEmailBadge}>
                   <Ionicons name="checkmark-circle" size={13} color="#059669" />
@@ -542,34 +518,29 @@ export default function EditChannelScreen() {
                 <View style={styles.sendOtpRow}>
                   {!isEmailVerified && (
                     <TouchableOpacity
-                      style={[styles.smallSendOtpBtn, { backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' }]}
+                      style={styles.smallSendOtpBtn}
                       onPress={handleSendOtp}
                       disabled={sendingOtp}
                       activeOpacity={0.8}
                     >
                       {sendingOtp ? (
-                        <ActivityIndicator size="small" color={Colors.primary} />
+                        <ActivityIndicator size="small" color={Colors.white} />
                       ) : (
-                        <Text style={[styles.smallSendOtpBtnText, { color: Colors.primary }]}>Verify with OTP</Text>
+                        <Text style={styles.smallSendOtpBtnText}>Verify OTP</Text>
                       )}
                     </TouchableOpacity>
                   )}
                   <TouchableOpacity
-                    style={styles.smallSendOtpBtn}
+                    style={[styles.smallSendOtpBtn, { backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' }]}
                     onPress={() => {
                       hapticSelection();
                       setIsEditingEmail(true);
                     }}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.smallSendOtpBtnText}>Change</Text>
+                    <Text style={[styles.smallSendOtpBtnText, { color: Colors.text }]}>Change</Text>
                   </TouchableOpacity>
                 </View>
-                <Text style={styles.emailHelpText}>
-                  {isEmailVerified
-                    ? 'Your Gmail is verified and creator uploads are active.'
-                    : 'Email added! You can upload videos, shorts, and posts now. Verification is optional.'}
-                </Text>
               </View>
             ) : (
               <View>
@@ -597,25 +568,18 @@ export default function EditChannelScreen() {
                     </TouchableOpacity>
                   )}
                   <TouchableOpacity
-                    style={[
-                      styles.smallSendOtpBtn,
-                      { backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#CBD5E1' },
-                      (!emailInput.trim() || sendingOtp) && styles.disabledBtn
-                    ]}
+                    style={[styles.smallSendOtpBtn, (!emailInput.trim() || sendingOtp) && styles.disabledBtn]}
                     onPress={handleSendOtp}
                     disabled={!emailInput.trim() || sendingOtp}
                     activeOpacity={0.8}
                   >
                     {sendingOtp ? (
-                      <ActivityIndicator size="small" color={Colors.primary} />
+                      <ActivityIndicator size="small" color={Colors.white} />
                     ) : (
-                      <Text style={[styles.smallSendOtpBtnText, { color: Colors.primary }]}>Verify with OTP (Optional)</Text>
+                      <Text style={styles.smallSendOtpBtnText}>Send OTP</Text>
                     )}
                   </TouchableOpacity>
                 </View>
-                <Text style={styles.emailHelpText}>
-                  Adding your Gmail address unlocks video, short, and post uploads. Tap "Publish Changes" below to save.
-                </Text>
               </View>
             )}
           </View>
@@ -713,7 +677,7 @@ export default function EditChannelScreen() {
                 {verifyingOtp ? (
                   <ActivityIndicator size="small" color={Colors.white} />
                 ) : (
-                  <Text style={styles.otpVerifyBtnText}>Verify & Save</Text>
+                  <Text style={styles.otpVerifyBtnText}>Verify OTP</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -992,12 +956,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#D97706',
-  },
-  emailHelpText: {
-    fontSize: 12,
-    color: Colors.textGray,
-    marginTop: 6,
-    lineHeight: 16,
   },
   sendOtpRow: {
     flexDirection: 'row',

@@ -14,7 +14,6 @@ export default function UploadScreen() {
   const { isAuthenticated, user, loading: authLoading } = useSelector((state: RootState) => state.auth);
   const [authModalVisible, setAuthModalVisible] = useState(false);
   const [showChannelPrompt, setShowChannelPrompt] = useState(false);
-  const [showEmailPrompt, setShowEmailPrompt] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -23,16 +22,11 @@ export default function UploadScreen() {
           setAuthModalVisible(true);
         } else if (!user?.channelName) {
           setShowChannelPrompt(true);
-          setShowEmailPrompt(false);
-        } else if (!user?.email || !user.email.trim()) {
-          setShowChannelPrompt(false);
-          setShowEmailPrompt(true);
         } else {
           setShowChannelPrompt(false);
-          setShowEmailPrompt(false);
         }
       }
-    }, [isAuthenticated, authLoading, user?.channelName, user?.email])
+    }, [isAuthenticated, authLoading, user?.channelName])
   );
 
   if (!isAuthenticated) {
@@ -97,40 +91,6 @@ export default function UploadScreen() {
     );
   }
 
-  if (showEmailPrompt) {
-    return (
-      <View style={styles.center}>
-        <View style={styles.promptCard}>
-          <View style={styles.iconCircle}>
-            <Ionicons name="mail-unread-outline" size={42} color={Colors.primary} />
-          </View>
-          <Text style={styles.promptTitle}>Email Required</Text>
-          <Text style={styles.promptSubtitle}>
-            Please add your Gmail address in your profile to unlock uploading videos, shorts, and community posts.
-          </Text>
-
-          <TouchableOpacity
-            style={styles.mainLoginBtn}
-            onPress={() => {
-              hapticSelection();
-              router.push('/edit-channel');
-            }}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.mainLoginBtnText}>Add Gmail</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.secondaryBtn}
-            onPress={() => router.replace('/')}
-          >
-            <Text style={styles.secondaryBtnText}>Maybe Later</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
-
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <View style={styles.headerRow}>
@@ -150,17 +110,6 @@ export default function UploadScreen() {
             activeOpacity={0.85}
             onPress={() => {
               hapticSelection();
-              if (!user?.email || !user.email.trim()) {
-                showAlert(
-                  'Email Required',
-                  'To upload content on Bideo, please add your Gmail address in your profile.',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Add Email', onPress: () => router.push('/edit-channel') },
-                  ]
-                );
-                return;
-              }
               router.push(item.route);
             }}
           >

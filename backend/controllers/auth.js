@@ -375,6 +375,7 @@ exports.updateChannel = async (req, res, next) => {
     }
 
     let trimmedEmail = undefined;
+    let shouldClearEmail = false;
     if (email !== undefined) {
       if (typeof email === 'string' && email.trim().length > 0) {
         trimmedEmail = email.trim().toLowerCase();
@@ -401,6 +402,8 @@ exports.updateChannel = async (req, res, next) => {
             message: 'This email address is already linked to another account.',
           });
         }
+      } else if (typeof email === 'string' && email.trim().length === 0) {
+        shouldClearEmail = true;
       }
     }
 
@@ -414,9 +417,12 @@ exports.updateChannel = async (req, res, next) => {
     if (avatar !== undefined) updateData.avatar = avatar;
     if (coverImage !== undefined) updateData.coverImage = coverImage;
 
-    if (trimmedEmail !== undefined && trimmedEmail !== user.email) {
+    const updateOps = { $set: updateData };
+    if (shouldClearEmail && user.email) {
+      updateOps.$unset = { email: 1 };
+      updateData.isEmailVerified = false;
+    } else if (trimmedEmail !== undefined && trimmedEmail !== user.email) {
       updateData.email = trimmedEmail;
-      // Mark verified so older app versions automatically allow uploads without prompting OTP
       updateData.isEmailVerified = true;
     }
 
@@ -434,7 +440,7 @@ exports.updateChannel = async (req, res, next) => {
 
     const updatedUser = await User.findByIdAndUpdate(
       req.user.id,
-      updateData,
+      updateOps,
       { new: true, runValidators: true }
     );
 

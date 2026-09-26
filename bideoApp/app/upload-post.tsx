@@ -18,19 +18,6 @@ export default function UploadPostScreen() {
   const { user } = useSelector((state: RootState) => state.auth);
   const { editPostId } = useLocalSearchParams<{ editPostId?: string }>();
 
-  useEffect(() => {
-    if (user && (!user.email || !user.email.trim())) {
-      showAlert(
-        'Email Required',
-        'To upload community posts on Bideo, please add your Gmail address in your profile.',
-        [
-          { text: 'Go Back', style: 'cancel', onPress: () => router.back() },
-          { text: 'Add Email', onPress: () => router.replace('/edit-channel') },
-        ]
-      );
-    }
-  }, [user]);
-
   const [postText, setPostText] = useState('');
   const [postImage, setPostImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [postImageChanged, setPostImageChanged] = useState(false);

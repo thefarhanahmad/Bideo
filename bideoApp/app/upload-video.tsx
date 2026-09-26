@@ -21,19 +21,6 @@ export default function UploadVideoScreen() {
   const { user } = useSelector((state: RootState) => state.auth);
   const { editId, type } = useLocalSearchParams<{ editId?: string; type?: 'video' | 'short' }>();
 
-  useEffect(() => {
-    if (user && (!user.email || !user.email.trim())) {
-      showAlert(
-        'Email Required',
-        'To upload videos or shorts on Bideo, please add your Gmail address in your profile.',
-        [
-          { text: 'Go Back', style: 'cancel', onPress: () => router.back() },
-          { text: 'Add Email', onPress: () => router.replace('/edit-channel') },
-        ]
-      );
-    }
-  }, [user]);
-
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');

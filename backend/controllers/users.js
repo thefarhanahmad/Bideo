@@ -1920,7 +1920,7 @@ exports.verifyEmailOtp = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: 'Email verified successfully! Creator upload privileges are now active.',
+      message: 'Email verified successfully!',
       data: {
         id: user._id,
         name: user.name,
@@ -1977,7 +1977,7 @@ exports.updateEmail = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: 'Email updated successfully. You can upload videos and posts now!',
+      message: 'Email updated successfully!',
       data: {
         id: user._id,
         name: user.name,
