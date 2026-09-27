@@ -55,7 +55,7 @@ let lastHandledNotificationId: string | null = null;
 /**
  * Robust notification navigation handler that resolves videos, shorts, posts, channels, and chats
  */
-export function handleNotificationNavigation(router: any, data: any) {
+export async function handleNotificationNavigation(router: any, data: any) {
   if (!data || !router) return;
 
   const isShort = data.isShort === true || data.isShort === 'true';
@@ -80,6 +80,11 @@ export function handleNotificationNavigation(router: any, data: any) {
       ? data.screen.match(/\/chat\/([a-zA-Z0-9_-]+)/)?.[1]
       : null);
 
+  // If there is no specific target and no explicit screen, stay on Home feed
+  if (!conversationId && !videoId && !postId && !channelId && !data.screen) {
+    return;
+  }
+
   const navKey = conversationId
     ? `chat:${conversationId}`
     : videoId
@@ -88,7 +93,7 @@ export function handleNotificationNavigation(router: any, data: any) {
     ? `post:${postId}`
     : channelId
     ? `channel:${channelId}`
-    : data.screen || 'notifications';
+    : data.screen;
 
   const now = Date.now();
   // Prevent duplicate navigation within 1.5 seconds for the same destination
@@ -111,9 +116,15 @@ export function handleNotificationNavigation(router: any, data: any) {
     } else if (channelId) {
       router.push(`/channel/${channelId}`);
     } else if (data.screen) {
+      // If navigating to notifications, only open if authenticated so guests open on Home feed
+      if (data.screen === '/notifications' || data.screen.includes('notification')) {
+        const token = await AsyncStorage.getItem('token');
+        if (!token) {
+          console.log('Suppressing notifications redirect for guest/unauthenticated user');
+          return;
+        }
+      }
       router.push(data.screen);
-    } else {
-      router.push('/notifications');
     }
   } catch (err) {
     console.error('Error executing notification navigation:', err);
@@ -220,24 +231,7 @@ export function setupNotificationListeners(router: any) {
     return () => {};
   }
 
-  // Check if app was launched from cold-start by tapping a notification
-  Notifications.getLastNotificationResponseAsync()
-    .then((response) => {
-      if (response) {
-        const notifId = response.notification?.request?.identifier;
-        if (notifId && notifId === lastHandledNotificationId) {
-          return;
-        }
-        if (notifId) {
-          lastHandledNotificationId = notifId;
-        }
-        const data = response.notification.request.content.data;
-        setTimeout(() => {
-          handleNotificationNavigation(router, data);
-        }, 800);
-      }
-    })
-    .catch(() => {});
+  // Do not navigate on cold-start launch; app must always open straight to the Home screen.
 
   // Listener for when a user clicks/taps the notification while app is running/backgrounded
   const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {

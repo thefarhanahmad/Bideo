@@ -164,15 +164,16 @@ function NotificationManager({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const cleanup = setupNotificationListeners(router);
-
-    if (isAuthenticated) {
-      registerForPushNotificationsAsync();
-    }
-
     return () => {
       cleanup();
     };
-  }, [isAuthenticated, router]);
+  }, [router]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      registerForPushNotificationsAsync();
+    }
+  }, [isAuthenticated]);
 
   return <>{children}</>;
 }
