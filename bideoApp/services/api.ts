@@ -263,4 +263,32 @@ export const chatService = {
   },
 };
 
+export const storyService = {
+  getStoryTray: async () => {
+    const response = await api.get('/stories/tray');
+    return response.data?.data || [];
+  },
+  createStory: async (formData: FormData) => {
+    const response = await api.post('/stories', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data?.data;
+  },
+  viewStory: async (storyId: string) => {
+    const response = await api.post(`/stories/${storyId}/view`);
+    return response.data;
+  },
+  deleteStory: async (storyId: string) => {
+    const response = await api.delete(`/stories/${storyId}`);
+    return response.data;
+  },
+  getStoryViewers: async (storyId: string) => {
+    const response = await api.get(`/stories/${storyId}/viewers`);
+    return response.data?.data || [];
+  },
+};
+
 export default api;
+

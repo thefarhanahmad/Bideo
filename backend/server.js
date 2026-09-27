@@ -17,6 +17,7 @@ const { initWalletSettlementScheduler } = require("./utils/walletSettlementSched
 const { initBoostQueueScheduler } = require("./utils/boostQueueScheduler");
 const { initVerifiedBadgeScheduler } = require("./utils/verifiedBadgeScheduler");
 const { initMonetizationScheduler } = require("./utils/monetizationScheduler");
+const { initStoryCleanupScheduler } = require("./utils/storyCleanupScheduler");
 
 // Connect to database
 connectDB();
@@ -41,6 +42,9 @@ initVerifiedBadgeScheduler();
 
 // Initialize 48-hour monetization auto-approval scheduler
 initMonetizationScheduler();
+
+// Initialize 24-hour story auto-cleanup scheduler (DB & media storage purge)
+initStoryCleanupScheduler();
 
 const PORT = process.env.PORT || 5000;
 

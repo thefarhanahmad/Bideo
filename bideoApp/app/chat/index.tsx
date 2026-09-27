@@ -11,18 +11,23 @@ import {
   DeviceEventEmitter,
   ScrollView,
   StatusBar,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSelector } from 'react-redux';
+import * as ImagePicker from 'expo-image-picker';
+import { LinearGradient } from 'expo-linear-gradient';
 import Colors from '../../constants/Colors';
 import { RootState } from '../../redux/store';
-import { chatService } from '../../services/api';
+import { chatService, storyService, resolveMediaUrl } from '../../services/api';
 import { requestOnlineStatus } from '../../services/socket';
 import VerifiedBadge from '../../components/VerifiedBadge';
 import AuthModal from '../../components/AuthModal';
+import StoryViewerModal from '../../components/StoryViewerModal';
+import { showAlert } from '../../components/AppAlert';
 import { AppAdBanner } from '../../components/AppAds';
 import { hapticSelection, hapticLight } from '../../utils/haptics';
 
@@ -75,9 +80,43 @@ export default function ChatListScreen() {
   const [authModalVisible, setAuthModalVisible] = useState(false);
   const [onlineMap, setOnlineMap] = useState<Record<string, boolean>>({});
 
+  // Stories State
+  const [storyTray, setStoryTray] = useState<any[]>([]);
+  const [loadingStories, setLoadingStories] = useState(false);
+  const [uploadingStory, setUploadingStory] = useState(false);
+  const [storyViewerVisible, setStoryViewerVisible] = useState(false);
+  const [selectedStoryUserIndex, setSelectedStoryUserIndex] = useState(0);
+
   const currentUserId = user?._id?.toString() || user?.id?.toString() || '';
   const conversationsRef = useRef<any[]>([]);
   conversationsRef.current = conversations;
+
+  const loadStoryTray = useCallback(async () => {
+    if (!isAuthenticated) return;
+    try {
+      setLoadingStories(true);
+      const data = await storyService.getStoryTray();
+      if (Array.isArray(data)) {
+        setStoryTray(data);
+
+        // Fetch presence status for followed users in story tray
+        const storyUserIds = data
+          .filter((g: any) => !g.isSelf && g.user?._id)
+          .map((g: any) => g.user._id.toString());
+        if (storyUserIds.length > 0) {
+          requestOnlineStatus(storyUserIds, (status) => {
+            if (status) {
+              setOnlineMap((prev) => ({ ...prev, ...status }));
+            }
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load story tray:', err);
+    } finally {
+      setLoadingStories(false);
+    }
+  }, [isAuthenticated]);
 
   const loadConversations = useCallback(async (isRefresh = false) => {
     if (!isAuthenticated) {
@@ -118,6 +157,7 @@ export default function ChatListScreen() {
       setAuthModalVisible(true);
     } else {
       loadConversations();
+      loadStoryTray();
     }
 
     // Real-time Socket Event Listeners
@@ -170,6 +210,7 @@ export default function ChatListScreen() {
 
     const subSocket = DeviceEventEmitter.addListener('socketConnected', () => {
       loadConversations(true);
+      loadStoryTray();
       const participantIds = conversationsRef.current
         .map((c: any) => c.otherParticipant?._id)
         .filter((id: any) => id && id.toString() !== currentUserId) as string[];
@@ -206,6 +247,7 @@ export default function ChatListScreen() {
 
     const subChatViewed = DeviceEventEmitter.addListener('chatViewed', () => {
       loadConversations(true);
+      loadStoryTray();
     });
 
     return () => {
@@ -217,25 +259,170 @@ export default function ChatListScreen() {
       subRead.remove();
       subChatViewed.remove();
     };
-  }, [isAuthenticated, loadConversations, currentUserId]);
+  }, [isAuthenticated, loadConversations, loadStoryTray, currentUserId]);
 
-  const onRefresh = () => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    loadConversations(true);
-  };
+    await Promise.all([loadConversations(true), loadStoryTray()]);
+  }, [loadConversations, loadStoryTray]);
 
-  // Online / Active users list
-  const onlineConversations = useMemo(() => {
-    return conversations.filter((c) => {
-      const otherId = c.otherParticipant?._id?.toString();
-      if (!otherId || otherId === currentUserId) return false;
-      const isOnline =
-        onlineMap[otherId] !== undefined
-          ? Boolean(onlineMap[otherId])
-          : Boolean(c.otherParticipant?.isOnline);
-      return isOnline;
-    });
-  }, [conversations, onlineMap, currentUserId]);
+  const isGroupSelf = useCallback(
+    (g: any) =>
+      Boolean(
+        g?.isSelf ||
+        g?.isOwn ||
+        (currentUserId &&
+          (g?.user?._id?.toString() === currentUserId || g?.user?.id?.toString() === currentUserId))
+      ),
+    [currentUserId]
+  );
+
+  // Groups with active stories for StoryViewerModal
+  const activeStoryGroups = useMemo(() => {
+    return storyTray.filter((g) => Array.isArray(g.stories) && g.stories.length > 0);
+  }, [storyTray]);
+
+  const pickAndUploadStory = useCallback(async () => {
+    if (!isAuthenticated) {
+      setAuthModalVisible(true);
+      return;
+    }
+
+    const ownGroup = storyTray.find(isGroupSelf);
+    const activeCount = ownGroup?.stories?.length || 0;
+    if (activeCount >= 5) {
+      showAlert(
+        'Story Limit Reached',
+        'You can have up to 5 active stories at a time. Please wait for an existing story to expire after 24 hours or delete one before adding a new photo.'
+      );
+      return;
+    }
+
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        showAlert('Permission Required', 'Please allow photo library access to upload a story.');
+        return;
+      }
+
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.85,
+      });
+
+      if (res.canceled || !res.assets || res.assets.length === 0) {
+        return;
+      }
+
+      const asset = res.assets[0];
+      const uri = asset.uri;
+      const filename = uri.split('/').pop() || `story_${Date.now()}.jpg`;
+      const match = /\.(\w+)$/.exec(filename);
+      const ext = match?.[1] ? match[1].toLowerCase() : 'jpeg';
+      const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
+
+      setUploadingStory(true);
+      const formData = new FormData();
+      // @ts-ignore
+      formData.append('image', {
+        uri,
+        name: filename,
+        type: mimeType,
+      });
+
+      await storyService.createStory(formData);
+      hapticLight();
+      await loadStoryTray();
+    } catch (err: any) {
+      console.error('Failed to upload story:', err);
+      showAlert(
+        'Upload Failed',
+        err?.response?.data?.message || 'Could not upload your story. Please try again.'
+      );
+    } finally {
+      setUploadingStory(false);
+    }
+  }, [isAuthenticated, storyTray, isGroupSelf, loadStoryTray]);
+
+  const handlePressStoryGroup = useCallback(
+    (group: any) => {
+      hapticLight();
+      if (isGroupSelf(group)) {
+        if (!group.stories || group.stories.length === 0) {
+          pickAndUploadStory();
+          return;
+        }
+        const idx = activeStoryGroups.findIndex(isGroupSelf);
+        setSelectedStoryUserIndex(idx !== -1 ? idx : 0);
+        setStoryViewerVisible(true);
+      } else {
+        const idx = activeStoryGroups.findIndex(
+          (g) => g.user?._id?.toString() === group.user?._id?.toString()
+        );
+        if (idx !== -1) {
+          setSelectedStoryUserIndex(idx);
+          setStoryViewerVisible(true);
+        }
+      }
+    },
+    [activeStoryGroups, isGroupSelf, pickAndUploadStory]
+  );
+
+  const handleStoryDeleted = useCallback(
+    (storyId: string) => {
+      if (!storyId) return;
+      setStoryTray((prev) =>
+        prev.map((g) => {
+          if (isGroupSelf(g)) {
+            const updatedStories = (g.stories || []).filter(
+              (s: any) => s._id?.toString() !== storyId.toString()
+            );
+            const hasUnviewed = updatedStories.some(
+              (s: any) => !s.isViewed && !s.ownerViewed
+            );
+            const lastStoryAt =
+              updatedStories.length > 0
+                ? updatedStories[updatedStories.length - 1].createdAt
+                : null;
+            return {
+              ...g,
+              stories: updatedStories,
+              hasUnviewed,
+              lastStoryAt,
+            };
+          }
+          return g;
+        })
+      );
+    },
+    [isGroupSelf]
+  );
+
+  const handleStoryViewed = useCallback((storyId: string) => {
+    setStoryTray((prev) =>
+      prev.map((g) => {
+        if (g.stories?.some((s: any) => s._id?.toString() === storyId)) {
+          const updatedStories = g.stories.map((s: any) => {
+            if (s._id?.toString() === storyId) {
+              const views = Array.isArray(s.views) ? s.views : [];
+              if (!views.includes(currentUserId)) {
+                return { ...s, views: [...views, currentUserId], isViewed: true };
+              }
+            }
+            return s;
+          });
+          const hasUnviewed = updatedStories.some(
+            (s: any) => !s.isViewed && !s.views?.includes(currentUserId)
+          );
+          return { ...g, stories: updatedStories, hasUnviewed };
+        }
+        return g;
+      })
+    );
+  }, [currentUserId]);
+
+
 
   // Total unread count across all chats
   const totalUnreadCount = useMemo(() => {
@@ -436,49 +623,182 @@ export default function ChatListScreen() {
         </View>
       </View>
 
-      {/* Active Now Section (Horizontal Avatars Carousel) */}
-      {!searchQuery && onlineConversations.length > 0 && (
-        <View style={styles.onlineSection}>
-          <Text style={styles.onlineSectionHeader}>ONLINE NOW</Text>
+      {/* Instagram-style Stories Tray */}
+      {!searchQuery && (
+        <View style={styles.storyTraySection}>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.onlineScroll}
+            nestedScrollEnabled={true}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.storyTrayScroll}
           >
-            {onlineConversations.map((c) => {
-              const other = c.otherParticipant;
+            {/* "Your story" Item */}
+            {(() => {
+              const ownGroup = storyTray.find(isGroupSelf);
+              const ownStories = ownGroup?.stories || [];
+              const hasOwnStories = ownStories.length > 0;
+              const hasUnviewed = Boolean(ownGroup?.hasUnviewed);
+              const ownAvatar = resolveMediaUrl(user?.avatar) || FALLBACK_AVATAR;
+
+              // If user has not added any story yet: Show simple centered Plus icon (no avatar)
+              if (!hasOwnStories) {
+                return (
+                  <TouchableOpacity
+                    key="my-story"
+                    style={styles.storyItem}
+                    activeOpacity={0.75}
+                    onPress={pickAndUploadStory}
+                  >
+                    <View style={styles.storyEmptyPlusCircle}>
+                      {uploadingStory ? (
+                        <ActivityIndicator size="small" color={Colors.primary} />
+                      ) : (
+                        <Ionicons name="add" size={26} color={Colors.text} />
+                      )}
+                    </View>
+                    <Text style={styles.storyUsername} numberOfLines={1}>
+                      Add story
+                    </Text>
+                  </TouchableOpacity>
+                );
+              }
+
+              // User has added stories: Show filled avatar with colored (unviewed) or grey (watched) ring
               return (
                 <TouchableOpacity
-                  key={c._id}
-                  style={styles.onlineUserItem}
-                  activeOpacity={0.75}
-                  onPress={() => {
-                    hapticLight();
-                    router.push({
-                      pathname: `/chat/${c._id}`,
-                      params: {
-                        name: other?.channelName || other?.name || '',
-                        avatar: other?.avatar || '',
-                        isVerified: other?.isVerified ? '1' : '0',
-                      },
-                    });
-                  }}
+                  key="my-story"
+                  style={styles.storyItem}
+                  activeOpacity={0.8}
+                  onPress={() => handlePressStoryGroup(ownGroup)}
                 >
-                  <View style={styles.onlineAvatarWrapper}>
-                    <Image
-                      source={{ uri: other?.avatar || FALLBACK_AVATAR }}
-                      style={styles.onlineAvatar}
-                      contentFit="cover"
-                      transition={150}
-                    />
-                    <View style={styles.onlineDot} />
+                  <View style={styles.storyRingWrapper}>
+                    {hasUnviewed ? (
+                      <LinearGradient
+                        colors={['#F58529', '#DD2A7B', '#8134AF']}
+                        start={{ x: 0, y: 1 }}
+                        end={{ x: 1, y: 0 }}
+                        style={styles.storyGradientRing}
+                      >
+                        <View style={styles.storyInnerBorder}>
+                          <Image
+                            source={{ uri: ownAvatar }}
+                            style={styles.storyAvatar}
+                            contentFit="cover"
+                            transition={150}
+                          />
+                        </View>
+                      </LinearGradient>
+                    ) : (
+                      <View style={styles.storyViewedRing}>
+                        <Image
+                          source={{ uri: ownAvatar }}
+                          style={styles.storyAvatar}
+                          contentFit="cover"
+                          transition={150}
+                        />
+                      </View>
+                    )}
+
+                    {/* Plus badge to add/upload another story */}
+                    <TouchableOpacity
+                      style={styles.storyPlusBadge}
+                      activeOpacity={0.85}
+                      onPress={pickAndUploadStory}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    >
+                      <Ionicons name="add" size={13} color="#FFFFFF" />
+                    </TouchableOpacity>
+
+                    {/* Uploading loading spinner */}
+                    {uploadingStory && (
+                      <View style={styles.storyUploadingOverlay}>
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      </View>
+                    )}
                   </View>
-                  <Text style={styles.onlineName} numberOfLines={1}>
-                    {other?.channelName || other?.name}
-                  </Text>
+
+                  <View style={styles.storyUsernameRow}>
+                    <Text style={styles.storyUsername} numberOfLines={1}>
+                      Your story
+                    </Text>
+                    {Boolean(user?.isVerified) && (
+                      <VerifiedBadge size={11} style={{ marginLeft: 2 }} />
+                    )}
+                  </View>
                 </TouchableOpacity>
               );
-            })}
+            })()}
+
+            {/* Followed Users' Stories (Latest uploaded first) */}
+            {storyTray
+              .filter((g) => !isGroupSelf(g) && Array.isArray(g.stories) && g.stories.length > 0)
+              .sort((a, b) => {
+                if (a.hasUnviewed && !b.hasUnviewed) return -1;
+                if (!a.hasUnviewed && b.hasUnviewed) return 1;
+                const timeA = a.lastStoryAt ? new Date(a.lastStoryAt).getTime() : 0;
+                const timeB = b.lastStoryAt ? new Date(b.lastStoryAt).getTime() : 0;
+                return timeB - timeA;
+              })
+              .map((group) => {
+                const groupUser = group.user || {};
+                const hasUnviewed = Boolean(group.hasUnviewed);
+                const isOnline = Boolean(
+                  groupUser._id && onlineMap[groupUser._id.toString()]
+                );
+                const avatarUri = resolveMediaUrl(groupUser.avatar) || FALLBACK_AVATAR;
+                const displayName = groupUser.channelName || groupUser.name || 'User';
+
+                return (
+                  <TouchableOpacity
+                    key={groupUser._id || group.latestStoryTime}
+                    style={styles.storyItem}
+                    activeOpacity={0.8}
+                    onPress={() => handlePressStoryGroup(group)}
+                  >
+                    <View style={styles.storyRingWrapper}>
+                      {hasUnviewed ? (
+                        <LinearGradient
+                          colors={['#F58529', '#DD2A7B', '#8134AF']}
+                          start={{ x: 0, y: 1 }}
+                          end={{ x: 1, y: 0 }}
+                          style={styles.storyGradientRing}
+                        >
+                          <View style={styles.storyInnerBorder}>
+                            <Image
+                              source={{ uri: avatarUri }}
+                              style={styles.storyAvatar}
+                              contentFit="cover"
+                              transition={150}
+                            />
+                          </View>
+                        </LinearGradient>
+                      ) : (
+                        <View style={styles.storyViewedRing}>
+                          <Image
+                            source={{ uri: avatarUri }}
+                            style={styles.storyAvatar}
+                            contentFit="cover"
+                            transition={150}
+                          />
+                        </View>
+                      )}
+
+                      {/* Online dot indicator on story */}
+                      {isOnline && <View style={styles.storyOnlineDot} />}
+                    </View>
+
+                    <View style={styles.storyUsernameRow}>
+                      <Text style={styles.storyUsername} numberOfLines={1}>
+                        {displayName}
+                      </Text>
+                      {Boolean(groupUser.isVerified) && (
+                        <VerifiedBadge size={11} style={{ marginLeft: 2 }} />
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
           </ScrollView>
         </View>
       )}
@@ -625,6 +945,18 @@ export default function ChatListScreen() {
         <AppAdBanner containerStyle={styles.bottomBannerContainer} />
       </View>
 
+      {/* Instagram Story Viewer Modal */}
+      <StoryViewerModal
+        visible={storyViewerVisible}
+        onClose={() => setStoryViewerVisible(false)}
+        storyGroups={activeStoryGroups}
+        initialUserIndex={selectedStoryUserIndex}
+        currentUserId={currentUserId}
+        onStoryDeleted={handleStoryDeleted}
+        onStoryViewed={handleStoryViewed}
+        onAddStory={pickAndUploadStory}
+      />
+
       <AuthModal
         visible={authModalVisible}
         onClose={() => {
@@ -712,45 +1044,104 @@ const styles = StyleSheet.create({
     color: Colors.text,
   },
 
-  // Active Now Section
-  onlineSection: {
-    paddingTop: 8,
-    paddingBottom: 10,
+  // Instagram-style Stories Tray Section
+  storyTraySection: {
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
+    backgroundColor: Colors.white,
   },
-  onlineSectionHeader: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.textGray,
-    letterSpacing: 0.8,
-    paddingHorizontal: 16,
-    marginBottom: 8,
+  storyTrayScroll: {
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
   },
-  onlineScroll: {
-    paddingHorizontal: 12,
-    gap: 12,
-  },
-  onlineUserItem: {
+  storyItem: {
     alignItems: 'center',
-    width: 64,
+    width: 68,
+    marginRight: 12,
   },
-  onlineAvatarWrapper: {
+  storyRingWrapper: {
     position: 'relative',
-    marginBottom: 4,
+    width: 64,
+    height: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  onlineAvatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#E5E7EB',
+  storyGradientRing: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    padding: 2.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  storyInnerBorder: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 30,
+    backgroundColor: Colors.white,
+    padding: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  storyViewedRing: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     borderWidth: 2,
-    borderColor: '#F3F4F6',
+    borderColor: '#D1D5DB',
+    padding: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.white,
   },
-  onlineDot: {
+  storyEmptyPlusCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 1.5,
+    borderColor: '#D1D5DB',
+    borderStyle: 'dashed',
+    backgroundColor: '#F9FAFB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  storyAvatar: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: '#F3F4F6',
+  },
+  storyPlusBadge: {
     position: 'absolute',
     bottom: 0,
     right: 0,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#0095F6',
+    borderWidth: 2,
+    borderColor: Colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.5,
+  },
+  storyUploadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 32,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  storyOnlineDot: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
     width: 14,
     height: 14,
     borderRadius: 7,
@@ -758,11 +1149,19 @@ const styles = StyleSheet.create({
     borderWidth: 2.5,
     borderColor: Colors.white,
   },
-  onlineName: {
+  storyUsernameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 5,
+    maxWidth: 72,
+  },
+  storyUsername: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '500',
     color: Colors.text,
     textAlign: 'center',
+    flexShrink: 1,
   },
 
   // Filter Tabs

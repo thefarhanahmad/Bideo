@@ -33,6 +33,7 @@ const ads = require("./routes/ads");
 const seo = require("./routes/seo");
 const boost = require("./routes/boost");
 const chat = require("./routes/chat");
+const stories = require("./routes/stories");
 
 // Middlewares
 app.use(express.json({ limit: "10mb" }));
@@ -99,6 +100,7 @@ app.use("/api/channels", channels);
 app.use("/api/ads", ads);
 app.use("/api/boost", boost);
 app.use("/api/chat", chat);
+app.use("/api/stories", stories);
 app.use("/", seo);
 app.use("/api", seo);
 

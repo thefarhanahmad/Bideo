@@ -623,6 +623,11 @@ export default function ChatRoomScreen() {
       >
         <TouchableOpacity
           activeOpacity={0.92}
+          style={[
+            styles.bubbleTouch,
+            isMine ? styles.bubbleTouchRight : styles.bubbleTouchLeft,
+            (hasVideo || hasPost) && styles.bubbleTouchMedia,
+          ]}
           onLongPress={() => {
             hapticSelection();
             setSelectedMessage(item);
@@ -1376,37 +1381,56 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   bubbleWrapper: {
-    marginVertical: 4,
+    marginVertical: 3,
+    width: '100%',
     flexDirection: 'row',
   },
   bubbleWrapperRight: {
     justifyContent: 'flex-end',
+    alignItems: 'flex-end',
   },
   bubbleWrapperLeft: {
     justifyContent: 'flex-start',
+    alignItems: 'flex-start',
+  },
+  bubbleTouch: {
+    maxWidth: '80%',
+  },
+  bubbleTouchRight: {
+    alignSelf: 'flex-end',
+    alignItems: 'flex-end',
+  },
+  bubbleTouchLeft: {
+    alignSelf: 'flex-start',
+    alignItems: 'flex-start',
+  },
+  bubbleTouchMedia: {
+    width: '80%',
+    maxWidth: 320,
   },
   bubble: {
-    maxWidth: '78%',
+    maxWidth: '100%',
     paddingHorizontal: 14,
     paddingVertical: 9,
     borderRadius: 18,
   },
   bubbleWithMedia: {
+    width: '100%',
     paddingHorizontal: 6,
     paddingTop: 6,
     paddingBottom: 6,
-    width: '84%',
-    maxWidth: 320,
   },
   bubbleRight: {
     backgroundColor: Colors.primary,
     borderBottomRightRadius: 4,
+    alignSelf: 'flex-end',
   },
   bubbleLeft: {
     backgroundColor: Colors.white,
     borderBottomLeftRadius: 4,
     borderWidth: 1,
     borderColor: '#ECECEC',
+    alignSelf: 'flex-start',
   },
   bubbleText: {
     fontSize: 15,
