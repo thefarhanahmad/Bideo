@@ -267,7 +267,10 @@ export default function UploadVideoScreen() {
           const compressedUri = await Video.compress(
             video.uri,
             {
-              compressionMethod: 'auto',
+              compressionMethod: 'manual',
+              maxSize: 1280,
+              bitrate: 1500000,
+              minimumFileSizeForCompress: 0,
             }
           );
           if (compressedUri) {

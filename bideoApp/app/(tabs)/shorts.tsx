@@ -691,7 +691,9 @@ const ShortAdItem = ({ containerHeight, insets, isActive, onComplete, showBackBu
 
 const ShortItem = ({ item, index, activeVideoIndex, containerHeight, isFocused, insets, user, showBackButton, onBack, onLike, onDoubleTapLike, onCommentClick, onShare, onMenuClick, onFollow, onCoinsEarned }: any) => {
   const router = useRouter();
-  const player = useVideoPlayer(item.videoUrl, (p) => {
+  const isNearby = Math.abs(activeVideoIndex - index) <= 1;
+  const videoSource = isNearby ? item.videoUrl : null;
+  const player = useVideoPlayer(videoSource, (p) => {
     p.loop = true;
   });
   const [isPaused, setIsPaused] = useState(false);
@@ -872,12 +874,14 @@ const ShortItem = ({ item, index, activeVideoIndex, containerHeight, isFocused, 
           contentFit="cover"
           transition={150}
         />
-        <VideoView
-          player={player}
-          style={styles.fullVideo}
-          contentFit="cover"
-          nativeControls={false}
-        />
+        {isNearby && (
+          <VideoView
+            player={player}
+            style={styles.fullVideo}
+            contentFit="cover"
+            nativeControls={false}
+          />
+        )}
 
         {showHeart && (
           <View style={[StyleSheet.absoluteFill, styles.heartOverlay]} pointerEvents="none">

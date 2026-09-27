@@ -123,14 +123,19 @@ export default function VideoScreen() {
       }
 
       if (!adCompletedRef.current) {
-        // Initial pre-roll ad finished: load source into player and start playback
+        // Initial pre-roll ad finished: start playback (from pre-buffered stream)
         adCompletedRef.current = true;
         setAdCompleted(true);
-        if (typeof player.replaceAsync === 'function') {
-          await player.replaceAsync(video.videoUrl);
-        } else {
-          player.replace(video.videoUrl);
+        if (player.status === 'idle') {
+          if (typeof player.replaceAsync === 'function') {
+            await player.replaceAsync(video.videoUrl);
+          } else {
+            player.replace(video.videoUrl);
+          }
         }
+        try {
+          player.currentTime = 0;
+        } catch {}
         player.play();
       } else {
         // Mid-roll ad finished: resume playback right where it was paused
@@ -182,7 +187,19 @@ export default function VideoScreen() {
       player.pause();
     } catch {}
 
-    // Reset ad state and show AdMob interstitial ad first
+    // Pre-buffer the video stream in the background (paused) while the ad is shown
+    try {
+      if (typeof player.replaceAsync === 'function') {
+        player.replaceAsync(video.videoUrl).then(() => {
+          try { player.pause(); } catch {}
+        }).catch(() => {});
+      } else {
+        player.replace(video.videoUrl);
+        try { player.pause(); } catch {}
+      }
+    } catch {}
+
+    // Reset ad state and show AdMob interstitial ad first (ads untouched)
     adCompletedRef.current = false;
     isPostRollRef.current = false;
     postRollTriggeredRef.current = false;
