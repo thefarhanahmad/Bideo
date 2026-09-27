@@ -12,12 +12,21 @@ const api = axios.create({
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
   },
 });
 
 // Automatically attach Bearer token on protected requests, but bypass for public auth routes
 api.interceptors.request.use(
   async (config) => {
+    if (config.headers) {
+      config.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+      config.headers['Pragma'] = 'no-cache';
+      config.headers['Expires'] = '0';
+    }
+
     const isAuthRoute =
       config.url?.includes('/auth/login') ||
       config.url?.includes('/auth/signup') ||

@@ -39,6 +39,10 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
 
+        # Prevent 304 Not Modified caching on dynamic API
+        proxy_set_header If-None-Match "";
+        proxy_set_header If-Modified-Since "";
+
         # Prevent 504 gateway timeout on large video uploads
         client_body_timeout 300s;
         proxy_connect_timeout 300s;

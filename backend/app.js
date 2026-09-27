@@ -14,6 +14,10 @@ dotenv.config();
 const app = express();
 app.set('trust proxy', 1);
 
+// Disable ETags globally so Express never responds with 304 Not Modified on API requests.
+// React Native (Axios) treats 304 as an error or receives an empty body, causing retry screens.
+app.set('etag', false);
+
 // Security middlewares
 const { apiLimiter, authLimiter, noSqlSanitizer } = require("./middlewares/security");
 
@@ -42,6 +46,21 @@ app.use(cookieParser());
 app.use(noSqlSanitizer);
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use("/api/uploads", express.static(path.join(__dirname, "uploads")));
+
+// Prevent 304 Not Modified responses on dynamic API routes:
+// 1. Strip conditional headers (If-None-Match, If-Modified-Since) so Express never evaluates the request as fresh
+// 2. Set strict Cache-Control headers so mobile and web clients always receive fresh JSON data (200 OK)
+app.use("/api", (req, res, next) => {
+  delete req.headers["if-none-match"];
+  delete req.headers["if-modified-since"];
+  res.set({
+    "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+    "Pragma": "no-cache",
+    "Expires": "0",
+    "Surrogate-Control": "no-store",
+  });
+  next();
+});
 
 const allowedOrigins = [
   "http://localhost:5173",
