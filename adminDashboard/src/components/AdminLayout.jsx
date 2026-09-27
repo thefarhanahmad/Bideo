@@ -19,6 +19,7 @@ import {
   RocketIcon,
   ServerIcon,
   MessageSquareIcon,
+  StoryIcon,
 } from "./Icons";
 
 const nav = [
@@ -26,6 +27,7 @@ const nav = [
   { to: "/admin/users", label: "Users", icon: UsersIcon },
   { to: "/admin/categories", label: "Categories", icon: TagIcon },
   { to: "/admin/videos", label: "Videos", icon: PlayIcon },
+  { to: "/admin/stories", label: "Stories", icon: StoryIcon },
   { to: "/admin/server-videos", label: "Server Videos", icon: ServerIcon },
   { to: "/admin/conversations", label: "Conversations", icon: MessageSquareIcon },
   { to: "/admin/reports", label: "Reports", icon: FlagIcon },
@@ -53,64 +55,67 @@ const AdminLayout = () => {
         : "text-ink/70 hover:bg-brand-50 hover:text-brand"
     }`;
 
-  const SidebarContent = () => (
-    <>
-      <Link to="/" className="flex items-center gap-2 px-2 py-1">
-        <Logo />
-      </Link>
+  const SidebarNav = ({ onClose }) => (
+    <div className="flex flex-col h-full min-h-0">
+      {/* Fixed Header / Logo */}
+      <div className="shrink-0 px-2 py-1">
+        <Link to="/" className="flex items-center gap-2" onClick={onClose}>
+          <Logo />
+        </Link>
+      </div>
 
-      <nav className="mt-6 space-y-1.5">
+      {/* Scrollable Navigation Links */}
+      <nav className="mt-4 flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-1.5 sidebar-scroll">
         {nav.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             end={item.end}
             className={linkClass}
-            onClick={() => setOpen(false)}
+            onClick={onClose}
           >
-            <item.icon className="h-5 w-5" />
-            {item.label}
+            <item.icon className="h-5 w-5 shrink-0" />
+            <span className="truncate">{item.label}</span>
           </NavLink>
         ))}
       </nav>
-    </>
+
+      {/* Fixed Footer: Logout Button */}
+      <div className="mt-auto pt-3 border-t border-line shrink-0">
+        <button
+          onClick={logout}
+          className="w-full flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
+        >
+          <LogoutIcon className="h-5 w-5 shrink-0" />
+          <span>Logout</span>
+        </button>
+      </div>
+    </div>
   );
 
   return (
     <div className="min-h-screen bg-surface font-sans text-ink">
       {/* Desktop sidebar */}
-      <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col border-r border-line bg-white p-4 lg:flex">
-        <SidebarContent />
-        <button
-          onClick={logout}
-          className="mt-auto flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
-        >
-          <LogoutIcon className="h-5 w-5" /> Logout
-        </button>
+      <aside className="fixed inset-y-0 left-0 hidden w-64 h-screen max-h-screen flex-col border-r border-line bg-white p-4 lg:flex z-30">
+        <SidebarNav onClose={() => setOpen(false)} />
       </aside>
 
       {/* Mobile drawer */}
       {open && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div
-            className="absolute inset-0 bg-black/40"
+            className="absolute inset-0 bg-black/50 backdrop-blur-xs transition-opacity"
             onClick={() => setOpen(false)}
           />
-          <aside className="absolute inset-y-0 left-0 flex w-64 flex-col border-r border-line bg-white p-4">
+          <aside className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] h-screen max-h-screen flex-col border-r border-line bg-white p-4 shadow-2xl">
             <button
               onClick={() => setOpen(false)}
-              className="absolute right-3 top-3 text-muted"
+              className="absolute right-3.5 top-3.5 grid h-8 w-8 place-items-center rounded-lg text-muted hover:bg-surface hover:text-ink transition-colors z-10"
               aria-label="Close menu"
             >
               <CloseIcon className="h-5 w-5" />
             </button>
-            <SidebarContent />
-            <button
-              onClick={logout}
-              className="mt-auto flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
-            >
-              <LogoutIcon className="h-5 w-5" /> Logout
-            </button>
+            <SidebarNav onClose={() => setOpen(false)} />
           </aside>
         </div>
       )}

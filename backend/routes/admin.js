@@ -25,6 +25,10 @@ const {
   getAdminConversations,
   getAdminConversationMessages,
   deleteAdminConversation,
+  getAdminStories,
+  getAdminStoryViewers,
+  deleteAdminStory,
+  deleteAdminUserStories,
 } = require('../controllers/admin');
 const { protect, authorize } = require('../middlewares/auth');
 
@@ -70,5 +74,11 @@ router.delete('/error-logs/:id', deleteErrorLog);
 router.get('/conversations', getAdminConversations);
 router.get('/conversations/:id/messages', getAdminConversationMessages);
 router.delete('/conversations/:id', deleteAdminConversation);
+
+// Stories Moderation & Management
+router.get('/stories', getAdminStories);
+router.get('/stories/:id/viewers', getAdminStoryViewers);
+router.delete('/stories/:id', deleteAdminStory);
+router.delete('/stories/user/:userId', deleteAdminUserStories);
 
 module.exports = router;

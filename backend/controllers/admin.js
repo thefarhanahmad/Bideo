@@ -11,6 +11,8 @@ const Ad = require('../models/Ad');
 const Post = require('../models/Post');
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
+const Story = require('../models/Story');
+const { deleteLocalFile } = require('../utils/localUpload');
 const WalletCredit = require('../models/WalletCredit');
 const VideoBoost = require('../models/VideoBoost');
 const CoinTransaction = require('../models/CoinTransaction');
@@ -2510,3 +2512,243 @@ exports.deleteAdminConversation = async (req, res, next) => {
     next(err);
   }
 };
+
+// @desc    Get all users with active (live) stories, with story counts, views, and live overview stats
+// @route   GET /api/admin/stories
+// @access  Private/Admin
+exports.getAdminStories = async (req, res, next) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit) || 15));
+    const skip = (page - 1) * limit;
+    const { search } = req.query;
+
+    const now = new Date();
+
+    // 1. Only query active (non-expired) stories
+    const storyQuery = { expiresAt: { $gt: now } };
+
+    if (search && search.trim()) {
+      const searchRegex = new RegExp(search.trim(), 'i');
+      const matchingUsers = await User.find({
+        $or: [
+          { name: searchRegex },
+          { channelName: searchRegex },
+          { email: searchRegex },
+        ],
+      }).select('_id');
+
+      const userIds = matchingUsers.map((u) => u._id);
+      storyQuery.user = { $in: userIds };
+    }
+
+    // 2. Fetch all active stories matching query
+    const activeStories = await Story.find(storyQuery)
+      .populate('user', 'name channelName avatar email isVerified role createdAt')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // 3. Group stories by user
+    const userMap = new Map();
+
+    for (const story of activeStories) {
+      if (!story.user || !story.user._id) continue;
+      const uId = story.user._id.toString();
+
+      const viewsCount = Array.isArray(story.views) ? story.views.length : 0;
+      const storyItem = {
+        _id: story._id,
+        mediaUrl: story.mediaUrl,
+        caption: story.caption || '',
+        createdAt: story.createdAt,
+        expiresAt: story.expiresAt,
+        viewsCount,
+      };
+
+      if (!userMap.has(uId)) {
+        userMap.set(uId, {
+          user: story.user,
+          stories: [storyItem],
+          storiesCount: 1,
+          totalViews: viewsCount,
+          latestStoryAt: story.createdAt,
+          earliestExpiresAt: story.expiresAt,
+        });
+      } else {
+        const entry = userMap.get(uId);
+        entry.stories.push(storyItem);
+        entry.storiesCount += 1;
+        entry.totalViews += viewsCount;
+        if (new Date(story.createdAt) > new Date(entry.latestStoryAt)) {
+          entry.latestStoryAt = story.createdAt;
+        }
+        if (new Date(story.expiresAt) < new Date(entry.earliestExpiresAt)) {
+          entry.earliestExpiresAt = story.expiresAt;
+        }
+      }
+    }
+
+    const allCreatorGroups = Array.from(userMap.values());
+
+    // Sort creators by latest story upload timestamp
+    allCreatorGroups.sort(
+      (a, b) => new Date(b.latestStoryAt).getTime() - new Date(a.latestStoryAt).getTime()
+    );
+
+    const totalCreators = allCreatorGroups.length;
+    const paginatedCreators = allCreatorGroups.slice(skip, skip + limit);
+
+    // 4. Calculate live platform stats (ONLY for live, unexpired stories)
+    const [totalLiveStories, totalLiveViewsAgg] = await Promise.all([
+      Story.countDocuments({ expiresAt: { $gt: now } }),
+      Story.aggregate([
+        { $match: { expiresAt: { $gt: now } } },
+        {
+          $project: {
+            viewsCount: { $size: { $ifNull: ['$views', []] } },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalViews: { $sum: '$viewsCount' },
+          },
+        },
+      ]),
+    ]);
+
+    const totalLiveViews =
+      totalLiveViewsAgg && totalLiveViewsAgg.length > 0
+        ? totalLiveViewsAgg[0].totalViews
+        : 0;
+
+    const activeCreatorsCount = totalCreators;
+    const avgViewsPerStory =
+      totalLiveStories > 0 ? (totalLiveViews / totalLiveStories).toFixed(1) : '0';
+
+    res.status(200).json({
+      success: true,
+      data: paginatedCreators,
+      total: totalCreators,
+      page,
+      pages: Math.ceil(totalCreators / limit) || 1,
+      stats: {
+        activeStories: totalLiveStories,
+        activeCreators: activeCreatorsCount,
+        totalViews: totalLiveViews,
+        avgViewsPerStory,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Get viewers of a specific story (Admin Moderation)
+// @route   GET /api/admin/stories/:id/viewers
+// @access  Private/Admin
+exports.getAdminStoryViewers = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ success: false, message: 'Invalid story ID' });
+    }
+
+    const story = await Story.findById(id)
+      .populate('user', 'name channelName avatar email isVerified')
+      .populate('views', 'name channelName avatar email isVerified createdAt role')
+      .lean();
+
+    if (!story) {
+      return res.status(404).json({ success: false, message: 'Story not found' });
+    }
+
+    const viewers = (Array.isArray(story.views) ? story.views : []).filter(Boolean);
+
+    res.status(200).json({
+      success: true,
+      story: {
+        _id: story._id,
+        mediaUrl: story.mediaUrl,
+        caption: story.caption,
+        createdAt: story.createdAt,
+        expiresAt: story.expiresAt,
+        user: story.user,
+        viewsCount: viewers.length,
+        isExpired: new Date(story.expiresAt) <= new Date(),
+      },
+      data: viewers,
+      total: viewers.length,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Delete story by admin (purges record from DB and media file from storage)
+// @route   DELETE /api/admin/stories/:id
+// @access  Private/Admin
+exports.deleteAdminStory = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ success: false, message: 'Invalid story ID' });
+    }
+
+    const story = await Story.findById(id);
+    if (!story) {
+      return res.status(404).json({ success: false, message: 'Story not found or already deleted' });
+    }
+
+    // 1. Permanently delete media file from storage
+    if (story.mediaUrl) {
+      try {
+        await deleteLocalFile(story.mediaUrl);
+      } catch (fileErr) {
+        console.warn('[deleteAdminStory] Media unlink warning:', fileErr?.message);
+      }
+    }
+
+    // 2. Delete record from MongoDB
+    await story.deleteOne();
+
+    res.status(200).json({
+      success: true,
+      message: 'Story and its media file permanently deleted.',
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Delete all active stories for a user by admin
+// @route   DELETE /api/admin/stories/user/:userId
+// @access  Private/Admin
+exports.deleteAdminUserStories = async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+    if (!userId || !userId.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ success: false, message: 'Invalid user ID' });
+    }
+
+    const stories = await Story.find({ user: userId });
+    for (const story of stories) {
+      if (story.mediaUrl) {
+        try {
+          await deleteLocalFile(story.mediaUrl);
+        } catch (e) {}
+      }
+    }
+
+    await Story.deleteMany({ user: userId });
+
+    res.status(200).json({
+      success: true,
+      message: `Successfully deleted ${stories.length} stories for this user.`,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+
