@@ -419,20 +419,16 @@ async function notifyInterestedNonFollowersOfUpload({ creatorId, video, follower
       : [];
 
     const combinedKeywords = Array.from(new Set([...titleKeywords, ...tagKeywords, ...descKeywords])).slice(0, 8);
-    if (combinedKeywords.length === 0 && !video.category) {
+    if (combinedKeywords.length === 0) {
       return;
     }
 
-    // 2. Find system videos that share these keywords or category (indexed query)
-    const videoQueryOr = [];
-    if (combinedKeywords.length > 0) {
-      videoQueryOr.push({ tags: { $in: combinedKeywords } });
-      const keywordRegexes = combinedKeywords.map((kw) => new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'));
-      videoQueryOr.push({ title: { $in: keywordRegexes } });
-    }
-    if (video.category) {
-      videoQueryOr.push({ category: video.category });
-    }
+    // 2. Find system videos that strictly share these keywords in title or tags (indexed query)
+    const keywordRegexes = combinedKeywords.map((kw) => new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'));
+    const videoQueryOr = [
+      { tags: { $in: combinedKeywords } },
+      { title: { $in: keywordRegexes } },
+    ];
 
     const matchingVideos = await Video.find({
       _id: { $ne: video._id },
