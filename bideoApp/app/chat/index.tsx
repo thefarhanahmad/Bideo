@@ -327,13 +327,13 @@ export default function ChatListScreen() {
       if (mediaTypeChoice === 'video') {
         res = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Videos,
-          allowsEditing: true,
+          allowsEditing: false,
           quality: 0.85,
         });
       } else if (mediaTypeChoice === 'camera_video') {
         res = await ImagePicker.launchCameraAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Videos,
-          allowsEditing: true,
+          allowsEditing: false,
           videoMaxDuration: 15,
           quality: 0.85,
         });
@@ -421,6 +421,10 @@ export default function ChatListScreen() {
         }
       }
 
+      if (Platform.OS === 'android' && !finalUploadUri.startsWith('file://') && !finalUploadUri.startsWith('content://')) {
+        finalUploadUri = `file://${finalUploadUri}`;
+      }
+
       const safeFilename = isVideo ? `story_${Date.now()}.mp4` : `story_${Date.now()}.jpg`;
       const mimeType = isVideo ? 'video/mp4' : (asset.mimeType || 'image/jpeg');
 
@@ -441,11 +445,21 @@ export default function ChatListScreen() {
       await loadStoryTray();
       showAlert('Story Shared', isVideo ? 'Your video story is live for 24 hours!' : 'Your story is live for 24 hours!');
     } catch (err: any) {
-      console.error('Failed to upload story:', err);
+      console.error('[Story Upload] Detailed error:', err);
+      console.error('[Story Upload] Error response:', err?.response?.data);
       const serverMsg = err?.response?.data?.message;
       const isTimeout = err?.code === 'ECONNABORTED' || err?.message?.includes('timeout');
       const isNetwork = err?.message?.includes('Network Error');
-      const errorMsg = serverMsg || (isTimeout ? 'Upload timed out. Please check your internet connection and try again.' : isNetwork ? 'Network error. Please check your connection and try again.' : 'Could not upload your story. Please try again.');
+      const clientMsg = err?.message;
+      const errorMsg =
+        serverMsg ||
+        (isTimeout
+          ? 'Upload timed out. Please check your internet connection and try again.'
+          : isNetwork
+          ? 'Network error. Please check your connection and try again.'
+          : clientMsg
+          ? `Upload failed: ${clientMsg}`
+          : 'Could not upload your story. Please try again.');
       showAlert('Upload Failed', errorMsg);
     } finally {
       setUploadingStory(false);

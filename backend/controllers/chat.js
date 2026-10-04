@@ -229,7 +229,7 @@ exports.getMessages = async (req, res, next) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
-      .populate('sender', '_id name channelName avatar')
+      .populate('sender', '_id name channelName avatar isVerified')
       .populate({
         path: 'video',
         select: '_id title thumbnail duration views owner isShort',

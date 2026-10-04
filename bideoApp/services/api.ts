@@ -326,7 +326,6 @@ export const storyService = {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
-      transformRequest: (data) => data,
     });
     return response.data?.data;
   },

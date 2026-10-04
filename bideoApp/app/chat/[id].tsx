@@ -268,6 +268,28 @@ const SwipeableMessageBubble = ({
   );
 };
 
+const SENDER_COLORS = [
+  '#7C3AED', // Purple
+  '#2563EB', // Blue
+  '#0D9488', // Teal
+  '#EA580C', // Orange
+  '#DB2777', // Pink
+  '#059669', // Emerald
+  '#D97706', // Amber
+  '#4F46E5', // Indigo
+];
+
+function getSenderColor(id?: string): string {
+  if (!id) return '#7C3AED';
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = (hash << 5) - hash + id.charCodeAt(i);
+    hash |= 0;
+  }
+  const index = Math.abs(hash) % SENDER_COLORS.length;
+  return SENDER_COLORS[index];
+}
+
 export default function ChatRoomScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{
@@ -957,6 +979,23 @@ export default function ChatRoomScreen() {
     const isMine =
       (item.sender?._id || item.sender)?.toString() === currentUserId;
 
+    // Resolve group sender details with fallback to conversation participants
+    const senderId = (item.sender?._id || item.sender)?.toString();
+    const senderParticipant =
+      isGroup && senderId && Array.isArray(conversation?.participants)
+        ? conversation.participants.find(
+            (p: any) => (p?._id || p)?.toString() === senderId
+          )
+        : null;
+    const senderObj =
+      typeof item.sender === 'object' && item.sender !== null
+        ? item.sender
+        : senderParticipant;
+    const senderChannelName =
+      senderObj?.channelName || senderObj?.name || 'Member';
+    const senderAvatarUri = resolveMediaUrl(senderObj?.avatar);
+    const senderIsVerified = Boolean(senderObj?.isVerified);
+
     const timeFormatted = item.createdAt
       ? new Date(item.createdAt).toLocaleTimeString([], {
           hour: '2-digit',
@@ -1016,21 +1055,26 @@ export default function ChatRoomScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Group Sender Name Header */}
+        {/* Group Sender Channel Name Header */}
         {isGroup && !isMine && (
           <TouchableOpacity
-            activeOpacity={0.7}
+            activeOpacity={0.75}
             onPress={() => {
-              const sId = item.sender?._id || item.sender;
-              if (sId) router.push(`/channel/${sId}`);
+              if (senderId) router.push(`/channel/${senderId}`);
             }}
-            style={styles.groupSenderNameRow}
+            style={styles.groupSenderHeaderRow}
           >
-            <Text style={[styles.groupSenderNameText, { color: currentTheme.primary }]} numberOfLines={1}>
-              {item.sender?.channelName || item.sender?.name || 'Member'}
+            <Text
+              style={[
+                styles.groupSenderNameText,
+                { color: getSenderColor(senderId) },
+              ]}
+              numberOfLines={1}
+            >
+              {senderChannelName}
             </Text>
-            {Boolean(item.sender?.isVerified) && (
-              <VerifiedBadge size={11} style={{ marginLeft: 3 }} />
+            {senderIsVerified && (
+              <VerifiedBadge size={12} style={{ marginLeft: 4 }} />
             )}
           </TouchableOpacity>
         )}
@@ -1230,16 +1274,24 @@ export default function ChatRoomScreen() {
             <TouchableOpacity
               activeOpacity={0.8}
               onPress={() => {
-                const sId = item.sender?._id || item.sender;
-                if (sId) router.push(`/channel/${sId}`);
+                if (senderId) router.push(`/channel/${senderId}`);
               }}
               style={styles.groupSenderAvatarTouch}
             >
-              <Image
-                source={{ uri: resolveMediaUrl(item.sender?.avatar) || FALLBACK_AVATAR }}
-                style={styles.groupSenderAvatar}
-                contentFit="cover"
-              />
+              {senderAvatarUri ? (
+                <Image
+                  source={{ uri: senderAvatarUri }}
+                  style={styles.groupSenderAvatar}
+                  contentFit="cover"
+                  transition={150}
+                />
+              ) : (
+                <View style={[styles.groupSenderAvatar, styles.groupSenderAvatarFallback]}>
+                  <Text style={styles.groupSenderAvatarInitial}>
+                    {senderChannelName.charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+              )}
             </TouchableOpacity>
           )}
 
@@ -1249,6 +1301,7 @@ export default function ChatRoomScreen() {
               styles.bubbleTouch,
               isMine ? styles.bubbleTouchRight : styles.bubbleTouchLeft,
               (hasVideo || hasPost) && styles.bubbleTouchMedia,
+              Boolean(item.replyTo) && styles.bubbleTouchWithReply,
             ]}
             onLongPress={() => {
               hapticSelection();
@@ -1266,6 +1319,7 @@ export default function ChatRoomScreen() {
                   styles.bubble,
                   styles.bubbleRight,
                   (hasVideo || hasPost) && styles.bubbleWithMedia,
+                  Boolean(item.replyTo) && styles.bubbleWithReply,
                 ]}
               >
                 {renderBubbleInner()}
@@ -1277,6 +1331,7 @@ export default function ChatRoomScreen() {
                   styles.bubbleLeft,
                   { backgroundColor: currentTheme.bubbleOtherBg },
                   (hasVideo || hasPost) && styles.bubbleWithMedia,
+                  Boolean(item.replyTo) && styles.bubbleWithReply,
                 ]}
               >
                 {renderBubbleInner()}
@@ -2137,6 +2192,10 @@ const styles = StyleSheet.create({
     width: '80%',
     maxWidth: 320,
   },
+  bubbleTouchWithReply: {
+    minWidth: 210,
+    maxWidth: '82%',
+  },
   bubble: {
     maxWidth: '100%',
     paddingHorizontal: 14,
@@ -2148,6 +2207,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingTop: 6,
     paddingBottom: 6,
+  },
+  bubbleWithReply: {
+    minWidth: 210,
   },
   bubbleRight: {
     backgroundColor: Colors.primary,
@@ -2493,25 +2555,40 @@ const styles = StyleSheet.create({
     color: Colors.text,
   },
   groupSenderAvatarTouch: {
-    marginRight: 6,
-    alignSelf: 'flex-end',
-    marginBottom: 4,
+    marginRight: 8,
+    alignSelf: 'flex-start',
+    marginTop: 2,
   },
   groupSenderAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: '#E5E7EB',
+  },
+  groupSenderAvatarFallback: {
+    backgroundColor: '#7C3AED',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  groupSenderAvatarInitial: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  groupSenderHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
   },
   groupSenderNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 3,
+    marginBottom: 4,
   },
   groupSenderNameText: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '700',
-    color: Colors.primary,
+    letterSpacing: -0.1,
   },
   groupAvatarFallback: {
     backgroundColor: '#FF6B00',
@@ -2572,6 +2649,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 6,
     overflow: 'hidden',
+    width: '100%',
+    minWidth: 190,
   },
   quotedMessageLeft: {
     backgroundColor: 'rgba(0, 0, 0, 0.05)',
