@@ -357,9 +357,6 @@ export default function ChannelScreen() {
                 }}
               >
                 <Image source={{ uri: channel?.avatar || FALLBACK_AVATAR }} style={styles.avatar} contentFit="cover" transition={200} />
-                <View style={styles.avatarZoomBadge}>
-                  <Ionicons name="expand" size={11} color="#FFFFFF" />
-                </View>
               </TouchableOpacity>
               
               <View style={styles.identityContainer}>

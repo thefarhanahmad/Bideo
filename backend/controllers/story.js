@@ -180,12 +180,17 @@ exports.createStory = async (req, res, next) => {
 
     // Enforce 15-second max duration limit on video stories
     if (isVideo && req.body.duration) {
-      const dur = parseFloat(req.body.duration);
-      if (dur > 16.5) {
-        return res.status(400).json({
-          success: false,
-          message: 'Story videos cannot exceed 15 seconds.',
-        });
+      let dur = parseFloat(req.body.duration);
+      if (!isNaN(dur)) {
+        if (dur > 100) {
+          dur = dur / 1000;
+        }
+        if (dur > 16.5) {
+          return res.status(400).json({
+            success: false,
+            message: 'Story videos cannot exceed 15 seconds.',
+          });
+        }
       }
     }
 

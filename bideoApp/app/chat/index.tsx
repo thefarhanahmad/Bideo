@@ -12,6 +12,8 @@ import {
   ScrollView,
   StatusBar,
   Alert,
+  Modal,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -20,6 +22,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSelector } from 'react-redux';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
+import { getVideoMetaData } from 'react-native-compressor';
 import Colors from '../../constants/Colors';
 import { RootState } from '../../redux/store';
 import { chatService, storyService, resolveMediaUrl } from '../../services/api';
@@ -88,6 +91,7 @@ export default function ChatListScreen() {
   const [uploadingStory, setUploadingStory] = useState(false);
   const [storyViewerVisible, setStoryViewerVisible] = useState(false);
   const [selectedStoryUserIndex, setSelectedStoryUserIndex] = useState(0);
+  const [storyPickerModalVisible, setStoryPickerModalVisible] = useState(false);
 
   const currentUserId = user?._id?.toString() || user?.id?.toString() || '';
   const conversationsRef = useRef<any[]>([]);
@@ -301,12 +305,22 @@ export default function ChatListScreen() {
     return storyTray.filter((g) => Array.isArray(g.stories) && g.stories.length > 0);
   }, [storyTray]);
 
-  const startStoryUpload = useCallback(async (mediaTypeChoice: 'image' | 'video') => {
+  const startStoryUpload = useCallback(async (mediaTypeChoice: 'image' | 'video' | 'camera_image' | 'camera_video') => {
     try {
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) {
-        showAlert('Permission Required', 'Please allow media library access to upload a story.');
-        return;
+      setStoryPickerModalVisible(false);
+
+      if (mediaTypeChoice === 'camera_image' || mediaTypeChoice === 'camera_video') {
+        const perm = await ImagePicker.requestCameraPermissionsAsync();
+        if (!perm.granted) {
+          showAlert('Camera Permission Required', 'Please allow camera access to capture a story.');
+          return;
+        }
+      } else {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) {
+          showAlert('Permission Required', 'Please allow gallery access to upload a story.');
+          return;
+        }
       }
 
       let res;
@@ -314,7 +328,19 @@ export default function ChatListScreen() {
         res = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Videos,
           allowsEditing: true,
+          quality: 0.85,
+        });
+      } else if (mediaTypeChoice === 'camera_video') {
+        res = await ImagePicker.launchCameraAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+          allowsEditing: true,
           videoMaxDuration: 15,
+          quality: 0.85,
+        });
+      } else if (mediaTypeChoice === 'camera_image') {
+        res = await ImagePicker.launchCameraAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
           quality: 0.85,
         });
       } else {
@@ -332,15 +358,44 @@ export default function ChatListScreen() {
       const asset = res.assets[0];
       const isVideo =
         mediaTypeChoice === 'video' ||
+        mediaTypeChoice === 'camera_video' ||
         asset.type === 'video' ||
         Boolean(asset.mimeType && asset.mimeType.startsWith('video/'));
 
-      if (isVideo && asset.duration && asset.duration > 15.5) {
-        showAlert(
-          'Video Too Long',
-          'Story videos can be at most 15 seconds long. Please choose or trim a video under 15 seconds.'
-        );
-        return;
+      let durationSec: number | null = null;
+      if (isVideo) {
+        // Step 1: Check asset.duration from ImagePicker
+        if (asset.duration !== undefined && asset.duration !== null) {
+          const raw = Number(asset.duration);
+          if (!isNaN(raw) && raw > 0) {
+            // Android often returns milliseconds (e.g. 15000), iOS returns seconds (e.g. 15.0)
+            durationSec = raw > 100 ? raw / 1000 : raw;
+          }
+        }
+
+        // Step 2: Fallback to getVideoMetaData if duration was null or missing
+        if (!durationSec) {
+          try {
+            const meta = await getVideoMetaData(asset.uri);
+            if (meta && meta.duration) {
+              const metaDur = Number(meta.duration);
+              if (!isNaN(metaDur) && metaDur > 0) {
+                durationSec = metaDur > 100 ? metaDur / 1000 : metaDur;
+              }
+            }
+          } catch (e) {
+            console.warn('Could not inspect video metadata:', e);
+          }
+        }
+
+        // Step 3: Strict 15-second cutoff verification
+        if (durationSec && durationSec > 15.5) {
+          showAlert(
+            'Video Too Long',
+            `Story videos can be at most 15 seconds long (selected video is ${Math.round(durationSec)}s). Please choose or trim a video under 15 seconds.`
+          );
+          return;
+        }
       }
 
       const uri = asset.uri;
@@ -359,8 +414,8 @@ export default function ChatListScreen() {
         name: filename,
         type: mimeType,
       });
-      if (isVideo && asset.duration) {
-        formData.append('duration', String(asset.duration));
+      if (isVideo && durationSec) {
+        formData.append('duration', String(durationSec));
       }
 
       await storyService.createStory(formData);
@@ -394,22 +449,9 @@ export default function ChatListScreen() {
       return;
     }
 
-    Alert.alert(
-      'Add Story',
-      'Choose what you want to share to your story (visible for 24 hours):',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: '📷 Photo',
-          onPress: () => startStoryUpload('image'),
-        },
-        {
-          text: '🎥 Video (Max 15s)',
-          onPress: () => startStoryUpload('video'),
-        },
-      ]
-    );
-  }, [isAuthenticated, storyTray, isGroupSelf, startStoryUpload]);
+    hapticSelection();
+    setStoryPickerModalVisible(true);
+  }, [isAuthenticated, storyTray, isGroupSelf]);
 
   const handlePressStoryGroup = useCallback(
     (group: any) => {
@@ -1185,6 +1227,162 @@ export default function ChatListScreen() {
         <AppAdBanner containerStyle={styles.bottomBannerContainer} />
       </View>
 
+      {/* Story Media Picker Modal (Instagram/Snapchat style) */}
+      <Modal
+        visible={storyPickerModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setStoryPickerModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.storyPickerOverlay}
+          activeOpacity={1}
+          onPress={() => setStoryPickerModalVisible(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            style={styles.storyPickerSheet}
+            onPress={(e) => e.stopPropagation()}
+          >
+            {/* Grabber indicator */}
+            <View style={styles.storyPickerGrabber} />
+
+            {/* Header row */}
+            <View style={styles.storyPickerHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.storyPickerTitle}>Create Story</Text>
+                <Text style={styles.storyPickerSubtitle}>
+                  Share a photo or video clip visible for 24 hours
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setStoryPickerModalVisible(false)}
+                style={styles.storyPickerCloseBtn}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Ionicons name="close" size={20} color={Colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Media Options */}
+            <View style={styles.storyOptionsContainer}>
+              {/* Photo from Gallery */}
+              <TouchableOpacity
+                style={styles.storyOptionCard}
+                activeOpacity={0.72}
+                onPress={() => startStoryUpload('image')}
+              >
+                <LinearGradient
+                  colors={['#FF6B00', '#FF8E53']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.storyOptionIconCircle}
+                >
+                  <Ionicons name="images" size={22} color="#FFFFFF" />
+                </LinearGradient>
+                <View style={styles.storyOptionTextContainer}>
+                  <Text style={styles.storyOptionTitle}>Photo Story</Text>
+                  <Text style={styles.storyOptionDesc}>Choose a photo from your gallery</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={Colors.textGray} />
+              </TouchableOpacity>
+
+              {/* Video from Gallery */}
+              <TouchableOpacity
+                style={styles.storyOptionCard}
+                activeOpacity={0.72}
+                onPress={() => startStoryUpload('video')}
+              >
+                <LinearGradient
+                  colors={['#8B5CF6', '#6366F1']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.storyOptionIconCircle}
+                >
+                  <Ionicons name="videocam" size={22} color="#FFFFFF" />
+                </LinearGradient>
+                <View style={styles.storyOptionTextContainer}>
+                  <View style={styles.storyOptionTitleRow}>
+                    <Text style={styles.storyOptionTitle}>Video Story</Text>
+                    <View style={styles.maxDurationPill}>
+                      <Ionicons name="time-outline" size={11} color="#6366F1" style={{ marginRight: 3 }} />
+                      <Text style={styles.maxDurationPillText}>Max 15s</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.storyOptionDesc}>Choose a video clip (up to 15 seconds)</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={Colors.textGray} />
+              </TouchableOpacity>
+
+              {/* Camera Photo */}
+              <TouchableOpacity
+                style={styles.storyOptionCard}
+                activeOpacity={0.72}
+                onPress={() => startStoryUpload('camera_image')}
+              >
+                <LinearGradient
+                  colors={['#06B6D4', '#0EA5E9']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.storyOptionIconCircle}
+                >
+                  <Ionicons name="camera" size={22} color="#FFFFFF" />
+                </LinearGradient>
+                <View style={styles.storyOptionTextContainer}>
+                  <Text style={styles.storyOptionTitle}>Take Photo</Text>
+                  <Text style={styles.storyOptionDesc}>Capture instantly with your camera</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={Colors.textGray} />
+              </TouchableOpacity>
+
+              {/* Camera Video */}
+              <TouchableOpacity
+                style={styles.storyOptionCard}
+                activeOpacity={0.72}
+                onPress={() => startStoryUpload('camera_video')}
+              >
+                <LinearGradient
+                  colors={['#EC4899', '#F43F5E']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.storyOptionIconCircle}
+                >
+                  <Ionicons name="radio-button-on" size={22} color="#FFFFFF" />
+                </LinearGradient>
+                <View style={styles.storyOptionTextContainer}>
+                  <View style={styles.storyOptionTitleRow}>
+                    <Text style={styles.storyOptionTitle}>Record Video</Text>
+                    <View style={styles.maxDurationPill}>
+                      <Ionicons name="time-outline" size={11} color="#6366F1" style={{ marginRight: 3 }} />
+                      <Text style={styles.maxDurationPillText}>Max 15s</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.storyOptionDesc}>Record a quick 15-second story clip</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={Colors.textGray} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Active stories hint */}
+            <View style={styles.storyPickerFooterHint}>
+              <Ionicons name="sparkles" size={14} color={Colors.primary} style={{ marginRight: 6 }} />
+              <Text style={styles.storyPickerFooterText}>
+                Active stories: {storyTray.find(isGroupSelf)?.stories?.length || 0}/5 • Disappears in 24 hours
+              </Text>
+            </View>
+
+            {/* Cancel Button */}
+            <TouchableOpacity
+              style={styles.storyPickerCancelBtn}
+              onPress={() => setStoryPickerModalVisible(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.storyPickerCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       {/* Instagram Story Viewer Modal */}
       <StoryViewerModal
         visible={storyViewerVisible}
@@ -1700,5 +1898,145 @@ const styles = StyleSheet.create({
   bottomBannerContainer: {
     paddingVertical: 4,
     marginVertical: 0,
+  },
+  storyPickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    justifyContent: 'flex-end',
+  },
+  storyPickerSheet: {
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+    paddingHorizontal: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 20,
+  },
+  storyPickerGrabber: {
+    width: 44,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#E5E7EB',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  storyPickerHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 18,
+  },
+  storyPickerTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.text,
+    letterSpacing: -0.2,
+  },
+  storyPickerSubtitle: {
+    fontSize: 13,
+    color: Colors.textGray,
+    marginTop: 2,
+  },
+  storyPickerCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  storyOptionsContainer: {
+    gap: 10,
+    marginBottom: 16,
+  },
+  storyOptionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+  },
+  storyOptionIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  storyOptionTextContainer: {
+    flex: 1,
+  },
+  storyOptionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  storyOptionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  maxDurationPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: 8,
+    borderWidth: 1,
+    borderColor: '#E0E7FF',
+  },
+  maxDurationPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#6366F1',
+  },
+  storyOptionDesc: {
+    fontSize: 12,
+    color: Colors.textGray,
+    marginTop: 2,
+  },
+  storyPickerFooterHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F8FAFC',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  storyPickerFooterText: {
+    fontSize: 12,
+    color: Colors.textGray,
+    fontWeight: '500',
+  },
+  storyPickerCancelBtn: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 14,
+    paddingVertical: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  storyPickerCancelText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.text,
   },
 });
