@@ -1,6 +1,6 @@
 import { showAlert } from '../../components/AppAlert';
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, ScrollView, Dimensions, Share, Modal, Pressable, Linking } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, ScrollView, Dimensions, Share, Modal, Pressable, Linking, TouchableWithoutFeedback } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -18,7 +18,7 @@ import { hapticLight, hapticSelection } from '../../utils/haptics';
 import { shareChannel, shareVideo } from '../../utils/shareHelper';
 import ShareModal, { ShareModalItem } from '../../components/ShareModal';
 
-const { width } = Dimensions.get('window');
+const { width, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const FALLBACK_AVATAR = 'https://via.placeholder.com/100x100.png?text=User';
 
 export default function ChannelScreen() {
@@ -617,23 +617,37 @@ export default function ChannelScreen() {
         animationType="slide"
         onRequestClose={() => setAboutModalVisible(false)}
       >
-        <Pressable 
-          style={styles.aboutModalOverlay} 
-          onPress={() => setAboutModalVisible(false)}
-        >
-          <Pressable style={styles.aboutModalContent} onPress={(e) => e.stopPropagation()}>
+        <View style={styles.aboutModalOverlay}>
+          <TouchableWithoutFeedback onPress={() => setAboutModalVisible(false)}>
+            <View style={StyleSheet.absoluteFill} />
+          </TouchableWithoutFeedback>
+
+          <View style={styles.aboutModalContent}>
+            <View style={styles.aboutModalGrabber} />
             <View style={styles.aboutModalHeader}>
               <Text style={styles.aboutModalTitle}>About this channel</Text>
-              <TouchableOpacity onPress={() => setAboutModalVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                <Ionicons name="close" size={24} color={Colors.text} />
+              <TouchableOpacity
+                onPress={() => setAboutModalVisible(false)}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                style={styles.modalCloseBtn}
+              >
+                <Ionicons name="close" size={22} color={Colors.text} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.aboutModalScroll}>
+            <ScrollView
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+              keyboardShouldPersistTaps="handled"
+              bounces={true}
+              overScrollMode="always"
+              style={styles.aboutModalScrollView}
+              contentContainerStyle={styles.aboutModalScroll}
+            >
               {/* Description Section */}
               <View style={styles.aboutSection}>
                 <Text style={styles.aboutSectionTitle}>Description</Text>
-                <Text style={styles.aboutFullText}>
+                <Text style={styles.aboutFullText} selectable={true}>
                   {channel?.about ? channel.about : 'No description provided.'}
                 </Text>
               </View>
@@ -771,8 +785,8 @@ export default function ChannelScreen() {
                 )}
               </View>
             </ScrollView>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
 
       {/* Name Change History Modal (Owner Only) */}
@@ -782,22 +796,36 @@ export default function ChannelScreen() {
         animationType="slide"
         onRequestClose={() => setNameHistoryModalVisible(false)}
       >
-        <Pressable
-          style={styles.aboutModalOverlay}
-          onPress={() => setNameHistoryModalVisible(false)}
-        >
-          <Pressable style={styles.historyModalContent} onPress={(e) => e.stopPropagation()}>
+        <View style={styles.aboutModalOverlay}>
+          <TouchableWithoutFeedback onPress={() => setNameHistoryModalVisible(false)}>
+            <View style={StyleSheet.absoluteFill} />
+          </TouchableWithoutFeedback>
+
+          <View style={styles.historyModalContent}>
+            <View style={styles.aboutModalGrabber} />
             <View style={styles.aboutModalHeader}>
-              <View>
+              <View style={{ flex: 1 }}>
                 <Text style={styles.aboutModalTitle}>Name change history</Text>
                 <Text style={styles.historyModalSub}>All past username & channel name modifications</Text>
               </View>
-              <TouchableOpacity onPress={() => setNameHistoryModalVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                <Ionicons name="close" size={24} color={Colors.text} />
+              <TouchableOpacity
+                onPress={() => setNameHistoryModalVisible(false)}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                style={styles.modalCloseBtn}
+              >
+                <Ionicons name="close" size={22} color={Colors.text} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.historyScroll}>
+            <ScrollView
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+              keyboardShouldPersistTaps="handled"
+              bounces={true}
+              overScrollMode="always"
+              style={styles.aboutModalScrollView}
+              contentContainerStyle={styles.historyScroll}
+            >
               {(!channel?.nameHistory || channel.nameHistory.length === 0) ? (
                 <View style={styles.emptyHistoryBox}>
                   <Ionicons name="checkmark-done-circle-outline" size={40} color={Colors.textGray} />
@@ -825,8 +853,8 @@ export default function ChannelScreen() {
                 ))
               )}
             </ScrollView>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
 
       {/* Profile Picture (DP) Large Fullscreen Viewer Modal */}
@@ -1341,17 +1369,35 @@ const styles = StyleSheet.create({
   },
   aboutModalContent: {
     backgroundColor: Colors.white,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '75%',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '85%',
+    width: '100%',
     paddingBottom: 24,
+  },
+  aboutModalGrabber: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#E5E7EB',
+    alignSelf: 'center',
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   aboutModalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
@@ -1360,10 +1406,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.text,
   },
+  aboutModalScrollView: {
+    flexGrow: 0,
+    flexShrink: 1,
+  },
   aboutModalScroll: {
     paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 20,
+    paddingBottom: 36,
   },
   aboutSection: {
     marginBottom: 20,
@@ -1474,9 +1524,9 @@ const styles = StyleSheet.create({
   },
   historyModalContent: {
     backgroundColor: Colors.white,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '80%',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '85%',
     width: '100%',
     paddingBottom: 24,
   },
@@ -1488,7 +1538,7 @@ const styles = StyleSheet.create({
   historyScroll: {
     paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 24,
+    paddingBottom: 36,
   },
   emptyHistoryBox: {
     paddingVertical: 36,
