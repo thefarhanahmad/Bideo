@@ -408,8 +408,21 @@ exports.updateChannel = async (req, res, next) => {
     }
 
     const updateData = {};
+    const updateOps = { $set: updateData };
+
     if (typeof name === 'string' && name.trim()) {
-      updateData.name = name.trim();
+      const trimmedName = name.trim();
+      if (user.name && user.name !== trimmedName) {
+        if (!updateOps.$push) updateOps.$push = {};
+        if (!updateOps.$push.nameHistory) updateOps.$push.nameHistory = { $each: [] };
+        updateOps.$push.nameHistory.$each.push({
+          type: 'name',
+          previousName: user.name,
+          newName: trimmedName,
+          changedAt: new Date(),
+        });
+      }
+      updateData.name = trimmedName;
     }
     if (about !== undefined) {
       updateData.about = about;
@@ -417,7 +430,26 @@ exports.updateChannel = async (req, res, next) => {
     if (avatar !== undefined) updateData.avatar = avatar;
     if (coverImage !== undefined) updateData.coverImage = coverImage;
 
-    const updateOps = { $set: updateData };
+    if (req.body.socialLinks !== undefined) {
+      let rawLinks = req.body.socialLinks;
+      if (typeof rawLinks === 'string') {
+        try {
+          rawLinks = JSON.parse(rawLinks);
+        } catch (e) {
+          rawLinks = [];
+        }
+      }
+      if (Array.isArray(rawLinks)) {
+        updateData.socialLinks = rawLinks
+          .filter((l) => l && typeof l.url === 'string' && l.url.trim().length > 0)
+          .map((l) => ({
+            platform: (l.platform || 'website').toLowerCase().trim(),
+            label: (l.label || '').trim(),
+            url: l.url.trim(),
+          }));
+      }
+    }
+
     if (shouldClearEmail && user.email) {
       updateOps.$unset = { email: 1 };
       updateData.isEmailVerified = false;
@@ -427,6 +459,16 @@ exports.updateChannel = async (req, res, next) => {
     }
 
     if (shouldUpdateChannelName && trimmedChannelName) {
+      if (user.channelName && user.channelName !== trimmedChannelName) {
+        if (!updateOps.$push) updateOps.$push = {};
+        if (!updateOps.$push.nameHistory) updateOps.$push.nameHistory = { $each: [] };
+        updateOps.$push.nameHistory.$each.push({
+          type: 'channelName',
+          previousName: user.channelName,
+          newName: trimmedChannelName,
+          changedAt: new Date(),
+        });
+      }
       updateData.channelName = trimmedChannelName;
       const isFirstCreation = !user.channelName;
       if (isFirstCreation) {
@@ -528,6 +570,9 @@ const sendTokenResponse = (user, statusCode, res) => {
         isVerified: !!user.isVerified,
         verifiedUntil: user.verifiedUntil || null,
         verifiedSource: user.verifiedSource || null,
+        verifiedAt: user.verifiedAt || null,
+        socialLinks: user.socialLinks || [],
+        nameHistory: user.nameHistory || [],
         deletionScheduled: !!user.deletionScheduled,
         scheduledDeletionDate: user.scheduledDeletionDate,
         deletionReason: user.deletionReason,

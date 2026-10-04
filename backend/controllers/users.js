@@ -217,8 +217,9 @@ exports.getChannelProfile = async (req, res, next) => {
     const isObjectId = mongoose.Types.ObjectId.isValid(cleanId);
 
     let channelObj = null;
+    const channelSelect = 'name avatar coverImage channelName about followersCount isVerified verifiedAt verifiedSource isBlocked blockedAt blockReason createdAt socialLinks nameHistory';
     if (isObjectId) {
-      channelObj = await User.findById(cleanId).select('name avatar coverImage channelName about followersCount isVerified isBlocked blockedAt blockReason createdAt');
+      channelObj = await User.findById(cleanId).select(channelSelect);
     }
 
     if (!channelObj && cleanId) {
@@ -230,7 +231,7 @@ exports.getChannelProfile = async (req, res, next) => {
           { name: regex },
           { email: regex },
         ],
-      }).select('name avatar coverImage channelName about followersCount isVerified isBlocked blockedAt blockReason createdAt');
+      }).select(channelSelect);
     }
 
     if (!channelObj) return res.status(404).json({ success: false, message: 'Channel not found' });
@@ -257,18 +258,32 @@ exports.getChannelProfile = async (req, res, next) => {
       ? {}
       : { $or: [{ visibility: 'public' }, { visibility: { $exists: false } }] };
 
-    const [followersCount, followingCount, videosCount, shortsCount, postsCount] = await Promise.all([
+    const [followersCount, followingCount, videosCount, shortsCount, postsCount, viewsAgg] = await Promise.all([
       Follower.countDocuments({ channel: channel._id }),
       Follower.countDocuments({ follower: channel._id }),
       Video.countDocuments({ owner: channel._id, isShort: { $ne: true }, ...visibilityQuery }),
       Video.countDocuments({ owner: channel._id, isShort: true, ...visibilityQuery }),
       Post.countDocuments({ owner: channel._id, ...visibilityQuery }),
+      Video.aggregate([
+        { $match: { owner: channel._id, ...visibilityQuery } },
+        { $group: { _id: null, totalViews: { $sum: '$views' } } },
+      ]),
     ]);
+    const totalViews = viewsAgg && viewsAgg.length > 0 && viewsAgg[0].totalViews ? viewsAgg[0].totalViews : 0;
     channel.followersCount = followersCount;
     channel.followingCount = followingCount;
     channel.videosCount = videosCount;
     channel.shortsCount = shortsCount;
     channel.postsCount = postsCount;
+    channel.totalViews = totalViews;
+    channel.socialLinks = channelObj.socialLinks || [];
+    if (isOwner) {
+      channel.verifiedAt = channelObj.verifiedAt || (channelObj.isVerified ? channelObj.createdAt : null);
+      channel.nameHistory = channelObj.nameHistory || [];
+    } else {
+      delete channel.verifiedAt;
+      delete channel.nameHistory;
+    }
     channel.contentCounts = {
       videos: videosCount,
       shorts: shortsCount,
@@ -836,9 +851,11 @@ exports.toggleVerifyUser = async (req, res, next) => {
     if (user.isVerified) {
       user.verifiedSource = 'admin';
       user.verifiedUntil = null; // Admin verification does not expire
+      user.verifiedAt = new Date();
     } else {
       user.verifiedSource = null;
       user.verifiedUntil = null;
+      user.verifiedAt = null;
     }
     await user.save();
 

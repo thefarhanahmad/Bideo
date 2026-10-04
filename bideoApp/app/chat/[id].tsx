@@ -15,9 +15,13 @@ import {
   Alert,
   Keyboard,
   Linking,
+  Animated,
+  PanResponder,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSelector } from 'react-redux';
@@ -40,6 +44,229 @@ import { AppAdBanner } from '../../components/AppAds';
 
 const FALLBACK_AVATAR = 'https://via.placeholder.com/100x100.png?text=User';
 const FALLBACK_THUMBNAIL = 'https://via.placeholder.com/640x360.png?text=Bideo';
+
+export interface ChatTheme {
+  id: string;
+  name: string;
+  previewColors: [string, string];
+  bubbleMineGradient: [string, string];
+  bubbleMineText: string;
+  bubbleOtherBg: string;
+  bubbleOtherText: string;
+  screenBg: string;
+  primary: string;
+  inputBg: string;
+  inputText: string;
+  accentBar: string;
+}
+
+export const CHAT_THEMES: Record<string, ChatTheme> = {
+  default: {
+    id: 'default',
+    name: 'Classic Bideo',
+    previewColors: ['#FF0033', '#CC0029'],
+    bubbleMineGradient: ['#FF0033', '#CC0029'],
+    bubbleMineText: '#FFFFFF',
+    bubbleOtherBg: '#F3F4F6',
+    bubbleOtherText: '#111827',
+    screenBg: '#F9FAFB',
+    primary: '#FF0033',
+    inputBg: '#FFFFFF',
+    inputText: '#111827',
+    accentBar: '#FF0033',
+  },
+  sunset: {
+    id: 'sunset',
+    name: 'Sunset Glow',
+    previewColors: ['#FF512F', '#DD2476'],
+    bubbleMineGradient: ['#FF512F', '#DD2476'],
+    bubbleMineText: '#FFFFFF',
+    bubbleOtherBg: '#FFF1F2',
+    bubbleOtherText: '#881337',
+    screenBg: '#FFF5F5',
+    primary: '#DD2476',
+    inputBg: '#FFFFFF',
+    inputText: '#111827',
+    accentBar: '#FF512F',
+  },
+  ocean: {
+    id: 'ocean',
+    name: 'Ocean Breeze',
+    previewColors: ['#00C0FF', '#4286F4'],
+    bubbleMineGradient: ['#00C0FF', '#4286F4'],
+    bubbleMineText: '#FFFFFF',
+    bubbleOtherBg: '#F0F9FF',
+    bubbleOtherText: '#0C4A6E',
+    screenBg: '#F8FAFC',
+    primary: '#0284C7',
+    inputBg: '#FFFFFF',
+    inputText: '#111827',
+    accentBar: '#00C0FF',
+  },
+  midnight: {
+    id: 'midnight',
+    name: 'Midnight Neon',
+    previewColors: ['#8A2387', '#E94057'],
+    bubbleMineGradient: ['#8A2387', '#E94057'],
+    bubbleMineText: '#FFFFFF',
+    bubbleOtherBg: '#FDF4FF',
+    bubbleOtherText: '#701A75',
+    screenBg: '#FAF5FF',
+    primary: '#A855F7',
+    inputBg: '#FFFFFF',
+    inputText: '#111827',
+    accentBar: '#8A2387',
+  },
+  emerald: {
+    id: 'emerald',
+    name: 'Emerald Mint',
+    previewColors: ['#11998E', '#38EF7D'],
+    bubbleMineGradient: ['#11998E', '#38EF7D'],
+    bubbleMineText: '#FFFFFF',
+    bubbleOtherBg: '#ECFDF5',
+    bubbleOtherText: '#064E3B',
+    screenBg: '#F0FDF4',
+    primary: '#059669',
+    inputBg: '#FFFFFF',
+    inputText: '#111827',
+    accentBar: '#11998E',
+  },
+  sakura: {
+    id: 'sakura',
+    name: 'Sakura Blossom',
+    previewColors: ['#FF758C', '#FF7EB3'],
+    bubbleMineGradient: ['#FF758C', '#FF7EB3'],
+    bubbleMineText: '#FFFFFF',
+    bubbleOtherBg: '#FFF0F5',
+    bubbleOtherText: '#831843',
+    screenBg: '#FFF5F7',
+    primary: '#DB2777',
+    inputBg: '#FFFFFF',
+    inputText: '#111827',
+    accentBar: '#FF758C',
+  },
+  amber: {
+    id: 'amber',
+    name: 'Cyber Amber',
+    previewColors: ['#F2994A', '#F2C94C'],
+    bubbleMineGradient: ['#F2994A', '#F2C94C'],
+    bubbleMineText: '#FFFFFF',
+    bubbleOtherBg: '#FEFCE8',
+    bubbleOtherText: '#713F12',
+    screenBg: '#FFFBEB',
+    primary: '#D97706',
+    inputBg: '#FFFFFF',
+    inputText: '#111827',
+    accentBar: '#F2994A',
+  },
+  slate: {
+    id: 'slate',
+    name: 'Steel Slate',
+    previewColors: ['#475569', '#1E293B'],
+    bubbleMineGradient: ['#475569', '#1E293B'],
+    bubbleMineText: '#FFFFFF',
+    bubbleOtherBg: '#F1F5F9',
+    bubbleOtherText: '#0F172A',
+    screenBg: '#F8FAFC',
+    primary: '#334155',
+    inputBg: '#FFFFFF',
+    inputText: '#111827',
+    accentBar: '#475569',
+  },
+};
+
+const SwipeableMessageBubble = ({
+  children,
+  onSwipeReply,
+  isMine,
+  themeColor,
+}: {
+  children: React.ReactNode;
+  onSwipeReply: () => void;
+  isMine: boolean;
+  themeColor: string;
+}) => {
+  const panX = useRef(new Animated.Value(0)).current;
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gestureState) => {
+          return (
+            Math.abs(gestureState.dx) > 16 &&
+            Math.abs(gestureState.dy) < 14
+          );
+        },
+        onPanResponderMove: (_, gestureState) => {
+          const maxDrag = 65;
+          let clampedX = 0;
+          if (gestureState.dx > 0) {
+            clampedX = Math.min(gestureState.dx * 0.75, maxDrag);
+          } else {
+            clampedX = Math.max(gestureState.dx * 0.75, -maxDrag);
+          }
+          panX.setValue(clampedX);
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          const threshold = 36;
+          if (Math.abs(gestureState.dx) >= threshold) {
+            hapticLight();
+            onSwipeReply();
+          }
+          Animated.spring(panX, {
+            toValue: 0,
+            friction: 6,
+            tension: 50,
+            useNativeDriver: true,
+          }).start();
+        },
+        onPanResponderTerminate: () => {
+          Animated.spring(panX, {
+            toValue: 0,
+            friction: 6,
+            tension: 50,
+            useNativeDriver: true,
+          }).start();
+        },
+      }),
+    [onSwipeReply]
+  );
+
+  return (
+    <View style={styles.swipeContainer}>
+      <Animated.View
+        style={[
+          styles.swipeReplyIconBox,
+          isMine ? styles.swipeReplyIconRight : styles.swipeReplyIconLeft,
+          {
+            backgroundColor: themeColor,
+            opacity: panX.interpolate({
+              inputRange: [-45, -20, 0, 20, 45],
+              outputRange: [1, 0.5, 0, 0.5, 1],
+            }),
+            transform: [
+              {
+                scale: panX.interpolate({
+                  inputRange: [-45, -20, 0, 20, 45],
+                  outputRange: [1, 0.8, 0.4, 0.8, 1],
+                }),
+              },
+            ],
+          },
+        ]}
+      >
+        <Ionicons name="arrow-undo" size={17} color="#FFFFFF" />
+      </Animated.View>
+
+      <Animated.View
+        {...panResponder.panHandlers}
+        style={{ transform: [{ translateX: panX }] }}
+      >
+        {children}
+      </Animated.View>
+    </View>
+  );
+};
 
 export default function ChatRoomScreen() {
   const router = useRouter();
@@ -65,6 +292,8 @@ export default function ChatRoomScreen() {
   const [messageActionModalVisible, setMessageActionModalVisible] = useState(false);
   const [groupInfoModalVisible, setGroupInfoModalVisible] = useState(false);
   const [addMembersModalVisible, setAddMembersModalVisible] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<any | null>(null);
+  const [themeModalVisible, setThemeModalVisible] = useState(false);
 
   const insets = useSafeAreaInsets();
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -74,6 +303,8 @@ export default function ChatRoomScreen() {
   const otherParticipantIdRef = useRef<string | null>(null);
 
   const currentUserId = user?._id?.toString() || user?.id?.toString() || '';
+  const currentThemeKey = conversation?.theme || 'default';
+  const currentTheme = CHAT_THEMES[currentThemeKey] || CHAT_THEMES.default;
 
   // Track keyboard height to smoothly position input above keyboard
   useEffect(() => {
@@ -297,6 +528,18 @@ export default function ChatRoomScreen() {
       }
     );
 
+    const subTheme = DeviceEventEmitter.addListener(
+      'chatThemeChanged',
+      (data: { conversationId: string; theme: string }) => {
+        if (data?.conversationId?.toString() === conversationId?.toString()) {
+          setConversation((prev: any) => ({
+            ...prev,
+            theme: data.theme,
+          }));
+        }
+      }
+    );
+
     return () => {
       if (conversationId) {
         leaveConversationRoom(conversationId);
@@ -313,6 +556,7 @@ export default function ChatRoomScreen() {
       subGroupMembers.remove();
       subGroupDetails.remove();
       subConvRemoved.remove();
+      subTheme.remove();
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
     };
   }, [conversationId, currentUserId, loadData]);
@@ -364,10 +608,24 @@ export default function ChatRoomScreen() {
       emitTyping(conversationId, conversation.otherParticipant._id, false);
     }
 
+    const replyPayload = replyingTo
+      ? {
+          message: replyingTo._id,
+          senderName:
+            (replyingTo.sender?._id || replyingTo.sender)?.toString() === currentUserId
+              ? 'You'
+              : replyingTo.sender?.channelName || replyingTo.sender?.name || 'User',
+          text: replyingTo.text || (replyingTo.video ? '🎥 Video' : replyingTo.post ? '📝 Post' : 'Message'),
+        }
+      : undefined;
+
+    setReplyingTo(null);
+
     try {
       const newMsg = await chatService.sendMessage({
         conversationId,
         text: trimmed,
+        replyTo: replyPayload,
       });
 
       if (newMsg) {
@@ -384,6 +642,39 @@ export default function ChatRoomScreen() {
       setInputText(trimmed); // Restore message
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleSelectTheme = async (themeKey: string) => {
+    hapticSelection();
+    setThemeModalVisible(false);
+    setConversation((prev: any) => ({ ...prev, theme: themeKey }));
+    try {
+      await chatService.updateChatTheme(conversationId, themeKey);
+    } catch (err: any) {
+      showAlert('Theme Error', err?.response?.data?.message || 'Failed to change theme');
+    }
+  };
+
+  const scrollToMessage = (targetMessageId: string) => {
+    if (!targetMessageId) return;
+    const targetIdx = reversedMessages.findIndex(
+      (m) => (m._id || m.id)?.toString() === targetMessageId.toString()
+    );
+    if (targetIdx !== -1) {
+      hapticLight();
+      try {
+        flatListRef.current?.scrollToIndex({
+          index: targetIdx,
+          animated: true,
+          viewPosition: 0.5,
+        });
+      } catch {
+        flatListRef.current?.scrollToOffset({
+          offset: targetIdx * 65,
+          animated: true,
+        });
+      }
     }
   };
 
@@ -684,154 +975,119 @@ export default function ChatRoomScreen() {
     const showText = Boolean(item.text && !isRedundantMediaUrl);
     const textParts = showText ? parseTextWithLinks(item.text) : [];
 
-    return (
-      <View
-        style={[
-          styles.bubbleWrapper,
-          isMine ? styles.bubbleWrapperRight : styles.bubbleWrapperLeft,
-        ]}
-      >
+    const renderBubbleInner = () => (
+      <>
+        {/* Quoted Message / Replying To Snippet */}
+        {Boolean(item.replyTo && (item.replyTo.text || item.replyTo.senderName)) && (
+          <TouchableOpacity
+            style={[
+              styles.quotedMessageContainer,
+              isMine ? styles.quotedMessageRight : styles.quotedMessageLeft,
+            ]}
+            activeOpacity={0.8}
+            onPress={() => item.replyTo?.message && scrollToMessage(item.replyTo.message)}
+          >
+            <View
+              style={[
+                styles.quotedMessageBar,
+                { backgroundColor: isMine ? '#FFFFFF' : currentTheme.primary },
+              ]}
+            />
+            <View style={styles.quotedMessageContent}>
+              <Text
+                style={[
+                  styles.quotedMessageSender,
+                  { color: isMine ? '#FFFFFF' : currentTheme.primary },
+                ]}
+                numberOfLines={1}
+              >
+                {item.replyTo.senderName || 'Replied message'}
+              </Text>
+              <Text
+                style={[
+                  styles.quotedMessageText,
+                  isMine ? styles.quotedMessageTextRight : styles.quotedMessageTextLeft,
+                ]}
+                numberOfLines={2}
+              >
+                {item.replyTo.text || 'Message'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {/* Group Sender Name Header */}
         {isGroup && !isMine && (
           <TouchableOpacity
-            activeOpacity={0.8}
+            activeOpacity={0.7}
             onPress={() => {
               const sId = item.sender?._id || item.sender;
               if (sId) router.push(`/channel/${sId}`);
             }}
-            style={styles.groupSenderAvatarTouch}
+            style={styles.groupSenderNameRow}
           >
-            <Image
-              source={{ uri: resolveMediaUrl(item.sender?.avatar) || FALLBACK_AVATAR }}
-              style={styles.groupSenderAvatar}
-              contentFit="cover"
-            />
+            <Text style={[styles.groupSenderNameText, { color: currentTheme.primary }]} numberOfLines={1}>
+              {item.sender?.channelName || item.sender?.name || 'Member'}
+            </Text>
+            {Boolean(item.sender?.isVerified) && (
+              <VerifiedBadge size={11} style={{ marginLeft: 3 }} />
+            )}
           </TouchableOpacity>
         )}
 
-        <TouchableOpacity
-          activeOpacity={0.92}
-          style={[
-            styles.bubbleTouch,
-            isMine ? styles.bubbleTouchRight : styles.bubbleTouchLeft,
-            (hasVideo || hasPost) && styles.bubbleTouchMedia,
-          ]}
-          onLongPress={() => {
-            hapticSelection();
-            setSelectedMessage(item);
-            setMessageActionModalVisible(true);
-          }}
-          delayLongPress={280}
-        >
-          <View
-            style={[
-              styles.bubble,
-              isMine ? styles.bubbleRight : styles.bubbleLeft,
-              (hasVideo || hasPost) && styles.bubbleWithMedia,
-            ]}
+        {/* Embedded Video Card */}
+        {hasVideo && (
+          <TouchableOpacity
+            style={styles.embeddedMediaCard}
+            activeOpacity={0.85}
+            onPress={() => {
+              hapticSelection();
+              if (item.video.isShort) {
+                router.push({ pathname: '/shorts', params: { initialShortId: item.video._id } });
+              } else {
+                router.push(`/v/${item.video._id}`);
+              }
+            }}
           >
-            {/* Group Sender Name Header */}
-            {isGroup && !isMine && (
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => {
-                  const sId = item.sender?._id || item.sender;
-                  if (sId) router.push(`/channel/${sId}`);
-                }}
-                style={styles.groupSenderNameRow}
-              >
-                <Text style={styles.groupSenderNameText} numberOfLines={1}>
-                  {item.sender?.channelName || item.sender?.name || 'Member'}
-                </Text>
-                {Boolean(item.sender?.isVerified) && (
-                  <VerifiedBadge size={11} style={{ marginLeft: 3 }} />
-                )}
-              </TouchableOpacity>
-            )}
-          {/* Embedded Video Card */}
-          {hasVideo && (
-            <TouchableOpacity
-              style={styles.embeddedMediaCard}
-              activeOpacity={0.85}
-              onPress={() => {
-                hapticSelection();
-                if (item.video.isShort) {
-                  router.push({ pathname: '/shorts', params: { initialShortId: item.video._id } });
-                } else {
-                  router.push(`/v/${item.video._id}`);
-                }
-              }}
-            >
-              <View style={styles.embeddedThumbContainer}>
-                <Image
-                  source={{ uri: resolveMediaUrl(item.video.thumbnail) || FALLBACK_THUMBNAIL }}
-                  style={styles.embeddedThumb}
-                  contentFit="cover"
-                  transition={150}
-                />
-                <View style={styles.embeddedPlayOverlay}>
-                  <View style={styles.embeddedPlayBtn}>
-                    <Ionicons name="play" size={16} color="#FFFFFF" style={{ marginLeft: 2 }} />
-                  </View>
+            <View style={styles.embeddedThumbContainer}>
+              <Image
+                source={{ uri: resolveMediaUrl(item.video.thumbnail) || FALLBACK_THUMBNAIL }}
+                style={styles.embeddedThumb}
+                contentFit="cover"
+                transition={150}
+              />
+              <View style={styles.embeddedPlayOverlay}>
+                <View style={styles.embeddedPlayBtn}>
+                  <Ionicons name="play" size={16} color="#FFFFFF" style={{ marginLeft: 2 }} />
                 </View>
-                {item.video.duration > 0 && (
-                  <View style={styles.embeddedDurationBadge}>
-                    <Text style={styles.embeddedDurationText}>
-                      {formatDuration(item.video.duration)}
-                    </Text>
-                  </View>
-                )}
-                {item.video.isShort && (
-                  <View style={styles.embeddedShortBadge}>
-                    <Ionicons name="flash" size={10} color="#FFFFFF" />
-                    <Text style={styles.embeddedShortText}>Short</Text>
-                  </View>
-                )}
               </View>
+              {item.video.duration > 0 && (
+                <View style={styles.embeddedDurationBadge}>
+                  <Text style={styles.embeddedDurationText}>
+                    {formatDuration(item.video.duration)}
+                  </Text>
+                </View>
+              )}
+              {item.video.isShort && (
+                <View style={styles.embeddedShortBadge}>
+                  <Ionicons name="flash" size={10} color="#FFFFFF" />
+                  <Text style={styles.embeddedShortText}>Short</Text>
+                </View>
+              )}
+            </View>
 
-              <View style={styles.embeddedInfo}>
-                <Text
-                  style={[styles.embeddedTitle, isMine && styles.embeddedTitleRight]}
-                  numberOfLines={2}
-                >
-                  {item.video.title || 'Shared Video'}
-                </Text>
+            <View style={styles.embeddedInfo}>
+              <Text
+                style={[styles.embeddedTitle, isMine && styles.embeddedTitleRight]}
+                numberOfLines={2}
+              >
+                {item.video.title || 'Shared Video'}
+              </Text>
 
-                {item.video.owner && (
-                  <View style={styles.embeddedOwnerRow}>
-                    <Image
-                      source={{ uri: resolveMediaUrl(item.video.owner.avatar) || FALLBACK_AVATAR }}
-                      style={styles.embeddedOwnerAvatar}
-                      contentFit="cover"
-                    />
-                    <Text
-                      style={[styles.embeddedOwnerName, isMine && styles.embeddedOwnerNameRight]}
-                      numberOfLines={1}
-                    >
-                      {item.video.owner.channelName || item.video.owner.name || 'Creator'}
-                    </Text>
-                    {Boolean(item.video.owner.isVerified) && (
-                      <VerifiedBadge size={12} style={{ marginLeft: 3 }} />
-                    )}
-                  </View>
-                )}
-              </View>
-            </TouchableOpacity>
-          )}
-
-          {/* Embedded Post Card */}
-          {hasPost && (
-            <TouchableOpacity
-              style={styles.embeddedPostCard}
-              activeOpacity={0.85}
-              onPress={() => {
-                hapticSelection();
-                router.push(`/post/${item.post._id}`);
-              }}
-            >
-              <View style={styles.embeddedPostHeader}>
+              {item.video.owner && (
                 <View style={styles.embeddedOwnerRow}>
                   <Image
-                    source={{ uri: resolveMediaUrl(item.post.author?.avatar) || FALLBACK_AVATAR }}
+                    source={{ uri: resolveMediaUrl(item.video.owner.avatar) || FALLBACK_AVATAR }}
                     style={styles.embeddedOwnerAvatar}
                     contentFit="cover"
                   />
@@ -839,90 +1095,196 @@ export default function ChatRoomScreen() {
                     style={[styles.embeddedOwnerName, isMine && styles.embeddedOwnerNameRight]}
                     numberOfLines={1}
                   >
-                    {item.post.author?.channelName || item.post.author?.name || 'Creator'}
+                    {item.video.owner.channelName || item.video.owner.name || 'Creator'}
                   </Text>
-                  {Boolean(item.post.author?.isVerified) && (
+                  {Boolean(item.video.owner.isVerified) && (
                     <VerifiedBadge size={12} style={{ marginLeft: 3 }} />
                   )}
                 </View>
-                <View style={[styles.postBadgePill, isMine && styles.postBadgePillRight]}>
-                  <Text style={[styles.postBadgePillText, isMine && styles.postBadgePillTextRight]}>
-                    Post
-                  </Text>
-                </View>
-              </View>
-
-              {Boolean(item.post.text) && (
-                <Text
-                  style={[styles.embeddedPostText, isMine && styles.embeddedPostTextRight]}
-                  numberOfLines={3}
-                >
-                  {item.post.text}
-                </Text>
               )}
+            </View>
+          </TouchableOpacity>
+        )}
 
-              {Boolean(item.post.image || item.post.imageUrl) && (
+        {/* Embedded Post Card */}
+        {hasPost && (
+          <TouchableOpacity
+            style={styles.embeddedPostCard}
+            activeOpacity={0.85}
+            onPress={() => {
+              hapticSelection();
+              router.push(`/post/${item.post._id}`);
+            }}
+          >
+            <View style={styles.embeddedPostHeader}>
+              <View style={styles.embeddedOwnerRow}>
                 <Image
-                  source={{ uri: resolveMediaUrl(item.post.image || item.post.imageUrl) }}
-                  style={styles.embeddedPostImage}
+                  source={{ uri: resolveMediaUrl(item.post.author?.avatar) || FALLBACK_AVATAR }}
+                  style={styles.embeddedOwnerAvatar}
                   contentFit="cover"
-                  transition={150}
                 />
-              )}
+                <Text
+                  style={[styles.embeddedOwnerName, isMine && styles.embeddedOwnerNameRight]}
+                  numberOfLines={1}
+                >
+                  {item.post.author?.channelName || item.post.author?.name || 'Creator'}
+                </Text>
+                {Boolean(item.post.author?.isVerified) && (
+                  <VerifiedBadge size={12} style={{ marginLeft: 3 }} />
+                )}
+              </View>
+              <View style={[styles.postBadgePill, isMine && styles.postBadgePillRight]}>
+                <Text style={[styles.postBadgePillText, isMine && styles.postBadgePillTextRight]}>
+                  Post
+                </Text>
+              </View>
+            </View>
+
+            {Boolean(item.post.text) && (
+              <Text
+                style={[styles.embeddedPostText, isMine && styles.embeddedPostTextRight]}
+                numberOfLines={3}
+              >
+                {item.post.text}
+              </Text>
+            )}
+
+            {Boolean(item.post.image || item.post.imageUrl) && (
+              <Image
+                source={{ uri: resolveMediaUrl(item.post.image || item.post.imageUrl) }}
+                style={styles.embeddedPostImage}
+                contentFit="cover"
+                transition={150}
+              />
+            )}
+          </TouchableOpacity>
+        )}
+
+        {/* Text message with clickable URLs */}
+        {showText && (
+          <Text
+            style={[
+              styles.bubbleText,
+              isMine ? styles.bubbleTextRight : [styles.bubbleTextLeft, { color: currentTheme.bubbleOtherText }],
+              (hasVideo || hasPost) && { marginTop: 4, paddingHorizontal: 6 },
+            ]}
+          >
+            {textParts.map((part, idx) => {
+              if (part.type === 'link') {
+                return (
+                  <Text
+                    key={idx}
+                    style={[
+                      styles.bubbleLinkText,
+                      isMine ? styles.bubbleLinkTextRight : [styles.bubbleLinkTextLeft, { color: currentTheme.primary }],
+                    ]}
+                    onPress={() => handleLinkPress(part.value)}
+                  >
+                    {part.value}
+                  </Text>
+                );
+              }
+              return <Text key={idx}>{part.value}</Text>;
+            })}
+          </Text>
+        )}
+
+        <View style={styles.bubbleFooter}>
+          <Text
+            style={[
+              styles.bubbleTime,
+              isMine ? styles.bubbleTimeRight : styles.bubbleTimeLeft,
+            ]}
+          >
+            {timeFormatted}
+          </Text>
+
+          {isMine && (
+            <Ionicons
+              name={item.isRead ? 'checkmark-done' : 'checkmark'}
+              size={14}
+              color={item.isRead ? '#93C5FD' : 'rgba(255,255,255,0.7)'}
+              style={{ marginLeft: 3 }}
+            />
+          )}
+        </View>
+      </>
+    );
+
+    return (
+      <SwipeableMessageBubble
+        onSwipeReply={() => {
+          hapticLight();
+          setReplyingTo(item);
+        }}
+        isMine={isMine}
+        themeColor={currentTheme.primary}
+      >
+        <View
+          style={[
+            styles.bubbleWrapper,
+            isMine ? styles.bubbleWrapperRight : styles.bubbleWrapperLeft,
+          ]}
+        >
+          {isGroup && !isMine && (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => {
+                const sId = item.sender?._id || item.sender;
+                if (sId) router.push(`/channel/${sId}`);
+              }}
+              style={styles.groupSenderAvatarTouch}
+            >
+              <Image
+                source={{ uri: resolveMediaUrl(item.sender?.avatar) || FALLBACK_AVATAR }}
+                style={styles.groupSenderAvatar}
+                contentFit="cover"
+              />
             </TouchableOpacity>
           )}
 
-          {/* Text message with clickable URLs */}
-          {showText && (
-            <Text
-              style={[
-                styles.bubbleText,
-                isMine ? styles.bubbleTextRight : styles.bubbleTextLeft,
-                (hasVideo || hasPost) && { marginTop: 4, paddingHorizontal: 6 },
-              ]}
-            >
-              {textParts.map((part, idx) => {
-                if (part.type === 'link') {
-                  return (
-                    <Text
-                      key={idx}
-                      style={[
-                        styles.bubbleLinkText,
-                        isMine ? styles.bubbleLinkTextRight : styles.bubbleLinkTextLeft,
-                      ]}
-                      onPress={() => handleLinkPress(part.value)}
-                    >
-                      {part.value}
-                    </Text>
-                  );
-                }
-                return <Text key={idx}>{part.value}</Text>;
-              })}
-            </Text>
-          )}
-
-          <View style={styles.bubbleFooter}>
-            <Text
-              style={[
-                styles.bubbleTime,
-                isMine ? styles.bubbleTimeRight : styles.bubbleTimeLeft,
-              ]}
-            >
-              {timeFormatted}
-            </Text>
-
-            {isMine && (
-              <Ionicons
-                name={item.isRead ? 'checkmark-done' : 'checkmark'}
-                size={14}
-                color={item.isRead ? '#93C5FD' : 'rgba(255,255,255,0.7)'}
-                style={{ marginLeft: 3 }}
-              />
+          <TouchableOpacity
+            activeOpacity={0.92}
+            style={[
+              styles.bubbleTouch,
+              isMine ? styles.bubbleTouchRight : styles.bubbleTouchLeft,
+              (hasVideo || hasPost) && styles.bubbleTouchMedia,
+            ]}
+            onLongPress={() => {
+              hapticSelection();
+              setSelectedMessage(item);
+              setMessageActionModalVisible(true);
+            }}
+            delayLongPress={280}
+          >
+            {isMine ? (
+              <LinearGradient
+                colors={currentTheme.bubbleMineGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[
+                  styles.bubble,
+                  styles.bubbleRight,
+                  (hasVideo || hasPost) && styles.bubbleWithMedia,
+                ]}
+              >
+                {renderBubbleInner()}
+              </LinearGradient>
+            ) : (
+              <View
+                style={[
+                  styles.bubble,
+                  styles.bubbleLeft,
+                  { backgroundColor: currentTheme.bubbleOtherBg },
+                  (hasVideo || hasPost) && styles.bubbleWithMedia,
+                ]}
+              >
+                {renderBubbleInner()}
+              </View>
             )}
-          </View>
+          </TouchableOpacity>
         </View>
-        </TouchableOpacity>
-      </View>
+      </SwipeableMessageBubble>
     );
   };
 
@@ -1008,11 +1370,7 @@ export default function ChatRoomScreen() {
         <TouchableOpacity
           style={styles.menuButton}
           onPress={() => {
-            if (isGroup) {
-              setGroupInfoModalVisible(true);
-            } else {
-              setMenuVisible(true);
-            }
+            setMenuVisible(true);
           }}
           activeOpacity={0.7}
         >
@@ -1021,7 +1379,7 @@ export default function ChatRoomScreen() {
       </View>
 
       <KeyboardAvoidingView
-        style={styles.contentContainer}
+        style={[styles.contentContainer, { backgroundColor: currentTheme.screenBg }]}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
       >
@@ -1095,6 +1453,12 @@ export default function ChatRoomScreen() {
           contentContainerStyle={styles.messagesList}
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
+          onScrollToIndexFailed={(info) => {
+            flatListRef.current?.scrollToOffset({
+              offset: info.averageItemLength > 0 ? info.index * info.averageItemLength : info.index * 60,
+              animated: true,
+            });
+          }}
           ListEmptyComponent={
             loading && messages.length === 0 ? (
               <View style={[styles.emptyMessages, { transform: [{ scaleY: -1 }], paddingVertical: 40 }]}>
@@ -1122,11 +1486,39 @@ export default function ChatRoomScreen() {
           </View>
         )}
 
+        {/* Reply Preview Banner */}
+        {Boolean(replyingTo) && (
+          <View style={[styles.replyBanner, { borderLeftColor: currentTheme.primary, backgroundColor: currentTheme.inputBg }]}>
+            <View style={styles.replyBannerContent}>
+              <View style={styles.replyBannerHeader}>
+                <Ionicons name="arrow-undo" size={13} color={currentTheme.primary} style={{ marginRight: 4 }} />
+                <Text style={[styles.replyBannerSender, { color: currentTheme.primary }]} numberOfLines={1}>
+                  Replying to {(replyingTo.sender?._id || replyingTo.sender)?.toString() === currentUserId ? 'yourself' : (replyingTo.sender?.channelName || replyingTo.sender?.name || 'User')}
+                </Text>
+              </View>
+              <Text style={styles.replyBannerText} numberOfLines={1}>
+                {replyingTo.text || (replyingTo.video ? '🎥 Shared Video' : replyingTo.post ? '📝 Shared Post' : 'Message')}
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => {
+                hapticLight();
+                setReplyingTo(null);
+              }}
+              style={styles.replyBannerCloseBtn}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="close" size={18} color={Colors.textGray} />
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Input Bar */}
         <View
           style={[
             styles.inputContainer,
             {
+              backgroundColor: currentTheme.inputBg,
               paddingBottom:
                 keyboardHeight > 0
                   ? Platform.OS === 'android'
@@ -1152,12 +1544,17 @@ export default function ChatRoomScreen() {
             multiline
             maxLength={2000}
             editable={!isBlocked && !isPendingForMe}
-            style={[styles.input, (isBlocked || isPendingForMe) && styles.inputDisabled]}
+            style={[
+              styles.input,
+              { color: currentTheme.inputText },
+              (isBlocked || isPendingForMe) && styles.inputDisabled,
+            ]}
           />
 
           <TouchableOpacity
             style={[
               styles.sendButton,
+              { backgroundColor: currentTheme.primary },
               (!inputText.trim() || sending || isBlocked || isPendingForMe) && styles.sendButtonDisabled,
             ]}
             onPress={handleSend}
@@ -1186,54 +1583,94 @@ export default function ChatRoomScreen() {
           onPress={() => setMenuVisible(false)}
         >
           <View style={styles.menuDropdown}>
-            {/* View Channel */}
-            <TouchableOpacity
-              style={styles.menuOption}
-              onPress={() => {
-                setMenuVisible(false);
-                if (other?._id) router.push(`/channel/${other._id}`);
-              }}
-            >
-              <Ionicons name="person-outline" size={18} color={Colors.text} style={{ marginRight: 10 }} />
-              <Text style={styles.menuOptionText}>View Channel</Text>
-            </TouchableOpacity>
-
-            {/* Block / Unblock Option */}
-            {isBlockedByMe ? (
-              <TouchableOpacity style={styles.menuOption} onPress={handleUnblock}>
-                <Ionicons name="checkmark-circle-outline" size={18} color={Colors.primary} style={{ marginRight: 10 }} />
-                <Text style={[styles.menuOptionText, { color: Colors.primary, fontWeight: '600' }]}>Unblock User</Text>
-              </TouchableOpacity>
-            ) : !isBlocked ? (
-              <TouchableOpacity style={styles.menuOption} onPress={handleBlock}>
-                <Ionicons name="ban-outline" size={18} color="#EF4444" style={{ marginRight: 10 }} />
-                <Text style={[styles.menuOptionText, { color: '#EF4444' }]}>Block User</Text>
-              </TouchableOpacity>
-            ) : null}
-
-            {/* Continue Chat (Accept) if pending, or Dismiss Option */}
-            {isPendingForMe ? (
+            {isGroup ? (
               <>
-                <TouchableOpacity style={styles.menuOption} onPress={handleAccept}>
-                  <Ionicons name="chatbubbles-outline" size={18} color={Colors.primary} style={{ marginRight: 10 }} />
-                  <Text style={[styles.menuOptionText, { color: Colors.primary, fontWeight: '600' }]}>Continue Chat</Text>
+                <TouchableOpacity
+                  style={styles.menuOption}
+                  onPress={() => {
+                    setMenuVisible(false);
+                    setGroupInfoModalVisible(true);
+                  }}
+                >
+                  <Ionicons name="information-circle-outline" size={18} color={Colors.text} style={{ marginRight: 10 }} />
+                  <Text style={styles.menuOptionText}>Group Info</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.menuOption} onPress={handleDecline}>
-                  <Ionicons name="close-circle-outline" size={18} color="#F97316" style={{ marginRight: 10 }} />
-                  <Text style={[styles.menuOptionText, { color: '#F97316' }]}>Dismiss Chat</Text>
+
+                <TouchableOpacity
+                  style={styles.menuOption}
+                  onPress={() => {
+                    setMenuVisible(false);
+                    setThemeModalVisible(true);
+                  }}
+                >
+                  <Ionicons name="color-palette-outline" size={18} color={currentTheme.primary} style={{ marginRight: 10 }} />
+                  <Text style={[styles.menuOptionText, { color: currentTheme.primary, fontWeight: '700' }]}>Change Theme</Text>
                 </TouchableOpacity>
               </>
-            ) : !isBlocked ? (
-              <TouchableOpacity style={styles.menuOption} onPress={handleDecline}>
-                <Ionicons name="trash-outline" size={18} color="#EF4444" style={{ marginRight: 10 }} />
-                <Text style={[styles.menuOptionText, { color: '#EF4444' }]}>Dismiss Chat</Text>
-              </TouchableOpacity>
-            ) : null}
+            ) : (
+              <>
+                {/* View Channel */}
+                <TouchableOpacity
+                  style={styles.menuOption}
+                  onPress={() => {
+                    setMenuVisible(false);
+                    if (other?._id) router.push(`/channel/${other._id}`);
+                  }}
+                >
+                  <Ionicons name="person-outline" size={18} color={Colors.text} style={{ marginRight: 10 }} />
+                  <Text style={styles.menuOptionText}>View Channel</Text>
+                </TouchableOpacity>
+
+                {/* Change Theme */}
+                <TouchableOpacity
+                  style={styles.menuOption}
+                  onPress={() => {
+                    setMenuVisible(false);
+                    setThemeModalVisible(true);
+                  }}
+                >
+                  <Ionicons name="color-palette-outline" size={18} color={currentTheme.primary} style={{ marginRight: 10 }} />
+                  <Text style={[styles.menuOptionText, { color: currentTheme.primary, fontWeight: '700' }]}>Change Theme</Text>
+                </TouchableOpacity>
+
+                {/* Block / Unblock Option */}
+                {isBlockedByMe ? (
+                  <TouchableOpacity style={styles.menuOption} onPress={handleUnblock}>
+                    <Ionicons name="checkmark-circle-outline" size={18} color={Colors.primary} style={{ marginRight: 10 }} />
+                    <Text style={[styles.menuOptionText, { color: Colors.primary, fontWeight: '600' }]}>Unblock User</Text>
+                  </TouchableOpacity>
+                ) : !isBlocked ? (
+                  <TouchableOpacity style={styles.menuOption} onPress={handleBlock}>
+                    <Ionicons name="ban-outline" size={18} color="#EF4444" style={{ marginRight: 10 }} />
+                    <Text style={[styles.menuOptionText, { color: '#EF4444' }]}>Block User</Text>
+                  </TouchableOpacity>
+                ) : null}
+
+                {/* Continue Chat (Accept) if pending, or Dismiss Option */}
+                {isPendingForMe ? (
+                  <>
+                    <TouchableOpacity style={styles.menuOption} onPress={handleAccept}>
+                      <Ionicons name="chatbubbles-outline" size={18} color={Colors.primary} style={{ marginRight: 10 }} />
+                      <Text style={[styles.menuOptionText, { color: Colors.primary, fontWeight: '600' }]}>Continue Chat</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.menuOption} onPress={handleDecline}>
+                      <Ionicons name="close-circle-outline" size={18} color="#F97316" style={{ marginRight: 10 }} />
+                      <Text style={[styles.menuOptionText, { color: '#F97316' }]}>Dismiss Chat</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : !isBlocked ? (
+                  <TouchableOpacity style={styles.menuOption} onPress={handleDecline}>
+                    <Ionicons name="trash-outline" size={18} color="#EF4444" style={{ marginRight: 10 }} />
+                    <Text style={[styles.menuOptionText, { color: '#EF4444' }]}>Dismiss Chat</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </>
+            )}
           </View>
         </TouchableOpacity>
       </Modal>
 
-      {/* Message Actions Modal (Instagram-style Unsend & Delete) */}
+      {/* Message Actions Modal (Instagram-style Reply, Unsend & Delete) */}
       <Modal
         visible={messageActionModalVisible}
         transparent
@@ -1263,6 +1700,28 @@ export default function ChatRoomScreen() {
             )}
 
             <View style={styles.actionSheetButtonsGroup}>
+              {/* Reply shortcut */}
+              <TouchableOpacity
+                style={styles.actionSheetItem}
+                onPress={() => {
+                  const targetMsg = selectedMessage;
+                  setMessageActionModalVisible(false);
+                  setSelectedMessage(null);
+                  hapticLight();
+                  setReplyingTo(targetMsg);
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="arrow-undo" size={20} color={currentTheme.primary} style={{ marginRight: 12 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.actionSheetItemText, { color: currentTheme.primary, fontWeight: '700' }]}>
+                    Reply
+                  </Text>
+                  <Text style={styles.actionSheetItemSubtext}>
+                    Quote message in your reply
+                  </Text>
+                </View>
+              </TouchableOpacity>
               {/* Unsend - only for current user's sent messages */}
               {((selectedMessage?.sender?._id || selectedMessage?.sender)?.toString() === currentUserId) && (
                 <TouchableOpacity
@@ -1363,6 +1822,85 @@ export default function ChatRoomScreen() {
           }}
         />
       )}
+
+      {/* Chat Theme Picker Modal */}
+      <Modal
+        visible={themeModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setThemeModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.themeModalOverlay}
+          activeOpacity={1}
+          onPress={() => setThemeModalVisible(false)}
+        >
+          <View style={styles.themeModalContent}>
+            <View style={styles.themeModalGrabber} />
+            <View style={styles.themeModalTitleRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.themeModalTitle}>Chat Theme</Text>
+                <Text style={styles.themeModalSubtitle}>
+                  Select a theme to personalize this conversation
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setThemeModalVisible(false)}
+                style={styles.themeModalCloseBtn}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="close" size={22} color={Colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              contentContainerStyle={styles.themeModalGrid}
+              showsVerticalScrollIndicator={false}
+            >
+              {Object.entries(CHAT_THEMES).map(([themeKey, tItem]) => {
+                const isSelected = currentThemeKey === themeKey;
+                return (
+                  <TouchableOpacity
+                    key={themeKey}
+                    style={[
+                      styles.themeCard,
+                      isSelected && {
+                        borderColor: tItem.primary,
+                        backgroundColor: '#F8FAFC',
+                      },
+                    ]}
+                    activeOpacity={0.8}
+                    onPress={() => handleSelectTheme(themeKey)}
+                  >
+                    <LinearGradient
+                      colors={tItem.bubbleMineGradient}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.themePreviewCircle}
+                    >
+                      {isSelected ? (
+                        <Ionicons name="checkmark" size={20} color="#FFFFFF" />
+                      ) : null}
+                    </LinearGradient>
+                    <Text
+                      style={[
+                        styles.themeCardName,
+                        isSelected && [
+                          styles.themeCardNameSelected,
+                          { color: tItem.primary },
+                        ],
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {tItem.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1998,5 +2536,185 @@ const styles = StyleSheet.create({
     color: Colors.textGray,
     fontWeight: '500',
     textAlign: 'center',
+  },
+  // Swipe to reply styles
+  swipeContainer: {
+    position: 'relative',
+    width: '100%',
+    justifyContent: 'center',
+  },
+  swipeReplyIconBox: {
+    position: 'absolute',
+    top: '50%',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: -16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  swipeReplyIconLeft: {
+    left: 10,
+  },
+  swipeReplyIconRight: {
+    right: 10,
+  },
+
+  // Quoted message preview inside bubble
+  quotedMessageContainer: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    borderRadius: 8,
+    marginBottom: 6,
+    overflow: 'hidden',
+  },
+  quotedMessageLeft: {
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  quotedMessageRight: {
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+  },
+  quotedMessageBar: {
+    width: 3.5,
+    borderRadius: 2,
+    marginRight: 8,
+  },
+  quotedMessageContent: {
+    flex: 1,
+    paddingVertical: 5,
+    paddingRight: 8,
+  },
+  quotedMessageSender: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  quotedMessageText: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  quotedMessageTextLeft: {
+    color: Colors.textGray,
+  },
+  quotedMessageTextRight: {
+    color: 'rgba(255, 255, 255, 0.88)',
+  },
+
+  // Reply preview banner above input composer
+  replyBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderLeftWidth: 3.5,
+    borderTopWidth: 1,
+    borderTopColor: '#EEEEEE',
+  },
+  replyBannerContent: {
+    flex: 1,
+    marginRight: 10,
+  },
+  replyBannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  replyBannerSender: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  replyBannerText: {
+    fontSize: 13,
+    color: Colors.textGray,
+  },
+  replyBannerCloseBtn: {
+    padding: 4,
+  },
+
+  // Chat Theme Modal styles
+  themeModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  themeModalContent: {
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 36,
+    maxHeight: '75%',
+  },
+  themeModalGrabber: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#D1D5DB',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  themeModalTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 18,
+  },
+  themeModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  themeModalSubtitle: {
+    fontSize: 12,
+    color: Colors.textGray,
+    marginTop: 2,
+  },
+  themeModalCloseBtn: {
+    padding: 6,
+  },
+  themeModalGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    paddingBottom: 16,
+  },
+  themeCard: {
+    width: '48%',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    marginBottom: 12,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+  },
+  themePreviewCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  themeCardName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.text,
+    textAlign: 'center',
+  },
+  themeCardNameSelected: {
+    fontWeight: '700',
   },
 });

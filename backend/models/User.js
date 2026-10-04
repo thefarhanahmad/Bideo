@@ -119,6 +119,49 @@ const userSchema = new mongoose.Schema({
     enum: ['admin', 'coin_purchase', null],
     default: null,
   },
+  verifiedAt: {
+    type: Date,
+    default: null,
+  },
+  socialLinks: [
+    {
+      platform: {
+        type: String,
+        default: 'website',
+        trim: true,
+      },
+      label: {
+        type: String,
+        trim: true,
+        default: '',
+      },
+      url: {
+        type: String,
+        trim: true,
+        default: '',
+      },
+    },
+  ],
+  nameHistory: [
+    {
+      type: {
+        type: String,
+        default: 'channelName',
+      },
+      previousName: {
+        type: String,
+        trim: true,
+      },
+      newName: {
+        type: String,
+        trim: true,
+      },
+      changedAt: {
+        type: Date,
+        default: Date.now,
+      },
+    },
+  ],
   isBlocked: {
     type: Boolean,
     default: false,

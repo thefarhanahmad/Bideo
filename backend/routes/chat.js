@@ -20,6 +20,7 @@ const {
   removeGroupMember,
   updateGroupAdminRole,
   updateGroupDetails,
+  updateConversationTheme,
 } = require('../controllers/chat');
 const { protect } = require('../middlewares/auth');
 const upload = require('../middlewares/multer');
@@ -50,6 +51,7 @@ router.route('/conversations/:id')
 
 router.get('/conversations/:id/messages', getMessages);
 router.put('/conversations/:id/read', markAsRead);
+router.put('/conversations/:id/theme', updateConversationTheme);
 router.post('/conversations/:id/accept', acceptChat);
 router.post('/conversations/:id/decline', declineChat);
 router.post('/conversations/:id/block', blockUser);

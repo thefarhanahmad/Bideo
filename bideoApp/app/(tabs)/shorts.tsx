@@ -16,7 +16,7 @@ import CommentList from '../../components/CommentList';
 import VerifiedBadge from '../../components/VerifiedBadge';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { formatViews } from '../../utils/formatDate';
+import { formatViews, formatTimeAgo } from '../../utils/formatDate';
 import { hapticLight } from '../../utils/haptics';
 import { AppInterstitialAd } from '../../components/AppAds';
 import HashtagText from '../../components/HashtagText';
@@ -698,6 +698,7 @@ const ShortItem = ({ item, index, activeVideoIndex, containerHeight, isFocused, 
   });
   const [isPaused, setIsPaused] = useState(false);
   const [showIcon, setShowIcon] = useState(false);
+  const [descModalVisible, setDescModalVisible] = useState(false);
   const [iconName, setIconName] = useState<'play' | 'pause'>('play');
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.7)).current;
@@ -975,14 +976,129 @@ const ShortItem = ({ item, index, activeVideoIndex, containerHeight, isFocused, 
               </TouchableOpacity>
             )}
           </View>
-          <HashtagText
-            text={item.title}
-            style={styles.shortTitle}
-            hashtagStyle={styles.shortHashtag}
-            numberOfLines={3}
-          />
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => {
+              hapticLight();
+              setDescModalVisible(true);
+            }}
+            style={styles.shortTitleTouch}
+          >
+            <HashtagText
+              text={item.title}
+              style={styles.shortTitle}
+              hashtagStyle={styles.shortHashtag}
+              numberOfLines={2}
+            />
+
+            {Boolean(item.description && item.description.trim() && item.description.trim() !== item.title.trim()) ? (
+              <View style={styles.shortDescPreviewRow}>
+                <Text style={styles.shortDescPreviewText} numberOfLines={1}>
+                  {item.description.trim()}
+                </Text>
+                <Text style={styles.shortDescMoreText}>...more</Text>
+              </View>
+            ) : (
+              <Text style={styles.shortDescMoreText}>...more</Text>
+            )}
+          </TouchableOpacity>
         </View>
       </View>
+
+      {/* Short Description Bottom Sheet Modal */}
+      <Modal
+        visible={descModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setDescModalVisible(false)}
+      >
+        <Pressable
+          style={styles.descModalOverlay}
+          onPress={() => setDescModalVisible(false)}
+        >
+          <Pressable style={styles.descModalContent} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.descModalHeader}>
+              <View style={styles.descModalGrabber} />
+              <View style={styles.descModalTitleRow}>
+                <Text style={styles.descModalHeading}>Description</Text>
+                <TouchableOpacity
+                  onPress={() => setDescModalVisible(false)}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                >
+                  <Ionicons name="close" size={24} color={Colors.white} />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.descModalScroll}>
+              {/* Short Title in Modal */}
+              <Text style={styles.descModalTitle}>{item.title}</Text>
+
+              {/* Stats badges */}
+              <View style={styles.descStatsRow}>
+                <View style={styles.descStatBadge}>
+                  <Ionicons name="heart" size={13} color={Colors.primary} />
+                  <Text style={styles.descStatText}>{formatViews(item.likes?.length || 0)} Likes</Text>
+                </View>
+                <View style={styles.descStatBadge}>
+                  <Ionicons name="chatbubble-ellipses" size={13} color="#60A5FA" />
+                  <Text style={styles.descStatText}>{formatViews(item.commentsCount || 0)} Comments</Text>
+                </View>
+                {Boolean(item.createdAt) && (
+                  <View style={styles.descStatBadge}>
+                    <Ionicons name="time-outline" size={13} color="#94A3B8" />
+                    <Text style={styles.descStatText}>{formatTimeAgo(item.createdAt)}</Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Creator Card */}
+              <View style={styles.descCreatorCard}>
+                <TouchableOpacity
+                  style={styles.descCreatorLeft}
+                  onPress={() => {
+                    setDescModalVisible(false);
+                    if (item.owner?._id) router.push(`/channel/${item.owner._id}`);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Image source={{ uri: item.owner?.avatar || FALLBACK_AVATAR }} style={styles.descCreatorAvatar} />
+                  <View style={{ marginLeft: 10, flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Text style={styles.descCreatorName} numberOfLines={1}>
+                        {item.owner.channelName || item.owner.name}
+                      </Text>
+                      {Boolean(item.owner?.isVerified) && <VerifiedBadge size={14} style={{ marginLeft: 4 }} />}
+                    </View>
+                    <Text style={styles.descCreatorHandle}>@{item.owner.name || 'user'}</Text>
+                  </View>
+                </TouchableOpacity>
+
+                {item.owner._id !== user?._id && (
+                  <TouchableOpacity
+                    style={[styles.descFollowBtn, item.isFollowing && styles.descFollowedBtn]}
+                    onPress={() => onFollow(item.owner._id)}
+                  >
+                    <Text style={[styles.descFollowBtnText, item.isFollowing && styles.descFollowedBtnText]}>
+                      {item.isFollowing ? 'Following' : 'Follow'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Description Body */}
+              <View style={styles.descBodyCard}>
+                <Text style={styles.descSectionLabel}>Full Description</Text>
+                <HashtagText
+                  text={item.description && item.description.trim() ? item.description : 'No additional description provided for this short.'}
+                  style={styles.descFullText}
+                  hashtagStyle={styles.shortHashtag}
+                />
+              </View>
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 };
@@ -1288,5 +1404,162 @@ const styles = StyleSheet.create({
   },
   adChevron: {
     marginTop: 8,
+  },
+  shortTitleTouch: {
+    marginTop: 4,
+  },
+  shortDescPreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 3,
+  },
+  shortDescPreviewText: {
+    color: '#E2E8F0',
+    fontSize: 13,
+    flex: 1,
+    opacity: 0.9,
+  },
+  shortDescMoreText: {
+    color: '#94A3B8',
+    fontSize: 13,
+    fontWeight: '700',
+    marginLeft: 4,
+  },
+  descModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    justifyContent: 'flex-end',
+  },
+  descModalContent: {
+    backgroundColor: '#1E1E24',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '75%',
+    width: '100%',
+    paddingBottom: 24,
+  },
+  descModalHeader: {
+    alignItems: 'center',
+    paddingTop: 10,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2D2D36',
+  },
+  descModalGrabber: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#4B5563',
+    marginBottom: 10,
+  },
+  descModalTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    paddingHorizontal: 20,
+  },
+  descModalHeading: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.white,
+  },
+  descModalScroll: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 30,
+  },
+  descModalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.white,
+    lineHeight: 22,
+    marginBottom: 14,
+  },
+  descStatsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  descStatBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2A2A33',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
+    gap: 5,
+  },
+  descStatText: {
+    color: '#E2E8F0',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  descCreatorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#2A2A33',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 16,
+  },
+  descCreatorLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 10,
+  },
+  descCreatorAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.border,
+  },
+  descCreatorName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.white,
+  },
+  descCreatorHandle: {
+    fontSize: 12,
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  descFollowBtn: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 18,
+  },
+  descFollowBtnText: {
+    color: Colors.white,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  descFollowedBtn: {
+    backgroundColor: '#374151',
+  },
+  descFollowedBtnText: {
+    color: '#D1D5DB',
+  },
+  descBodyCard: {
+    backgroundColor: '#25252D',
+    borderRadius: 14,
+    padding: 14,
+  },
+  descSectionLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  descFullText: {
+    fontSize: 14,
+    color: '#F1F5F9',
+    lineHeight: 22,
   },
 });

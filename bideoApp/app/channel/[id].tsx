@@ -1,6 +1,6 @@
 import { showAlert } from '../../components/AppAlert';
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, ScrollView, Dimensions, Share, Modal, Pressable } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, ScrollView, Dimensions, Share, Modal, Pressable, Linking } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -14,7 +14,7 @@ import { updateUser } from '../../redux/slices/authSlice';
 import AuthModal from '../../components/AuthModal';
 import VerifiedBadge from '../../components/VerifiedBadge';
 import { formatTimeAgo, formatViews, formatJoinedDate } from '../../utils/formatDate';
-import { hapticLight } from '../../utils/haptics';
+import { hapticLight, hapticSelection } from '../../utils/haptics';
 import { shareChannel, shareVideo } from '../../utils/shareHelper';
 import ShareModal, { ShareModalItem } from '../../components/ShareModal';
 
@@ -37,6 +37,8 @@ export default function ChannelScreen() {
   const [error, setError] = useState<string | null>(null);
   const [authModalVisible, setAuthModalVisible] = useState(false);
   const [aboutModalVisible, setAboutModalVisible] = useState(false);
+  const [dpModalVisible, setDpModalVisible] = useState(false);
+  const [nameHistoryModalVisible, setNameHistoryModalVisible] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<any>(null);
   const [menuVisible, setMenuVisible] = useState(false);
   const [shareModalVisible, setShareModalVisible] = useState(false);
@@ -269,7 +271,9 @@ export default function ChannelScreen() {
     );
   };
 
-  const isOwner = user?._id === id;
+  const currentUserId = user?._id?.toString() || user?.id?.toString() || '';
+  const channelOwnerId = channel?._id?.toString() || (typeof id === 'string' ? id : '');
+  const isOwner = Boolean(currentUserId && (currentUserId === channelOwnerId || currentUserId === id));
   const tabItems = [
     { key: 'videos', label: 'Videos' },
     { key: 'shorts', label: 'Shorts' },
@@ -344,9 +348,19 @@ export default function ChannelScreen() {
 
             {/* Profile Section */}
             <View style={styles.profileSection}>
-              <View style={styles.avatarWrapper}>
+              <TouchableOpacity 
+                style={styles.avatarWrapper}
+                activeOpacity={0.85}
+                onPress={() => {
+                  hapticLight();
+                  setDpModalVisible(true);
+                }}
+              >
                 <Image source={{ uri: channel?.avatar || FALLBACK_AVATAR }} style={styles.avatar} contentFit="cover" transition={200} />
-              </View>
+                <View style={styles.avatarZoomBadge}>
+                  <Ionicons name="expand" size={11} color="#FFFFFF" />
+                </View>
+              </TouchableOpacity>
               
               <View style={styles.identityContainer}>
                 <View style={styles.nameRow}>
@@ -627,10 +641,75 @@ export default function ChannelScreen() {
                 </Text>
               </View>
 
+              {/* Social Media Links Section */}
+              {Array.isArray(channel?.socialLinks) && channel.socialLinks.length > 0 && (
+                <View style={styles.aboutSection}>
+                  <Text style={styles.aboutSectionTitle}>Links</Text>
+                  {channel.socialLinks.map((link: any, idx: number) => {
+                    const platform = (link.platform || 'website').toLowerCase();
+                    let iconName = 'globe-outline';
+                    let iconColor = '#6366F1';
+                    let defaultLabel = 'Website';
+
+                    if (platform.includes('instagram')) {
+                      iconName = 'logo-instagram';
+                      iconColor = '#E1306C';
+                      defaultLabel = 'Instagram';
+                    } else if (platform.includes('facebook')) {
+                      iconName = 'logo-facebook';
+                      iconColor = '#1877F2';
+                      defaultLabel = 'Facebook';
+                    } else if (platform.includes('youtube')) {
+                      iconName = 'logo-youtube';
+                      iconColor = '#FF0000';
+                      defaultLabel = 'YouTube';
+                    } else if (platform.includes('twitter')) {
+                      iconName = 'logo-twitter';
+                      iconColor = '#1DA1F2';
+                      defaultLabel = 'X / Twitter';
+                    }
+
+                    const displayLabel = link.label?.trim() || defaultLabel;
+                    const url = link.url?.trim() || '';
+
+                    return (
+                      <TouchableOpacity
+                        key={idx}
+                        style={styles.socialLinkRow}
+                        activeOpacity={0.7}
+                        onPress={async () => {
+                          if (!url) return;
+                          hapticSelection();
+                          let targetUrl = url;
+                          if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+                            targetUrl = `https://${targetUrl}`;
+                          }
+                          try {
+                            await Linking.openURL(targetUrl);
+                          } catch {
+                            showAlert('Link Error', 'Unable to open ' + targetUrl);
+                          }
+                        }}
+                      >
+                        <View style={[styles.socialIconCircle, { backgroundColor: `${iconColor}15` }]}>
+                          <Ionicons name={iconName as any} size={18} color={iconColor} />
+                        </View>
+                        <View style={styles.socialLinkTextContainer}>
+                          <Text style={styles.socialLinkLabel} numberOfLines={1}>{displayLabel}</Text>
+                          <Text style={styles.socialLinkUrl} numberOfLines={1}>{url}</Text>
+                        </View>
+                        <Ionicons name="open-outline" size={16} color={Colors.textGray} />
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+
               {/* Channel Details Section */}
               <View style={styles.aboutSection}>
                 <Text style={styles.aboutSectionTitle}>Channel details</Text>
                 
+                {/* Joined Date */}
                 {!!channel?.createdAt && (
                   <View style={styles.detailRow}>
                     <Ionicons name="calendar-outline" size={20} color={Colors.textGray} style={styles.detailIcon} />
@@ -641,18 +720,154 @@ export default function ChannelScreen() {
                   </View>
                 )}
 
+                {/* Total Views across all videos */}
+                <View style={styles.detailRow}>
+                  <Ionicons name="eye-outline" size={20} color={Colors.textGray} style={styles.detailIcon} />
+                  <View style={styles.detailTextContainer}>
+                    <Text style={styles.detailLabel}>Views</Text>
+                    <Text style={styles.detailValue}>
+                      {(channel?.totalViews || 0).toLocaleString()} views
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Verified Badge & Date (date owner-only) */}
                 {Boolean(channel?.isVerified) && (
                   <View style={styles.detailRow}>
                     <Ionicons name="checkmark-circle" size={20} color="#2196F3" style={styles.detailIcon} />
                     <View style={styles.detailTextContainer}>
                       <Text style={styles.detailLabel}>Verified</Text>
-                      <Text style={styles.detailValue}>Verified Channel</Text>
+                      <Text style={styles.detailValue}>
+                        {isOwner && channel?.verifiedAt
+                          ? `Verified on ${formatJoinedDate(channel.verifiedAt)}`
+                          : 'Verified Channel'}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* Name Changes (Owner-only) */}
+                {isOwner && (
+                  <View style={styles.detailRow}>
+                    <Ionicons name="time-outline" size={20} color={Colors.textGray} style={styles.detailIcon} />
+                    <View style={styles.detailTextContainer}>
+                      <Text style={styles.detailLabel}>Name changes</Text>
+                      <View style={styles.nameHistoryRow}>
+                        <Text style={styles.detailValue}>
+                          {channel?.nameHistory?.length || 0} {(channel?.nameHistory?.length || 0) === 1 ? 'change' : 'changes'}
+                        </Text>
+                        {Boolean(channel?.nameHistory && channel.nameHistory.length > 0) && (
+                          <TouchableOpacity
+                            onPress={() => {
+                              hapticLight();
+                              setNameHistoryModalVisible(true);
+                            }}
+                            style={styles.nameHistoryLink}
+                          >
+                            <Text style={styles.nameHistoryLinkText}>View history</Text>
+                            <Ionicons name="chevron-forward" size={13} color={Colors.primary} />
+                          </TouchableOpacity>
+                        )}
+                      </View>
                     </View>
                   </View>
                 )}
               </View>
             </ScrollView>
           </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Name Change History Modal (Owner Only) */}
+      <Modal
+        visible={nameHistoryModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setNameHistoryModalVisible(false)}
+      >
+        <Pressable
+          style={styles.aboutModalOverlay}
+          onPress={() => setNameHistoryModalVisible(false)}
+        >
+          <Pressable style={styles.historyModalContent} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.aboutModalHeader}>
+              <View>
+                <Text style={styles.aboutModalTitle}>Name change history</Text>
+                <Text style={styles.historyModalSub}>All past username & channel name modifications</Text>
+              </View>
+              <TouchableOpacity onPress={() => setNameHistoryModalVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close" size={24} color={Colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.historyScroll}>
+              {(!channel?.nameHistory || channel.nameHistory.length === 0) ? (
+                <View style={styles.emptyHistoryBox}>
+                  <Ionicons name="checkmark-done-circle-outline" size={40} color={Colors.textGray} />
+                  <Text style={styles.emptyHistoryText}>No past name changes recorded.</Text>
+                </View>
+              ) : (
+                channel.nameHistory.map((item: any, idx: number) => (
+                  <View key={idx} style={styles.historyCard}>
+                    <View style={styles.historyCardHeader}>
+                      <View style={styles.historyBadge}>
+                        <Text style={styles.historyBadgeText}>
+                          {item.type === 'name' ? 'Username' : 'Channel Name'}
+                        </Text>
+                      </View>
+                      <Text style={styles.historyDate}>
+                        {item.changedAt ? formatJoinedDate(item.changedAt) : 'Earlier'}
+                      </Text>
+                    </View>
+                    <View style={styles.historyNamesRow}>
+                      <Text style={styles.historyOldName}>{item.previousName || 'Initial'}</Text>
+                      <Ionicons name="arrow-forward" size={14} color={Colors.textGray} style={{ marginHorizontal: 8 }} />
+                      <Text style={styles.historyNewName}>{item.newName}</Text>
+                    </View>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Profile Picture (DP) Large Fullscreen Viewer Modal */}
+      <Modal
+        visible={dpModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDpModalVisible(false)}
+      >
+        <Pressable
+          style={styles.dpModalOverlay}
+          onPress={() => setDpModalVisible(false)}
+        >
+          <View style={styles.dpModalContent}>
+            <TouchableOpacity 
+              style={styles.dpCloseBtn}
+              onPress={() => setDpModalVisible(false)}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Ionicons name="close" size={26} color="#FFFFFF" />
+            </TouchableOpacity>
+
+            <View style={styles.dpImageWrapper}>
+              <Image
+                source={{ uri: channel?.avatar || FALLBACK_AVATAR }}
+                style={styles.dpLargeImage}
+                contentFit="cover"
+                transition={200}
+              />
+            </View>
+
+            <View style={styles.dpInfoContainer}>
+              <Text style={styles.dpName} numberOfLines={1}>
+                {channel?.channelName || channel?.name || 'Channel'}
+              </Text>
+              <Text style={styles.dpHandle}>@{channel?.name || 'user'}</Text>
+            </View>
+          </View>
         </Pressable>
       </Modal>
     </View>
@@ -1193,5 +1408,201 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.text,
     fontWeight: '500',
+  },
+  avatarZoomBadge: {
+    position: 'absolute',
+    right: 2,
+    bottom: 2,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  socialLinkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  socialIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  socialLinkTextContainer: {
+    flex: 1,
+    marginLeft: 12,
+    marginRight: 8,
+  },
+  socialLinkLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  socialLinkUrl: {
+    fontSize: 11,
+    color: Colors.textGray,
+    marginTop: 2,
+  },
+  nameHistoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  nameHistoryLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  nameHistoryLinkText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.primary,
+    marginRight: 2,
+  },
+  historyModalContent: {
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '80%',
+    width: '100%',
+    paddingBottom: 24,
+  },
+  historyModalSub: {
+    fontSize: 12,
+    color: Colors.textGray,
+    marginTop: 2,
+  },
+  historyScroll: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 24,
+  },
+  emptyHistoryBox: {
+    paddingVertical: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyHistoryText: {
+    fontSize: 13,
+    color: Colors.textGray,
+    marginTop: 10,
+    fontWeight: '500',
+  },
+  historyCard: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+  },
+  historyCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  historyBadge: {
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  historyBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#6366F1',
+    textTransform: 'uppercase',
+  },
+  historyDate: {
+    fontSize: 12,
+    color: Colors.textGray,
+  },
+  historyNamesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  historyOldName: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: Colors.textGray,
+    textDecorationLine: 'line-through',
+  },
+  historyNewName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  dpModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.92)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  dpModalContent: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  dpCloseBtn: {
+    position: 'absolute',
+    top: -60,
+    right: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  dpImageWrapper: {
+    width: width * 0.85,
+    height: width * 0.85,
+    borderRadius: (width * 0.85) / 2,
+    overflow: 'hidden',
+    backgroundColor: '#1E293B',
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 15,
+    borderWidth: 3,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  dpLargeImage: {
+    width: '100%',
+    height: '100%',
+  },
+  dpInfoContainer: {
+    marginTop: 24,
+    alignItems: 'center',
+  },
+  dpName: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+  },
+  dpHandle: {
+    fontSize: 14,
+    color: '#94A3B8',
+    marginTop: 4,
   },
 });

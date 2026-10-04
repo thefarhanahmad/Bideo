@@ -234,8 +234,17 @@ export const chatService = {
     text?: string;
     videoId?: string;
     postId?: string;
+    replyTo?: {
+      message?: string;
+      senderName?: string;
+      text?: string;
+    };
   }) => {
     const response = await api.post('/chat/messages', data);
+    return response.data?.data;
+  },
+  updateChatTheme: async (conversationId: string, theme: string) => {
+    const response = await api.put(`/chat/conversations/${conversationId}/theme`, { theme });
     return response.data?.data;
   },
   markAsRead: async (conversationId: string) => {

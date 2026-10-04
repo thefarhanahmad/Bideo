@@ -122,6 +122,10 @@ export const initSocket = async (tokenOverride?: string): Promise<Socket | null>
       DeviceEventEmitter.emit('chatGroupDetailsUpdated', data);
     });
 
+    socket.on('chat_theme_changed', (data) => {
+      DeviceEventEmitter.emit('chatThemeChanged', data);
+    });
+
     socket.on('disconnect', (reason) => {
       isConnecting = false;
       console.log('Socket disconnected:', reason);

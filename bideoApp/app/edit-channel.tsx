@@ -63,6 +63,9 @@ export default function EditChannelScreen() {
   const [about, setAbout] = useState(user?.about || '');
   const [avatar, setAvatar] = useState(user?.avatar || '');
   const [coverImage, setCoverImage] = useState(user?.coverImage || '');
+  const [socialLinks, setSocialLinks] = useState<Array<{ platform: string; label: string; url: string }>>(
+    Array.isArray((user as any)?.socialLinks) ? (user as any).socialLinks : []
+  );
   const [loading, setLoading] = useState(false);
 
   // Email verification state
@@ -216,6 +219,27 @@ export default function EditChannelScreen() {
     }
   };
 
+  const handleAddSocialLink = () => {
+    hapticSelection();
+    setSocialLinks((prev) => [
+      ...prev,
+      { platform: 'instagram', label: '', url: '' },
+    ]);
+  };
+
+  const handleUpdateSocialLink = (index: number, field: string, val: string) => {
+    setSocialLinks((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: val };
+      return updated;
+    });
+  };
+
+  const handleRemoveSocialLink = (index: number) => {
+    hapticLight();
+    setSocialLinks((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleSave = async () => {
     const trimmedChannelName = channelName.trim();
     if (!trimmedChannelName) {
@@ -253,6 +277,7 @@ export default function EditChannelScreen() {
       formData.append('channelName', trimmedChannelName);
       formData.append('about', about);
       formData.append('email', trimmedEmail);
+      formData.append('socialLinks', JSON.stringify(socialLinks));
       
       const isLocalAvatar = avatar?.startsWith('file://') || avatar?.startsWith('content://');
       const isRemoteAvatar = avatar?.startsWith('http://') || avatar?.startsWith('https://');
@@ -596,6 +621,120 @@ export default function EditChannelScreen() {
               onChangeText={setAbout}
             />
           </View>
+        </View>
+
+        {/* Social Media Links Section */}
+        <View style={styles.formCard}>
+          <View style={styles.socialHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cardHeaderTitle}>Social Media Links</Text>
+              <Text style={styles.cardHeaderSub}>Add your profile links to display in your channel About</Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.addSocialBtn}
+              onPress={handleAddSocialLink}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="add" size={16} color={Colors.white} />
+              <Text style={styles.addSocialBtnText}>Add</Text>
+            </TouchableOpacity>
+          </View>
+
+          {socialLinks.length === 0 ? (
+            <View style={styles.emptySocialBox}>
+              <Ionicons name="share-social-outline" size={32} color={Colors.textGray} />
+              <Text style={styles.emptySocialTitle}>No social links added</Text>
+              <Text style={styles.emptySocialSub}>Connect your Instagram, Facebook, YouTube or Website</Text>
+            </View>
+          ) : (
+            socialLinks.map((item, index) => (
+              <View key={index} style={styles.socialLinkCard}>
+                <View style={styles.socialLinkCardHeader}>
+                  <Text style={styles.socialLinkCardTitle}>Link #{index + 1}</Text>
+                  <TouchableOpacity
+                    onPress={() => handleRemoveSocialLink(index)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Platform Selector Chips */}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.platformScroll}>
+                  {[
+                    { id: 'instagram', label: 'Instagram', icon: 'logo-instagram', color: '#E1306C' },
+                    { id: 'facebook', label: 'Facebook', icon: 'logo-facebook', color: '#1877F2' },
+                    { id: 'youtube', label: 'YouTube', icon: 'logo-youtube', color: '#FF0000' },
+                    { id: 'twitter', label: 'X / Twitter', icon: 'logo-twitter', color: '#1DA1F2' },
+                    { id: 'website', label: 'Website', icon: 'globe-outline', color: '#6366F1' },
+                  ].map((p) => {
+                    const isSelected = item.platform === p.id;
+                    return (
+                      <TouchableOpacity
+                        key={p.id}
+                        style={[
+                          styles.platformChip,
+                          isSelected && { backgroundColor: p.color, borderColor: p.color },
+                        ]}
+                        onPress={() => {
+                          hapticSelection();
+                          handleUpdateSocialLink(index, 'platform', p.id);
+                        }}
+                      >
+                        <Ionicons
+                          name={p.icon as any}
+                          size={13}
+                          color={isSelected ? '#FFFFFF' : Colors.textGray}
+                          style={{ marginRight: 4 }}
+                        />
+                        <Text style={[styles.platformChipText, isSelected && { color: '#FFFFFF', fontWeight: '700' }]}>
+                          {p.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+
+                {/* URL Input */}
+                <Text style={styles.fieldLabelSmall}>Profile URL</Text>
+                <TextInput
+                  style={styles.textInputSmall}
+                  placeholder={
+                    item.platform === 'instagram'
+                      ? 'https://instagram.com/username'
+                      : item.platform === 'facebook'
+                      ? 'https://facebook.com/username'
+                      : item.platform === 'youtube'
+                      ? 'https://youtube.com/@channel'
+                      : item.platform === 'twitter'
+                      ? 'https://x.com/username'
+                      : 'https://example.com'
+                  }
+                  placeholderTextColor={Colors.textGray}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  value={item.url}
+                  onChangeText={(val) => handleUpdateSocialLink(index, 'url', val)}
+                />
+
+                {/* Optional Label Input */}
+                <Text style={[styles.fieldLabelSmall, { marginTop: 8 }]}>Custom Label (optional)</Text>
+                <TextInput
+                  style={styles.textInputSmall}
+                  placeholder={
+                    item.platform === 'instagram'
+                      ? 'Follow on Instagram'
+                      : item.platform === 'facebook'
+                      ? 'Official Page'
+                      : 'My Website'
+                  }
+                  placeholderTextColor={Colors.textGray}
+                  value={item.label}
+                  onChangeText={(val) => handleUpdateSocialLink(index, 'label', val)}
+                />
+              </View>
+            ))
+          )}
         </View>
 
         <TouchableOpacity 
@@ -1087,5 +1226,111 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: Colors.white,
+  },
+  socialHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  cardHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  cardHeaderSub: {
+    fontSize: 12,
+    color: Colors.textGray,
+    marginTop: 2,
+  },
+  addSocialBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 4,
+  },
+  addSocialBtnText: {
+    color: Colors.white,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  emptySocialBox: {
+    paddingVertical: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderStyle: 'dashed',
+  },
+  emptySocialTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.text,
+    marginTop: 8,
+  },
+  emptySocialSub: {
+    fontSize: 12,
+    color: Colors.textGray,
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  socialLinkCard: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+  },
+  socialLinkCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  socialLinkCardTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  platformScroll: {
+    marginBottom: 12,
+  },
+  platformChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginRight: 8,
+  },
+  platformChipText: {
+    fontSize: 12,
+    color: Colors.text,
+    fontWeight: '500',
+  },
+  fieldLabelSmall: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.text,
+    marginBottom: 4,
+  },
+  textInputSmall: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: Colors.text,
   },
 });

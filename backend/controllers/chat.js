@@ -43,6 +43,7 @@ function formatConversation(conv, currentUserId) {
       isBlockedByOther: false,
       lastMessage: conv.lastMessage,
       unreadCount,
+      theme: conv.theme || 'default',
       updatedAt: conv.updatedAt,
       createdAt: conv.createdAt,
     };
@@ -74,6 +75,7 @@ function formatConversation(conv, currentUserId) {
     isBlockedByOther: conv.status === 'blocked' && conv.blockedBy?.toString() !== currentUserIdStr,
     lastMessage: conv.lastMessage,
     unreadCount,
+    theme: conv.theme || 'default',
     updatedAt: conv.updatedAt,
     createdAt: conv.createdAt,
   };
@@ -264,8 +266,17 @@ exports.getMessages = async (req, res, next) => {
  */
 exports.sendMessage = async (req, res, next) => {
   try {
-    const { conversationId, recipientId, text, videoId, postId } = req.body;
+    const { conversationId, recipientId, text, videoId, postId, replyTo } = req.body;
     const currentUserId = req.user._id;
+
+    let cleanReplyTo = null;
+    if (replyTo && (replyTo.text || replyTo.message || replyTo._id)) {
+      cleanReplyTo = {
+        message: replyTo.message || replyTo._id || null,
+        senderName: replyTo.senderName || '',
+        text: (replyTo.text || '').slice(0, 300),
+      };
+    }
 
     let cleanText = (text || '').trim();
     let videoDoc = null;
@@ -361,6 +372,7 @@ exports.sendMessage = async (req, res, next) => {
       text: cleanText,
       video: videoDoc ? videoDoc._id : null,
       post: postDoc ? postDoc._id : null,
+      replyTo: cleanReplyTo || undefined,
       isRead: false,
     });
 
@@ -1548,6 +1560,65 @@ exports.updateGroupDetails = async (req, res, next) => {
       success: true,
       message: 'Group details updated',
       data: formatConversation(updatedGroup, currentUserId),
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * @desc    Update conversation theme
+ * @route   PUT /api/chat/conversations/:id/theme
+ * @access  Private
+ */
+exports.updateConversationTheme = async (req, res, next) => {
+  try {
+    const { theme } = req.body;
+    const conversationId = req.params.id;
+    const currentUserId = req.user._id;
+
+    const validThemes = ['default', 'sunset', 'ocean', 'midnight', 'emerald', 'sakura', 'amber', 'slate'];
+    const chosenTheme = (theme || 'default').toLowerCase().trim();
+
+    if (!validThemes.includes(chosenTheme)) {
+      return res.status(400).json({ success: false, message: 'Invalid theme selected' });
+    }
+
+    const conversation = await Conversation.findOne({
+      _id: conversationId,
+      participants: currentUserId,
+    });
+
+    if (!conversation) {
+      return res.status(404).json({ success: false, message: 'Conversation not found' });
+    }
+
+    conversation.theme = chosenTheme;
+    await conversation.save();
+
+    const io = getIO();
+    if (io) {
+      io.to(`conversation:${conversationId}`).emit('chat_theme_changed', {
+        conversationId: conversationId.toString(),
+        theme: chosenTheme,
+        updatedBy: currentUserId.toString(),
+      });
+      conversation.participants.forEach((p) => {
+        const pId = (p._id || p).toString();
+        io.to(`user:${pId}`).emit('chat_theme_changed', {
+          conversationId: conversationId.toString(),
+          theme: chosenTheme,
+          updatedBy: currentUserId.toString(),
+        });
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        conversationId: conversation._id,
+        theme: chosenTheme,
+      },
     });
   } catch (err) {
     next(err);
