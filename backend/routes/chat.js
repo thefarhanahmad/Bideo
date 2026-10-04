@@ -14,11 +14,30 @@ const {
   getUnreadCount,
   unsendMessage,
   deleteMessageForMe,
+  getEligibleContacts,
+  createGroup,
+  addGroupMembers,
+  removeGroupMember,
+  updateGroupAdminRole,
+  updateGroupDetails,
 } = require('../controllers/chat');
 const { protect } = require('../middlewares/auth');
+const upload = require('../middlewares/multer');
 
 // All chat routes require authentication
 router.use(protect);
+
+router.get('/eligible-contacts', getEligibleContacts);
+
+router.route('/groups')
+  .post(upload.single('avatar'), createGroup);
+
+router.route('/groups/:id')
+  .put(upload.single('avatar'), updateGroupDetails);
+
+router.put('/groups/:id/members', addGroupMembers);
+router.delete('/groups/:id/members/:memberId', removeGroupMember);
+router.put('/groups/:id/admins', updateGroupAdminRole);
 
 router.route('/conversations')
   .get(getConversations)

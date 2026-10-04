@@ -5,26 +5,59 @@ const Video = require('../models/Video');
 const Post = require('../models/Post');
 const { getIO, isUserOnline, isUserInConversation } = require('../socket');
 const { sendPushNotification } = require('../utils/pushNotification');
+const { saveLocalFile } = require('../utils/localUpload');
 
 /**
  * Format conversation for client consumption
  */
 function formatConversation(conv, currentUserId) {
   const currentUserIdStr = currentUserId.toString();
-  const otherParticipant = (conv.participants || []).find((p) => {
-    const pId = (p?._id || p)?.toString();
-    return pId && pId !== currentUserIdStr;
-  }) || null;
+  const isGroup = Boolean(conv.isGroup);
 
   const unreadMap = conv.unreadCounts instanceof Map 
     ? conv.unreadCounts 
     : new Map(Object.entries(conv.unreadCounts || {}));
   const unreadCount = unreadMap.get(currentUserIdStr) || 0;
 
+  if (isGroup) {
+    const admins = Array.isArray(conv.groupAdmins) ? conv.groupAdmins : [];
+    const isAdmin = admins.some((a) => (a?._id || a)?.toString() === currentUserIdStr);
+    const isCreator = (conv.groupCreator?._id || conv.groupCreator || conv.initiator)?.toString() === currentUserIdStr;
+
+    return {
+      _id: conv._id,
+      isGroup: true,
+      groupName: conv.groupName || 'Group',
+      groupAvatar: conv.groupAvatar || null,
+      groupDescription: conv.groupDescription || '',
+      groupAdmins: conv.groupAdmins || [],
+      groupCreator: conv.groupCreator || null,
+      isAdmin,
+      isCreator,
+      memberCount: Array.isArray(conv.participants) ? conv.participants.length : 0,
+      participants: conv.participants || [],
+      initiator: conv.initiator,
+      status: 'accepted',
+      blockedBy: null,
+      isBlockedByMe: false,
+      isBlockedByOther: false,
+      lastMessage: conv.lastMessage,
+      unreadCount,
+      updatedAt: conv.updatedAt,
+      createdAt: conv.createdAt,
+    };
+  }
+
+  const otherParticipant = (conv.participants || []).find((p) => {
+    const pId = (p?._id || p)?.toString();
+    return pId && pId !== currentUserIdStr;
+  }) || null;
+
   const otherId = (otherParticipant?._id || otherParticipant)?.toString() || null;
 
   return {
     _id: conv._id,
+    isGroup: false,
     participants: conv.participants,
     otherParticipant: otherParticipant ? {
       _id: otherId,
@@ -58,11 +91,17 @@ exports.getConversations = async (req, res, next) => {
     const conversations = await Conversation.find({
       participants: currentUserId,
       deletedFor: { $ne: currentUserId },
-      'lastMessage.sender': { $ne: null },
-      'lastMessage.text': { $exists: true, $ne: '' },
+      $or: [
+        { isGroup: true },
+        {
+          'lastMessage.sender': { $ne: null },
+          'lastMessage.text': { $exists: true, $ne: '' },
+        },
+      ],
     })
       .populate('participants', '_id name channelName avatar isVerified')
-      .populate('lastMessage.sender', '_id name channelName')
+      .populate('groupAdmins', '_id name channelName avatar isVerified')
+      .populate('lastMessage.sender', '_id name channelName avatar')
       .sort({ updatedAt: -1 })
       .lean();
 
@@ -103,11 +142,13 @@ exports.getOrCreateConversation = async (req, res, next) => {
 
     // Check if conversation already exists between these 2 users
     let conversation = await Conversation.findOne({
+      isGroup: { $ne: true },
       participants: { $all: [currentUserId, recipientId], $size: 2 },
     }).populate('participants', '_id name channelName avatar isVerified');
 
     if (!conversation) {
       conversation = await Conversation.create({
+        isGroup: false,
         participants: [currentUserId, recipientId],
         initiator: currentUserId,
         status: 'pending',
@@ -140,7 +181,10 @@ exports.getConversationById = async (req, res, next) => {
     const conversation = await Conversation.findOne({
       _id: req.params.id,
       participants: currentUserId,
-    }).populate('participants', '_id name channelName avatar isVerified');
+    })
+      .populate('participants', '_id name channelName avatar isVerified')
+      .populate('groupAdmins', '_id name channelName avatar isVerified')
+      .populate('lastMessage.sender', '_id name channelName avatar');
 
     if (!conversation) {
       return res.status(404).json({ success: false, message: 'Conversation not found' });
@@ -262,11 +306,13 @@ exports.sendMessage = async (req, res, next) => {
       }).populate('participants', '_id name channelName avatar isVerified');
     } else if (recipientId) {
       conversation = await Conversation.findOne({
+        isGroup: { $ne: true },
         participants: { $all: [currentUserId, recipientId], $size: 2 },
       }).populate('participants', '_id name channelName avatar isVerified');
 
       if (!conversation) {
         conversation = await Conversation.create({
+          isGroup: false,
           participants: [currentUserId, recipientId],
           initiator: currentUserId,
           status: 'pending',
@@ -294,20 +340,24 @@ exports.sendMessage = async (req, res, next) => {
       }
     }
 
-    // Identify target recipient
-    const recipient = conversation.participants.find(
-      (p) => p._id.toString() !== currentUserId.toString()
+    const isGroup = Boolean(conversation.isGroup);
+
+    // Identify target recipient (for 1-on-1) or other participants (for group)
+    const otherParticipants = (conversation.participants || []).filter(
+      (p) => (p._id || p).toString() !== currentUserId.toString()
     );
 
-    if (!recipient) {
+    if (!isGroup && otherParticipants.length === 0) {
       return res.status(400).json({ success: false, message: 'Invalid recipient in conversation' });
     }
+
+    const recipient = !isGroup && otherParticipants.length > 0 ? otherParticipants[0] : null;
 
     // Create Message record
     const message = await Message.create({
       conversationId: conversation._id,
       sender: currentUserId,
-      recipient: recipient._id,
+      recipient: recipient ? recipient._id : null,
       text: cleanText,
       video: videoDoc ? videoDoc._id : null,
       post: postDoc ? postDoc._id : null,
@@ -315,7 +365,7 @@ exports.sendMessage = async (req, res, next) => {
     });
 
     const populatedMessage = await Message.findById(message._id)
-      .populate('sender', '_id name channelName avatar')
+      .populate('sender', '_id name channelName avatar isVerified')
       .populate({
         path: 'video',
         select: '_id title thumbnail duration views owner isShort',
@@ -328,11 +378,11 @@ exports.sendMessage = async (req, res, next) => {
       })
       .lean();
 
-    // Check if recipient is active in this conversation right now
-    const isRecipientViewingChat = isUserInConversation(recipient._id, conversation._id);
+    // Check if 1-on-1 recipient is active in this conversation right now
+    const isRecipientViewingChat = recipient ? isUserInConversation(recipient._id, conversation._id) : false;
 
-    // If recipient is viewing the chat, message is instantly read
-    if (isRecipientViewingChat) {
+    // If 1-on-1 recipient is viewing the chat, message is instantly read
+    if (!isGroup && isRecipientViewingChat) {
       await Message.findByIdAndUpdate(message._id, { isRead: true, readAt: new Date() });
       populatedMessage.isRead = true;
       populatedMessage.readAt = new Date();
@@ -350,16 +400,28 @@ exports.sendMessage = async (req, res, next) => {
       text: previewText,
       sender: currentUserId,
       createdAt: message.createdAt,
-      isRead: isRecipientViewingChat,
+      isRead: !isGroup ? isRecipientViewingChat : false,
     };
 
     if (!conversation.unreadCounts) {
       conversation.unreadCounts = new Map();
     }
 
-    if (!isRecipientViewingChat) {
-      const currentUnread = conversation.unreadCounts.get(recipient._id.toString()) || 0;
-      conversation.unreadCounts.set(recipient._id.toString(), currentUnread + 1);
+    if (!isGroup) {
+      if (!isRecipientViewingChat && recipient) {
+        const currentUnread = conversation.unreadCounts.get(recipient._id.toString()) || 0;
+        conversation.unreadCounts.set(recipient._id.toString(), currentUnread + 1);
+      }
+    } else {
+      // For groups, increment unread count for every other participant not currently viewing
+      otherParticipants.forEach((p) => {
+        const pIdStr = (p._id || p).toString();
+        const isViewing = isUserInConversation(pIdStr, conversation._id);
+        if (!isViewing) {
+          const currentUnread = conversation.unreadCounts.get(pIdStr) || 0;
+          conversation.unreadCounts.set(pIdStr, currentUnread + 1);
+        }
+      });
     }
 
     await conversation.save();
@@ -367,27 +429,39 @@ exports.sendMessage = async (req, res, next) => {
     // Socket.io Real-time dispatch
     const io = getIO();
     if (io) {
-      // 1. Broadcast new message to conversation room and directly to both users' personal rooms
+      // 1. Broadcast new message to conversation room and sender personal room
       io.to(`conversation:${conversation._id}`).emit('new_message', populatedMessage);
-      io.to(`user:${recipient._id}`).emit('new_message', populatedMessage);
       io.to(`user:${currentUserId}`).emit('new_message', populatedMessage);
 
-      // 2. Broadcast conversation updated event to both users' personal rooms
-      const formattedForSender = formatConversation(conversation, currentUserId);
-      const formattedForRecipient = formatConversation(conversation, recipient._id);
+      if (!isGroup && recipient) {
+        io.to(`user:${recipient._id}`).emit('new_message', populatedMessage);
+        const formattedForSender = formatConversation(conversation, currentUserId);
+        const formattedForRecipient = formatConversation(conversation, recipient._id);
+        io.to(`user:${currentUserId}`).emit('conversation_updated', formattedForSender);
+        io.to(`user:${recipient._id}`).emit('conversation_updated', formattedForRecipient);
 
-      io.to(`user:${currentUserId}`).emit('conversation_updated', formattedForSender);
-      io.to(`user:${recipient._id}`).emit('conversation_updated', formattedForRecipient);
-
-      // 3. Emit badge update to recipient if not viewing
-      if (!isRecipientViewingChat) {
-        const totalUnread = await exports.computeTotalUnreadCount(recipient._id);
-        io.to(`user:${recipient._id}`).emit('unread_chat_count', { count: totalUnread });
+        if (!isRecipientViewingChat) {
+          const totalUnread = await exports.computeTotalUnreadCount(recipient._id);
+          io.to(`user:${recipient._id}`).emit('unread_chat_count', { count: totalUnread });
+        }
+      } else {
+        // Group broadcast to all other members
+        otherParticipants.forEach(async (p) => {
+          const pId = (p._id || p).toString();
+          io.to(`user:${pId}`).emit('new_message', populatedMessage);
+          io.to(`user:${pId}`).emit('conversation_updated', formatConversation(conversation, pId));
+          const isViewing = isUserInConversation(pId, conversation._id);
+          if (!isViewing) {
+            const totalUnread = await exports.computeTotalUnreadCount(pId);
+            io.to(`user:${pId}`).emit('unread_chat_count', { count: totalUnread });
+          }
+        });
+        io.to(`user:${currentUserId}`).emit('conversation_updated', formatConversation(conversation, currentUserId));
       }
     }
 
-    // Push notification logic: ONLY if recipient is NOT actively in the chat screen
-    if (!isRecipientViewingChat) {
+    // Push notification logic
+    if (!isGroup && recipient && !isRecipientViewingChat) {
       sendPushNotification({
         recipientId: recipient._id,
         title: req.user.channelName || req.user.name || 'New Message',
@@ -399,6 +473,24 @@ exports.sendMessage = async (req, res, next) => {
         },
       }).catch((pushErr) => {
         console.error('Failed to dispatch chat push notification:', pushErr);
+      });
+    } else if (isGroup) {
+      otherParticipants.forEach((p) => {
+        const pId = (p._id || p).toString();
+        const isViewing = isUserInConversation(pId, conversation._id);
+        if (!isViewing) {
+          sendPushNotification({
+            recipientId: pId,
+            title: conversation.groupName || 'Group Message',
+            body: `${req.user.name || 'Member'}: ${cleanText.slice(0, 100)}`,
+            data: {
+              screen: `/chat/${conversation._id}`,
+              conversationId: conversation._id.toString(),
+              senderId: currentUserId.toString(),
+              isGroup: true,
+            },
+          }).catch(() => {});
+        }
       });
     }
 
@@ -431,16 +523,13 @@ exports.markAsRead = async (req, res, next) => {
     }
 
     // Mark messages as read in DB
-    await Message.updateMany(
-      {
-        conversationId,
-        recipient: currentUserId,
-        isRead: false,
-      },
-      {
-        $set: { isRead: true, readAt: new Date() },
-      }
-    );
+    const updateFilter = conversation.isGroup
+      ? { conversationId, sender: { $ne: currentUserId }, isRead: false }
+      : { conversationId, recipient: currentUserId, isRead: false };
+
+    await Message.updateMany(updateFilter, {
+      $set: { isRead: true, readAt: new Date() },
+    });
 
     // Update conversation lastMessage.isRead so conversation list displays double tick
     if (conversation.lastMessage) {
@@ -516,6 +605,10 @@ exports.acceptChat = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Conversation not found' });
     }
 
+    if (conversation.isGroup) {
+      return res.status(400).json({ success: false, message: 'Cannot accept a group conversation' });
+    }
+
     conversation.status = 'accepted';
     conversation.blockedBy = null;
     // Remove from deletedFor if previously declined or dismissed
@@ -572,6 +665,10 @@ exports.blockUser = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Conversation not found' });
     }
 
+    if (conversation.isGroup) {
+      return res.status(400).json({ success: false, message: 'Cannot block a group conversation' });
+    }
+
     conversation.status = 'blocked';
     conversation.blockedBy = currentUserId;
     await conversation.save();
@@ -622,6 +719,10 @@ exports.unblockUser = async (req, res, next) => {
 
     if (!conversation) {
       return res.status(404).json({ success: false, message: 'Conversation not found' });
+    }
+
+    if (conversation.isGroup) {
+      return res.status(400).json({ success: false, message: 'Cannot unblock a group conversation' });
     }
 
     if (conversation.blockedBy && conversation.blockedBy.toString() !== currentUserId.toString()) {
@@ -725,6 +826,10 @@ exports.declineChat = async (req, res, next) => {
 
     if (!conversation) {
       return res.status(404).json({ success: false, message: 'Conversation not found' });
+    }
+
+    if (conversation.isGroup) {
+      return res.status(400).json({ success: false, message: 'Cannot decline a group conversation' });
     }
 
     // Add current user to deletedFor so it disappears from inbox
@@ -896,6 +1001,553 @@ exports.deleteMessageForMe = async (req, res, next) => {
       success: true,
       message: 'Message deleted for you',
       data: { messageId, conversationId: message.conversationId },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * @desc    Get contacts eligible to be added to a group (accepted, non-blocked 1-on-1 chats)
+ * @route   GET /api/chat/eligible-contacts
+ * @access  Private
+ */
+exports.getEligibleContacts = async (req, res, next) => {
+  try {
+    const currentUserId = req.user._id;
+
+    // Find all 1-on-1 conversations where status is 'accepted'
+    // Exclude conversations where current user blocked the other or vice-versa
+    const conversations = await Conversation.find({
+      isGroup: { $ne: true },
+      participants: currentUserId,
+      status: 'accepted',
+      blockedBy: { $ne: currentUserId },
+    })
+      .populate('participants', '_id name channelName avatar isVerified isBlocked')
+      .sort({ updatedAt: -1 })
+      .lean();
+
+    const contactMap = new Map();
+    conversations.forEach((conv) => {
+      const other = (conv.participants || []).find(
+        (p) => p && p._id && p._id.toString() !== currentUserId.toString()
+      );
+      if (other && !other.isBlocked && !contactMap.has(other._id.toString())) {
+        contactMap.set(other._id.toString(), {
+          _id: other._id,
+          name: other.name || '',
+          channelName: other.channelName || other.name || '',
+          avatar: other.avatar || null,
+          isVerified: Boolean(other.isVerified),
+        });
+      }
+    });
+
+    const contacts = Array.from(contactMap.values());
+    res.status(200).json({
+      success: true,
+      count: contacts.length,
+      data: contacts,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * @desc    Create a new group conversation
+ * @route   POST /api/chat/groups
+ * @access  Private
+ */
+exports.createGroup = async (req, res, next) => {
+  try {
+    const currentUserId = req.user._id;
+    const { name, description, memberIds: rawMemberIds } = req.body;
+
+    const trimmedName = String(name || '').trim();
+    if (!trimmedName || trimmedName.length < 2) {
+      return res.status(400).json({ success: false, message: 'Group name must be at least 2 characters long' });
+    }
+    if (trimmedName.length > 60) {
+      return res.status(400).json({ success: false, message: 'Group name cannot exceed 60 characters' });
+    }
+
+    let memberIds = [];
+    if (Array.isArray(rawMemberIds)) {
+      memberIds = rawMemberIds.map((id) => id?.toString()).filter(Boolean);
+    } else if (typeof rawMemberIds === 'string') {
+      try {
+        const parsed = JSON.parse(rawMemberIds);
+        if (Array.isArray(parsed)) memberIds = parsed.map((id) => id?.toString()).filter(Boolean);
+      } catch {
+        memberIds = rawMemberIds.split(',').map((id) => id.trim()).filter(Boolean);
+      }
+    }
+
+    memberIds = Array.from(new Set(memberIds.filter((id) => id !== currentUserId.toString())));
+
+    if (memberIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'Please select at least 1 member to add to the group' });
+    }
+
+    // Verify all memberIds are in creator's eligible contacts (accepted and not blocked by creator)
+    const eligibleConvs = await Conversation.find({
+      isGroup: { $ne: true },
+      participants: { $all: [currentUserId] },
+      status: 'accepted',
+      blockedBy: { $ne: currentUserId },
+    }).select('participants').lean();
+
+    const allowedUserIds = new Set();
+    eligibleConvs.forEach((c) => {
+      (c.participants || []).forEach((p) => {
+        const pId = p.toString();
+        if (pId !== currentUserId.toString()) {
+          allowedUserIds.add(pId);
+        }
+      });
+    });
+
+    const validMemberIds = memberIds.filter((id) => allowedUserIds.has(id));
+    if (validMemberIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'None of the selected members are eligible to be added. You can only add users you have actively chatted and connected with.',
+      });
+    }
+
+    let groupAvatar = null;
+    if (req.file) {
+      const uploadRes = await saveLocalFile(req, req.file, 'image');
+      if (uploadRes && uploadRes.url) {
+        groupAvatar = uploadRes.url;
+      }
+    } else if (req.body.avatar) {
+      groupAvatar = req.body.avatar;
+    }
+
+    const allParticipants = [currentUserId, ...validMemberIds];
+
+    const group = await Conversation.create({
+      isGroup: true,
+      groupName: trimmedName,
+      groupAvatar,
+      groupDescription: String(description || '').trim().slice(0, 300),
+      initiator: currentUserId,
+      groupCreator: currentUserId,
+      groupAdmins: [currentUserId],
+      participants: allParticipants,
+      status: 'accepted',
+      lastMessage: {
+        text: `Group "${trimmedName}" created`,
+        sender: currentUserId,
+        createdAt: new Date(),
+        isRead: false,
+      },
+    });
+
+    const populatedGroup = await Conversation.findById(group._id)
+      .populate('participants', '_id name channelName avatar isVerified')
+      .populate('groupAdmins', '_id name channelName avatar isVerified')
+      .populate('lastMessage.sender', '_id name channelName avatar')
+      .lean();
+
+    const io = getIO();
+    if (io) {
+      allParticipants.forEach((pId) => {
+        const idStr = pId.toString();
+        io.to(`user:${idStr}`).emit('conversation_updated', formatConversation(populatedGroup, idStr));
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Group created successfully',
+      data: formatConversation(populatedGroup, currentUserId),
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * @desc    Add new members to an existing group
+ * @route   PUT /api/chat/groups/:id/members
+ * @access  Private
+ */
+exports.addGroupMembers = async (req, res, next) => {
+  try {
+    const currentUserId = req.user._id;
+    const conversationId = req.params.id;
+    const { memberIds: rawMemberIds } = req.body;
+
+    const group = await Conversation.findOne({ _id: conversationId, isGroup: true });
+    if (!group) {
+      return res.status(404).json({ success: false, message: 'Group not found' });
+    }
+
+    // Check if requester is admin of this group
+    const isAdmin = (group.groupAdmins || []).some(
+      (a) => a.toString() === currentUserId.toString()
+    );
+    if (!isAdmin) {
+      return res.status(403).json({ success: false, message: 'Only group admins can add members' });
+    }
+
+    let memberIds = [];
+    if (Array.isArray(rawMemberIds)) {
+      memberIds = rawMemberIds.map((id) => id?.toString()).filter(Boolean);
+    } else if (typeof rawMemberIds === 'string') {
+      try {
+        memberIds = JSON.parse(rawMemberIds);
+      } catch {
+        memberIds = rawMemberIds.split(',').map((id) => id.trim()).filter(Boolean);
+      }
+    }
+
+    // Filter out users already in the group
+    const existingParticipantSet = new Set(group.participants.map((p) => p.toString()));
+    const newMemberIds = memberIds.filter((id) => !existingParticipantSet.has(id));
+
+    if (newMemberIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'All selected members are already in the group' });
+    }
+
+    // Validate that new members are in THIS admin's eligible contacts (accepted and not blocked by THIS admin)
+    const eligibleConvs = await Conversation.find({
+      isGroup: { $ne: true },
+      participants: { $all: [currentUserId] },
+      status: 'accepted',
+      blockedBy: { $ne: currentUserId },
+    }).select('participants').lean();
+
+    const allowedUserIds = new Set();
+    eligibleConvs.forEach((c) => {
+      (c.participants || []).forEach((p) => {
+        const pId = p.toString();
+        if (pId !== currentUserId.toString()) {
+          allowedUserIds.add(pId);
+        }
+      });
+    });
+
+    const validNewMembers = newMemberIds.filter((id) => allowedUserIds.has(id));
+    if (validNewMembers.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'You cannot add users who you have blocked or have not accepted chat requests with.',
+      });
+    }
+
+    // Add to participants
+    group.participants.push(...validNewMembers);
+
+    // Fetch names of added members
+    const addedUsers = await User.find({ _id: { $in: validNewMembers } }).select('name').lean();
+    const addedNames = addedUsers.map((u) => u.name || 'User').join(', ');
+    const adminUser = await User.findById(currentUserId).select('name').lean();
+
+    const systemText = `${adminUser?.name || 'Admin'} added ${addedNames}`;
+    group.lastMessage = {
+      text: systemText,
+      sender: currentUserId,
+      createdAt: new Date(),
+      isRead: false,
+    };
+    group.updatedAt = new Date();
+    await group.save();
+
+    // Create system message record
+    const systemMsg = await Message.create({
+      conversationId: group._id,
+      sender: currentUserId,
+      recipient: null,
+      text: systemText,
+    });
+    const populatedSystemMsg = await Message.findById(systemMsg._id)
+      .populate('sender', '_id name channelName avatar isVerified')
+      .lean();
+
+    const updatedGroup = await Conversation.findById(group._id)
+      .populate('participants', '_id name channelName avatar isVerified')
+      .populate('groupAdmins', '_id name channelName avatar isVerified')
+      .populate('lastMessage.sender', '_id name channelName avatar')
+      .lean();
+
+    const io = getIO();
+    if (io) {
+      io.to(`conversation:${group._id}`).emit('new_message', populatedSystemMsg);
+      io.to(`conversation:${group._id}`).emit('group_members_updated', formatConversation(updatedGroup, currentUserId));
+      group.participants.forEach((pId) => {
+        const idStr = pId.toString();
+        io.to(`user:${idStr}`).emit('conversation_updated', formatConversation(updatedGroup, idStr));
+        io.to(`user:${idStr}`).emit('new_message', populatedSystemMsg);
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `${validNewMembers.length} member(s) added successfully`,
+      data: formatConversation(updatedGroup, currentUserId),
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * @desc    Remove member from group OR leave group
+ * @route   DELETE /api/chat/groups/:id/members/:memberId
+ * @access  Private
+ */
+exports.removeGroupMember = async (req, res, next) => {
+  try {
+    const currentUserId = req.user._id;
+    const conversationId = req.params.id;
+    const targetMemberId = req.params.memberId;
+
+    const group = await Conversation.findOne({ _id: conversationId, isGroup: true });
+    if (!group) {
+      return res.status(404).json({ success: false, message: 'Group not found' });
+    }
+
+    const isSelfLeaving = targetMemberId.toString() === currentUserId.toString();
+    const isAdmin = (group.groupAdmins || []).some((a) => a.toString() === currentUserId.toString());
+    const isCreator = (group.groupCreator || group.initiator)?.toString() === currentUserId.toString();
+
+    if (!isSelfLeaving) {
+      if (!isAdmin) {
+        return res.status(403).json({ success: false, message: 'Only group admins can remove members' });
+      }
+      // Cannot remove group creator unless requester is creator
+      const targetIsCreator = (group.groupCreator || group.initiator)?.toString() === targetMemberId.toString();
+      if (targetIsCreator && !isCreator) {
+        return res.status(403).json({ success: false, message: 'Cannot remove the group creator' });
+      }
+    }
+
+    // Remove target from participants and admins
+    group.participants = group.participants.filter((p) => p.toString() !== targetMemberId.toString());
+    group.groupAdmins = group.groupAdmins.filter((a) => a.toString() !== targetMemberId.toString());
+
+    // If no participants left, delete group
+    if (group.participants.length === 0) {
+      await group.deleteOne();
+      await Message.deleteMany({ conversationId: group._id });
+      return res.status(200).json({ success: true, message: 'Group deleted as all members left' });
+    }
+
+    // If leaving member was the last admin, assign the oldest remaining member as admin
+    if (group.groupAdmins.length === 0 && group.participants.length > 0) {
+      group.groupAdmins.push(group.participants[0]);
+    }
+
+    const targetUser = await User.findById(targetMemberId).select('name').lean();
+    const actorUser = await User.findById(currentUserId).select('name').lean();
+    const systemText = isSelfLeaving
+      ? `${targetUser?.name || 'Member'} left the group`
+      : `${actorUser?.name || 'Admin'} removed ${targetUser?.name || 'Member'}`;
+
+    group.lastMessage = {
+      text: systemText,
+      sender: currentUserId,
+      createdAt: new Date(),
+      isRead: false,
+    };
+    group.updatedAt = new Date();
+    await group.save();
+
+    const systemMsg = await Message.create({
+      conversationId: group._id,
+      sender: currentUserId,
+      recipient: null,
+      text: systemText,
+    });
+    const populatedSystemMsg = await Message.findById(systemMsg._id)
+      .populate('sender', '_id name channelName avatar isVerified')
+      .lean();
+
+    const updatedGroup = await Conversation.findById(group._id)
+      .populate('participants', '_id name channelName avatar isVerified')
+      .populate('groupAdmins', '_id name channelName avatar isVerified')
+      .populate('lastMessage.sender', '_id name channelName avatar')
+      .lean();
+
+    const io = getIO();
+    if (io) {
+      io.to(`conversation:${group._id}`).emit('new_message', populatedSystemMsg);
+      io.to(`conversation:${group._id}`).emit('group_members_updated', formatConversation(updatedGroup, currentUserId));
+      io.to(`user:${targetMemberId}`).emit('conversation_removed', { conversationId: group._id });
+      group.participants.forEach((pId) => {
+        const idStr = pId.toString();
+        io.to(`user:${idStr}`).emit('conversation_updated', formatConversation(updatedGroup, idStr));
+        io.to(`user:${idStr}`).emit('new_message', populatedSystemMsg);
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: isSelfLeaving ? 'You left the group' : 'Member removed from group',
+      data: formatConversation(updatedGroup, currentUserId),
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * @desc    Promote or demote group admin
+ * @route   PUT /api/chat/groups/:id/admins
+ * @access  Private
+ */
+exports.updateGroupAdminRole = async (req, res, next) => {
+  try {
+    const currentUserId = req.user._id;
+    const conversationId = req.params.id;
+    const { targetUserId, action } = req.body;
+
+    if (!targetUserId || !['promote', 'demote'].includes(action)) {
+      return res.status(400).json({ success: false, message: 'Invalid action. Must be promote or demote' });
+    }
+
+    const group = await Conversation.findOne({ _id: conversationId, isGroup: true });
+    if (!group) {
+      return res.status(404).json({ success: false, message: 'Group not found' });
+    }
+
+    const isAdmin = (group.groupAdmins || []).some((a) => a.toString() === currentUserId.toString());
+    if (!isAdmin) {
+      return res.status(403).json({ success: false, message: 'Only group admins can manage roles' });
+    }
+
+    const isCreator = (group.groupCreator || group.initiator)?.toString() === currentUserId.toString();
+    const targetIsCreator = (group.groupCreator || group.initiator)?.toString() === targetUserId.toString();
+
+    if (action === 'demote') {
+      if (targetIsCreator) {
+        return res.status(403).json({ success: false, message: 'Cannot demote the group creator' });
+      }
+      if (!isCreator && group.groupAdmins.length <= 1) {
+        return res.status(400).json({ success: false, message: 'Group must have at least one admin' });
+      }
+      group.groupAdmins = group.groupAdmins.filter((a) => a.toString() !== targetUserId.toString());
+    } else if (action === 'promote') {
+      const alreadyAdmin = group.groupAdmins.some((a) => a.toString() === targetUserId.toString());
+      if (!alreadyAdmin) {
+        group.groupAdmins.push(targetUserId);
+      }
+    }
+
+    group.updatedAt = new Date();
+    await group.save();
+
+    const targetUser = await User.findById(targetUserId).select('name').lean();
+    const actorUser = await User.findById(currentUserId).select('name').lean();
+    const systemText = action === 'promote'
+      ? `${actorUser?.name || 'Admin'} made ${targetUser?.name || 'User'} a group admin`
+      : `${actorUser?.name || 'Admin'} dismissed ${targetUser?.name || 'User'} as admin`;
+
+    const systemMsg = await Message.create({
+      conversationId: group._id,
+      sender: currentUserId,
+      recipient: null,
+      text: systemText,
+    });
+    const populatedSystemMsg = await Message.findById(systemMsg._id)
+      .populate('sender', '_id name channelName avatar isVerified')
+      .lean();
+
+    const updatedGroup = await Conversation.findById(group._id)
+      .populate('participants', '_id name channelName avatar isVerified')
+      .populate('groupAdmins', '_id name channelName avatar isVerified')
+      .populate('lastMessage.sender', '_id name channelName avatar')
+      .lean();
+
+    const io = getIO();
+    if (io) {
+      io.to(`conversation:${group._id}`).emit('new_message', populatedSystemMsg);
+      io.to(`conversation:${group._id}`).emit('group_members_updated', formatConversation(updatedGroup, currentUserId));
+      group.participants.forEach((pId) => {
+        const idStr = pId.toString();
+        io.to(`user:${idStr}`).emit('conversation_updated', formatConversation(updatedGroup, idStr));
+        io.to(`user:${idStr}`).emit('new_message', populatedSystemMsg);
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: action === 'promote' ? 'Member promoted to Admin' : 'Admin role removed',
+      data: formatConversation(updatedGroup, currentUserId),
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * @desc    Update group details (name, description, avatar)
+ * @route   PUT /api/chat/groups/:id
+ * @access  Private
+ */
+exports.updateGroupDetails = async (req, res, next) => {
+  try {
+    const currentUserId = req.user._id;
+    const conversationId = req.params.id;
+    const { name, description } = req.body;
+
+    const group = await Conversation.findOne({ _id: conversationId, isGroup: true });
+    if (!group) {
+      return res.status(404).json({ success: false, message: 'Group not found' });
+    }
+
+    const isAdmin = (group.groupAdmins || []).some((a) => a.toString() === currentUserId.toString());
+    if (!isAdmin) {
+      return res.status(403).json({ success: false, message: 'Only group admins can edit group details' });
+    }
+
+    if (name !== undefined) {
+      const trimmed = String(name).trim();
+      if (trimmed.length < 2 || trimmed.length > 60) {
+        return res.status(400).json({ success: false, message: 'Group name must be between 2 and 60 characters' });
+      }
+      group.groupName = trimmed;
+    }
+
+    if (description !== undefined) {
+      group.groupDescription = String(description).trim().slice(0, 300);
+    }
+
+    if (req.file) {
+      const uploadRes = await saveLocalFile(req, req.file, 'image');
+      if (uploadRes && uploadRes.url) {
+        group.groupAvatar = uploadRes.url;
+      }
+    } else if (req.body.avatar !== undefined) {
+      group.groupAvatar = req.body.avatar;
+    }
+
+    group.updatedAt = new Date();
+    await group.save();
+
+    const updatedGroup = await Conversation.findById(group._id)
+      .populate('participants', '_id name channelName avatar isVerified')
+      .populate('groupAdmins', '_id name channelName avatar isVerified')
+      .populate('lastMessage.sender', '_id name channelName avatar')
+      .lean();
+
+    const io = getIO();
+    if (io) {
+      io.to(`conversation:${group._id}`).emit('group_details_updated', formatConversation(updatedGroup, currentUserId));
+      group.participants.forEach((pId) => {
+        io.to(`user:${pId.toString()}`).emit('conversation_updated', formatConversation(updatedGroup, pId.toString()));
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Group details updated',
+      data: formatConversation(updatedGroup, currentUserId),
     });
   } catch (err) {
     next(err);

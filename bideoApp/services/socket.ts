@@ -110,6 +110,18 @@ export const initSocket = async (tokenOverride?: string): Promise<Socket | null>
       DeviceEventEmitter.emit('chatMessageDeletedForMe', data);
     });
 
+    socket.on('conversation_removed', (data) => {
+      DeviceEventEmitter.emit('chatConversationRemoved', data);
+    });
+
+    socket.on('group_members_updated', (data) => {
+      DeviceEventEmitter.emit('chatGroupMembersUpdated', data);
+    });
+
+    socket.on('group_details_updated', (data) => {
+      DeviceEventEmitter.emit('chatGroupDetailsUpdated', data);
+    });
+
     socket.on('disconnect', (reason) => {
       isConnecting = false;
       console.log('Socket disconnected:', reason);

@@ -270,6 +270,40 @@ export const chatService = {
     const response = await api.get('/chat/unread-count');
     return response.data?.count || 0;
   },
+  getEligibleContacts: async () => {
+    const response = await api.get('/chat/eligible-contacts');
+    return response.data?.data || [];
+  },
+  createGroup: async (data: FormData | any) => {
+    const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
+    const response = await api.post('/chat/groups', data, {
+      headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : undefined,
+    });
+    return response.data?.data;
+  },
+  addGroupMembers: async (groupId: string, memberIds: string[]) => {
+    const response = await api.put(`/chat/groups/${groupId}/members`, { memberIds });
+    return response.data?.data;
+  },
+  removeGroupMember: async (groupId: string, memberId: string) => {
+    const response = await api.delete(`/chat/groups/${groupId}/members/${memberId}`);
+    return response.data?.data;
+  },
+  updateGroupAdminRole: async (groupId: string, targetUserId: string, action: 'promote' | 'demote') => {
+    const response = await api.put(`/chat/groups/${groupId}/admins`, { targetUserId, action });
+    return response.data?.data;
+  },
+  updateGroupDetails: async (groupId: string, data: FormData | any) => {
+    const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
+    const response = await api.put(`/chat/groups/${groupId}`, data, {
+      headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : undefined,
+    });
+    return response.data?.data;
+  },
+  leaveGroup: async (groupId: string, memberId: string) => {
+    const response = await api.delete(`/chat/groups/${groupId}/members/${memberId}`);
+    return response.data;
+  },
 };
 
 export const storyService = {

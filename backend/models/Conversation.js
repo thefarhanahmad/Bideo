@@ -54,6 +54,38 @@ const conversationSchema = new mongoose.Schema(
         ref: 'User',
       },
     ],
+    isGroup: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    groupName: {
+      type: String,
+      default: '',
+      trim: true,
+      maxlength: [60, 'Group name cannot exceed 60 characters'],
+    },
+    groupAvatar: {
+      type: String,
+      default: null,
+    },
+    groupDescription: {
+      type: String,
+      default: '',
+      trim: true,
+      maxlength: [300, 'Group description cannot exceed 300 characters'],
+    },
+    groupCreator: {
+      type: mongoose.Schema.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    groupAdmins: [
+      {
+        type: mongoose.Schema.ObjectId,
+        ref: 'User',
+      },
+    ],
   },
   {
     timestamps: true,
@@ -64,6 +96,7 @@ const conversationSchema = new mongoose.Schema(
 
 // Compound index for querying user conversations sorted by recent activity
 conversationSchema.index({ participants: 1, updatedAt: -1 });
+conversationSchema.index({ participants: 1, isGroup: 1, updatedAt: -1 });
 conversationSchema.index({ status: 1 });
 
 module.exports = mongoose.model('Conversation', conversationSchema);

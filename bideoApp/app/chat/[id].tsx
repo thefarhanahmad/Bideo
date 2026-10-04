@@ -32,6 +32,8 @@ import {
   requestOnlineStatus,
 } from '../../services/socket';
 import VerifiedBadge from '../../components/VerifiedBadge';
+import GroupInfoModal from '../../components/GroupInfoModal';
+import AddGroupMembersModal from '../../components/AddGroupMembersModal';
 import { showAlert } from '../../components/AppAlert';
 import { hapticLight, hapticSelection } from '../../utils/haptics';
 import { AppAdBanner } from '../../components/AppAds';
@@ -46,6 +48,7 @@ export default function ChatRoomScreen() {
     name?: string;
     avatar?: string;
     isVerified?: string;
+    isGroup?: string;
   }>();
   const conversationId = Array.isArray(params.id) ? params.id[0] : params.id;
   const { user, isAuthenticated } = useSelector((state: RootState) => state.auth);
@@ -60,6 +63,8 @@ export default function ChatRoomScreen() {
   const [menuVisible, setMenuVisible] = useState(false);
   const [selectedMessage, setSelectedMessage] = useState<any | null>(null);
   const [messageActionModalVisible, setMessageActionModalVisible] = useState(false);
+  const [groupInfoModalVisible, setGroupInfoModalVisible] = useState(false);
+  const [addMembersModalVisible, setAddMembersModalVisible] = useState(false);
 
   const insets = useSafeAreaInsets();
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -264,6 +269,34 @@ export default function ChatRoomScreen() {
       }
     );
 
+    const subGroupMembers = DeviceEventEmitter.addListener(
+      'chatGroupMembersUpdated',
+      (updatedGroup: any) => {
+        if (updatedGroup?._id?.toString() === conversationId?.toString()) {
+          setConversation((prev: any) => ({ ...prev, ...updatedGroup }));
+        }
+      }
+    );
+
+    const subGroupDetails = DeviceEventEmitter.addListener(
+      'chatGroupDetailsUpdated',
+      (updatedGroup: any) => {
+        if (updatedGroup?._id?.toString() === conversationId?.toString()) {
+          setConversation((prev: any) => ({ ...prev, ...updatedGroup }));
+        }
+      }
+    );
+
+    const subConvRemoved = DeviceEventEmitter.addListener(
+      'chatConversationRemoved',
+      (data: { conversationId: string }) => {
+        if (data?.conversationId?.toString() === conversationId?.toString()) {
+          showAlert('Group', 'You are no longer a member of this group.');
+          router.back();
+        }
+      }
+    );
+
     return () => {
       if (conversationId) {
         leaveConversationRoom(conversationId);
@@ -277,6 +310,9 @@ export default function ChatRoomScreen() {
       subRead.remove();
       subUnsend.remove();
       subDeleteForMe.remove();
+      subGroupMembers.remove();
+      subGroupDetails.remove();
+      subConvRemoved.remove();
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
     };
   }, [conversationId, currentUserId, loadData]);
@@ -284,6 +320,17 @@ export default function ChatRoomScreen() {
   // Handle typing debounce
   const handleInputChange = (text: string) => {
     setInputText(text);
+
+    if (isGroup) {
+      if (conversationId) {
+        emitTyping(conversationId, '', true);
+        if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+        typingTimerRef.current = setTimeout(() => {
+          emitTyping(conversationId, '', false);
+        }, 1500);
+      }
+      return;
+    }
 
     const targetId = otherParticipantIdRef.current || conversation?.otherParticipant?._id;
     if (targetId && conversationId) {
@@ -311,7 +358,9 @@ export default function ChatRoomScreen() {
     setInputText('');
 
     // Stop typing indicator
-    if (conversation?.otherParticipant?._id && conversationId) {
+    if (isGroup) {
+      if (conversationId) emitTyping(conversationId, '', false);
+    } else if (conversation?.otherParticipant?._id && conversationId) {
       emitTyping(conversationId, conversation.otherParticipant._id, false);
     }
 
@@ -504,14 +553,19 @@ export default function ChatRoomScreen() {
     }
   };
 
+  const isGroup = Boolean(params.isGroup === '1' || conversation?.isGroup);
   const other = conversation?.otherParticipant;
-  const displayName = other?.channelName || other?.name || params.name || 'Chat';
-  const rawAvatar = other?.avatar || params.avatar;
+  const displayName = isGroup
+    ? (conversation?.groupName || params.name || 'Group Chat')
+    : (other?.channelName || other?.name || params.name || 'Chat');
+  const rawAvatar = isGroup
+    ? (conversation?.groupAvatar || params.avatar)
+    : (other?.avatar || params.avatar);
   const displayAvatar = rawAvatar ? resolveMediaUrl(rawAvatar) : FALLBACK_AVATAR;
-  const isVerifiedUser = Boolean(other?.isVerified ?? (params.isVerified === '1'));
-  const isInitiator = conversation?.initiator?.toString() === currentUserId;
-  const isPendingForMe = conversation?.status === 'pending' && !isInitiator;
-  const isBlocked = conversation?.status === 'blocked';
+  const isVerifiedUser = !isGroup && Boolean(other?.isVerified ?? (params.isVerified === '1'));
+  const isInitiator = !isGroup && conversation?.initiator?.toString() === currentUserId;
+  const isPendingForMe = !isGroup && conversation?.status === 'pending' && !isInitiator;
+  const isBlocked = !isGroup && conversation?.status === 'blocked';
   const isBlockedByMe = isBlocked && Boolean(conversation?.isBlockedByMe || (conversation?.blockedBy ? conversation.blockedBy.toString() === currentUserId : true));
   const isBlockedByOther = isBlocked && !isBlockedByMe;
 
@@ -598,6 +652,17 @@ export default function ChatRoomScreen() {
   }, [messages]);
 
   const renderMessageBubble = ({ item }: { item: any }) => {
+    // Check if system message
+    if (item.system) {
+      return (
+        <View style={styles.systemMessageContainer}>
+          <View style={styles.systemMessagePill}>
+            <Text style={styles.systemMessageText}>{item.text}</Text>
+          </View>
+        </View>
+      );
+    }
+
     const isMine =
       (item.sender?._id || item.sender)?.toString() === currentUserId;
 
@@ -626,6 +691,23 @@ export default function ChatRoomScreen() {
           isMine ? styles.bubbleWrapperRight : styles.bubbleWrapperLeft,
         ]}
       >
+        {isGroup && !isMine && (
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => {
+              const sId = item.sender?._id || item.sender;
+              if (sId) router.push(`/channel/${sId}`);
+            }}
+            style={styles.groupSenderAvatarTouch}
+          >
+            <Image
+              source={{ uri: resolveMediaUrl(item.sender?.avatar) || FALLBACK_AVATAR }}
+              style={styles.groupSenderAvatar}
+              contentFit="cover"
+            />
+          </TouchableOpacity>
+        )}
+
         <TouchableOpacity
           activeOpacity={0.92}
           style={[
@@ -647,6 +729,24 @@ export default function ChatRoomScreen() {
               (hasVideo || hasPost) && styles.bubbleWithMedia,
             ]}
           >
+            {/* Group Sender Name Header */}
+            {isGroup && !isMine && (
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => {
+                  const sId = item.sender?._id || item.sender;
+                  if (sId) router.push(`/channel/${sId}`);
+                }}
+                style={styles.groupSenderNameRow}
+              >
+                <Text style={styles.groupSenderNameText} numberOfLines={1}>
+                  {item.sender?.channelName || item.sender?.name || 'Member'}
+                </Text>
+                {Boolean(item.sender?.isVerified) && (
+                  <VerifiedBadge size={11} style={{ marginLeft: 3 }} />
+                )}
+              </TouchableOpacity>
+            )}
           {/* Embedded Video Card */}
           {hasVideo && (
             <TouchableOpacity
@@ -848,19 +948,36 @@ export default function ChatRoomScreen() {
             style={styles.profileHeaderTouch}
             activeOpacity={0.8}
             onPress={() => {
-              if (other?._id) {
+              if (isGroup) {
+                setGroupInfoModalVisible(true);
+              } else if (other?._id) {
                 router.push(`/channel/${other._id}`);
               }
             }}
           >
             <View style={styles.avatarWrapper}>
-              <Image
-                source={{ uri: displayAvatar }}
-                style={styles.headerAvatar}
-                contentFit="cover"
-                transition={0}
-              />
-              {isOtherOnline && <View style={styles.headerOnlineBadge} />}
+              {isGroup ? (
+                displayAvatar && displayAvatar !== FALLBACK_AVATAR ? (
+                  <Image
+                    source={{ uri: displayAvatar }}
+                    style={styles.headerAvatar}
+                    contentFit="cover"
+                    transition={0}
+                  />
+                ) : (
+                  <View style={[styles.headerAvatar, styles.groupAvatarFallback]}>
+                    <Ionicons name="people" size={20} color="#FFFFFF" />
+                  </View>
+                )
+              ) : (
+                <Image
+                  source={{ uri: displayAvatar }}
+                  style={styles.headerAvatar}
+                  contentFit="cover"
+                  transition={0}
+                />
+              )}
+              {!isGroup && isOtherOnline && <View style={styles.headerOnlineBadge} />}
             </View>
 
             <View style={styles.headerTitleContainer}>
@@ -874,7 +991,9 @@ export default function ChatRoomScreen() {
               </View>
 
               <Text style={styles.headerSubtitle}>
-                {isOtherTyping ? (
+                {isGroup ? (
+                  `${conversation?.participants?.length || 0} members • Tap for info`
+                ) : isOtherTyping ? (
                   <Text style={styles.typingText}>typing...</Text>
                 ) : isOtherOnline ? (
                   <Text style={styles.onlineText}>Online</Text>
@@ -888,7 +1007,13 @@ export default function ChatRoomScreen() {
 
         <TouchableOpacity
           style={styles.menuButton}
-          onPress={() => setMenuVisible(true)}
+          onPress={() => {
+            if (isGroup) {
+              setGroupInfoModalVisible(true);
+            } else {
+              setMenuVisible(true);
+            }
+          }}
           activeOpacity={0.7}
         >
           <Ionicons name="ellipsis-vertical" size={20} color={Colors.text} />
@@ -979,7 +1104,9 @@ export default function ChatRoomScreen() {
               <View style={[styles.emptyMessages, { transform: [{ scaleY: -1 }] }]}>
                 <Ionicons name="chatbubble-ellipses-outline" size={48} color={Colors.textGray} />
                 <Text style={styles.emptyText}>
-                  Send a message to start chatting with {displayName}!
+                  {isGroup
+                    ? 'Welcome to the group! Send a message to start chatting with members.'
+                    : `Send a message to start chatting with ${displayName}!`}
                 </Text>
               </View>
             )
@@ -990,7 +1117,7 @@ export default function ChatRoomScreen() {
         {isOtherTyping && (
           <View style={styles.typingIndicatorBar}>
             <Text style={styles.typingIndicatorText}>
-              {other?.channelName || other?.name} is typing...
+              {isGroup ? 'Someone is typing...' : `${other?.channelName || other?.name} is typing...`}
             </Text>
           </View>
         )}
@@ -1198,6 +1325,44 @@ export default function ChatRoomScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
+      {/* Group Info Modal */}
+      {isGroup && (
+        <GroupInfoModal
+          visible={groupInfoModalVisible}
+          conversation={conversation}
+          currentUserId={currentUserId}
+          onClose={() => setGroupInfoModalVisible(false)}
+          onOpenAddMembers={() => {
+            setGroupInfoModalVisible(false);
+            setAddMembersModalVisible(true);
+          }}
+          onGroupUpdated={(updatedGroup) => {
+            setConversation((prev: any) => ({
+              ...prev,
+              ...updatedGroup,
+            }));
+            loadData();
+          }}
+          onLeftGroup={() => {
+            setGroupInfoModalVisible(false);
+            router.back();
+          }}
+        />
+      )}
+
+      {/* Add Group Members Modal */}
+      {isGroup && (
+        <AddGroupMembersModal
+          visible={addMembersModalVisible}
+          groupId={conversationId}
+          existingMemberIds={(conversation?.participants || []).map((p: any) => (p?._id || p)?.toString())}
+          onClose={() => setAddMembersModalVisible(false)}
+          onMembersAdded={() => {
+            setAddMembersModalVisible(false);
+            loadData();
+          }}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -1788,5 +1953,50 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: Colors.text,
+  },
+  groupSenderAvatarTouch: {
+    marginRight: 6,
+    alignSelf: 'flex-end',
+    marginBottom: 4,
+  },
+  groupSenderAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#E5E7EB',
+  },
+  groupSenderNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 3,
+  },
+  groupSenderNameText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  groupAvatarFallback: {
+    backgroundColor: '#FF6B00',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  systemMessageContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 8,
+    width: '100%',
+  },
+  systemMessagePill: {
+    backgroundColor: 'rgba(0, 0, 0, 0.06)',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 12,
+    maxWidth: '85%',
+  },
+  systemMessageText: {
+    fontSize: 12,
+    color: Colors.textGray,
+    fontWeight: '500',
+    textAlign: 'center',
   },
 });

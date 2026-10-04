@@ -27,6 +27,7 @@ import { requestOnlineStatus } from '../../services/socket';
 import VerifiedBadge from '../../components/VerifiedBadge';
 import AuthModal from '../../components/AuthModal';
 import StoryViewerModal from '../../components/StoryViewerModal';
+import CreateGroupModal from '../../components/CreateGroupModal';
 import { showAlert } from '../../components/AppAlert';
 import { AppAdBanner } from '../../components/AppAds';
 import { hapticSelection, hapticLight } from '../../utils/haptics';
@@ -76,7 +77,8 @@ export default function ChatListScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [conversations, setConversations] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'all' | 'unread' | 'requests'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'unread' | 'groups' | 'blocked' | 'requests'>('all');
+  const [createGroupModalVisible, setCreateGroupModalVisible] = useState(false);
   const [authModalVisible, setAuthModalVisible] = useState(false);
   const [onlineMap, setOnlineMap] = useState<Record<string, boolean>>({});
 
@@ -250,6 +252,17 @@ export default function ChatListScreen() {
       loadStoryTray();
     });
 
+    const subRemoved = DeviceEventEmitter.addListener(
+      'chatConversationRemoved',
+      (data: { conversationId: string }) => {
+        if (data?.conversationId) {
+          setConversations((prev) =>
+            prev.filter((c) => c._id?.toString() !== data.conversationId.toString())
+          );
+        }
+      }
+    );
+
     return () => {
       subMsg.remove();
       subConv.remove();
@@ -258,6 +271,7 @@ export default function ChatListScreen() {
       subSocket.remove();
       subRead.remove();
       subChatViewed.remove();
+      subRemoved.remove();
     };
   }, [isAuthenticated, loadConversations, loadStoryTray, currentUserId]);
 
@@ -479,9 +493,19 @@ export default function ChatListScreen() {
   // Total pending message requests count
   const pendingRequestsCount = useMemo(() => {
     return conversations.filter(
-      (c) => c.status === 'pending' && c.initiator !== currentUserId
+      (c) => !c.isGroup && c.status === 'pending' && c.initiator !== currentUserId
     ).length;
   }, [conversations, currentUserId]);
+
+  // Total groups count
+  const groupChatsCount = useMemo(() => {
+    return conversations.filter((c) => Boolean(c.isGroup)).length;
+  }, [conversations]);
+
+  // Total blocked count
+  const blockedChatsCount = useMemo(() => {
+    return conversations.filter((c) => c.status === 'blocked').length;
+  }, [conversations]);
 
   // Filtered conversations based on search query and active tab
   const filteredConversations = useMemo(() => {
@@ -489,13 +513,25 @@ export default function ChatListScreen() {
 
     if (activeTab === 'unread') {
       list = list.filter((c) => (c.unreadCount || 0) > 0);
+    } else if (activeTab === 'groups') {
+      list = list.filter((c) => Boolean(c.isGroup));
+    } else if (activeTab === 'blocked') {
+      list = list.filter((c) => c.status === 'blocked');
     } else if (activeTab === 'requests') {
-      list = list.filter((c) => c.status === 'pending' && c.initiator !== currentUserId);
+      list = list.filter((c) => !c.isGroup && c.status === 'pending' && c.initiator !== currentUserId);
+    } else {
+      // 'all': Show all active chats except blocked ones
+      list = list.filter((c) => c.status !== 'blocked');
     }
 
     if (!searchQuery.trim()) return list;
     const q = searchQuery.toLowerCase().trim();
     return list.filter((c) => {
+      if (c.isGroup) {
+        const groupName = (c.groupName || '').toLowerCase();
+        const lastMsg = (c.lastMessage?.text || '').toLowerCase();
+        return groupName.includes(q) || lastMsg.includes(q);
+      }
       const name = c.otherParticipant?.name?.toLowerCase() || '';
       const channelName = c.otherParticipant?.channelName?.toLowerCase() || '';
       const lastMsg = c.lastMessage?.text?.toLowerCase() || '';
@@ -504,18 +540,21 @@ export default function ChatListScreen() {
   }, [conversations, activeTab, searchQuery, currentUserId]);
 
   const renderConversationItem = ({ item }: { item: any }) => {
+    const isGroup = Boolean(item.isGroup);
     const other = item.otherParticipant;
     const otherId = other?._id?.toString();
     const isOnline = Boolean(
+      !isGroup &&
       otherId &&
       otherId !== currentUserId &&
       (onlineMap[otherId] !== undefined ? onlineMap[otherId] : other?.isOnline)
     );
     const unreadCount = item.unreadCount || 0;
-    const isPending = item.status === 'pending';
-    const isBlocked = item.status === 'blocked';
+    const isPending = !isGroup && item.status === 'pending';
+    const isBlocked = !isGroup && item.status === 'blocked';
     const isLastSenderMe =
       (item.lastMessage?.sender?._id || item.lastMessage?.sender)?.toString() === currentUserId;
+    const groupAvatarUri = resolveMediaUrl(item.groupAvatar);
 
     return (
       <TouchableOpacity
@@ -524,24 +563,51 @@ export default function ChatListScreen() {
         onPress={() => {
           hapticLight();
           DeviceEventEmitter.emit('chatViewed');
-          router.push({
-            pathname: `/chat/${item._id}`,
-            params: {
-              name: other?.channelName || other?.name || '',
-              avatar: other?.avatar || '',
-              isVerified: other?.isVerified ? '1' : '0',
-            },
-          });
+          if (isGroup) {
+            router.push({
+              pathname: `/chat/${item._id}`,
+              params: {
+                name: item.groupName || 'Group Chat',
+                avatar: item.groupAvatar || '',
+                isGroup: '1',
+              },
+            });
+          } else {
+            router.push({
+              pathname: `/chat/${item._id}`,
+              params: {
+                name: other?.channelName || other?.name || '',
+                avatar: other?.avatar || '',
+                isVerified: other?.isVerified ? '1' : '0',
+                isGroup: '0',
+              },
+            });
+          }
         }}
       >
         {/* Avatar + Online Indicator */}
         <View style={styles.avatarWrapper}>
-          <Image
-            source={{ uri: other?.avatar || FALLBACK_AVATAR }}
-            style={styles.avatar}
-            contentFit="cover"
-            transition={150}
-          />
+          {isGroup ? (
+            groupAvatarUri ? (
+              <Image
+                source={{ uri: groupAvatarUri }}
+                style={styles.avatar}
+                contentFit="cover"
+                transition={150}
+              />
+            ) : (
+              <View style={[styles.avatar, styles.groupAvatarFallback]}>
+                <Ionicons name="people" size={24} color="#FFFFFF" />
+              </View>
+            )
+          ) : (
+            <Image
+              source={{ uri: other?.avatar || FALLBACK_AVATAR }}
+              style={styles.avatar}
+              contentFit="cover"
+              transition={150}
+            />
+          )}
           {isOnline && <View style={styles.onlineBadge} />}
         </View>
 
@@ -550,13 +616,18 @@ export default function ChatListScreen() {
           {/* Top Row: Name + Time */}
           <View style={styles.convHeaderRow}>
             <View style={styles.nameRow}>
+              {isGroup && (
+                <View style={styles.groupBadgeInline}>
+                  <Ionicons name="people" size={12} color={Colors.primary} />
+                </View>
+              )}
               <Text
                 style={[styles.participantName, unreadCount > 0 && styles.participantNameUnread]}
                 numberOfLines={1}
               >
-                {other?.channelName || other?.name || 'User'}
+                {isGroup ? (item.groupName || 'Group Chat') : (other?.channelName || other?.name || 'User')}
               </Text>
-              {Boolean(other?.isVerified) && (
+              {!isGroup && Boolean(other?.isVerified) && (
                 <VerifiedBadge size={14} style={{ marginLeft: 4 }} />
               )}
             </View>
@@ -592,6 +663,16 @@ export default function ChatListScreen() {
                   '🚫 Conversation blocked'
                 ) : isPending && item.initiator !== currentUserId ? (
                   '📬 Sent you a message request'
+                ) : isGroup ? (
+                  item.lastMessage ? (
+                    isLastSenderMe ? (
+                      `You: ${item.lastMessage?.text || 'Sent an attachment'}`
+                    ) : (
+                      `${item.lastMessage?.sender?.channelName || item.lastMessage?.sender?.name || 'Member'}: ${item.lastMessage?.text || 'Sent an attachment'}`
+                    )
+                  ) : (
+                    'Group created'
+                  )
                 ) : isLastSenderMe ? (
                   `You: ${item.lastMessage?.text || 'Sent an attachment'}`
                 ) : (
@@ -643,10 +724,18 @@ export default function ChatListScreen() {
 
         <TouchableOpacity
           style={styles.headerActionButton}
-          onPress={() => router.push('/(tabs)')}
+          onPress={() => {
+            if (!isAuthenticated) {
+              setAuthModalVisible(true);
+              return;
+            }
+            hapticLight();
+            setCreateGroupModalVisible(true);
+          }}
           activeOpacity={0.7}
+          accessibilityLabel="Create Group"
         >
-          <Ionicons name="compass-outline" size={22} color={Colors.text} />
+          <Ionicons name="people-outline" size={23} color={Colors.text} />
         </TouchableOpacity>
       </View>
 
@@ -850,78 +939,153 @@ export default function ChatListScreen() {
         </View>
       )}
 
-      {/* Segmented Filter Pills (All / Unread / Requests) */}
+      {/* Segmented Filter Pills (All / Unread / Groups / Blocked / Requests) */}
       {!searchQuery && (
-        <View style={styles.filterTabsContainer}>
-          <TouchableOpacity
-            style={[styles.filterTab, activeTab === 'all' && styles.filterTabActive]}
-            onPress={() => {
-              hapticSelection();
-              setActiveTab('all');
-            }}
-            activeOpacity={0.8}
+        <View style={styles.filterTabsSection}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterTabsContainer}
+            keyboardShouldPersistTaps="handled"
           >
-            <Text style={[styles.filterTabText, activeTab === 'all' && styles.filterTabTextActive]}>
-              All Chats
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.filterTab, activeTab === 'unread' && styles.filterTabActive]}
-            onPress={() => {
-              hapticSelection();
-              setActiveTab('unread');
-            }}
-            activeOpacity={0.8}
-          >
-            <Text
-              style={[styles.filterTabText, activeTab === 'unread' && styles.filterTabTextActive]}
-            >
-              Unread
-            </Text>
-            {totalUnreadCount > 0 && (
-              <View
-                style={[
-                  styles.tabBadge,
-                  activeTab === 'unread' ? styles.tabBadgeActive : styles.tabBadgeInactive,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.tabBadgeText,
-                    activeTab === 'unread'
-                      ? styles.tabBadgeTextActive
-                      : styles.tabBadgeTextInactive,
-                  ]}
-                >
-                  {totalUnreadCount}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
-
-          {pendingRequestsCount > 0 && (
             <TouchableOpacity
-              style={[styles.filterTab, activeTab === 'requests' && styles.filterTabActive]}
+              style={[styles.filterTab, activeTab === 'all' && styles.filterTabActive]}
               onPress={() => {
                 hapticSelection();
-                setActiveTab('requests');
+                setActiveTab('all');
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.filterTabText, activeTab === 'all' && styles.filterTabTextActive]}>
+                All Chats
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.filterTab, activeTab === 'unread' && styles.filterTabActive]}
+              onPress={() => {
+                hapticSelection();
+                setActiveTab('unread');
               }}
               activeOpacity={0.8}
             >
               <Text
-                style={[
-                  styles.filterTabText,
-                  activeTab === 'requests' && styles.filterTabTextActive,
-                ]}
+                style={[styles.filterTabText, activeTab === 'unread' && styles.filterTabTextActive]}
               >
-                Requests
+                Unread
               </Text>
-              <View style={styles.tabBadgeActive}>
-                <Text style={styles.tabBadgeTextActive}>{pendingRequestsCount}</Text>
-              </View>
+              {totalUnreadCount > 0 && (
+                <View
+                  style={[
+                    styles.tabBadge,
+                    activeTab === 'unread' ? styles.tabBadgeActive : styles.tabBadgeInactive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.tabBadgeText,
+                      activeTab === 'unread'
+                        ? styles.tabBadgeTextActive
+                        : styles.tabBadgeTextInactive,
+                    ]}
+                  >
+                    {totalUnreadCount}
+                  </Text>
+                </View>
+              )}
             </TouchableOpacity>
-          )}
+
+            <TouchableOpacity
+              style={[styles.filterTab, activeTab === 'groups' && styles.filterTabActive]}
+              onPress={() => {
+                hapticSelection();
+                setActiveTab('groups');
+              }}
+              activeOpacity={0.8}
+            >
+              <Text
+                style={[styles.filterTabText, activeTab === 'groups' && styles.filterTabTextActive]}
+              >
+                Groups
+              </Text>
+              {groupChatsCount > 0 && (
+                <View
+                  style={[
+                    styles.tabBadge,
+                    activeTab === 'groups' ? styles.tabBadgeActive : styles.tabBadgeInactive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.tabBadgeText,
+                      activeTab === 'groups'
+                        ? styles.tabBadgeTextActive
+                        : styles.tabBadgeTextInactive,
+                    ]}
+                  >
+                    {groupChatsCount}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.filterTab, activeTab === 'blocked' && styles.filterTabActive]}
+              onPress={() => {
+                hapticSelection();
+                setActiveTab('blocked');
+              }}
+              activeOpacity={0.8}
+            >
+              <Text
+                style={[styles.filterTabText, activeTab === 'blocked' && styles.filterTabTextActive]}
+              >
+                Blocked
+              </Text>
+              {blockedChatsCount > 0 && (
+                <View
+                  style={[
+                    styles.tabBadge,
+                    activeTab === 'blocked' ? styles.tabBadgeActive : styles.tabBadgeInactive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.tabBadgeText,
+                      activeTab === 'blocked'
+                        ? styles.tabBadgeTextActive
+                        : styles.tabBadgeTextInactive,
+                    ]}
+                  >
+                    {blockedChatsCount}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {pendingRequestsCount > 0 && (
+              <TouchableOpacity
+                style={[styles.filterTab, activeTab === 'requests' && styles.filterTabActive]}
+                onPress={() => {
+                  hapticSelection();
+                  setActiveTab('requests');
+                }}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[
+                    styles.filterTabText,
+                    activeTab === 'requests' && styles.filterTabTextActive,
+                  ]}
+                >
+                  Requests
+                </Text>
+                <View style={styles.tabBadgeActive}>
+                  <Text style={styles.tabBadgeTextActive}>{pendingRequestsCount}</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
         </View>
       )}
 
@@ -959,19 +1123,43 @@ export default function ChatListScreen() {
                   ? 'No matching conversations'
                   : activeTab === 'unread'
                   ? 'No unread messages'
+                  : activeTab === 'groups'
+                  ? 'No group chats yet'
+                  : activeTab === 'blocked'
+                  ? 'No blocked chats'
                   : activeTab === 'requests'
                   ? 'No message requests'
                   : 'Start a Conversation'}
               </Text>
               <Text style={styles.emptySubtitle}>
                 {searchQuery
-                  ? 'Check the spelling or try searching for another creator'
+                  ? 'Check the spelling or try searching for another creator or group'
                   : activeTab === 'unread'
                   ? 'You are all caught up! When new messages arrive, they appear here.'
+                  : activeTab === 'groups'
+                  ? 'Create a group to chat with multiple approved contacts together in real time.'
+                  : activeTab === 'blocked'
+                  ? 'Users you block will appear here. They cannot message or call you.'
                   : activeTab === 'requests'
                   ? 'You have no pending chat requests from new users.'
                   : 'Visit any creator’s channel and tap Chat to message them directly.'}
               </Text>
+              {!searchQuery && activeTab === 'groups' && (
+                <TouchableOpacity
+                  style={styles.browseButton}
+                  onPress={() => {
+                    if (!isAuthenticated) {
+                      setAuthModalVisible(true);
+                      return;
+                    }
+                    setCreateGroupModalVisible(true);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="people" size={17} color={Colors.white} style={{ marginRight: 6 }} />
+                  <Text style={styles.browseButtonText}>Create Group</Text>
+                </TouchableOpacity>
+              )}
               {!searchQuery && activeTab === 'all' && (
                 <TouchableOpacity
                   style={styles.browseButton}
@@ -1002,6 +1190,26 @@ export default function ChatListScreen() {
         onStoryDeleted={handleStoryDeleted}
         onStoryViewed={handleStoryViewed}
         onAddStory={pickAndUploadStory}
+      />
+
+      {/* Create Group Modal */}
+      <CreateGroupModal
+        visible={createGroupModalVisible}
+        onClose={() => setCreateGroupModalVisible(false)}
+        onGroupCreated={(newGroup) => {
+          setCreateGroupModalVisible(false);
+          loadConversations(true);
+          if (newGroup?._id) {
+            router.push({
+              pathname: `/chat/${newGroup._id}`,
+              params: {
+                name: newGroup.groupName || 'Group Chat',
+                avatar: newGroup.groupAvatar || '',
+                isGroup: '1',
+              },
+            });
+          }
+        }}
       />
 
       <AuthModal
@@ -1212,6 +1420,9 @@ const styles = StyleSheet.create({
   },
 
   // Filter Tabs
+  filterTabsSection: {
+    backgroundColor: Colors.white,
+  },
   filterTabsContainer: {
     flexDirection: 'row',
     paddingHorizontal: 16,
@@ -1299,6 +1510,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#E5E7EB',
     borderWidth: 1,
     borderColor: '#EEEEEE',
+  },
+  groupAvatarFallback: {
+    backgroundColor: '#FF6B00',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  groupBadgeInline: {
+    marginRight: 5,
+    backgroundColor: '#FFF4EB',
+    padding: 3,
+    borderRadius: 6,
   },
   onlineBadge: {
     position: 'absolute',
