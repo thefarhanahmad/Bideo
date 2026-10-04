@@ -23,6 +23,7 @@ const {
   updateConversationTheme,
 } = require('../controllers/chat');
 const { protect } = require('../middlewares/auth');
+const { chatMessageLimiter } = require('../middlewares/security');
 const upload = require('../middlewares/multer');
 
 // All chat routes require authentication
@@ -57,7 +58,7 @@ router.post('/conversations/:id/decline', declineChat);
 router.post('/conversations/:id/block', blockUser);
 router.post('/conversations/:id/unblock', unblockUser);
 
-router.post('/messages', sendMessage);
+router.post('/messages', chatMessageLimiter, sendMessage);
 router.post('/messages/:id/unsend', unsendMessage);
 router.post('/messages/:id/delete', deleteMessageForMe);
 

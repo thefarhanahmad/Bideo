@@ -47,8 +47,11 @@ function getClientIdentifier(req) {
 /**
  * General API Rate Limiter
  * Allows up to 10,000 requests per 15-minute window per client session (~667 req/min).
- * Generous enough for real-time chat, story trays, notifications, and fast short video scrolling
- * while still firmly mitigating automated DDoS, scraper bots, and server resource exhaustion.
+ * Generous enough for dynamic app browsing (feed scrolling, shorts, comments)
+ * while mitigating automated DDoS, scraper bots, and server resource exhaustion.
+ *
+ * NOTE: Chat endpoints (/api/chat) are 100% EXEMPT from this limiter so users can
+ * communicate unlimitedly anytime without ever hitting a "Too many requests" wall!
  */
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -57,10 +60,41 @@ const apiLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: getClientIdentifier,
   validate: false,
-  skip: (req) => req.method === 'OPTIONS',
+  skip: (req) => {
+    // 1. Always skip CORS preflight requests
+    if (req.method === 'OPTIONS') return true;
+
+    // 2. Chat is 100% UNLIMITED: exempt all chat endpoints from general rate limiting
+    // All /api/chat endpoints are already strictly protected by the 'protect' JWT authentication middleware
+    const url = req.originalUrl || req.url || '';
+    if (url.startsWith('/api/chat')) {
+      return true;
+    }
+
+    return false;
+  },
   message: {
     success: false,
     message: 'Too many requests from this IP. Please slow down and try again shortly.',
+  },
+});
+
+/**
+ * Chat Message Flood Protection
+ * Protects message dispatch from automated bot flooding (e.g. scripts sending thousands of POST requests per second),
+ * while giving human users practically unlimited high-speed chatting (up to 180 messages per minute per session).
+ */
+const chatMessageLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 180,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: getClientIdentifier,
+  validate: false,
+  skip: (req) => req.method === 'OPTIONS',
+  message: {
+    success: false,
+    message: 'You are sending messages too quickly. Please pause for a moment.',
   },
 });
 
@@ -139,5 +173,6 @@ const noSqlSanitizer = (req, res, next) => {
 module.exports = {
   apiLimiter,
   authLimiter,
+  chatMessageLimiter,
   noSqlSanitizer,
 };
