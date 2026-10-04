@@ -163,7 +163,7 @@ exports.createStory = async (req, res, next) => {
     if (!req.file) {
       return res.status(400).json({
         success: false,
-        message: 'Please select an image to upload as your story.',
+        message: 'Please select an image or video to upload as your story.',
       });
     }
 

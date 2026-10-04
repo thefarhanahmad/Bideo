@@ -322,9 +322,11 @@ export const storyService = {
   },
   createStory: async (formData: FormData) => {
     const response = await api.post('/stories', formData, {
+      timeout: 180000, // 3 minutes timeout for story video upload
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+      transformRequest: (data) => data,
     });
     return response.data?.data;
   },

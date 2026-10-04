@@ -398,20 +398,38 @@ export default function ChatListScreen() {
         }
       }
 
-      const uri = asset.uri;
-      const filename =
-        uri.split('/').pop() || (isVideo ? `story_${Date.now()}.mp4` : `story_${Date.now()}.jpg`);
-      const match = /\.(\w+)$/.exec(filename);
-      const ext = match?.[1] ? match[1].toLowerCase() : (isVideo ? 'mp4' : 'jpeg');
-      let mimeType = isVideo ? 'video/mp4' : (ext === 'png' ? 'image/png' : 'image/jpeg');
-      if (asset.mimeType) mimeType = asset.mimeType;
-
       setUploadingStory(true);
+
+      let finalUploadUri = asset.uri;
+      if (isVideo) {
+        try {
+          const { Video } = require('react-native-compressor');
+          const compressed = await Video.compress(
+            asset.uri,
+            {
+              compressionMethod: 'manual',
+              maxSize: 1080,
+              bitrate: 2000000,
+              minimumFileSizeForCompress: 0,
+            }
+          );
+          if (compressed) {
+            finalUploadUri = compressed;
+          }
+        } catch (compErr) {
+          console.warn('Video compression skipped/fallback to raw:', compErr);
+        }
+      }
+
+      const safeFilename = isVideo ? `story_${Date.now()}.mp4` : `story_${Date.now()}.jpg`;
+      const mimeType = isVideo ? 'video/mp4' : (asset.mimeType || 'image/jpeg');
+
       const formData = new FormData();
+      // Append with key 'video' for videos and 'image' for images
       // @ts-ignore
-      formData.append('image', {
-        uri,
-        name: filename,
+      formData.append(isVideo ? 'video' : 'image', {
+        uri: finalUploadUri,
+        name: safeFilename,
         type: mimeType,
       });
       if (isVideo && durationSec) {
@@ -424,10 +442,11 @@ export default function ChatListScreen() {
       showAlert('Story Shared', isVideo ? 'Your video story is live for 24 hours!' : 'Your story is live for 24 hours!');
     } catch (err: any) {
       console.error('Failed to upload story:', err);
-      showAlert(
-        'Upload Failed',
-        err?.response?.data?.message || 'Could not upload your story. Please try again.'
-      );
+      const serverMsg = err?.response?.data?.message;
+      const isTimeout = err?.code === 'ECONNABORTED' || err?.message?.includes('timeout');
+      const isNetwork = err?.message?.includes('Network Error');
+      const errorMsg = serverMsg || (isTimeout ? 'Upload timed out. Please check your internet connection and try again.' : isNetwork ? 'Network error. Please check your connection and try again.' : 'Could not upload your story. Please try again.');
+      showAlert('Upload Failed', errorMsg);
     } finally {
       setUploadingStory(false);
     }
@@ -436,6 +455,11 @@ export default function ChatListScreen() {
   const pickAndUploadStory = useCallback(async () => {
     if (!isAuthenticated) {
       setAuthModalVisible(true);
+      return;
+    }
+
+    if (uploadingStory) {
+      showAlert('Uploading Story', 'Your story is currently uploading. Please wait a moment.');
       return;
     }
 
@@ -451,7 +475,7 @@ export default function ChatListScreen() {
 
     hapticSelection();
     setStoryPickerModalVisible(true);
-  }, [isAuthenticated, storyTray, isGroupSelf]);
+  }, [isAuthenticated, storyTray, isGroupSelf, uploadingStory]);
 
   const handlePressStoryGroup = useCallback(
     (group: any) => {
