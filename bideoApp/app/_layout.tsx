@@ -161,6 +161,7 @@ function DeletionGuard({ children }: { children: React.ReactNode }) {
 function NotificationManager({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { isAuthenticated } = useSelector((state: RootState) => state.auth);
+  const lastSyncTimeRef = useRef(0);
 
   useEffect(() => {
     const cleanup = setupNotificationListeners(router);
@@ -172,7 +173,25 @@ function NotificationManager({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isAuthenticated) {
       registerForPushNotificationsAsync();
+      lastSyncTimeRef.current = Date.now();
     }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active' && isAuthenticated) {
+        // Re-verify push registration at most once every 6 hours on foreground resume
+        const now = Date.now();
+        if (now - lastSyncTimeRef.current > 6 * 60 * 60 * 1000) {
+          lastSyncTimeRef.current = now;
+          registerForPushNotificationsAsync();
+        }
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
   }, [isAuthenticated]);
 
   return <>{children}</>;

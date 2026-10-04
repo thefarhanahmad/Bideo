@@ -15,7 +15,16 @@ const fileFilter = (req, file, cb) => {
     } else {
       cb(new Error('Please upload a valid video file (MP4, MOV, MKV, WEBM, AVI)'), false);
     }
-  } else if (file.fieldname === 'thumbnail' || file.fieldname === 'image') {
+  } else if (file.fieldname === 'media' || file.fieldname === 'storyMedia' || file.fieldname === 'image') {
+    if (
+      (file.mimetype.startsWith('image/') && ALLOWED_IMAGE_EXTENSIONS.has(ext)) ||
+      (file.mimetype.startsWith('video/') && ALLOWED_VIDEO_EXTENSIONS.has(ext))
+    ) {
+      cb(null, true);
+    } else {
+      cb(new Error('Please upload a valid image (JPG, PNG, WEBP) or video (MP4, MOV, WEBM)'), false);
+    }
+  } else if (file.fieldname === 'thumbnail') {
     if (file.mimetype.startsWith('image/') && ALLOWED_IMAGE_EXTENSIONS.has(ext)) {
       cb(null, true);
     } else {

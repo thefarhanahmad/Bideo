@@ -4,6 +4,7 @@ const VideoBoost = require('../models/VideoBoost');
 const CoinTransaction = require('../models/CoinTransaction');
 const Notification = require('../models/Notification');
 const { processBoostQueue } = require('../utils/boostQueueScheduler');
+const { sendPushForEvent } = require('../utils/pushNotification');
 
 const DAILY_MAX_ADS = 16;
 const SESSION_BURST_MAX = 3;
@@ -618,6 +619,14 @@ exports.buyVerifiedBadge = async (req, res) => {
       recipient: updatedUser._id,
       actor: updatedUser._id,
       type: 'system',
+      message,
+    }).catch(() => {});
+
+    sendPushForEvent({
+      recipient: updatedUser._id,
+      actor: updatedUser._id,
+      type: 'system',
+      title: 'Verified Badge Active! 🛡️',
       message,
     }).catch(() => {});
 

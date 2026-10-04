@@ -340,6 +340,7 @@ export default function ChatRoomScreen() {
 
   // Accept message request (Continue chat)
   const handleAccept = async () => {
+    setMenuVisible(false);
     try {
       hapticSelection();
       const updated = await chatService.acceptChat(conversationId);
@@ -347,6 +348,9 @@ export default function ChatRoomScreen() {
         ...prev,
         ...updated,
         status: 'accepted',
+        blockedBy: null,
+        isBlockedByMe: false,
+        isBlockedByOther: false,
       }));
       showAlert('Request Accepted', 'You can now chat freely with this user.');
     } catch (err: any) {
@@ -354,15 +358,16 @@ export default function ChatRoomScreen() {
     }
   };
 
-  // Decline message request
+  // Decline / Dismiss message request or conversation
   const handleDecline = () => {
+    setMenuVisible(false);
     Alert.alert(
-      'Decline Request',
-      'Are you sure you want to decline this chat request? It will be removed from your chat list.',
+      'Dismiss Chat',
+      'Are you sure you want to dismiss this chat? It will be removed from your active conversations list.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Decline',
+          text: 'Dismiss',
           style: 'destructive',
           onPress: async () => {
             try {
@@ -370,7 +375,7 @@ export default function ChatRoomScreen() {
               await chatService.declineChat(conversationId);
               router.back();
             } catch (err: any) {
-              showAlert('Error', err?.response?.data?.message || 'Failed to decline chat');
+              showAlert('Error', err?.response?.data?.message || 'Failed to dismiss chat');
             }
           },
         },
@@ -507,7 +512,7 @@ export default function ChatRoomScreen() {
   const isInitiator = conversation?.initiator?.toString() === currentUserId;
   const isPendingForMe = conversation?.status === 'pending' && !isInitiator;
   const isBlocked = conversation?.status === 'blocked';
-  const isBlockedByMe = isBlocked && conversation?.blockedBy?.toString() === currentUserId;
+  const isBlockedByMe = isBlocked && Boolean(conversation?.isBlockedByMe || (conversation?.blockedBy ? conversation.blockedBy.toString() === currentUserId : true));
   const isBlockedByOther = isBlocked && !isBlockedByMe;
 
   const formatDuration = (seconds: number) => {
@@ -1054,6 +1059,7 @@ export default function ChatRoomScreen() {
           onPress={() => setMenuVisible(false)}
         >
           <View style={styles.menuDropdown}>
+            {/* View Channel */}
             <TouchableOpacity
               style={styles.menuOption}
               onPress={() => {
@@ -1065,17 +1071,37 @@ export default function ChatRoomScreen() {
               <Text style={styles.menuOptionText}>View Channel</Text>
             </TouchableOpacity>
 
+            {/* Block / Unblock Option */}
             {isBlockedByMe ? (
               <TouchableOpacity style={styles.menuOption} onPress={handleUnblock}>
                 <Ionicons name="checkmark-circle-outline" size={18} color={Colors.primary} style={{ marginRight: 10 }} />
-                <Text style={[styles.menuOptionText, { color: Colors.primary }]}>Unblock User</Text>
+                <Text style={[styles.menuOptionText, { color: Colors.primary, fontWeight: '600' }]}>Unblock User</Text>
               </TouchableOpacity>
-            ) : (
+            ) : !isBlocked ? (
               <TouchableOpacity style={styles.menuOption} onPress={handleBlock}>
                 <Ionicons name="ban-outline" size={18} color="#EF4444" style={{ marginRight: 10 }} />
                 <Text style={[styles.menuOptionText, { color: '#EF4444' }]}>Block User</Text>
               </TouchableOpacity>
-            )}
+            ) : null}
+
+            {/* Continue Chat (Accept) if pending, or Dismiss Option */}
+            {isPendingForMe ? (
+              <>
+                <TouchableOpacity style={styles.menuOption} onPress={handleAccept}>
+                  <Ionicons name="chatbubbles-outline" size={18} color={Colors.primary} style={{ marginRight: 10 }} />
+                  <Text style={[styles.menuOptionText, { color: Colors.primary, fontWeight: '600' }]}>Continue Chat</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.menuOption} onPress={handleDecline}>
+                  <Ionicons name="close-circle-outline" size={18} color="#F97316" style={{ marginRight: 10 }} />
+                  <Text style={[styles.menuOptionText, { color: '#F97316' }]}>Dismiss Chat</Text>
+                </TouchableOpacity>
+              </>
+            ) : !isBlocked ? (
+              <TouchableOpacity style={styles.menuOption} onPress={handleDecline}>
+                <Ionicons name="trash-outline" size={18} color="#EF4444" style={{ marginRight: 10 }} />
+                <Text style={[styles.menuOptionText, { color: '#EF4444' }]}>Dismiss Chat</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         </TouchableOpacity>
       </Modal>

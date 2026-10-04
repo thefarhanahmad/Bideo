@@ -518,6 +518,12 @@ exports.acceptChat = async (req, res, next) => {
 
     conversation.status = 'accepted';
     conversation.blockedBy = null;
+    // Remove from deletedFor if previously declined or dismissed
+    if (conversation.deletedFor && conversation.deletedFor.length > 0) {
+      conversation.deletedFor = conversation.deletedFor.filter(
+        (id) => id && id.toString() !== currentUserId.toString()
+      );
+    }
     await conversation.save();
 
     const io = getIO();
@@ -525,6 +531,15 @@ exports.acceptChat = async (req, res, next) => {
       io.to(`conversation:${conversationId}`).emit('conversation_status_changed', {
         conversationId,
         status: 'accepted',
+      });
+      conversation.participants.forEach((p) => {
+        const pId = (p?._id || p)?.toString();
+        if (pId) {
+          io.to(`user:${pId}`).emit('conversation_status_changed', {
+            conversationId,
+            status: 'accepted',
+          });
+        }
       });
     }
 
@@ -568,6 +583,16 @@ exports.blockUser = async (req, res, next) => {
         status: 'blocked',
         blockedBy: currentUserId,
       });
+      conversation.participants.forEach((p) => {
+        const pId = (p?._id || p)?.toString();
+        if (pId) {
+          io.to(`user:${pId}`).emit('conversation_status_changed', {
+            conversationId,
+            status: 'blocked',
+            blockedBy: currentUserId,
+          });
+        }
+      });
     }
 
     res.status(200).json({
@@ -605,6 +630,12 @@ exports.unblockUser = async (req, res, next) => {
 
     conversation.status = 'accepted';
     conversation.blockedBy = null;
+    // Remove from deletedFor if previously declined or dismissed
+    if (conversation.deletedFor && conversation.deletedFor.length > 0) {
+      conversation.deletedFor = conversation.deletedFor.filter(
+        (id) => id && id.toString() !== currentUserId.toString()
+      );
+    }
     await conversation.save();
 
     const io = getIO();
@@ -612,6 +643,15 @@ exports.unblockUser = async (req, res, next) => {
       io.to(`conversation:${conversationId}`).emit('conversation_status_changed', {
         conversationId,
         status: 'accepted',
+      });
+      conversation.participants.forEach((p) => {
+        const pId = (p?._id || p)?.toString();
+        if (pId) {
+          io.to(`user:${pId}`).emit('conversation_status_changed', {
+            conversationId,
+            status: 'accepted',
+          });
+        }
       });
     }
 
@@ -703,6 +743,15 @@ exports.declineChat = async (req, res, next) => {
     }
 
     await conversation.save();
+
+    const io = getIO();
+    if (io) {
+      io.to(`conversation:${conversationId}`).emit('conversation_status_changed', {
+        conversationId,
+        status: 'declined',
+        declinedBy: currentUserId,
+      });
+    }
 
     res.status(200).json({
       success: true,

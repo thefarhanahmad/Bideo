@@ -167,20 +167,34 @@ exports.createStory = async (req, res, next) => {
       });
     }
 
-    // 2. Validate that uploaded file is an image
-    if (!req.file.mimetype || !req.file.mimetype.startsWith('image/')) {
+    // 2. Validate that uploaded file is an image or video
+    const isImage = req.file.mimetype && req.file.mimetype.startsWith('image/');
+    const isVideo = req.file.mimetype && req.file.mimetype.startsWith('video/');
+
+    if (!isImage && !isVideo) {
       return res.status(400).json({
         success: false,
-        message: 'Only image files (JPG, PNG, WEBP) are allowed for stories.',
+        message: 'Only image files (JPG, PNG, WEBP) or short videos (MP4, MOV, WEBM) are allowed for stories.',
       });
     }
 
+    // Enforce 15-second max duration limit on video stories
+    if (isVideo && req.body.duration) {
+      const dur = parseFloat(req.body.duration);
+      if (dur > 16.5) {
+        return res.status(400).json({
+          success: false,
+          message: 'Story videos cannot exceed 15 seconds.',
+        });
+      }
+    }
+
     // 3. Save uploaded file to Cloudflare R2 / local uploads
-    const result = await saveLocalFile(req, req.file, 'image');
+    const result = await saveLocalFile(req, req.file, isVideo ? 'video' : 'image');
     if (!result || !result.url) {
       return res.status(500).json({
         success: false,
-        message: 'Failed to save story image. Please try again.',
+        message: 'Failed to save story media. Please try again.',
       });
     }
     savedFileUrl = result.url;
@@ -190,7 +204,7 @@ exports.createStory = async (req, res, next) => {
     const story = await Story.create({
       user: currentUserId,
       mediaUrl: result.url,
-      mediaType: 'image',
+      mediaType: isVideo ? 'video' : 'image',
       caption: (req.body.caption || '').trim().slice(0, 300),
       expiresAt,
     });

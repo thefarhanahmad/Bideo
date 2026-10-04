@@ -910,11 +910,12 @@ exports.bulkReviewMonetizationApplications = async (req, res, next) => {
     if (status === 'approved') {
       for (const app of appsToUpdate) {
         if (app.user) {
-          Notification.create({
+          notifyAndPush({
             recipient: app.user,
             actor: req.user.id,
             type: 'system',
-            message: 'Congratulations! Your channel monetization application has been approved. You are now earning from video views! 🎉',
+            title: 'Monetization Approved! 🎉',
+            message: 'Congratulations! Your channel monetization application has been approved. You are now earning from video views!',
           }).catch(() => {});
         }
       }

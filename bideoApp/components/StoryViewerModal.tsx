@@ -20,6 +20,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Colors from '../constants/Colors';
@@ -29,8 +30,89 @@ import { hapticLight, hapticMedium } from '../utils/haptics';
 import api, { resolveMediaUrl, chatService, storyService } from '../services/api';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const STORY_DURATION = 5000; // 5 seconds per story
+const STORY_DURATION = 5000; // 5 seconds per photo story
 const FALLBACK_AVATAR = 'https://via.placeholder.com/100x100.png?text=User';
+
+interface StoryVideoItemProps {
+  uri: string;
+  isPaused: boolean;
+  onVideoEnd: () => void;
+  onDurationDiscovered?: (durMs: number) => void;
+  onError?: () => void;
+}
+
+function StoryVideoItem({
+  uri,
+  isPaused,
+  onVideoEnd,
+  onDurationDiscovered,
+  onError,
+}: StoryVideoItemProps) {
+  const player = useVideoPlayer(uri, (p) => {
+    p.loop = false;
+    p.play();
+  });
+
+  const hasNotifiedDuration = useRef(false);
+  const endedCalledRef = useRef(false);
+
+  useEffect(() => {
+    if (!player) return;
+    try {
+      if (isPaused) {
+        player.pause();
+      } else {
+        player.play();
+      }
+    } catch {}
+  }, [player, isPaused]);
+
+  useEffect(() => {
+    if (!player) return;
+
+    const interval = setInterval(() => {
+      try {
+        if (!hasNotifiedDuration.current && player.duration && player.duration > 0) {
+          hasNotifiedDuration.current = true;
+          const durMs = Math.min(Math.round(player.duration * 1000), 15000);
+          if (onDurationDiscovered && durMs > 1000) {
+            onDurationDiscovered(durMs);
+          }
+        }
+
+        if ((player as any)?.status === 'error') {
+          clearInterval(interval);
+          onError?.();
+          return;
+        }
+
+        if (
+          !endedCalledRef.current &&
+          player.duration &&
+          player.duration > 0 &&
+          (player.currentTime >= Math.min(player.duration - 0.25, 15) || (!player.playing && player.currentTime > 0.8))
+        ) {
+          endedCalledRef.current = true;
+          clearInterval(interval);
+          onVideoEnd();
+        }
+      } catch {}
+    }, 200);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [player, onVideoEnd, onDurationDiscovered, onError]);
+
+  return (
+    <VideoView
+      player={player}
+      style={styles.storyImage}
+      contentFit="contain"
+      nativeControls={false}
+    />
+  );
+}
 
 interface StoryViewerModalProps {
   visible: boolean;
@@ -104,6 +186,15 @@ export default function StoryViewerModal({
   const progressAnim = useRef(new Animated.Value(0)).current;
   const currentProgressVal = useRef(0);
   const animRef = useRef<Animated.CompositeAnimation | null>(null);
+  const wasVisibleRef = useRef(false);
+  const currentStoryDurationRef = useRef(STORY_DURATION);
+  const lastAdvanceTimeRef = useRef(0);
+  const userIndexRef = useRef(userIndex);
+  userIndexRef.current = userIndex;
+  const storyIndexRef = useRef(storyIndex);
+  storyIndexRef.current = storyIndex;
+  const validGroupsRef = useRef(validGroups);
+  validGroupsRef.current = validGroups;
 
   // Auto-close cleanly if no active story groups remain (e.g. after deletion or expiration)
   useEffect(() => {
@@ -112,27 +203,32 @@ export default function StoryViewerModal({
     }
   }, [visible, validGroups.length, onClose]);
 
-  // Sync initial user index when modal opens
+  // Sync initial user index ONLY when modal first becomes visible
   useEffect(() => {
-    if (visible && validGroups.length > 0) {
-      const targetUser = storyGroups[initialUserIndex]?.user?._id;
-      const mappedIdx = validGroups.findIndex((g) => g.user?._id === targetUser);
-      const safeIdx = mappedIdx !== -1 ? mappedIdx : 0;
-      setUserIndex(safeIdx);
+    if (visible && !wasVisibleRef.current) {
+      wasVisibleRef.current = true;
+      if (validGroups.length > 0) {
+        const targetUser = storyGroups[initialUserIndex]?.user?._id;
+        const mappedIdx = validGroups.findIndex((g) => g.user?._id === targetUser);
+        const safeIdx = mappedIdx !== -1 ? mappedIdx : 0;
+        setUserIndex(safeIdx);
 
-      // Start from first unviewed story for followed users, or 0 for own
-      const group = validGroups[safeIdx];
-      const isGroupOwn = Boolean(
-        group?.isSelf ||
-        group?.isOwn ||
-        (currentUserId && group?.user?._id?.toString() === currentUserId)
-      );
-      if (group && !isGroupOwn) {
-        const firstUnviewed = group.stories.findIndex((s: any) => !s.isViewed);
-        setStoryIndex(firstUnviewed !== -1 ? firstUnviewed : 0);
-      } else {
-        setStoryIndex(0);
+        // Start from first unviewed story for followed users, or 0 for own
+        const group = validGroups[safeIdx];
+        const isGroupOwn = Boolean(
+          group?.isSelf ||
+          group?.isOwn ||
+          (currentUserId && group?.user?._id?.toString() === currentUserId)
+        );
+        if (group && !isGroupOwn) {
+          const firstUnviewed = group.stories.findIndex((s: any) => !s.isViewed);
+          setStoryIndex(firstUnviewed !== -1 ? firstUnviewed : 0);
+        } else {
+          setStoryIndex(0);
+        }
       }
+    } else if (!visible) {
+      wasVisibleRef.current = false;
     }
   }, [visible, initialUserIndex, validGroups, storyGroups, currentUserId]);
 
@@ -175,7 +271,7 @@ export default function StoryViewerModal({
     } finally {
       setSendingReply(false);
       setIsPaused(false);
-      const remainingTime = Math.max(500, (1 - currentProgressVal.current) * STORY_DURATION);
+      const remainingTime = Math.max(500, (1 - currentProgressVal.current) * currentStoryDurationRef.current);
       startProgressAnimation(remainingTime);
     }
   };
@@ -202,7 +298,7 @@ export default function StoryViewerModal({
   const handleCloseViewers = () => {
     setViewersModalVisible(false);
     setIsPaused(false);
-    const remainingTime = Math.max(500, (1 - currentProgressVal.current) * STORY_DURATION);
+    const remainingTime = Math.max(500, (1 - currentProgressVal.current) * currentStoryDurationRef.current);
     startProgressAnimation(remainingTime);
   };
 
@@ -248,33 +344,66 @@ export default function StoryViewerModal({
   }, [isOwnStory, otherUser?._id, onClose, router]);
 
   const handleNextStory = useCallback(() => {
-    if (safeStoryIndex < currentStories.length - 1) {
-      setStoryIndex(safeStoryIndex + 1);
-    } else if (safeUserIndex < validGroups.length - 1) {
-      setUserIndex(safeUserIndex + 1);
+    const now = Date.now();
+    if (now - lastAdvanceTimeRef.current < 400) {
+      return;
+    }
+    lastAdvanceTimeRef.current = now;
+
+    const curUIdx = userIndexRef.current;
+    const curSIdx = storyIndexRef.current;
+    const groups = validGroupsRef.current;
+    const curStories = groups[curUIdx]?.stories || [];
+
+    if (curSIdx < curStories.length - 1) {
+      const nextIdx = curSIdx + 1;
+      storyIndexRef.current = nextIdx;
+      setStoryIndex(nextIdx);
+    } else if (curUIdx < groups.length - 1) {
+      const nextUserIdx = curUIdx + 1;
+      userIndexRef.current = nextUserIdx;
+      storyIndexRef.current = 0;
+      setUserIndex(nextUserIdx);
       setStoryIndex(0);
     } else {
       onClose();
     }
-  }, [safeStoryIndex, currentStories.length, safeUserIndex, validGroups.length, onClose]);
+  }, [onClose]);
 
   const handlePrevStory = useCallback(() => {
-    if (safeStoryIndex > 0) {
-      setStoryIndex(safeStoryIndex - 1);
-    } else if (safeUserIndex > 0) {
-      const prevUserStories = validGroups[safeUserIndex - 1]?.stories || [];
-      setUserIndex(safeUserIndex - 1);
-      setStoryIndex(Math.max(0, prevUserStories.length - 1));
+    const now = Date.now();
+    if (now - lastAdvanceTimeRef.current < 400) {
+      return;
     }
-  }, [safeStoryIndex, safeUserIndex, validGroups]);
+    lastAdvanceTimeRef.current = now;
+
+    const curUIdx = userIndexRef.current;
+    const curSIdx = storyIndexRef.current;
+    const groups = validGroupsRef.current;
+
+    if (curSIdx > 0) {
+      const prevIdx = curSIdx - 1;
+      storyIndexRef.current = prevIdx;
+      setStoryIndex(prevIdx);
+    } else if (curUIdx > 0) {
+      const prevUserIdx = curUIdx - 1;
+      const prevUserStories = groups[prevUserIdx]?.stories || [];
+      const prevStoryIdx = Math.max(0, prevUserStories.length - 1);
+      userIndexRef.current = prevUserIdx;
+      storyIndexRef.current = prevStoryIdx;
+      setUserIndex(prevUserIdx);
+      setStoryIndex(prevStoryIdx);
+    }
+  }, []);
 
   // Start story progress animation
   const startProgressAnimation = useCallback(
-    (remainingDuration = STORY_DURATION) => {
+    (remainingDuration?: number) => {
+      const dur = remainingDuration !== undefined ? remainingDuration : currentStoryDurationRef.current;
       animRef.current?.stop();
       animRef.current = Animated.timing(progressAnim, {
         toValue: 1,
-        duration: remainingDuration,
+        duration: dur,
         useNativeDriver: false,
       });
 
@@ -285,6 +414,17 @@ export default function StoryViewerModal({
       });
     },
     [progressAnim, handleNextStory]
+  );
+
+  const handleVideoDurationDiscovered = useCallback(
+    (durMs: number) => {
+      if (!durMs || durMs <= 1000) return;
+      currentStoryDurationRef.current = durMs;
+      const currentVal = currentProgressVal.current;
+      const remainingTime = Math.max(500, (1 - currentVal) * durMs);
+      startProgressAnimation(remainingTime);
+    },
+    [startProgressAnimation]
   );
 
   // Restart progress when story changes
@@ -298,7 +438,9 @@ export default function StoryViewerModal({
     setIsPaused(false);
 
     markViewed(currentStory._id);
-    startProgressAnimation(STORY_DURATION);
+    const initialDur = currentStory.mediaType === 'video' ? 15000 : STORY_DURATION;
+    currentStoryDurationRef.current = initialDur;
+    startProgressAnimation(initialDur);
 
     return () => {
       animRef.current?.stop();
@@ -320,7 +462,7 @@ export default function StoryViewerModal({
     if (isInputFocused) return;
     setIsPressHolding(false);
     setIsPaused(false);
-    const remainingTime = Math.max(500, (1 - currentProgressVal.current) * STORY_DURATION);
+    const remainingTime = Math.max(500, (1 - currentProgressVal.current) * currentStoryDurationRef.current);
     startProgressAnimation(remainingTime);
   };
 
@@ -382,7 +524,7 @@ export default function StoryViewerModal({
                 } else {
                   progressAnim.setValue(0);
                   currentProgressVal.current = 0;
-                  startProgressAnimation(STORY_DURATION);
+                  startProgressAnimation(currentStoryDurationRef.current);
                 }
               }
             } catch (err: any) {
@@ -422,30 +564,47 @@ export default function StoryViewerModal({
     >
       <StatusBar barStyle="light-content" backgroundColor="#000000" translucent />
       <View style={styles.container}>
-        {/* Fullscreen Media Image */}
+        {/* Fullscreen Media Image or Video */}
         <TouchableWithoutFeedback
           onPress={handleTapScreen}
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
         >
           <View style={styles.imageContainer}>
-            <Image
-              source={{ uri: resolveMediaUrl(currentStory.mediaUrl) || currentStory.mediaUrl }}
-              style={styles.storyImage}
-              contentFit="contain"
-              onLoadEnd={() => setImageLoading(false)}
-              onError={() => {
-                setImageLoading(false);
-                setImageError(true);
-                // Gracefully advance after 1.2s so user never gets stuck
-                setTimeout(() => {
-                  handleNextStory();
-                }, 1200);
-              }}
-              transition={100}
-            />
+            {currentStory.mediaType === 'video' ? (
+              <StoryVideoItem
+                key={currentStory._id || currentStory.mediaUrl}
+                uri={resolveMediaUrl(currentStory.mediaUrl) || currentStory.mediaUrl}
+                isPaused={isPaused || isPressHolding || viewersModalVisible}
+                onVideoEnd={handleNextStory}
+                onDurationDiscovered={handleVideoDurationDiscovered}
+                onError={() => {
+                  setImageLoading(false);
+                  setImageError(true);
+                  setTimeout(() => {
+                    handleNextStory();
+                  }, 1200);
+                }}
+              />
+            ) : (
+              <Image
+                source={{ uri: resolveMediaUrl(currentStory.mediaUrl) || currentStory.mediaUrl }}
+                style={styles.storyImage}
+                contentFit="contain"
+                onLoadEnd={() => setImageLoading(false)}
+                onError={() => {
+                  setImageLoading(false);
+                  setImageError(true);
+                  // Gracefully advance after 1.2s so user never gets stuck
+                  setTimeout(() => {
+                    handleNextStory();
+                  }, 1200);
+                }}
+                transition={100}
+              />
+            )}
 
-            {imageLoading && !imageError && (
+            {imageLoading && !imageError && currentStory.mediaType !== 'video' && (
               <View style={styles.loaderContainer}>
                 <ActivityIndicator size="large" color="#FFFFFF" />
               </View>
@@ -634,7 +793,7 @@ export default function StoryViewerModal({
                         setIsPaused(false);
                         const remainingTime = Math.max(
                           500,
-                          (1 - currentProgressVal.current) * STORY_DURATION
+                          (1 - currentProgressVal.current) * currentStoryDurationRef.current
                         );
                         startProgressAnimation(remainingTime);
                       }

@@ -282,6 +282,83 @@ export default function ChatListScreen() {
     return storyTray.filter((g) => Array.isArray(g.stories) && g.stories.length > 0);
   }, [storyTray]);
 
+  const startStoryUpload = useCallback(async (mediaTypeChoice: 'image' | 'video') => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        showAlert('Permission Required', 'Please allow media library access to upload a story.');
+        return;
+      }
+
+      let res;
+      if (mediaTypeChoice === 'video') {
+        res = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+          allowsEditing: true,
+          videoMaxDuration: 15,
+          quality: 0.85,
+        });
+      } else {
+        res = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          quality: 0.85,
+        });
+      }
+
+      if (res.canceled || !res.assets || res.assets.length === 0) {
+        return;
+      }
+
+      const asset = res.assets[0];
+      const isVideo =
+        mediaTypeChoice === 'video' ||
+        asset.type === 'video' ||
+        Boolean(asset.mimeType && asset.mimeType.startsWith('video/'));
+
+      if (isVideo && asset.duration && asset.duration > 15.5) {
+        showAlert(
+          'Video Too Long',
+          'Story videos can be at most 15 seconds long. Please choose or trim a video under 15 seconds.'
+        );
+        return;
+      }
+
+      const uri = asset.uri;
+      const filename =
+        uri.split('/').pop() || (isVideo ? `story_${Date.now()}.mp4` : `story_${Date.now()}.jpg`);
+      const match = /\.(\w+)$/.exec(filename);
+      const ext = match?.[1] ? match[1].toLowerCase() : (isVideo ? 'mp4' : 'jpeg');
+      let mimeType = isVideo ? 'video/mp4' : (ext === 'png' ? 'image/png' : 'image/jpeg');
+      if (asset.mimeType) mimeType = asset.mimeType;
+
+      setUploadingStory(true);
+      const formData = new FormData();
+      // @ts-ignore
+      formData.append('image', {
+        uri,
+        name: filename,
+        type: mimeType,
+      });
+      if (isVideo && asset.duration) {
+        formData.append('duration', String(asset.duration));
+      }
+
+      await storyService.createStory(formData);
+      hapticLight();
+      await loadStoryTray();
+      showAlert('Story Shared', isVideo ? 'Your video story is live for 24 hours!' : 'Your story is live for 24 hours!');
+    } catch (err: any) {
+      console.error('Failed to upload story:', err);
+      showAlert(
+        'Upload Failed',
+        err?.response?.data?.message || 'Could not upload your story. Please try again.'
+      );
+    } finally {
+      setUploadingStory(false);
+    }
+  }, [loadStoryTray]);
+
   const pickAndUploadStory = useCallback(async () => {
     if (!isAuthenticated) {
       setAuthModalVisible(true);
@@ -293,57 +370,27 @@ export default function ChatListScreen() {
     if (activeCount >= 5) {
       showAlert(
         'Story Limit Reached',
-        'You can have up to 5 active stories at a time. Please wait for an existing story to expire after 24 hours or delete one before adding a new photo.'
+        'You can have up to 5 active stories at a time. Please wait for an existing story to expire after 24 hours or delete one before adding a new story.'
       );
       return;
     }
 
-    try {
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) {
-        showAlert('Permission Required', 'Please allow photo library access to upload a story.');
-        return;
-      }
-
-      const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 0.85,
-      });
-
-      if (res.canceled || !res.assets || res.assets.length === 0) {
-        return;
-      }
-
-      const asset = res.assets[0];
-      const uri = asset.uri;
-      const filename = uri.split('/').pop() || `story_${Date.now()}.jpg`;
-      const match = /\.(\w+)$/.exec(filename);
-      const ext = match?.[1] ? match[1].toLowerCase() : 'jpeg';
-      const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
-
-      setUploadingStory(true);
-      const formData = new FormData();
-      // @ts-ignore
-      formData.append('image', {
-        uri,
-        name: filename,
-        type: mimeType,
-      });
-
-      await storyService.createStory(formData);
-      hapticLight();
-      await loadStoryTray();
-    } catch (err: any) {
-      console.error('Failed to upload story:', err);
-      showAlert(
-        'Upload Failed',
-        err?.response?.data?.message || 'Could not upload your story. Please try again.'
-      );
-    } finally {
-      setUploadingStory(false);
-    }
-  }, [isAuthenticated, storyTray, isGroupSelf, loadStoryTray]);
+    Alert.alert(
+      'Add Story',
+      'Choose what you want to share to your story (visible for 24 hours):',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: '📷 Photo',
+          onPress: () => startStoryUpload('image'),
+        },
+        {
+          text: '🎥 Video (Max 15s)',
+          onPress: () => startStoryUpload('video'),
+        },
+      ]
+    );
+  }, [isAuthenticated, storyTray, isGroupSelf, startStoryUpload]);
 
   const handlePressStoryGroup = useCallback(
     (group: any) => {
