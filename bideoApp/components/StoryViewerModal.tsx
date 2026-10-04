@@ -70,12 +70,24 @@ function StoryVideoItem({
   useEffect(() => {
     if (!player) return;
 
+    let subscription: any = null;
+    try {
+      if (player && typeof (player as any).addListener === 'function') {
+        subscription = (player as any).addListener('playToEnd', () => {
+          if (!endedCalledRef.current) {
+            endedCalledRef.current = true;
+            onVideoEnd();
+          }
+        });
+      }
+    } catch {}
+
     const interval = setInterval(() => {
       try {
         if (!hasNotifiedDuration.current && player.duration && player.duration > 0) {
           hasNotifiedDuration.current = true;
           const durMs = Math.min(Math.round(player.duration * 1000), 15000);
-          if (onDurationDiscovered && durMs > 1000) {
+          if (onDurationDiscovered && durMs >= 500) {
             onDurationDiscovered(durMs);
           }
         }
@@ -90,17 +102,20 @@ function StoryVideoItem({
           !endedCalledRef.current &&
           player.duration &&
           player.duration > 0 &&
-          (player.currentTime >= Math.min(player.duration - 0.25, 15) || (!player.playing && player.currentTime > 0.8))
+          (player.currentTime >= Math.min(player.duration - 0.2, 15) || (!player.playing && player.currentTime > 0.5))
         ) {
           endedCalledRef.current = true;
           clearInterval(interval);
           onVideoEnd();
         }
       } catch {}
-    }, 200);
+    }, 150);
 
     return () => {
       clearInterval(interval);
+      try {
+        subscription?.remove?.();
+      } catch {}
     };
   }, [player, onVideoEnd, onDurationDiscovered, onError]);
 
@@ -418,10 +433,10 @@ export default function StoryViewerModal({
 
   const handleVideoDurationDiscovered = useCallback(
     (durMs: number) => {
-      if (!durMs || durMs <= 1000) return;
+      if (!durMs || durMs < 500) return;
       currentStoryDurationRef.current = durMs;
       const currentVal = currentProgressVal.current;
-      const remainingTime = Math.max(500, (1 - currentVal) * durMs);
+      const remainingTime = Math.max(300, (1 - currentVal) * durMs);
       startProgressAnimation(remainingTime);
     },
     [startProgressAnimation]
