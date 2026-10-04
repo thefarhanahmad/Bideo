@@ -247,7 +247,12 @@ export default function ChatListScreen() {
       }
     );
 
+    let chatViewedThrottleTimer: any = null;
     const subChatViewed = DeviceEventEmitter.addListener('chatViewed', () => {
+      if (chatViewedThrottleTimer) return;
+      chatViewedThrottleTimer = setTimeout(() => {
+        chatViewedThrottleTimer = null;
+      }, 2000);
       loadConversations(true);
       loadStoryTray();
     });

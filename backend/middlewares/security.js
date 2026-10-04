@@ -1,16 +1,63 @@
-const rateLimit = require('express-rate-limit');
+const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
+
+/**
+ * Accurately extracts the real client IP address regardless of reverse proxy or CDN layer:
+ * 1. Cloudflare header: 'cf-connecting-ip'
+ * 2. Nginx real IP header: 'x-real-ip'
+ * 3. Standard proxy header: 'x-forwarded-for' (client is the leftmost IP)
+ * 4. Express req.ip / socket remote address fallback
+ */
+function getClientIp(req) {
+  const cfIp = req.headers['cf-connecting-ip'];
+  if (cfIp && typeof cfIp === 'string') return cfIp.trim();
+
+  const xRealIp = req.headers['x-real-ip'];
+  if (xRealIp && typeof xRealIp === 'string') return xRealIp.trim();
+
+  const xForwarded = req.headers['x-forwarded-for'];
+  if (xForwarded && typeof xForwarded === 'string') {
+    return xForwarded.split(',')[0].trim();
+  }
+
+  return req.ip || req.socket?.remoteAddress || '127.0.0.1';
+}
+
+/**
+ * Generates an isolated rate-limiting key:
+ * - For authenticated requests (Bearer token), isolates the quota to the individual user session.
+ *   This ensures users on shared Wi-Fi, mobile carrier CGNAT (Jio/Airtel), or Cloudflare edge proxies
+ *   never exhaust each other's quota or get blocked while chatting or browsing!
+ * - For unauthenticated requests, standardizes and keys on the normalized client IP.
+ */
+function getClientIdentifier(req) {
+  const clientIp = getClientIp(req);
+  const normalizedIp = ipKeyGenerator ? ipKeyGenerator(clientIp) : clientIp;
+
+  const authHeader = req.headers.authorization;
+  if (authHeader && typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7).trim();
+    if (token.length > 10) {
+      return `auth_${token.slice(-16)}_${normalizedIp}`;
+    }
+  }
+
+  return normalizedIp;
+}
 
 /**
  * General API Rate Limiter
- * Allows up to 1,500 requests per 15-minute window per IP (~100 req/min).
- * Generous enough for dynamic app browsing (feed scrolling, shorts, comments)
- * while mitigating automated DDoS, scraper bots, and resource exhaustion.
+ * Allows up to 10,000 requests per 15-minute window per client session (~667 req/min).
+ * Generous enough for real-time chat, story trays, notifications, and fast short video scrolling
+ * while still firmly mitigating automated DDoS, scraper bots, and server resource exhaustion.
  */
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 1500,
+  max: 10000,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: getClientIdentifier,
+  validate: false,
+  skip: (req) => req.method === 'OPTIONS',
   message: {
     success: false,
     message: 'Too many requests from this IP. Please slow down and try again shortly.',
@@ -19,15 +66,21 @@ const apiLimiter = rateLimit({
 
 /**
  * Strict Rate Limiter for Authentication and Sensitive Endpoints
- * Limits login, registration, and credential attempts to 25 per 15 minutes per IP.
+ * Limits login, registration, and credential attempts to 50 per 15 minutes per IP.
  * Defends against credential stuffing, password brute-forcing, and account enumeration.
  */
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 25,
+  max: 50,
   skipSuccessfulRequests: true,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => {
+    const ip = getClientIp(req);
+    return ipKeyGenerator ? ipKeyGenerator(ip) : ip;
+  },
+  validate: false,
+  skip: (req) => req.method === 'OPTIONS',
   message: {
     success: false,
     message: 'Too many failed authentication attempts. Please try again after 15 minutes.',

@@ -12,7 +12,7 @@ const fs = require("fs");
 dotenv.config();
 
 const app = express();
-app.set('trust proxy', 1);
+app.set('trust proxy', true);
 
 // Disable ETags globally so Express never responds with 304 Not Modified on API requests.
 // React Native (Axios) treats 304 as an error or receives an empty body, causing retry screens.
