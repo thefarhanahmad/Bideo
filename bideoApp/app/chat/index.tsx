@@ -1148,7 +1148,7 @@ export default function ChatListScreen() {
               )}
             </TouchableOpacity>
 
-            {pendingRequestsCount > 0 && (
+            {(pendingRequestsCount > 0 || activeTab === 'requests') && (
               <TouchableOpacity
                 style={[styles.filterTab, activeTab === 'requests' && styles.filterTabActive]}
                 onPress={() => {
@@ -1165,9 +1165,25 @@ export default function ChatListScreen() {
                 >
                   Requests
                 </Text>
-                <View style={styles.tabBadgeActive}>
-                  <Text style={styles.tabBadgeTextActive}>{pendingRequestsCount}</Text>
-                </View>
+                {pendingRequestsCount > 0 && (
+                  <View
+                    style={[
+                      styles.tabBadge,
+                      activeTab === 'requests' ? styles.tabBadgeActive : styles.tabBadgeInactive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.tabBadgeText,
+                        activeTab === 'requests'
+                          ? styles.tabBadgeTextActive
+                          : styles.tabBadgeTextInactive,
+                      ]}
+                    >
+                      {pendingRequestsCount}
+                    </Text>
+                  </View>
+                )}
               </TouchableOpacity>
             )}
           </ScrollView>
@@ -1690,10 +1706,13 @@ const styles = StyleSheet.create({
     color: Colors.white,
   },
   tabBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 5,
+    borderRadius: 9,
     marginLeft: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   tabBadgeActive: {
     backgroundColor: Colors.primary,
@@ -1704,6 +1723,8 @@ const styles = StyleSheet.create({
   tabBadgeText: {
     fontSize: 10,
     fontWeight: '700',
+    includeFontPadding: false,
+    textAlign: 'center',
   },
   tabBadgeTextActive: {
     color: Colors.white,

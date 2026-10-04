@@ -114,6 +114,10 @@ export default function ShareModal({ visible, onClose, item }: ShareModalProps) 
     if (!searchQuery.trim()) return conversations;
     const q = searchQuery.toLowerCase().trim();
     return conversations.filter((c) => {
+      if (c.isGroup) {
+        const groupName = (c.groupName || 'Group').toLowerCase();
+        return groupName.includes(q);
+      }
       const name = c.otherParticipant?.name?.toLowerCase() || '';
       const channelName = c.otherParticipant?.channelName?.toLowerCase() || '';
       return name.includes(q) || channelName.includes(q);
@@ -386,32 +390,63 @@ export default function ShareModal({ visible, onClose, item }: ShareModalProps) 
                   keyboardShouldPersistTaps="handled"
                   keyboardDismissMode="on-drag"
                   renderItem={({ item: conv }) => {
+                    const isGroup = Boolean(conv.isGroup);
                     const other = conv.otherParticipant;
-                    const isOnline = Boolean(other?._id && onlineMap[other._id]);
+                    const isOnline = Boolean(!isGroup && other?._id && onlineMap[other._id]);
                     const sendState = sentMap[conv._id] || 'idle';
+                    const groupAvatarUri = isGroup ? resolveMediaUrl(conv.groupAvatar) : null;
+                    const chatTitle = isGroup
+                      ? (conv.groupName || 'Group Chat')
+                      : (other?.channelName || other?.name || 'Creator');
+                    const memberCount =
+                      conv.memberCount || (Array.isArray(conv.participants) ? conv.participants.length : 0);
+                    const statusSubtitle = isGroup
+                      ? `${memberCount} members`
+                      : (isOnline ? 'Online now' : 'Offline');
 
                     return (
                       <View style={styles.chatRow}>
                         <View style={styles.chatRowLeft}>
                           <View style={styles.chatAvatarWrapper}>
-                            <Image
-                              source={{ uri: other?.avatar || FALLBACK_AVATAR }}
-                              style={styles.chatAvatar}
-                              contentFit="cover"
-                            />
+                            {isGroup ? (
+                              groupAvatarUri ? (
+                                <Image
+                                  source={{ uri: groupAvatarUri }}
+                                  style={styles.chatAvatar}
+                                  contentFit="cover"
+                                  transition={120}
+                                />
+                              ) : (
+                                <View style={[styles.chatAvatar, styles.groupAvatarFallback]}>
+                                  <Ionicons name="people" size={20} color="#FFFFFF" />
+                                </View>
+                              )
+                            ) : (
+                              <Image
+                                source={{ uri: resolveMediaUrl(other?.avatar) || FALLBACK_AVATAR }}
+                                style={styles.chatAvatar}
+                                contentFit="cover"
+                                transition={120}
+                              />
+                            )}
                             {isOnline && <View style={styles.onlineDot} />}
                           </View>
                           <View style={styles.chatRowInfo}>
                             <View style={styles.chatNameRow}>
+                              {isGroup && (
+                                <View style={styles.groupBadgeInline}>
+                                  <Ionicons name="people" size={11} color={Colors.primary} />
+                                </View>
+                              )}
                               <Text style={styles.chatName} numberOfLines={1}>
-                                {other?.channelName || other?.name || 'User'}
+                                {chatTitle}
                               </Text>
-                              {Boolean(other?.isVerified) && (
+                              {!isGroup && Boolean(other?.isVerified) && (
                                 <VerifiedBadge size={13} style={{ marginLeft: 3 }} />
                               )}
                             </View>
                             <Text style={styles.chatStatusText}>
-                              {isOnline ? 'Online now' : 'Offline'}
+                              {statusSubtitle}
                             </Text>
                           </View>
                         </View>
@@ -679,6 +714,11 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: '#E5E7EB',
   },
+  groupAvatarFallback: {
+    backgroundColor: '#FF6B00',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   onlineDot: {
     position: 'absolute',
     bottom: 0,
@@ -696,6 +736,15 @@ const styles = StyleSheet.create({
   chatNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  groupBadgeInline: {
+    backgroundColor: 'rgba(255, 107, 0, 0.12)',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginRight: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   chatName: {
     fontSize: 13,

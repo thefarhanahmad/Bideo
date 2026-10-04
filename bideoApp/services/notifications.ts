@@ -106,7 +106,13 @@ export async function handleNotificationNavigation(router: any, data: any) {
 
   try {
     if (conversationId) {
-      router.push(`/chat/${conversationId}`);
+      router.push({
+        pathname: `/chat/${conversationId}`,
+        params: {
+          isGroup: data.isGroup ? '1' : '0',
+          name: data.groupName || data.name || '',
+        },
+      });
     } else if ((isShort || (typeof data.screen === 'string' && data.screen.includes('/shorts'))) && videoId) {
       router.push({ pathname: '/shorts', params: { initialShortId: videoId } });
     } else if (videoId) {

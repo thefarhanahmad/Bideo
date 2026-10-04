@@ -473,35 +473,48 @@ exports.sendMessage = async (req, res, next) => {
     }
 
     // Push notification logic
+    const senderDisplayName = req.user.channelName || req.user.name || 'Member';
+    const messagePreview = videoDoc
+      ? `📹 ${videoDoc.title || 'Video'}`
+      : postDoc
+      ? `📝 ${postDoc.text ? postDoc.text.slice(0, 50) : 'Post'}`
+      : cleanText.slice(0, 100);
+
     if (!isGroup && recipient && !isRecipientViewingChat) {
       sendPushNotification({
         recipientId: recipient._id,
-        title: req.user.channelName || req.user.name || 'New Message',
-        body: text.trim(),
+        title: senderDisplayName,
+        body: messagePreview,
         data: {
           screen: `/chat/${conversation._id}`,
           conversationId: conversation._id.toString(),
           senderId: currentUserId.toString(),
+          name: senderDisplayName,
         },
       }).catch((pushErr) => {
         console.error('Failed to dispatch chat push notification:', pushErr);
       });
     } else if (isGroup) {
+      const groupTitle = (conversation.groupName && conversation.groupName.trim()) || 'Group Chat';
       otherParticipants.forEach((p) => {
         const pId = (p._id || p).toString();
         const isViewing = isUserInConversation(pId, conversation._id);
         if (!isViewing) {
           sendPushNotification({
             recipientId: pId,
-            title: conversation.groupName || 'Group Message',
-            body: `${req.user.name || 'Member'}: ${cleanText.slice(0, 100)}`,
+            title: groupTitle,
+            body: `${senderDisplayName}: ${messagePreview}`,
             data: {
               screen: `/chat/${conversation._id}`,
               conversationId: conversation._id.toString(),
               senderId: currentUserId.toString(),
               isGroup: true,
+              groupName: groupTitle,
+              name: groupTitle,
             },
-          }).catch(() => {});
+          }).catch((pushErr) => {
+            console.error('Failed to dispatch group push notification:', pushErr);
+          });
         }
       });
     }
