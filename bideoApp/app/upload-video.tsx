@@ -522,7 +522,7 @@ export default function UploadVideoScreen() {
       </View>
 
       <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        <ProgressOverlay visible={uploading} progress={uploadProgress} label={editId ? 'Saving' : 'Uploading'} />
+        <ProgressOverlay visible={uploading} progress={uploadProgress} label={editId ? 'Saving' : undefined} />
 
         {/* Top Banner Ad */}
         <AppAdBanner containerStyle={styles.topBannerContainer} />
@@ -715,8 +715,8 @@ const ProgressOverlay = ({ visible, progress, label }: { visible: boolean; progr
     outputRange: ['0%', '100%'],
   });
 
-  const displayText = label
-    ? `${label}...`
+  const displayText = label && label !== 'Uploading' && label !== 'Publishing'
+    ? (label.endsWith('...') ? label : `${label}...`)
     : progressValue >= 95
       ? 'Finishing up...'
       : 'Uploading...';
