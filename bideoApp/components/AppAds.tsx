@@ -60,16 +60,21 @@ export const ADMOB_IDS = {
 interface AppAdBannerProps {
   size?: any;
   containerStyle?: any;
+  onAdLoaded?: () => void;
+  onAdFailedToLoad?: (error?: any) => void;
 }
 
 /**
  * Banner ad that returns null when running in Expo Go (no native module available)
  * or if the ad failed to fill.
  */
-export const AppAdBanner: React.FC<AppAdBannerProps> = ({ size, containerStyle }: AppAdBannerProps) => {
+export const AppAdBanner: React.FC<AppAdBannerProps> = ({ size, containerStyle, onAdLoaded, onAdFailedToLoad }: AppAdBannerProps) => {
   const isExpoGo =
     Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
-  if (isExpoGo) return null;
+  if (isExpoGo) {
+    onAdFailedToLoad?.(new Error('Expo Go'));
+    return null;
+  }
 
   const [adFailed, setAdFailed] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -90,7 +95,10 @@ export const AppAdBanner: React.FC<AppAdBannerProps> = ({ size, containerStyle }
 
   try {
     const { BannerAd, BannerAdSize, TestIds } = require('react-native-google-mobile-ads');
-    if (!BannerAd) return null;
+    if (!BannerAd) {
+      onAdFailedToLoad?.(new Error('No BannerAd'));
+      return null;
+    }
 
     const unitId = isTestingAds ? (TestIds?.BANNER || TEST_BANNER_ID) : ADMOB_IDS.BANNER;
 
@@ -101,15 +109,21 @@ export const AppAdBanner: React.FC<AppAdBannerProps> = ({ size, containerStyle }
           unitId={unitId}
           size={size || BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
           requestOptions={{ requestNonPersonalizedAdsOnly: false }}
+          onAdLoaded={() => {
+            setAdFailed(false);
+            onAdLoaded?.();
+          }}
           onAdFailedToLoad={(error: any) => {
             console.log(`Banner Ad failed with unit ${unitId}:`, error?.message || error);
             setAdFailed(true);
+            onAdFailedToLoad?.(error);
           }}
         />
       </View>
     );
   } catch (e) {
     console.log('AdMob component could not be loaded:', e);
+    onAdFailedToLoad?.(e);
     return null;
   }
 };
@@ -565,10 +579,17 @@ const styles = StyleSheet.create({
  * Native Ad component that renders a high-eCPM sponsored card.
  * Returns null in Expo Go or if the ad fails to load / fill.
  */
-export const AppNativeAd: React.FC<{ style?: any }> = ({ style }) => {
+export const AppNativeAd: React.FC<{
+  style?: any;
+  onAdLoaded?: () => void;
+  onAdFailedToLoad?: (error?: any) => void;
+}> = ({ style, onAdLoaded, onAdFailedToLoad }) => {
   const isExpoGo =
     Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
-  if (isExpoGo) return null;
+  if (isExpoGo) {
+    onAdFailedToLoad?.(new Error('Expo Go'));
+    return null;
+  }
 
   const [nativeAd, setNativeAd] = useState<any>(null);
   const [adFailed, setAdFailed] = useState(false);
@@ -594,6 +615,7 @@ export const AppNativeAd: React.FC<{ style?: any }> = ({ style }) => {
                 return ad;
               });
               setAdFailed(false);
+              onAdLoaded?.();
             }
           })
           .catch((err: any) => {
@@ -604,6 +626,7 @@ export const AppNativeAd: React.FC<{ style?: any }> = ({ style }) => {
                 if (!currentAd) setAdFailed(true);
                 return currentAd;
               });
+              onAdFailedToLoad?.(err);
             }
           });
       } catch (e) {
@@ -612,6 +635,7 @@ export const AppNativeAd: React.FC<{ style?: any }> = ({ style }) => {
             if (!currentAd) setAdFailed(true);
             return currentAd;
           });
+          onAdFailedToLoad?.(e);
         }
       }
     };

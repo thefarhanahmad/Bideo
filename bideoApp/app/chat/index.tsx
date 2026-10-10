@@ -1356,14 +1356,14 @@ export default function ChatListScreen() {
                   <Ionicons name="videocam" size={22} color="#FFFFFF" />
                 </LinearGradient>
                 <View style={styles.storyOptionTextContainer}>
-                  <View style={styles.storyOptionTitleRow}>
+                    <View style={styles.storyOptionTitleRow}>
                     <Text style={styles.storyOptionTitle}>Video Story</Text>
                     <View style={styles.maxDurationPill}>
                       <Ionicons name="time-outline" size={11} color="#6366F1" style={{ marginRight: 3 }} />
-                      <Text style={styles.maxDurationPillText}>Max 15s</Text>
+                      <Text style={styles.maxDurationPillText}>Max 30s</Text>
                     </View>
                   </View>
-                  <Text style={styles.storyOptionDesc}>Choose a video clip (up to 15 seconds)</Text>
+                  <Text style={styles.storyOptionDesc}>Choose a video clip (up to 30 seconds)</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={Colors.textGray} />
               </TouchableOpacity>
@@ -1408,10 +1408,10 @@ export default function ChatListScreen() {
                     <Text style={styles.storyOptionTitle}>Record Video</Text>
                     <View style={styles.maxDurationPill}>
                       <Ionicons name="time-outline" size={11} color="#6366F1" style={{ marginRight: 3 }} />
-                      <Text style={styles.maxDurationPillText}>Max 15s</Text>
+                      <Text style={styles.maxDurationPillText}>Max 30s</Text>
                     </View>
                   </View>
-                  <Text style={styles.storyOptionDesc}>Record a quick 15-second story clip</Text>
+                  <Text style={styles.storyOptionDesc}>Record a quick 30-second story clip</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={Colors.textGray} />
               </TouchableOpacity>

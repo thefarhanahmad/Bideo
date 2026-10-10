@@ -18,7 +18,8 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatViews, formatTimeAgo } from '../../utils/formatDate';
 import { hapticLight } from '../../utils/haptics';
-import { AppInterstitialAd } from '../../components/AppAds';
+import { AppInterstitialAd, AppAdBanner, AppNativeAd } from '../../components/AppAds';
+import Constants from 'expo-constants';
 import HashtagText from '../../components/HashtagText';
 import { shareVideo } from '../../utils/shareHelper';
 import ShareModal from '../../components/ShareModal';
@@ -202,12 +203,13 @@ export default function ShortsScreen() {
       for (let i = 0; i < randomizedShorts.length; i++) {
         withAds.push(randomizedShorts[i]);
         shortCount++;
-        if (shortCount === 5) {
+        if (shortCount % 5 === 0) {
+          const isInterstitial = shortCount % 10 === 0;
           withAds.push({
-            _id: `short_ad_${i}`,
+            _id: `short_ad_${isInterstitial ? 'interstitial' : 'scrollable'}_${shortCount}_${randomizedShorts[i]._id}`,
             isAd: true,
+            adType: isInterstitial ? 'interstitial' : 'scrollable',
           });
-          shortCount = 0;
         }
       }
       setShorts(withAds);
@@ -250,13 +252,18 @@ export default function ShortsScreen() {
             hasMore.current = false;
             return prev;
           }
+          const prevShortsCount = prev.filter((s: any) => !s.isAd).length;
+          let currentShortCount = prevShortsCount;
           const withAds: any[] = [];
           for (let i = 0; i < trulyNew.length; i++) {
             withAds.push(trulyNew[i]);
-            if ((prev.length + withAds.length) % 5 === 0) {
+            currentShortCount++;
+            if (currentShortCount % 5 === 0) {
+              const isInterstitial = currentShortCount % 10 === 0;
               withAds.push({
-                _id: `short_ad_${trulyNew[i]?._id || i}`,
+                _id: `short_ad_${isInterstitial ? 'interstitial' : 'scrollable'}_${currentShortCount}_${trulyNew[i]?._id || i}`,
                 isAd: true,
+                adType: isInterstitial ? 'interstitial' : 'scrollable',
               });
             }
           }
@@ -627,6 +634,18 @@ export default function ShortsScreen() {
         }}
         renderItem={({ item, index }) => {
           if (item.isAd) {
+            if (item.adType === 'scrollable') {
+              return (
+                <ScrollableAdItem
+                  containerHeight={containerHeight}
+                  insets={insets}
+                  isActive={activeVideoIndex === index}
+                  onComplete={() => handleAdComplete(index)}
+                  showBackButton={Boolean(fromChannelId || initialShortId)}
+                  onBack={handleBack}
+                />
+              );
+            }
             return (
               <ShortAdItem
                 containerHeight={containerHeight}
@@ -663,6 +682,117 @@ export default function ShortsScreen() {
     </View>
   );
 }
+
+const ScrollableAdItem = ({
+  containerHeight,
+  insets,
+  isActive,
+  onComplete,
+  showBackButton,
+  onBack,
+}: {
+  containerHeight: number;
+  insets: any;
+  isActive: boolean;
+  onComplete: () => void;
+  showBackButton?: boolean;
+  onBack?: () => void;
+}) => {
+  const isExpoGo =
+    Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
+
+  const [banner1Loaded, setBanner1Loaded] = useState(false);
+  const [nativeLoaded, setNativeLoaded] = useState(false);
+  const [banner2Loaded, setBanner2Loaded] = useState(false);
+
+  const [banner1Failed, setBanner1Failed] = useState(false);
+  const [nativeFailed, setNativeFailed] = useState(false);
+  const [banner2Failed, setBanner2Failed] = useState(false);
+
+  const [timedOut, setTimedOut] = useState(false);
+
+  const hasAnyAd = banner1Loaded || nativeLoaded || banner2Loaded;
+  const allFailed = banner1Failed && nativeFailed && banner2Failed;
+
+  // Safety timer: if none of the ads have loaded within 3 seconds, or immediately in Expo Go
+  useEffect(() => {
+    if (isExpoGo) {
+      setTimedOut(true);
+      return;
+    }
+    const timer = setTimeout(() => {
+      setTimedOut(true);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [isExpoGo]);
+
+  const shouldSkip = !hasAnyAd && (allFailed || timedOut || isExpoGo);
+
+  const hasTriggeredSkip = useRef(false);
+
+  // When active and there are no ads to show, automatically advance to the next short
+  useEffect(() => {
+    if (isActive && shouldSkip && !hasTriggeredSkip.current) {
+      hasTriggeredSkip.current = true;
+      onComplete();
+    }
+  }, [isActive, shouldSkip, onComplete]);
+
+  // If no ads are available, preserve container height to avoid FlatList snapping glitches while auto-skipping
+  if (shouldSkip) {
+    return <View style={[styles.shortItem, { height: containerHeight, backgroundColor: '#000000' }]} />;
+  }
+
+  return (
+    <View style={[styles.shortItem, { height: containerHeight, backgroundColor: '#000000' }]}>
+      {showBackButton && (
+        <View style={[styles.topHeader, { top: insets.top + 10, zIndex: 10 }]}>
+          <TouchableOpacity 
+            style={styles.headerBackBtn}
+            onPress={onBack}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="arrow-back" size={24} color={Colors.white} />
+          </TouchableOpacity>
+          <Text style={styles.shortsHeaderTitle}>Shorts</Text>
+        </View>
+      )}
+
+      <ScrollView
+        style={{ flex: 1, width: '100%' }}
+        contentContainerStyle={{
+          paddingTop: insets.top + (showBackButton ? 64 : 20),
+          paddingBottom: insets.bottom + 20,
+          paddingHorizontal: 16,
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexGrow: 1,
+        }}
+        showsVerticalScrollIndicator={false}
+        nestedScrollEnabled={true}
+      >
+        <AppAdBanner
+          containerStyle={{ marginVertical: 8 }}
+          onAdLoaded={() => setBanner1Loaded(true)}
+          onAdFailedToLoad={() => setBanner1Failed(true)}
+        />
+
+        <AppNativeAd
+          style={{ marginVertical: 12, width: '100%' }}
+          onAdLoaded={() => setNativeLoaded(true)}
+          onAdFailedToLoad={() => setNativeFailed(true)}
+        />
+
+        <AppAdBanner
+          containerStyle={{ marginVertical: 8 }}
+          onAdLoaded={() => setBanner2Loaded(true)}
+          onAdFailedToLoad={() => setBanner2Failed(true)}
+        />
+      </ScrollView>
+    </View>
+  );
+};
 
 const ShortAdItem = ({ containerHeight, insets, isActive, onComplete, showBackButton, onBack }: any) => {
   return (
