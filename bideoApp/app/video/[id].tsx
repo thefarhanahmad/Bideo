@@ -26,6 +26,12 @@ import { shareVideo } from '../../utils/shareHelper';
 import ShareModal from '../../components/ShareModal';
 import { showAlert } from '../../components/AppAlert';
 import { VideoDetailSkeleton } from '../../components/ListStates';
+import {
+  getLocalWatchProgress,
+  saveWatchProgress,
+  clearWatchProgress,
+  isVideoFinished,
+} from '../../utils/watchProgress';
 
 const FALLBACK_IMAGE = 'https://via.placeholder.com/80x80.png?text=User';
 const REQUIRED_WATCH_TIME = 3; // 3 seconds minimum watch time to count a view
@@ -41,16 +47,48 @@ export default function VideoScreen() {
   const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
   const watchSecondsForCoinRef = useRef(0);
 
+  const [video, setVideo] = useState<any>(null);
+  const videoRef = useRef<any>(null);
+  videoRef.current = video;
+
+  const resumePositionRef = useRef<number>(0);
+  const lastSavedPositionRef = useRef<number>(0);
+
+  // expo-video player (replaces the deprecated expo-av <Video>). Source is loaded
+  // via player.replace() once the video data arrives.
+  const player = useVideoPlayer(null, (p) => {
+    p.loop = false;
+  });
+
+  const persistCurrentProgress = useCallback((forceSync = false) => {
+    const curVideo = videoRef.current;
+    if (!curVideo?._id) return;
+    const isShort = curVideo.isShort === true || curVideo.isShort === 'true';
+    if (isShort) return;
+
+    try {
+      const cur = Math.round(player.currentTime || 0);
+      const dur = Math.round(player.duration || curVideo.duration || 0);
+
+      if (!forceSync && Math.abs(cur - lastSavedPositionRef.current) < 2) return;
+
+      lastSavedPositionRef.current = cur;
+      saveWatchProgress(curVideo._id, cur, dur);
+    } catch {}
+  }, [player]);
+
   const handleBack = useCallback(() => {
+    persistCurrentProgress(true);
     if (router.canGoBack()) {
       router.back();
     } else {
       router.replace('/(tabs)');
     }
-  }, [router]);
+  }, [router, persistCurrentProgress]);
 
   useEffect(() => {
     const onBackPress = () => {
+      persistCurrentProgress(true);
       if (router.canGoBack()) {
         router.back();
         return true;
@@ -61,12 +99,7 @@ export default function VideoScreen() {
 
     const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
     return () => sub.remove();
-  }, [router]);
-  // expo-video player (replaces the deprecated expo-av <Video>). Source is loaded
-  // via player.replace() once the video data arrives.
-  const player = useVideoPlayer(null, (p) => {
-    p.loop = false;
-  });
+  }, [router, persistCurrentProgress]);
 
   // Controls & floating back button visibility (show on click/pause, auto-hide when playing)
   const [controlsVisible, setControlsVisible] = useState(true);
@@ -96,8 +129,6 @@ export default function VideoScreen() {
       }
     });
   }, [player]);
-
-  const [video, setVideo] = useState<any>(null);
   const [recommendedVideos, setRecommendedVideos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [authModalVisible, setAuthModalVisible] = useState(false);
@@ -165,9 +196,24 @@ export default function VideoScreen() {
             player.replace(video.videoUrl);
           }
         }
-        try {
-          player.currentTime = 0;
-        } catch {}
+        const isShort = video.isShort === true || video.isShort === 'true';
+        const resumeTime = resumePositionRef.current;
+        if (resumeTime > 0 && !isShort) {
+          try {
+            player.currentTime = resumeTime;
+          } catch {}
+          setTimeout(() => {
+            try {
+              if (Math.abs(player.currentTime - resumeTime) > 3) {
+                player.currentTime = resumeTime;
+              }
+            } catch {}
+          }, 350);
+        } else {
+          try {
+            player.currentTime = 0;
+          } catch {}
+        }
         player.play();
       } else {
         // Mid-roll ad finished: resume playback right where it was paused
@@ -176,12 +222,17 @@ export default function VideoScreen() {
     } catch (err) {
       console.log('Main video playback error after ad:', err);
     }
-  }, [video?.videoUrl, player]);
+  }, [video?.videoUrl, video?.isShort, player]);
 
   // Listen for video completion event from expo-video to trigger post-roll ad
   useEffect(() => {
     if (!player) return;
     const sub = (player as any).addListener?.('playToEnd', () => {
+      if (video?._id) {
+        clearWatchProgress(video._id);
+        resumePositionRef.current = 0;
+        lastSavedPositionRef.current = 0;
+      }
       if (adCompletedRef.current && !postRollTriggeredRef.current) {
         postRollTriggeredRef.current = true;
         isPostRollRef.current = true;
@@ -195,7 +246,7 @@ export default function VideoScreen() {
     return () => {
       sub?.remove?.();
     };
-  }, [player]);
+  }, [player, video?._id]);
 
   // Listen for playback state changes to coordinate toolbar / back button visibility
   useEffect(() => {
@@ -210,6 +261,7 @@ export default function VideoScreen() {
           setControlsVisible(false);
         }, 3500);
       } else {
+        persistCurrentProgress(true);
         if (controlsTimeoutRef.current) {
           clearTimeout(controlsTimeoutRef.current);
           controlsTimeoutRef.current = null;
@@ -224,7 +276,7 @@ export default function VideoScreen() {
         clearTimeout(controlsTimeoutRef.current);
       }
     };
-  }, [player]);
+  }, [player, persistCurrentProgress]);
 
   useEffect(() => {
     if (id) {
@@ -248,15 +300,28 @@ export default function VideoScreen() {
       player.pause();
     } catch {}
 
+    const isShort = video.isShort === true || video.isShort === 'true';
+    const resumeTime = resumePositionRef.current;
+
     // Pre-buffer the video stream in the background (paused) while the ad is shown
     try {
       if (typeof player.replaceAsync === 'function') {
         player.replaceAsync(video.videoUrl).then(() => {
-          try { player.pause(); } catch {}
+          try {
+            player.pause();
+            if (resumeTime > 0 && !isShort) {
+              player.currentTime = resumeTime;
+            }
+          } catch {}
         }).catch(() => {});
       } else {
         player.replace(video.videoUrl);
-        try { player.pause(); } catch {}
+        try {
+          player.pause();
+          if (resumeTime > 0 && !isShort) {
+            player.currentTime = resumeTime;
+          }
+        } catch {}
       }
     } catch {}
 
@@ -267,7 +332,7 @@ export default function VideoScreen() {
     triggeredMidrollsRef.current.clear();
     setAdCompleted(false);
     setShowingAd(true);
-  }, [video?.videoUrl, player]);
+  }, [video?.videoUrl, video?.isShort, player]);
 
   // Track active watch time (3 seconds required before recording a view) and trigger mid-roll ads
   useEffect(() => {
@@ -276,6 +341,12 @@ export default function VideoScreen() {
     const interval = setInterval(() => {
       try {
         if (player && player.playing && !showingAd) {
+          // Periodic watch progress auto-save (every 5 seconds) for long videos
+          const isShortVid = video?.isShort === true || video?.isShort === 'true';
+          if (adCompletedRef.current && !isShortVid && Math.floor(player.currentTime) % 5 === 0) {
+            persistCurrentProgress();
+          }
+
           // Mid-roll ad check: show an interstitial ad every 5 minutes (300s) on long videos
           if (adCompletedRef.current && player.currentTime >= MIDROLL_INTERVAL_SECONDS) {
             const currentSlot = Math.floor(player.currentTime / MIDROLL_INTERVAL_SECONDS);
@@ -370,7 +441,7 @@ export default function VideoScreen() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [video?._id, player, showingAd, isAuthenticated, video?.isShort, dispatch]);
+  }, [video?._id, player, showingAd, isAuthenticated, video?.isShort, dispatch, persistCurrentProgress]);
 
   useFocusEffect(
     useCallback(() => {
@@ -382,11 +453,12 @@ export default function VideoScreen() {
         loadVideoData();
       }
       return () => {
+        persistCurrentProgress(true);
         try {
           player.pause();
         } catch {}
       };
-    }, [id, player])
+    }, [id, player, persistCurrentProgress])
   );
 
   const loadVideoData = async () => {
@@ -398,6 +470,24 @@ export default function VideoScreen() {
       ]);
       const videoData = videoRes?.data || videoRes;
       const allVideos: any[] = Array.isArray(allVideosRes) ? allVideosRes : ((allVideosRes as any)?.data || []);
+
+      if (videoData?._id && !videoData.isShort) {
+        const localProg = await getLocalWatchProgress(videoData._id);
+        const backendProg = typeof videoData.progress === 'number' ? videoData.progress : 0;
+        const initialProg = localProg > 0 ? localProg : backendProg;
+        const dur = Math.round(Number(videoData.duration) || 0);
+
+        if (initialProg >= 5 && !isVideoFinished(initialProg, dur)) {
+          resumePositionRef.current = initialProg;
+          lastSavedPositionRef.current = initialProg;
+        } else {
+          resumePositionRef.current = 0;
+          lastSavedPositionRef.current = 0;
+        }
+      } else {
+        resumePositionRef.current = 0;
+        lastSavedPositionRef.current = 0;
+      }
 
       setVideo(videoData || null);
       setRecommendedVideos((allVideos || []).filter((v: any) => v?._id !== id));
@@ -421,6 +511,13 @@ export default function VideoScreen() {
       setLoading(false);
     }
   };
+
+  // Save watch progress on component unmount
+  useEffect(() => {
+    return () => {
+      persistCurrentProgress(true);
+    };
+  }, [persistCurrentProgress]);
 
   const handleLike = async () => {
     if (!isAuthenticated) {

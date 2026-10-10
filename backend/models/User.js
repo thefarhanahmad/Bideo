@@ -83,6 +83,26 @@ const userSchema = new mongoose.Schema({
       ref: 'Video',
     },
   ],
+  watchProgress: [
+    {
+      video: {
+        type: mongoose.Schema.ObjectId,
+        ref: 'Video',
+      },
+      progress: {
+        type: Number,
+        default: 0,
+      },
+      duration: {
+        type: Number,
+        default: 0,
+      },
+      updatedAt: {
+        type: Date,
+        default: Date.now,
+      },
+    },
+  ],
   likedVideos: [
     {
       type: mongoose.Schema.ObjectId,
@@ -295,5 +315,6 @@ userSchema.methods.getSignedJwtToken = function () {
 
 userSchema.index({ isVerified: 1, verifiedSource: 1, verifiedUntil: 1 });
 userSchema.index({ watchHistory: 1 });
+userSchema.index({ 'watchProgress.video': 1 });
 
 module.exports = mongoose.model('User', userSchema);

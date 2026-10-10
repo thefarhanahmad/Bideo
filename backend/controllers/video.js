@@ -203,9 +203,19 @@ const decorateVideos = async (videos, req) => {
 
   if (!req.user || req.user.role === "admin") return results;
 
-  const user = await User.findById(req.user.id);
+  const user = await User.findById(req.user.id).select('followingChannels watchProgress');
+  const progressMap = new Map();
+  if (user?.watchProgress && Array.isArray(user.watchProgress)) {
+    user.watchProgress.forEach((wp) => {
+      if (wp?.video) {
+        progressMap.set(wp.video.toString(), wp.progress || 0);
+      }
+    });
+  }
+
   results = results.map((v) => ({
     ...v,
+    progress: progressMap.get(v._id ? v._id.toString() : '') || 0,
     isLiked: v.likes
       ? v.likes.some((id) => id.toString() === req.user.id.toString())
       : false,
@@ -1697,8 +1707,8 @@ exports.deleteVideo = async (req, res, next) => {
       Notification.deleteMany({ video: video._id }),
       Playlist.updateMany({ videos: video._id }, { $pull: { videos: video._id } }),
       User.updateMany(
-        { $or: [{ watchHistory: video._id }, { likedVideos: video._id }] },
-        { $pull: { watchHistory: video._id, likedVideos: video._id } }
+        { $or: [{ watchHistory: video._id }, { likedVideos: video._id }, { 'watchProgress.video': video._id }] },
+        { $pull: { watchHistory: video._id, likedVideos: video._id, watchProgress: { video: video._id } } }
       ),
     ]);
     res.status(200).json({ success: true, data: {} });
@@ -1758,8 +1768,8 @@ exports.bulkDeleteVideos = async (req, res, next) => {
           Notification.deleteMany({ video: video._id }),
           Playlist.updateMany({ videos: video._id }, { $pull: { videos: video._id } }),
           User.updateMany(
-            { $or: [{ watchHistory: video._id }, { likedVideos: video._id }] },
-            { $pull: { watchHistory: video._id, likedVideos: video._id } }
+            { $or: [{ watchHistory: video._id }, { likedVideos: video._id }, { 'watchProgress.video': video._id }] },
+            { $pull: { watchHistory: video._id, likedVideos: video._id, watchProgress: { video: video._id } } }
           ),
         ]);
         deletedCount++;

@@ -6,6 +6,7 @@ const {
   updateUser,
   deleteUser,
   addToHistory,
+  updateWatchProgress,
   getHistory,
   getLikedVideos,
   addSearchHistory,
@@ -50,6 +51,8 @@ router.post('/send-email-otp', sendEmailOtp);
 router.post('/verify-email-otp', verifyEmailOtp);
 
 router.post('/history', addToHistory);
+router.put('/history/progress', updateWatchProgress);
+router.post('/history/progress', updateWatchProgress);
 router.get('/history', getHistory);
 router.get('/liked-videos', getLikedVideos);
 router.post('/search-history', addSearchHistory);

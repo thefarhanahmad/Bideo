@@ -1042,9 +1042,45 @@ exports.assignCoinsByAdmin = async (req, res, next) => {
 // @desc    Add video to watch history
 // @route   POST /api/users/history
 // @access  Private
+// Helper to atomically update user watch progress
+const updateProgressHelper = async (userId, videoId, progress, duration = 0) => {
+  const videoObjId = new mongoose.Types.ObjectId(videoId);
+  const prog = Math.max(0, Math.round(Number(progress) || 0));
+  const dur = Math.max(0, Math.round(Number(duration) || 0));
+
+  // If video reached >= 95% completion or within 5s of end, treat as completed (progress 0)
+  const isFinished = dur > 5 && (prog >= dur * 0.95 || prog >= dur - 5);
+  const finalProgress = isFinished ? 0 : prog;
+
+  // 1. Always pull any existing entry for this video first (prevents duplicates)
+  await User.updateOne(
+    { _id: userId },
+    { $pull: { watchProgress: { video: videoObjId } } }
+  );
+
+  // 2. If progress is greater than 5 seconds, save the new progress at the front (keep top 100)
+  if (finalProgress >= 5) {
+    await User.updateOne(
+      { _id: userId },
+      {
+        $push: {
+          watchProgress: {
+            $each: [{ video: videoObjId, progress: finalProgress, duration: dur, updatedAt: new Date() }],
+            $position: 0,
+            $slice: 100,
+          },
+        },
+      }
+    );
+  }
+};
+
+// @desc    Add video to watch history
+// @route   POST /api/users/history
+// @access  Private
 exports.addToHistory = async (req, res, next) => {
   try {
-    const { videoId } = req.body;
+    const { videoId, progress, duration } = req.body;
     if (!videoId || !mongoose.Types.ObjectId.isValid(videoId)) {
       return res.status(400).json({ success: false, message: 'Valid videoId is required' });
     }
@@ -1076,7 +1112,37 @@ exports.addToHistory = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
+    if (progress !== undefined && progress !== null) {
+      await updateProgressHelper(req.user.id, videoObjId, progress, duration);
+    }
+
     res.status(200).json({ success: true, data: updatedUser.watchHistory || [] });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Update video playback watch progress
+// @route   PUT /api/users/history/progress
+// @route   POST /api/users/history/progress
+// @access  Private
+exports.updateWatchProgress = async (req, res, next) => {
+  try {
+    const { videoId, progress, duration } = req.body;
+    if (!videoId || !mongoose.Types.ObjectId.isValid(videoId)) {
+      return res.status(400).json({ success: false, message: 'Valid videoId is required' });
+    }
+
+    await updateProgressHelper(req.user.id, videoId, progress, duration);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        videoId,
+        progress: Number(progress) || 0,
+        duration: Number(duration) || 0,
+      },
+    });
   } catch (err) {
     next(err);
   }
@@ -1087,12 +1153,30 @@ exports.addToHistory = async (req, res, next) => {
 // @access  Private
 exports.getHistory = async (req, res, next) => {
   try {
-    const user = await User.findById(req.user.id).populate({
-      path: 'watchHistory',
-      populate: { path: 'owner', select: 'name channelName avatar' }
-    });
+    const user = await User.findById(req.user.id)
+      .select('watchHistory watchProgress')
+      .populate({
+        path: 'watchHistory',
+        populate: { path: 'owner', select: 'name channelName avatar isVerified' }
+      });
 
-    const validHistory = (user?.watchHistory || []).filter(Boolean);
+    const progressMap = new Map();
+    if (user?.watchProgress && Array.isArray(user.watchProgress)) {
+      user.watchProgress.forEach((wp) => {
+        if (wp?.video) {
+          progressMap.set(wp.video.toString(), wp.progress || 0);
+        }
+      });
+    }
+
+    const validHistory = (user?.watchHistory || [])
+      .filter(Boolean)
+      .map((v) => {
+        const vObj = typeof v.toObject === 'function' ? v.toObject() : { ...v };
+        vObj.progress = progressMap.get(vObj._id.toString()) || 0;
+        return vObj;
+      });
+
     res.status(200).json({ success: true, data: validHistory });
   } catch (err) {
     next(err);

@@ -266,11 +266,24 @@ export default function LibraryScreen() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalListContent}>
             {history.map(item => (
               <TouchableOpacity key={item._id} style={styles.horizontalItem} onPress={() => router.push(`/video/${item._id}`)}>
-                <View style={styles.thumbnailContainer}>
+                <View style={[styles.thumbnailContainer, { overflow: 'hidden', borderRadius: 8 }]}>
                   <Image source={{ uri: item.thumbnail }} style={styles.horizontalThumbnail} />
                   <View style={styles.durationBadge}>
                     <Text style={styles.durationText}>{formatDuration(item.duration || 0)}</Text>
                   </View>
+                  {(() => {
+                    const dur = Math.round(Number(item.duration) || 0);
+                    const prog = Math.round(Number(item.progress) || 0);
+                    if (!item.isShort && dur > 5 && prog >= 5 && prog < dur * 0.95) {
+                      const pct = Math.min(100, Math.max(1, (prog / dur) * 100));
+                      return (
+                        <View style={styles.progressBarContainer}>
+                          <View style={[styles.progressBarFill, { width: `${pct}%` }]} />
+                        </View>
+                      );
+                    }
+                    return null;
+                  })()}
                 </View>
                 <Text style={styles.horizontalText} numberOfLines={2}>{item.title}</Text>
                 <Text style={styles.horizontalOwner}>{item.owner?.channelName || item.owner?.name}</Text>
@@ -636,6 +649,19 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontSize: 10,
     fontWeight: 'bold',
+  },
+  progressBarContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.35)',
+    zIndex: 6,
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#FF0000',
   },
   horizontalInfo: {
     flexDirection: 'row',

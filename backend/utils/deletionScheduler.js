@@ -35,8 +35,8 @@ const permanentlyDeleteUser = async (userId) => {
       Notification.deleteMany({ video: video._id }),
       Playlist.updateMany({ videos: video._id }, { $pull: { videos: video._id } }),
       User.updateMany(
-        { $or: [{ watchHistory: video._id }, { likedVideos: video._id }] },
-        { $pull: { watchHistory: video._id, likedVideos: video._id } }
+        { $or: [{ watchHistory: video._id }, { likedVideos: video._id }, { 'watchProgress.video': video._id }] },
+        { $pull: { watchHistory: video._id, likedVideos: video._id, watchProgress: { video: video._id } } }
       ),
     ]);
 

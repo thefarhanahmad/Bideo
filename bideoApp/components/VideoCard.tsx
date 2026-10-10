@@ -1,6 +1,7 @@
 import { showAlert } from './AppAlert';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, Alert, Pressable, Share } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -37,6 +38,7 @@ interface VideoCardProps {
     duration: number;
     videoUrl?: string;
     isShort?: boolean;
+    progress?: number;
   };
   onMenuPress?: () => void;
   onPlaylistPress?: (videoId: string) => void;
@@ -51,6 +53,41 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, onMenuPress, onPlaylistPre
   const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
   const [menuVisible, setMenuVisible] = useState(false);
   const [shareModalVisible, setShareModalVisible] = useState(false);
+  const [watchProgress, setWatchProgress] = useState<number>(video.progress || 0);
+
+  useEffect(() => {
+    if (typeof video.progress === 'number') {
+      setWatchProgress(video.progress);
+      return;
+    }
+    let isMounted = true;
+    AsyncStorage.getItem(`@bideo_watch_progress_${video._id}`)
+      .then((data) => {
+        if (isMounted && data) {
+          try {
+            const parsed = JSON.parse(data);
+            if (typeof parsed?.progress === 'number') {
+              setWatchProgress(parsed.progress);
+            }
+          } catch {}
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, [video._id, video.progress]);
+
+  const durSecs = Math.round(Number(video.duration) || 0);
+  const progSecs = Math.round(Number(watchProgress) || 0);
+  const showProgressBar =
+    !video.isShort &&
+    durSecs > 5 &&
+    progSecs >= 5 &&
+    progSecs < durSecs * 0.95;
+  const progressPercent = showProgressBar
+    ? Math.min(100, Math.max(1, (progSecs / durSecs) * 100))
+    : 0;
 
   const openMenu = () => {
     hapticSelection();
@@ -153,6 +190,11 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, onMenuPress, onPlaylistPre
         <View style={styles.durationBadge}>
           <Text style={styles.durationText}>{formatDuration(video?.duration || 0)}</Text>
         </View>
+        {showProgressBar && (
+          <View style={styles.progressBarContainer}>
+            <View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} />
+          </View>
+        )}
       </View>
 
       <View style={styles.detailsContainer}>
@@ -304,6 +346,19 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontSize: 12,
     fontWeight: 'bold',
+  },
+  progressBarContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 3.5,
+    backgroundColor: 'rgba(255, 255, 255, 0.35)',
+    zIndex: 6,
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#FF0000',
   },
   detailsContainer: {
     flexDirection: 'row',
