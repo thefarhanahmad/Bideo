@@ -29,6 +29,7 @@ const {
   toggleVerifyUser,
   toggleBlockUser,
   toggleMonetizeUser,
+  assignCoinsByAdmin,
   sendEmailOtp,
   verifyEmailOtp,
   updateEmail,
@@ -72,6 +73,7 @@ router.post('/:id/reject-recovery', rejectRecoveryByAdmin);
 router.put('/:id/verify', toggleVerifyUser);
 router.put('/:id/block', toggleBlockUser);
 router.put('/:id/monetize', toggleMonetizeUser);
+router.post('/:id/assign-coins', assignCoinsByAdmin);
 
 router.route('/').get(getUsers).post(createUser);
 router.route('/:id').get(getUser).put(updateUser).delete(deleteUser);

@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Modal from "../components/Modal";
 import ConfirmModal from "../components/ConfirmModal";
 import DataTableToolbar from "../components/DataTableToolbar";
@@ -31,6 +31,13 @@ const Users = () => {
   const [showAdd, setShowAdd] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [editUser, setEditUser] = useState(null);
+
+  // Assign coins state
+  const [assignCoinsUser, setAssignCoinsUser] = useState(null);
+  const [coinsAmount, setCoinsAmount] = useState("");
+  const [coinsNote, setCoinsNote] = useState("");
+  const [assigningCoins, setAssigningCoins] = useState(false);
+  const [coinsError, setCoinsError] = useState(null);
 
   // Custom confirmation modal state for styled dialogs
   const [confirmDialog, setConfirmDialog] = useState(null);
@@ -150,6 +157,45 @@ const Users = () => {
         confirmClass: "bg-brand hover:bg-brand-dark text-white",
         onConfirm: () => setConfirmDialog(null),
       });
+    }
+  };
+
+  const handleAssignCoins = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!assignCoinsUser) return;
+    const amountNum = Number(coinsAmount);
+    if (!coinsAmount || isNaN(amountNum) || amountNum <= 0) {
+      setCoinsError("Please enter a valid positive number of coins.");
+      return;
+    }
+
+    setAssigningCoins(true);
+    setCoinsError(null);
+    try {
+      const token = localStorage.getItem("admin_token");
+      const res = await fetch(`${API_URL}/api/users/${assignCoinsUser._id}/assign-coins`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          amount: amountNum,
+          note: coinsNote.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to assign coins");
+
+      setAssignCoinsUser(null);
+      setCoinsAmount("");
+      setCoinsNote("");
+      await fetchUsers();
+    } catch (err) {
+      setCoinsError(err.message);
+    } finally {
+      setAssigningCoins(false);
     }
   };
 
@@ -537,6 +583,9 @@ const Users = () => {
                             Balance
                           </span>
                         </div>
+                        <div className="flex items-center gap-1 text-[11px] text-amber-700 font-bold mt-0.5">
+                          <span>🪙 {Number(u.coins || 0).toLocaleString()} Coins</span>
+                        </div>
                         <div className="text-[11px] text-muted mt-0.5">
                           Lifetime: ₹
                           {Number(u.totalEarnings || 0).toLocaleString("en-IN", {
@@ -682,6 +731,19 @@ const Users = () => {
                                 </button>
                               )}
                               <button
+                                type="button"
+                                onClick={() => {
+                                  setAssignCoinsUser(u);
+                                  setCoinsAmount("");
+                                  setCoinsNote("");
+                                  setCoinsError(null);
+                                }}
+                                className="rounded-lg bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-500/20 transition-colors"
+                                title={`Assign coins to ${u.name || "this user"}`}
+                              >
+                                🪙 Assign Coins
+                              </button>
+                              <button
                                 onClick={() => {
                                   setEditUser(u);
                                   setShowEdit(true);
@@ -751,6 +813,96 @@ const Users = () => {
               setEditUser(null);
             }}
           />
+        </Modal>
+      )}
+
+      {/* Assign Coins Modal */}
+      {assignCoinsUser && (
+        <Modal
+          title={`Assign Coins — ${assignCoinsUser.name || assignCoinsUser.channelName || "User"}`}
+          maxWidth="max-w-md"
+          onClose={() => {
+            setAssignCoinsUser(null);
+            setCoinsAmount("");
+            setCoinsNote("");
+            setCoinsError(null);
+          }}
+        >
+          <form onSubmit={handleAssignCoins} className="space-y-4">
+            <div className="rounded-xl bg-amber-50 border border-amber-200/80 p-3.5 text-xs text-amber-900">
+              <div className="font-bold flex items-center gap-1.5">
+                <span>🪙 Current Coins:</span>
+                <span className="text-sm font-extrabold text-amber-950">
+                  {Number(assignCoinsUser.coins || 0).toLocaleString()}
+                </span>
+              </div>
+              <p className="mt-1 text-amber-800">
+                Coins will be credited immediately to the user's account without sending any notification.
+              </p>
+            </div>
+
+            {coinsError && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                {coinsError}
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-bold text-ink mb-1">
+                Coins to Credit <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                min="1"
+                step="any"
+                value={coinsAmount}
+                onChange={(e) => {
+                  setCoinsAmount(e.target.value);
+                  setCoinsError(null);
+                }}
+                placeholder="e.g. 50, 100, 500"
+                className="w-full rounded-xl border border-line bg-surface/50 px-3.5 py-2.5 text-sm text-ink placeholder:text-muted focus:border-brand focus:bg-white focus:outline-none"
+                autoFocus
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-ink mb-1">
+                Optional Admin Note / Reason
+              </label>
+              <input
+                type="text"
+                value={coinsNote}
+                onChange={(e) => setCoinsNote(e.target.value)}
+                placeholder="e.g. Promotional credit, contest reward"
+                className="w-full rounded-xl border border-line bg-surface/50 px-3.5 py-2.5 text-sm text-ink placeholder:text-muted focus:border-brand focus:bg-white focus:outline-none"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setAssignCoinsUser(null);
+                  setCoinsAmount("");
+                  setCoinsNote("");
+                  setCoinsError(null);
+                }}
+                disabled={assigningCoins}
+                className="rounded-xl border border-line px-4 py-2 text-xs font-semibold text-muted hover:bg-surface cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={assigningCoins}
+                className="rounded-xl bg-brand px-5 py-2 text-xs font-bold text-white shadow-brand hover:bg-brand-dark disabled:opacity-50 cursor-pointer"
+              >
+                {assigningCoins ? "Crediting..." : "Credit Coins"}
+              </button>
+            </div>
+          </form>
         </Modal>
       )}
 

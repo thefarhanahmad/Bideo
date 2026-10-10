@@ -14,7 +14,8 @@ const VideoMonetizationReview = require('../models/VideoMonetizationReview');
 const MonetizationApplication = require('../models/MonetizationApplication');
 const WithdrawalRequest = require('../models/WithdrawalRequest');
 const VideoView = require('../models/VideoView');
-const Notification = require('../models/Notification');
+const CoinTransaction = require('../models/CoinTransaction');
+const { checkAndApplyChannelVerification } = require('../utils/channelVerification');
 const { notifyAndPush } = require('../utils/pushNotification');
 const { getUserEarningsSummary, processPendingWalletCredits, getRewardRates } = require('../services/walletSettlementService');
 
@@ -270,6 +271,10 @@ exports.getChannelProfile = async (req, res, next) => {
       ]),
     ]);
     const totalViews = viewsAgg && viewsAgg.length > 0 && viewsAgg[0].totalViews ? viewsAgg[0].totalViews : 0;
+    if (totalViews >= 100000 && !channelObj.isVerified) {
+      checkAndApplyChannelVerification(channelObj._id).catch(() => {});
+      channel.isVerified = true;
+    }
     channel.followersCount = followersCount;
     channel.followingCount = followingCount;
     channel.videosCount = videosCount;
@@ -656,7 +661,7 @@ exports.getUsers = async (req, res, next) => {
     const skip = (page - 1) * limit;
 
     const USER_PROJECTION =
-      'name channelName avatar email phone role isVerified isBlocked blockedAt blockReason deletionScheduled scheduledDeletionDate deletionStatus recoveryRequested walletBalance totalEarnings followersCount createdAt';
+      'name channelName avatar email phone role isVerified isBlocked blockedAt blockReason deletionScheduled scheduledDeletionDate deletionStatus recoveryRequested walletBalance totalEarnings coins followersCount createdAt';
 
     const [users, total, countsAgg, approvedApps] = await Promise.all([
       User.find(query)
@@ -968,6 +973,67 @@ exports.toggleMonetizeUser = async (req, res, next) => {
         data: application,
       });
     }
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Assign / credit coins to a user by administrator (No notification)
+// @route   POST /api/users/:id/assign-coins
+// @access  Private/Admin
+exports.assignCoinsByAdmin = async (req, res, next) => {
+  try {
+    const rawAmount = req.body.amount;
+    const amount = Number(rawAmount);
+
+    if (isNaN(amount) || amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid positive coin amount to assign.',
+      });
+    }
+
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const previousCoins = Number(user.coins || 0);
+    const updatedUser = await User.findByIdAndUpdate(
+      user._id,
+      { $inc: { coins: amount } },
+      { new: true }
+    );
+
+    const note = (req.body.note || '').trim();
+    const description = note
+      ? `Admin assigned ${amount} coins: ${note}`
+      : `Admin assigned ${amount} coins`;
+
+    await CoinTransaction.create({
+      user: updatedUser._id,
+      type: 'admin_adjustment',
+      amount: amount,
+      balanceAfter: updatedUser.coins,
+      description: description,
+      metadata: {
+        adminId: req.user.id,
+        adminName: req.user.name,
+        previousCoins,
+        newCoins: updatedUser.coins,
+        note: note || undefined,
+      },
+    });
+
+    // NOTE: Explicit requirement - Do NOT send any notification to the user, just credit coins.
+    return res.status(200).json({
+      success: true,
+      message: `Successfully credited ${amount} coins to ${updatedUser.name || updatedUser.channelName || 'user'}.`,
+      data: {
+        userId: updatedUser._id,
+        coins: updatedUser.coins,
+      },
+    });
   } catch (err) {
     next(err);
   }

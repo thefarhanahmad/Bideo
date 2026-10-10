@@ -116,7 +116,7 @@ const userSchema = new mongoose.Schema({
   },
   verifiedSource: {
     type: String,
-    enum: ['admin', 'coin_purchase', null],
+    enum: ['admin', 'coin_purchase', 'views_milestone', null],
     default: null,
   },
   verifiedAt: {

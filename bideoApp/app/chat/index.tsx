@@ -22,7 +22,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSelector } from 'react-redux';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getVideoMetaData } from 'react-native-compressor';
 import Colors from '../../constants/Colors';
 import { RootState } from '../../redux/store';
 import { chatService, storyService, resolveMediaUrl } from '../../services/api';
@@ -334,7 +333,7 @@ export default function ChatListScreen() {
         res = await ImagePicker.launchCameraAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Videos,
           allowsEditing: false,
-          videoMaxDuration: 15,
+          videoMaxDuration: 30,
           quality: 0.85,
         });
       } else if (mediaTypeChoice === 'camera_image') {
@@ -376,6 +375,7 @@ export default function ChatListScreen() {
         // Step 2: Fallback to getVideoMetaData if duration was null or missing
         if (!durationSec) {
           try {
+            const { getVideoMetaData } = require('react-native-compressor');
             const meta = await getVideoMetaData(asset.uri);
             if (meta && meta.duration) {
               const metaDur = Number(meta.duration);
@@ -384,15 +384,15 @@ export default function ChatListScreen() {
               }
             }
           } catch (e) {
-            console.warn('Could not inspect video metadata:', e);
+            console.warn('Could not inspect video metadata (falling back):', e);
           }
         }
 
-        // Step 3: Strict 15-second cutoff verification
-        if (durationSec && durationSec > 15.5) {
+        // Step 3: Strict 30-second cutoff verification
+        if (durationSec && durationSec > 30.5) {
           showAlert(
             'Video Too Long',
-            `Story videos can be at most 15 seconds long (selected video is ${Math.round(durationSec)}s). Please choose or trim a video under 15 seconds.`
+            `Story videos can be at most 30 seconds long (selected video is ${Math.round(durationSec)}s). Please choose or trim a video under 30 seconds.`
           );
           return;
         }

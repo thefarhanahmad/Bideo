@@ -22,6 +22,7 @@ const {
   notifyFollowersOfUpload,
   checkAndNotifyViewMilestone,
 } = require("../utils/pushNotification");
+const { checkAndApplyChannelVerification } = require("../utils/channelVerification");
 const { scheduleVideoModeration } = require("../services/moderationService");
 const {
   queueWalletCredit,
@@ -980,6 +981,9 @@ exports.recordView = async (req, res, next) => {
         creatorId: video.owner,
         video: updatedVideo,
       }).catch(() => {});
+
+      // Auto-verify channel permanently when total views reach 1 lac (100,000 views)
+      checkAndApplyChannelVerification(video.owner).catch(() => {});
     }
 
     const isSelfView =

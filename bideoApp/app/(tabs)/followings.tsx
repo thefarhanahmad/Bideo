@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ScrollView, TouchableOpacity, ActivityIndicator, Modal, TextInput } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -10,6 +10,8 @@ import { useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import api from '../../services/api';
 import AuthModal from '../../components/AuthModal';
+import PlaylistModal from '../../components/PlaylistModal';
+import { showAlert } from '../../components/AppAlert';
 import { EmptyState } from '../../components/ListStates';
 import VerifiedBadge from '../../components/VerifiedBadge';
 const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
@@ -22,6 +24,10 @@ export default function FollowingsScreen() {
   const [filter, setFilter] = useState<'all' | 'short' | 'video'>('all');
   const [loading, setLoading] = useState(false);
   const [authModalVisible, setAuthModalVisible] = useState(false);
+  const [playlistModalVisible, setPlaylistModalVisible] = useState(false);
+  const [selectedVideo, setSelectedVideo] = useState<any>(null);
+  const [reportModalVisible, setReportModalVisible] = useState(false);
+  const [reportReason, setReportReason] = useState('');
 
   useFocusEffect(
     useCallback(() => {
@@ -131,7 +137,23 @@ export default function FollowingsScreen() {
       <FlatList
         data={feedItems}
         keyExtractor={(item) => item._id}
-        renderItem={({ item }) => item.itemType === 'post' ? <PostCard post={item} /> : <VideoCard video={item} />}
+        renderItem={({ item }) =>
+          item.itemType === 'post' ? (
+            <PostCard post={item} />
+          ) : (
+            <VideoCard
+              video={item}
+              onPlaylistPress={(vId) => {
+                setSelectedVideo({ _id: vId });
+                setPlaylistModalVisible(true);
+              }}
+              onReportPress={(v) => {
+                setSelectedVideo(v);
+                setReportModalVisible(true);
+              }}
+            />
+          )
+        }
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={<Text style={styles.sectionTitle}>{feedItems.length > 0 ? 'Recent Activity' : ''}</Text>}
         ListEmptyComponent={
@@ -146,6 +168,52 @@ export default function FollowingsScreen() {
         refreshing={loading}
         onRefresh={loadFollowings}
       />
+
+      <PlaylistModal
+        visible={playlistModalVisible}
+        onClose={() => {
+          setPlaylistModalVisible(false);
+          setSelectedVideo(null);
+        }}
+        videoId={selectedVideo?._id}
+      />
+
+      <Modal visible={reportModalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.reportBox}>
+            <Text style={styles.reportTitle}>Report video</Text>
+            <TextInput
+              style={styles.reportInput}
+              placeholder="Tell us what is wrong"
+              placeholderTextColor={Colors.textGray}
+              value={reportReason}
+              onChangeText={setReportReason}
+              multiline
+            />
+            <View style={styles.reportActions}>
+              <TouchableOpacity onPress={() => { setReportModalVisible(false); setSelectedVideo(null); setReportReason(''); }}>
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.submitReport}
+                onPress={async () => {
+                  try {
+                    await api.post(`/videos/${selectedVideo?._id}/report`, { reason: reportReason });
+                    showAlert('Report sent', 'Thanks for helping keep Bideo safe.');
+                    setReportModalVisible(false);
+                    setSelectedVideo(null);
+                    setReportReason('');
+                  } catch (err: any) {
+                    showAlert('Report failed', err.response?.data?.message || 'Please try again');
+                  }
+                }}
+              >
+                <Text style={styles.submitReportText}>Submit</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -259,12 +327,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   listContent: {
-    paddingBottom: 20,
+    paddingHorizontal: 8,
+    paddingTop: 6,
+    paddingBottom: 24,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    margin: 15,
+    marginHorizontal: 4,
+    marginVertical: 10,
     color: Colors.text,
   },
   emptyText: {
@@ -272,6 +343,42 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 50,
   },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  reportBox: {
+    backgroundColor: Colors.white,
+    borderRadius: 20,
+    padding: 20,
+  },
+  reportTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.text,
+    marginBottom: 12,
+  },
+  reportInput: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    minHeight: 90,
+    padding: 12,
+    textAlignVertical: 'top',
+    backgroundColor: Colors.background,
+  },
+  reportActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    marginTop: 16,
+    gap: 18,
+  },
+  cancelText: { color: Colors.textGray, fontWeight: '600' },
+  submitReport: { backgroundColor: Colors.primary, borderRadius: 999, paddingHorizontal: 22, paddingVertical: 11 },
+  submitReportText: { color: Colors.white, fontWeight: 'bold' },
   filters: {
     flexDirection: 'row',
     gap: 8,

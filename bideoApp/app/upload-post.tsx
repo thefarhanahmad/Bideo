@@ -102,15 +102,15 @@ export default function UploadPostScreen() {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        allowsEditing: true,
-        quality: 0.7,
+        allowsEditing: false,
+        quality: 0.85,
       });
-      if (!result.canceled) {
+      if (!result.canceled && result.assets && result.assets.length > 0) {
         setPostImage(result.assets[0]);
         setPostImageChanged(true);
       }
     } catch (err) {
-      showAlert('Error', 'Failed to pick or crop image.');
+      showAlert('Error', 'Failed to select image.');
     }
   };
 
@@ -305,18 +305,31 @@ export default function UploadPostScreen() {
         )}
 
         <Text style={styles.label}>Image (Optional)</Text>
-        <TouchableOpacity style={[styles.picker, styles.thumbnailPicker]} onPress={pickPostImage}>
-          {postImage ? (
-            <Image source={{ uri: postImage.uri }} style={styles.thumbnailPreview} contentFit="cover" transition={200} />
-          ) : (
-            <>
-              <View style={styles.pickerIconCircle}>
-                <Ionicons name="image" size={24} color={Colors.primary} />
-              </View>
-              <Text style={styles.pickerText}>Tap to add an image</Text>
-            </>
-          )}
-        </TouchableOpacity>
+        {postImage ? (
+          <View style={styles.imagePreviewWrapper}>
+            <TouchableOpacity style={styles.thumbnailPickerFilled} onPress={pickPostImage} activeOpacity={0.9}>
+              <Image source={{ uri: postImage.uri }} style={styles.thumbnailPreview} contentFit="contain" transition={200} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.removeImageBtn}
+              onPress={() => {
+                setPostImage(null);
+                setPostImageChanged(true);
+              }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="close" size={16} color={Colors.white} />
+            </TouchableOpacity>
+            <Text style={styles.tapToChangeHint}>Tap image to change</Text>
+          </View>
+        ) : (
+          <TouchableOpacity style={[styles.picker, styles.thumbnailPicker]} onPress={pickPostImage}>
+            <View style={styles.pickerIconCircle}>
+              <Ionicons name="image" size={24} color={Colors.primary} />
+            </View>
+            <Text style={styles.pickerText}>Tap to add an image</Text>
+          </TouchableOpacity>
+        )}
 
         {Boolean(editPostId) && (
           <>
@@ -469,10 +482,40 @@ const styles = StyleSheet.create({
   thumbnailPicker: {
     height: 180,
   },
+  imagePreviewWrapper: {
+    position: 'relative',
+    width: '100%',
+  },
+  thumbnailPickerFilled: {
+    width: '100%',
+    height: 220,
+    backgroundColor: Colors.white,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
   thumbnailPreview: {
     width: '100%',
     height: '100%',
     borderRadius: 14,
+  },
+  removeImageBtn: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 15,
+    width: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tapToChangeHint: {
+    fontSize: 11,
+    color: Colors.textGray,
+    textAlign: 'center',
+    marginTop: 6,
   },
   pickerIconCircle: {
     width: 56,

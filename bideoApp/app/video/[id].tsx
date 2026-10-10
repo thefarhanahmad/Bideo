@@ -24,6 +24,8 @@ import { AppInterstitialAd, AppAdBanner } from '../../components/AppAds';
 import HashtagText from '../../components/HashtagText';
 import { shareVideo } from '../../utils/shareHelper';
 import ShareModal from '../../components/ShareModal';
+import { showAlert } from '../../components/AppAlert';
+import { VideoDetailSkeleton } from '../../components/ListStates';
 
 const FALLBACK_IMAGE = 'https://via.placeholder.com/80x80.png?text=User';
 const REQUIRED_WATCH_TIME = 3; // 3 seconds minimum watch time to count a view
@@ -71,6 +73,7 @@ export default function VideoScreen() {
   const [loading, setLoading] = useState(true);
   const [authModalVisible, setAuthModalVisible] = useState(false);
   const [playlistModalVisible, setPlaylistModalVisible] = useState(false);
+  const [selectedPlaylistVideoId, setSelectedPlaylistVideoId] = useState<string | null>(null);
   const [isFollowed, setIsFollowed] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
   const [isDisliked, setIsDisliked] = useState(false);
@@ -527,27 +530,23 @@ export default function VideoScreen() {
     }
   };
 
-  if (loading) {
-    return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
-    );
-  }
-
-  if (!video) {
-    return (
-      <View style={styles.centerContainer}>
-        <Text>Video not found</Text>
-      </View>
-    );
-  }
-
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.white} />
       <View style={[styles.videoPlayerContainer, { height: playerHeight }]}>
-        {!adCompleted && showingAd ? (
+        {loading ? (
+          <View style={styles.videoLoadingPlaceholder}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+            <TouchableOpacity
+              style={styles.floatingBackButton}
+              onPress={handleBack}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="arrow-back" size={22} color={Colors.white} />
+            </TouchableOpacity>
+          </View>
+        ) : !adCompleted && showingAd ? (
           <View style={styles.adPlayerPlaceholder}>
             <ActivityIndicator size="large" color={Colors.primary} />
             <Text style={{ color: Colors.white, marginTop: 10, fontSize: 13, fontWeight: '600' }}>Loading Sponsor Ad...</Text>
@@ -576,10 +575,19 @@ export default function VideoScreen() {
         )}
       </View>
 
-      <FlatList
-        ListHeaderComponent={
-          <View style={styles.contentContainer}>
-            <View style={styles.titleContainer}>
+      {loading ? (
+        <ScrollView style={{ flex: 1, backgroundColor: Colors.white }} showsVerticalScrollIndicator={false}>
+          <VideoDetailSkeleton />
+        </ScrollView>
+      ) : !video ? (
+        <View style={styles.centerContainer}>
+          <Text style={{ color: Colors.textGray, fontSize: 15 }}>Video not found</Text>
+        </View>
+      ) : (
+        <FlatList
+          ListHeaderComponent={
+            <View style={styles.contentContainer}>
+              <View style={styles.titleContainer}>
               <View style={{ flex: 1, paddingRight: 6 }}>
                 <HashtagText text={video.title} style={styles.title} numberOfLines={2} />
               </View>
@@ -697,10 +705,22 @@ export default function VideoScreen() {
         }
         data={recommendedVideos}
         keyExtractor={(item) => item._id}
-        renderItem={({ item }) => <VideoCard video={item} />}
+        renderItem={({ item }) => (
+          <VideoCard
+            video={item}
+            onPlaylistPress={(vId) => {
+              setSelectedPlaylistVideoId(vId);
+              setPlaylistModalVisible(true);
+            }}
+            onReportPress={(v) => {
+              showAlert('Report', 'Thank you. We will review this video.');
+            }}
+          />
+        )}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
       />
+      )}
 
       <AuthModal 
         visible={authModalVisible} 
@@ -712,8 +732,11 @@ export default function VideoScreen() {
       />
       <PlaylistModal 
         visible={playlistModalVisible} 
-        onClose={() => setPlaylistModalVisible(false)}
-        videoId={video._id}
+        onClose={() => {
+          setPlaylistModalVisible(false);
+          setSelectedPlaylistVideoId(null);
+        }}
+        videoId={selectedPlaylistVideoId || video?._id || (id as string)}
       />
       <AppInterstitialAd 
         visible={showingAd} 
@@ -721,103 +744,107 @@ export default function VideoScreen() {
       />
 
       {/* Description Bottom Sheet Modal */}
-      <Modal
-        visible={descriptionModalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setDescriptionModalVisible(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setDescriptionModalVisible(false)} />
-          <View style={styles.descSheetContent}>
-            <View style={styles.sheetHeader}>
-              <Text style={styles.sheetHeaderTitle}>Description</Text>
-              <TouchableOpacity
-                style={styles.sheetCloseBtn}
-                onPress={() => setDescriptionModalVisible(false)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Ionicons name="close" size={22} color={Colors.text} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.sheetScroll} showsVerticalScrollIndicator={false} nestedScrollEnabled={true}>
-              <Text style={styles.sheetVideoTitle}>{video.title}</Text>
-              <View style={styles.descStatsRow}>
-                <View style={styles.descStatItem}>
-                  <Text style={styles.descStatNumber}>{formatViews(video.likes?.length || 0)}</Text>
-                  <Text style={styles.descStatLabel}>Likes</Text>
-                </View>
-                <View style={styles.descStatDivider} />
-                <View style={styles.descStatItem}>
-                  <Text style={styles.descStatNumber}>{formatViews(video.views || 0)}</Text>
-                  <Text style={styles.descStatLabel}>Views</Text>
-                </View>
-                <View style={styles.descStatDivider} />
-                <View style={styles.descStatItem}>
-                  <Text style={styles.descStatNumber}>{formatTimeAgo(video.createdAt)}</Text>
-                  <Text style={styles.descStatLabel}>Uploaded</Text>
-                </View>
+      {Boolean(video) && (
+        <Modal
+          visible={descriptionModalVisible}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setDescriptionModalVisible(false)}
+        >
+          <View style={styles.modalBackdrop}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => setDescriptionModalVisible(false)} />
+            <View style={styles.descSheetContent}>
+              <View style={styles.sheetHeader}>
+                <Text style={styles.sheetHeaderTitle}>Description</Text>
+                <TouchableOpacity
+                  style={styles.sheetCloseBtn}
+                  onPress={() => setDescriptionModalVisible(false)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name="close" size={22} color={Colors.text} />
+                </TouchableOpacity>
               </View>
-              <View style={styles.descDivider} />
-              <HashtagText
-                text={video.description || 'No description available for this video.'}
-                style={styles.sheetDescText}
-              />
-            </ScrollView>
+              <ScrollView style={styles.sheetScroll} showsVerticalScrollIndicator={false} nestedScrollEnabled={true}>
+                <Text style={styles.sheetVideoTitle}>{video?.title || ''}</Text>
+                <View style={styles.descStatsRow}>
+                  <View style={styles.descStatItem}>
+                    <Text style={styles.descStatNumber}>{formatViews(video?.likes?.length || 0)}</Text>
+                    <Text style={styles.descStatLabel}>Likes</Text>
+                  </View>
+                  <View style={styles.descStatDivider} />
+                  <View style={styles.descStatItem}>
+                    <Text style={styles.descStatNumber}>{formatViews(video?.views || 0)}</Text>
+                    <Text style={styles.descStatLabel}>Views</Text>
+                  </View>
+                  <View style={styles.descStatDivider} />
+                  <View style={styles.descStatItem}>
+                    <Text style={styles.descStatNumber}>{formatTimeAgo(video?.createdAt)}</Text>
+                    <Text style={styles.descStatLabel}>Uploaded</Text>
+                  </View>
+                </View>
+                <View style={styles.descDivider} />
+                <HashtagText
+                  text={video?.description || 'No description available for this video.'}
+                  style={styles.sheetDescText}
+                />
+              </ScrollView>
+            </View>
           </View>
-        </View>
-      </Modal>
+        </Modal>
+      )}
 
       {/* Comments Full Bottom Sheet Modal */}
-      <Modal
-        visible={commentsModalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setCommentsModalVisible(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setCommentsModalVisible(false)} />
-          <View style={styles.commentsSheetContent}>
-            <View style={[styles.sheetHeader, { paddingHorizontal: 16 }]}>
-              <Text style={styles.sheetHeaderTitle}>
-                Comments ({commentsCount || video.commentsCount || 0})
-              </Text>
-              <TouchableOpacity
-                style={styles.sheetCloseBtn}
-                onPress={() => setCommentsModalVisible(false)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      {Boolean(video) && (
+        <Modal
+          visible={commentsModalVisible}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setCommentsModalVisible(false)}
+        >
+          <View style={styles.modalBackdrop}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => setCommentsModalVisible(false)} />
+            <View style={styles.commentsSheetContent}>
+              <View style={[styles.sheetHeader, { paddingHorizontal: 16 }]}>
+                <Text style={styles.sheetHeaderTitle}>
+                  Comments ({commentsCount || video?.commentsCount || 0})
+                </Text>
+                <TouchableOpacity
+                  style={styles.sheetCloseBtn}
+                  onPress={() => setCommentsModalVisible(false)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name="close" size={22} color={Colors.text} />
+                </TouchableOpacity>
+              </View>
+              <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={{ paddingBottom: 40 }}
+                showsVerticalScrollIndicator={true}
+                keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled={true}
+                scrollEventThrottle={16}
+                bounces={true}
+                overScrollMode="always"
               >
-                <Ionicons name="close" size={22} color={Colors.text} />
-              </TouchableOpacity>
+                <CommentList
+                  videoId={video?._id}
+                  contentOwnerId={video?.owner?._id || video?.owner}
+                  onCommentAdded={() => {
+                    setCommentsCount((prev) => prev + 1);
+                    setVideo((prev: any) => prev ? { ...prev, commentsCount: (prev.commentsCount || 0) + 1 } : prev);
+                    if (video?._id) fetchPreviewComments(video._id);
+                  }}
+                  isAuthenticated={isAuthenticated}
+                  onAuthRequired={() => {
+                    setCommentsModalVisible(false);
+                    setAuthModalVisible(true);
+                  }}
+                />
+              </ScrollView>
             </View>
-            <ScrollView
-              style={{ flex: 1 }}
-              contentContainerStyle={{ paddingBottom: 40 }}
-              showsVerticalScrollIndicator={true}
-              keyboardShouldPersistTaps="handled"
-              nestedScrollEnabled={true}
-              scrollEventThrottle={16}
-              bounces={true}
-              overScrollMode="always"
-            >
-              <CommentList
-                videoId={video._id}
-                contentOwnerId={video?.owner?._id || video?.owner}
-                onCommentAdded={() => {
-                  setCommentsCount((prev) => prev + 1);
-                  setVideo((prev: any) => prev ? { ...prev, commentsCount: (prev.commentsCount || 0) + 1 } : prev);
-                  fetchPreviewComments(video._id);
-                }}
-                isAuthenticated={isAuthenticated}
-                onAuthRequired={() => {
-                  setCommentsModalVisible(false);
-                  setAuthModalVisible(true);
-                }}
-              />
-            </ScrollView>
           </View>
-        </View>
-      </Modal>
+        </Modal>
+      )}
 
       <ShareModal
         visible={shareModalVisible}
@@ -843,13 +870,20 @@ export default function VideoScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.white,
+    backgroundColor: Colors.background,
   },
   videoPlayerContainer: {
     position: 'relative',
     width: '100%',
     backgroundColor: '#000000',
     overflow: 'hidden',
+  },
+  videoLoadingPlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#000000',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   floatingBackButton: {
     position: 'absolute',
@@ -931,7 +965,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   contentContainer: {
+    backgroundColor: Colors.white,
     padding: 12,
+    marginBottom: 8,
+    borderRadius: 12,
   },
   titleContainer: {
     flexDirection: 'row',
@@ -1104,10 +1141,13 @@ const styles = StyleSheet.create({
   recommendedTitle: {
     fontSize: 16,
     fontWeight: 'bold',
+    color: Colors.text,
     marginBottom: 12,
   },
   listContainer: {
-    paddingBottom: 20,
+    paddingHorizontal: 8,
+    paddingBottom: 24,
+    backgroundColor: Colors.background,
   },
   modalBackdrop: {
     flex: 1,

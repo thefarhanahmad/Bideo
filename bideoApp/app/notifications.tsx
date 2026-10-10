@@ -19,9 +19,25 @@ export default function NotificationsScreen() {
   const router = useRouter();
   const { isAuthenticated } = useSelector((state: RootState) => state.auth);
   const [items, setItems] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'all' | 'activity' | 'recommendations'>('all');
   const [loading, setLoading] = useState(false);
   const [authModalVisible, setAuthModalVisible] = useState(false);
   const isNavigatingRef = useRef(false);
+
+  const isRecommendationNotification = (item: any) => {
+    const msg = (item.message || '').toLowerCase();
+    return msg.includes('recommended') || item.type === 'recommendation';
+  };
+
+  const filteredItems = items.filter((item) => {
+    if (activeTab === 'recommendations') {
+      return isRecommendationNotification(item);
+    }
+    if (activeTab === 'activity') {
+      return !isRecommendationNotification(item);
+    }
+    return true;
+  });
 
   const loadNotifications = useCallback(async () => {
     if (!isAuthenticated) return;
@@ -185,11 +201,36 @@ export default function NotificationsScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Filter Tabs */}
+      <View style={styles.tabsContainer}>
+        {(
+          [
+            { id: 'all', label: 'All' },
+            { id: 'activity', label: 'Activity' },
+            { id: 'recommendations', label: 'Recommendations' },
+          ] as const
+        ).map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <TouchableOpacity
+              key={tab.id}
+              style={[styles.tabButton, isActive && styles.tabButtonActive]}
+              onPress={() => setActiveTab(tab.id)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.tabButtonText, isActive && styles.tabButtonTextActive]}>
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
       {loading && items.length === 0 ? (
         <View style={styles.center}><ActivityIndicator color={Colors.primary} /></View>
       ) : (
         <FlatList
-          data={items}
+          data={filteredItems}
           keyExtractor={(item) => item._id}
           renderItem={({ item }) => {
             const iconInfo = getTypeIcon(item.type);
@@ -262,11 +303,25 @@ export default function NotificationsScreen() {
             );
           }}
           ListEmptyComponent={
-            <EmptyState
-              icon="notifications-outline"
-              title="You're all caught up"
-              subtitle="Likes, comments, follows, milestones, and uploads from creators will show up here."
-            />
+            activeTab === 'recommendations' ? (
+              <EmptyState
+                icon="bulb-outline"
+                title="No recommendations yet"
+                subtitle="Personalized video and post recommendations will appear here."
+              />
+            ) : activeTab === 'activity' ? (
+              <EmptyState
+                icon="notifications-outline"
+                title="No activity yet"
+                subtitle="Likes, comments, followers, and creator alerts will appear here."
+              />
+            ) : (
+              <EmptyState
+                icon="notifications-outline"
+                title="You're all caught up"
+                subtitle="Likes, comments, follows, milestones, and uploads from creators will show up here."
+              />
+            )
           }
           refreshing={loading}
           onRefresh={loadNotifications}
@@ -292,6 +347,36 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
+  },
+  tabsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 8,
+    backgroundColor: Colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  tabButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  tabButtonActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  tabButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  tabButtonTextActive: {
+    color: Colors.white,
+    fontWeight: '700',
   },
   title: { fontSize: 18, fontWeight: 'bold', color: Colors.text },
   readAll: { color: Colors.primary, fontWeight: '600' },

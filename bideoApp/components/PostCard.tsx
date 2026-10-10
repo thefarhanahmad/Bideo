@@ -136,13 +136,15 @@ const PostCard = ({ post, onDelete }: PostCardProps) => {
         style={styles.linkPreviewContainer}
       />
       {!!post.imageUrl && (
-        <Image
-          source={{ uri: resolveMediaUrl(post.imageUrl) }}
-          style={styles.image}
-          contentFit="cover"
-          transition={150}
-          cachePolicy="memory-disk"
-        />
+<View style={styles.imageCardContainer}>
+          <Image
+            source={{ uri: resolveMediaUrl(post.imageUrl) }}
+            style={styles.cardImage}
+            contentFit="contain"
+            transition={150}
+            cachePolicy="memory-disk"
+          />
+        </View>
       )}
 
       <View style={styles.actions}>
@@ -303,12 +305,23 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginBottom: 10,
   },
-  image: {
+  imageCardContainer: {
     width: '100%',
-    height: 300,
-    borderRadius: 4,
-    marginTop: 4,
-    backgroundColor: Colors.background,
+    aspectRatio: 1,
+    maxHeight: 380,
+    backgroundColor: Colors.white,
+    borderRadius: 12,
+    marginTop: 6,
+    marginBottom: 4,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+  },
+  cardImage: {
+    width: '100%',
+    height: '100%',
   },
   actions: {
     flexDirection: 'row',

@@ -23,7 +23,7 @@ export const EmptyState = ({
 );
 
 /** A single pulsing grey box. */
-const Shimmer = ({ style }: { style?: any }) => {
+export const Shimmer = ({ style }: { style?: any }) => {
   const opacity = useRef(new Animated.Value(0.5)).current;
   useEffect(() => {
     const loop = Animated.loop(
@@ -49,6 +49,49 @@ export const VideoListSkeleton = ({ count = 4 }: { count?: number }) => (
           <View style={{ flex: 1 }}>
             <Shimmer style={styles.lineLg} />
             <Shimmer style={styles.lineSm} />
+          </View>
+        </View>
+      </View>
+    ))}
+  </View>
+);
+
+/** Skeleton placeholder for Video Details screen below the player. */
+export const VideoDetailSkeleton = () => (
+  <View style={styles.detailSkeletonWrap}>
+    <Shimmer style={{ width: '92%', height: 20, marginBottom: 8, borderRadius: 6 }} />
+    <Shimmer style={{ width: '60%', height: 16, marginBottom: 14, borderRadius: 6 }} />
+    <Shimmer style={{ width: '40%', height: 12, marginBottom: 16, borderRadius: 4 }} />
+
+    <View style={{ flexDirection: 'row', gap: 10, marginBottom: 18 }}>
+      <Shimmer style={{ width: 75, height: 36, borderRadius: 999 }} />
+      <Shimmer style={{ width: 55, height: 36, borderRadius: 999 }} />
+      <Shimmer style={{ width: 75, height: 36, borderRadius: 999 }} />
+      <Shimmer style={{ width: 70, height: 36, borderRadius: 999 }} />
+    </View>
+
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderTopWidth: 1, borderBottomWidth: 1, borderColor: '#F0F0F0', marginBottom: 14 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <Shimmer style={{ width: 42, height: 42, borderRadius: 21 }} />
+        <View>
+          <Shimmer style={{ width: 110, height: 14, marginBottom: 6, borderRadius: 4 }} />
+          <Shimmer style={{ width: 70, height: 10, borderRadius: 4 }} />
+        </View>
+      </View>
+      <Shimmer style={{ width: 85, height: 32, borderRadius: 20 }} />
+    </View>
+
+    <Shimmer style={{ width: '100%', height: 68, borderRadius: 12, marginBottom: 18 }} />
+    <Shimmer style={{ width: 130, height: 18, marginBottom: 14, borderRadius: 4 }} />
+
+    {Array.from({ length: 3 }).map((_, i) => (
+      <View key={i} style={{ marginBottom: 16 }}>
+        <Shimmer style={{ width: '100%', aspectRatio: 16 / 9, borderRadius: 12, marginBottom: 10 }} />
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <Shimmer style={{ width: 36, height: 36, borderRadius: 18 }} />
+          <View style={{ flex: 1 }}>
+            <Shimmer style={{ width: '85%', height: 14, marginBottom: 6, borderRadius: 4 }} />
+            <Shimmer style={{ width: '50%', height: 11, borderRadius: 4 }} />
           </View>
         </View>
       </View>
@@ -120,5 +163,11 @@ const styles = StyleSheet.create({
   lineSm: {
     height: 10,
     width: '55%',
+  },
+  detailSkeletonWrap: {
+    paddingHorizontal: 12,
+    paddingTop: 16,
+    paddingBottom: 24,
+    backgroundColor: Colors.white,
   },
 });

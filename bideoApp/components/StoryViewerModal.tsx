@@ -38,6 +38,7 @@ interface StoryVideoItemProps {
   isPaused: boolean;
   onVideoEnd: () => void;
   onDurationDiscovered?: (durMs: number) => void;
+  onReady?: () => void;
   onError?: () => void;
 }
 
@@ -46,6 +47,7 @@ function StoryVideoItem({
   isPaused,
   onVideoEnd,
   onDurationDiscovered,
+  onReady,
   onError,
 }: StoryVideoItemProps) {
   const player = useVideoPlayer(uri, (p) => {
@@ -86,10 +88,11 @@ function StoryVideoItem({
       try {
         if (!hasNotifiedDuration.current && player.duration && player.duration > 0) {
           hasNotifiedDuration.current = true;
-          const durMs = Math.min(Math.round(player.duration * 1000), 15000);
+          const durMs = Math.min(Math.round(player.duration * 1000), 30000);
           if (onDurationDiscovered && durMs >= 500) {
             onDurationDiscovered(durMs);
           }
+          onReady?.();
         }
 
         if ((player as any)?.status === 'error') {
@@ -102,7 +105,7 @@ function StoryVideoItem({
           !endedCalledRef.current &&
           player.duration &&
           player.duration > 0 &&
-          (player.currentTime >= Math.min(player.duration - 0.2, 15) || (!player.playing && player.currentTime > 0.5))
+          (player.currentTime >= Math.min(player.duration - 0.2, 30) || (!player.playing && player.currentTime > 0.5))
         ) {
           endedCalledRef.current = true;
           clearInterval(interval);
@@ -431,21 +434,34 @@ export default function StoryViewerModal({
     [progressAnim, handleNextStory]
   );
 
+  const handleMediaLoaded = useCallback(() => {
+    setImageLoading(false);
+    setImageError(false);
+    if (!isPaused && !isPressHolding && !viewersModalVisible) {
+      startProgressAnimation(currentStoryDurationRef.current);
+    }
+  }, [isPaused, isPressHolding, viewersModalVisible, startProgressAnimation]);
+
   const handleVideoDurationDiscovered = useCallback(
     (durMs: number) => {
       if (!durMs || durMs < 500) return;
       currentStoryDurationRef.current = durMs;
-      const currentVal = currentProgressVal.current;
-      const remainingTime = Math.max(300, (1 - currentVal) * durMs);
-      startProgressAnimation(remainingTime);
+      setImageLoading(false);
+      setImageError(false);
+      if (!isPaused && !isPressHolding && !viewersModalVisible) {
+        const currentVal = currentProgressVal.current;
+        const remainingTime = Math.max(300, (1 - currentVal) * durMs);
+        startProgressAnimation(remainingTime);
+      }
     },
-    [startProgressAnimation]
+    [isPaused, isPressHolding, viewersModalVisible, startProgressAnimation]
   );
 
-  // Restart progress when story changes
+  // Reset progress and set loading when story changes
   useEffect(() => {
     if (!visible || !currentStory) return;
 
+    animRef.current?.stop();
     setImageLoading(true);
     setImageError(false);
     progressAnim.setValue(0);
@@ -453,9 +469,9 @@ export default function StoryViewerModal({
     setIsPaused(false);
 
     markViewed(currentStory._id);
-    const initialDur = currentStory.mediaType === 'video' ? 15000 : STORY_DURATION;
+    const initialDur = currentStory.mediaType === 'video' ? 30000 : STORY_DURATION;
     currentStoryDurationRef.current = initialDur;
-    startProgressAnimation(initialDur);
+    // NOTE: Progress animation will start once media loads (onLoadEnd / onReady)
 
     return () => {
       animRef.current?.stop();
@@ -477,8 +493,10 @@ export default function StoryViewerModal({
     if (isInputFocused) return;
     setIsPressHolding(false);
     setIsPaused(false);
-    const remainingTime = Math.max(500, (1 - currentProgressVal.current) * currentStoryDurationRef.current);
-    startProgressAnimation(remainingTime);
+    if (!imageLoading) {
+      const remainingTime = Math.max(500, (1 - currentProgressVal.current) * currentStoryDurationRef.current);
+      startProgressAnimation(remainingTime);
+    }
   };
 
   const handleTapScreen = (evt: any) => {
@@ -593,6 +611,7 @@ export default function StoryViewerModal({
                 isPaused={isPaused || isPressHolding || viewersModalVisible}
                 onVideoEnd={handleNextStory}
                 onDurationDiscovered={handleVideoDurationDiscovered}
+                onReady={handleMediaLoaded}
                 onError={() => {
                   setImageLoading(false);
                   setImageError(true);
@@ -606,7 +625,7 @@ export default function StoryViewerModal({
                 source={{ uri: resolveMediaUrl(currentStory.mediaUrl) || currentStory.mediaUrl }}
                 style={styles.storyImage}
                 contentFit="contain"
-                onLoadEnd={() => setImageLoading(false)}
+                onLoadEnd={handleMediaLoaded}
                 onError={() => {
                   setImageLoading(false);
                   setImageError(true);
@@ -619,7 +638,7 @@ export default function StoryViewerModal({
               />
             )}
 
-            {imageLoading && !imageError && currentStory.mediaType !== 'video' && (
+            {imageLoading && !imageError && (
               <View style={styles.loaderContainer}>
                 <ActivityIndicator size="large" color="#FFFFFF" />
               </View>
