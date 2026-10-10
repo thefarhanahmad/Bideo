@@ -1378,6 +1378,11 @@ exports.uploadVideo = async (req, res, next) => {
       });
     }
 
+    // Auto-detect if a video uploaded under "Video" (long-form) is actually a short vertical video
+    // (portrait ratio ~9:16 or aspect < 0.8 and duration <= 60 seconds)
+    const isPortraitShort = (isNineBySixteen(aspectRatio) || (aspectRatio && aspectRatio < 0.8)) && (!duration || duration <= 60);
+    const effectiveIsShort = uploadType === "short" || isPortraitShort;
+
     const originalVideoSize = Number(req.body.originalVideoSize || 0);
     const compressedVideoSize = req.files.video[0].size || 0;
 
@@ -1424,7 +1429,7 @@ exports.uploadVideo = async (req, res, next) => {
       videoUrl: videoResult.url,
       thumbnail: thumbnail,
       duration: duration,
-      isShort: uploadType === "short",
+      isShort: effectiveIsShort,
       isPinned,
       boostType: isPinned ? "admin" : "none",
       boostExpiresAt: null,

@@ -15,6 +15,7 @@ import * as VideoThumbnails from 'expo-video-thumbnails';
 import Constants from 'expo-constants';
 import MentionSuggestions from '../components/MentionSuggestions';
 import { AppAdBanner } from '../components/AppAds';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 
 const FALLBACK_THUMBNAIL = 'https://via.placeholder.com/640x360.png?text=Tube+India';
 
@@ -259,9 +260,17 @@ export default function UploadVideoScreen() {
     }
 
     setUploading(true);
-    setUploadProgress(0);
+    setUploadProgress(1);
+
+    try {
+      await activateKeepAwakeAsync();
+    } catch {
+      // keep-awake fallback
+    }
+
     try {
       let finalVideoUri = video.uri;
+      let hasCompression = false;
 
       // Compress video silently (skip if in Expo Go)
       const isExpoGo = Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
@@ -275,6 +284,11 @@ export default function UploadVideoScreen() {
               maxSize: 1280,
               bitrate: 1500000,
               minimumFileSizeForCompress: 0,
+            },
+            (progress: number) => {
+              hasCompression = true;
+              const p = Math.round(progress * 25);
+              setUploadProgress(Math.min(Math.max(p, 1), 25));
             }
           );
           if (compressedUri) {
@@ -368,12 +382,19 @@ export default function UploadVideoScreen() {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
-        timeout: 600000, // 10 minutes timeout for large 500MB video uploads
+        timeout: 900000, // 15 minutes timeout for large video uploads
         onUploadProgress: (event) => {
-          if (event.total) setUploadProgress(Math.round((event.loaded / event.total) * 100));
+          if (event.total) {
+            const raw = event.loaded / event.total;
+            const uploadPercent = hasCompression
+              ? 25 + Math.round(raw * 70)
+              : Math.round(raw * 95);
+            setUploadProgress(Math.min(Math.max(uploadPercent, 1), 95));
+          }
         },
       });
 
+      setUploadProgress(100);
       showAlert('Success', 'Video uploaded successfully!');
       router.replace('/');
     } catch (err: any) {
@@ -391,13 +412,25 @@ export default function UploadVideoScreen() {
       }
       showAlert('Upload Failed', displayMsg);
     } finally {
+      try {
+        deactivateKeepAwake();
+      } catch {
+        // ignore
+      }
       setUploading(false);
     }
   };
 
   const handleUpdate = async () => {
     setUploading(true);
-    setUploadProgress(0);
+    setUploadProgress(1);
+
+    try {
+      await activateKeepAwakeAsync();
+    } catch {
+      // ignore
+    }
+
     try {
       const safeTitle = title.trim().slice(0, 100);
       const safeDescription = description.trim().slice(0, 1000);
@@ -438,8 +471,9 @@ export default function UploadVideoScreen() {
           headers: {
             'Content-Type': 'multipart/form-data',
           },
+          timeout: 900000,
           onUploadProgress: (event) => {
-            if (event.total) setUploadProgress(Math.round((event.loaded / event.total) * 100));
+            if (event.total) setUploadProgress(Math.min(Math.round((event.loaded / event.total) * 95), 95));
           },
         });
       } else {
@@ -451,6 +485,7 @@ export default function UploadVideoScreen() {
           visibility,
         });
       }
+      setUploadProgress(100);
       showAlert('Success', 'Video updated successfully!');
       router.replace('/');
     } catch (err: any) {
@@ -468,6 +503,11 @@ export default function UploadVideoScreen() {
       }
       showAlert('Update Failed', displayMsg);
     } finally {
+      try {
+        deactivateKeepAwake();
+      } catch {
+        // ignore
+      }
       setUploading(false);
     }
   };
@@ -657,60 +697,55 @@ export default function UploadVideoScreen() {
   );
 }
 
-const ProgressOverlay = ({ visible, progress, label }: { visible: boolean; progress: number; label: string }) => {
-  const spin = useRef(new Animated.Value(0)).current;
+const ProgressOverlay = ({ visible, progress, label }: { visible: boolean; progress: number; label?: string }) => {
   const animatedProgress = useRef(new Animated.Value(0)).current;
   const progressValue = Math.max(0, Math.min(progress || 0, 100));
 
   useEffect(() => {
-    if (!visible) return;
-    spin.setValue(0);
-    const loop = Animated.loop(
-      Animated.timing(spin, {
-        toValue: 1,
-        duration: 1200,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      }),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [visible, spin]);
-
-  useEffect(() => {
     Animated.timing(animatedProgress, {
       toValue: progressValue,
-      duration: 260,
+      duration: 220,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: false,
     }).start();
   }, [animatedProgress, progressValue]);
 
-  const spinRotation = spin.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
   const progressWidth = animatedProgress.interpolate({
     inputRange: [0, 100],
     outputRange: ['0%', '100%'],
   });
 
+  const displayText = label
+    ? `${label}...`
+    : progressValue >= 95
+      ? 'Finishing up...'
+      : 'Uploading...';
+
   return (
-    <Modal visible={visible} transparent animationType="fade">
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
       <View style={styles.progressOverlay}>
+        {/* Banner Ad above progress */}
+        <AppAdBanner containerStyle={styles.progressAdBanner} />
+
         <View style={styles.progressBox}>
-          <View style={styles.progressRing}>
-            <Animated.View style={[styles.progressArc, { transform: [{ rotate: spinRotation }] }]} />
-            <View style={styles.progressRingInner}>
-              <Text style={styles.progressPercent}>{progressValue}%</Text>
+          <View style={styles.progressIconRow}>
+            <View style={styles.progressIconBadge}>
+              <Ionicons name="cloud-upload" size={24} color={Colors.primary} />
             </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.progressLabel}>{displayText}</Text>
+              <Text style={styles.progressHint}>Please keep app open</Text>
+            </View>
+            <Text style={styles.progressPercent}>{progressValue}%</Text>
           </View>
-          <Text style={styles.progressLabel}>{label}...</Text>
+
           <View style={styles.progressTrack}>
             <Animated.View style={[styles.progressBar, { width: progressWidth }]} />
           </View>
-          <Text style={styles.progressHint}>Keep this screen open</Text>
         </View>
+
+        {/* Banner Ad below progress */}
+        <AppAdBanner containerStyle={styles.progressAdBanner} />
       </View>
     </Modal>
   );
@@ -923,76 +958,68 @@ const styles = StyleSheet.create({
   },
   progressOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(0,0,0,0.65)',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+  },
+  progressAdBanner: {
+    alignSelf: 'center',
+    marginVertical: 12,
   },
   progressBox: {
-    width: 240,
-    alignItems: 'center',
+    width: '100%',
+    maxWidth: 360,
     backgroundColor: Colors.white,
-    borderRadius: 24,
-    padding: 28,
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
   },
-  progressRing: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
-    borderWidth: 9,
-    borderColor: Colors.border,
+  progressIconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 12,
+  },
+  progressIconBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.primary + '14',
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  progressArc: {
-    position: 'absolute',
-    width: 104,
-    height: 104,
-    borderRadius: 52,
-    borderTopWidth: 9,
-    borderRightWidth: 9,
-    borderBottomWidth: 9,
-    borderLeftWidth: 9,
-    borderColor: Colors.primary,
-    borderLeftColor: 'transparent',
-    borderBottomColor: 'transparent',
-  },
-  progressRingInner: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    backgroundColor: Colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  progressPercent: {
-    color: Colors.text,
-    fontSize: 18,
-    fontWeight: 'bold',
   },
   progressLabel: {
-    marginTop: 14,
-    color: Colors.text,
+    fontSize: 16,
     fontWeight: '700',
+    color: Colors.text,
+  },
+  progressHint: {
+    fontSize: 12,
+    color: Colors.textGray,
+    marginTop: 2,
+  },
+  progressPercent: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors.primary,
   },
   progressTrack: {
     width: '100%',
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.border,
-    marginTop: 18,
+    backgroundColor: '#E5E7EB',
     overflow: 'hidden',
   },
   progressBar: {
     height: '100%',
     borderRadius: 4,
     backgroundColor: Colors.primary,
-  },
-  progressHint: {
-    marginTop: 10,
-    color: Colors.textGray,
-    fontSize: 12,
   },
   topBannerContainer: {
     alignSelf: 'center',
