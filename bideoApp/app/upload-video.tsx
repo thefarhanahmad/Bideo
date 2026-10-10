@@ -14,6 +14,7 @@ import { hapticSelection } from '../utils/haptics';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import Constants from 'expo-constants';
 import MentionSuggestions from '../components/MentionSuggestions';
+import { AppAdBanner } from '../components/AppAds';
 
 const FALLBACK_THUMBNAIL = 'https://via.placeholder.com/640x360.png?text=Tube+India';
 
@@ -36,6 +37,7 @@ export default function UploadVideoScreen() {
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [thumbnailChanged, setThumbnailChanged] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [bottomAdLoaded, setBottomAdLoaded] = useState(false);
 
   // @mention autocomplete states
   const [mentionQuery, setMentionQuery] = useState('');
@@ -482,6 +484,9 @@ export default function UploadVideoScreen() {
       <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <ProgressOverlay visible={uploading} progress={uploadProgress} label={editId ? 'Saving' : 'Uploading'} />
 
+        {/* Top Banner Ad */}
+        <AppAdBanner containerStyle={styles.topBannerContainer} />
+
         {!editId && (
           <>
             <Text style={styles.label}>Video File *</Text>
@@ -639,6 +644,15 @@ export default function UploadVideoScreen() {
           <Text style={styles.uploadButtonText}>{editId ? 'Save Changes' : `Upload ${uploadType === 'short' ? 'Short' : 'Video'}`}</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Bottom Sticky Banner Ad */}
+      <View style={[styles.bottomBannerWrapper, !bottomAdLoaded && { display: 'none' }, { paddingBottom: Math.max(insets.bottom, 4) }]}>
+        <AppAdBanner
+          containerStyle={styles.bottomBannerContainer}
+          onAdLoaded={() => setBottomAdLoaded(true)}
+          onAdFailedToLoad={() => setBottomAdLoaded(false)}
+        />
+      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -979,5 +993,21 @@ const styles = StyleSheet.create({
     marginTop: 10,
     color: Colors.textGray,
     fontSize: 12,
+  },
+  topBannerContainer: {
+    alignSelf: 'center',
+    marginBottom: 8,
+  },
+  bottomBannerWrapper: {
+    width: '100%',
+    backgroundColor: Colors.white,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bottomBannerContainer: {
+    paddingVertical: 4,
+    marginVertical: 0,
   },
 });

@@ -13,6 +13,7 @@ import { showAlert } from '../components/AppAlert';
 import Constants from 'expo-constants';
 import MentionSuggestions from '../components/MentionSuggestions';
 import { PostLinkPreview, PreviewData, detectBideoLink } from '../components/PostLinkPreview';
+import { AppAdBanner } from '../components/AppAds';
 
 export default function UploadPostScreen() {
   const router = useRouter();
@@ -27,6 +28,7 @@ export default function UploadPostScreen() {
   const [uploading, setUploading] = useState(false);
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [bottomAdLoaded, setBottomAdLoaded] = useState(false);
 
   // Link preview state
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
@@ -277,6 +279,9 @@ export default function UploadPostScreen() {
       <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <ProgressOverlay visible={uploading} progress={uploadProgress} label={editPostId ? 'Saving' : 'Publishing'} />
 
+        {/* Top Banner Ad */}
+        <AppAdBanner containerStyle={styles.topBannerContainer} />
+
         <Text style={styles.label}>Post Text</Text>
         <TextInput
           style={[styles.input, styles.textArea]}
@@ -371,6 +376,15 @@ export default function UploadPostScreen() {
           <Text style={styles.uploadButtonText}>{editPostId ? 'Save Changes' : 'Publish Post'}</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Bottom Sticky Banner Ad */}
+      <View style={[styles.bottomBannerWrapper, !bottomAdLoaded && { display: 'none' }, { paddingBottom: Math.max(insets.bottom, 4) }]}>
+        <AppAdBanner
+          containerStyle={styles.bottomBannerContainer}
+          onAdLoaded={() => setBottomAdLoaded(true)}
+          onAdFailedToLoad={() => setBottomAdLoaded(false)}
+        />
+      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -691,5 +705,21 @@ const styles = StyleSheet.create({
     marginTop: 10,
     color: Colors.textGray,
     fontSize: 12,
+  },
+  topBannerContainer: {
+    alignSelf: 'center',
+    marginBottom: 8,
+  },
+  bottomBannerWrapper: {
+    width: '100%',
+    backgroundColor: Colors.white,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bottomBannerContainer: {
+    paddingVertical: 4,
+    marginVertical: 0,
   },
 });
