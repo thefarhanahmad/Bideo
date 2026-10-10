@@ -1,10 +1,10 @@
 import { showAlert } from '../../components/AppAlert';
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, Dimensions, TouchableOpacity, ActivityIndicator, ScrollView, Platform, Modal, Pressable, Share, TextInput, Animated, BackHandler } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Dimensions, TouchableOpacity, ActivityIndicator, ScrollView, Platform, Modal, Pressable, Share, TextInput, Animated, BackHandler, DeviceEventEmitter } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { useIsFocused } from '@react-navigation/native';
+import { useIsFocused, useFocusEffect } from '@react-navigation/native';
 import Colors from '../../constants/Colors';
 import api, { videoService } from '../../services/api';
 import { useSelector, useDispatch } from 'react-redux';
@@ -80,6 +80,8 @@ export default function ShortsScreen() {
   const shortsRef = useRef(shorts);
   shortsRef.current = shorts;
   const flatListRef = useRef<FlatList>(null);
+  const globalShortsCacheRef = useRef<any[] | null>(null);
+  const isChannelModeRef = useRef<boolean>(Boolean(fromChannelId));
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const isFetchingMore = useRef(false);
@@ -97,77 +99,22 @@ export default function ShortsScreen() {
   const [shareModalVisible, setShareModalVisible] = useState(false);
   const [sharingShort, setSharingShort] = useState<any>(null);
 
-  const handleBack = useCallback(() => {
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/(tabs)');
-    }
-  }, [router]);
-
-  useEffect(() => {
-    if (!isFocused) return;
-    const onBackPress = () => {
-      if ((fromChannelId || initialShortId) && router.canGoBack()) {
-        router.back();
-        return true;
-      }
-      return false;
-    };
-
-    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-    return () => sub.remove();
-  }, [isFocused, fromChannelId, initialShortId, router]);
-
-  useEffect(() => {
-    loadShorts(initialShortId);
-  }, [isAuthenticated, fromChannelId]);
-
-  useEffect(() => {
-    if (!initialShortId) return;
-
-    const syncTargetShort = async () => {
-      // Check if it's already in the loaded list
-      const existing = shortsRef.current.find((s) => s._id === initialShortId);
-      if (existing) {
-        setShorts((prev) => [existing, ...prev.filter((s) => s._id !== initialShortId)]);
-        setActiveVideoIndex(0);
-        setTimeout(() => {
-          flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
-        }, 50);
-        return;
-      }
-
-      // If not present in current shorts, fetch and prepend to top
-      try {
-        const res = await api.get(`/videos/${initialShortId}`);
-        if (res.data?.success && res.data?.data) {
-          const formatted = formatShortItem(res.data.data, user?._id, isAuthenticated);
-          setShorts((prev) => [formatted, ...prev.filter((s) => s._id !== initialShortId)]);
-          setActiveVideoIndex(0);
-          setTimeout(() => {
-            flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
-          }, 50);
-        }
-      } catch (err) {
-        console.error('Failed to fetch initial short by id:', err);
-      }
-    };
-
-    if (isFocused) {
-      syncTargetShort();
-    }
-  }, [initialShortId, isFocused]);
-
-  const loadShorts = async (targetId = initialShortId) => {
+  const loadShorts = useCallback(async (targetId = initialShortId, forceGlobal = false) => {
     setLoading(true);
     setPage(1);
     hasMore.current = true;
     isFetchingMore.current = false;
     try {
+      const activeChannelId = forceGlobal ? undefined : (fromChannelId || undefined);
+      if (activeChannelId) {
+        isChannelModeRef.current = true;
+      } else {
+        isChannelModeRef.current = false;
+      }
+
       const queryParams: any = { type: 'short', page: 1, limit: 50 };
-      if (fromChannelId) {
-        queryParams.owner = fromChannelId;
+      if (activeChannelId) {
+        queryParams.owner = activeChannelId;
       }
       const data = await api.get('/videos', { params: queryParams });
       const rawList = data.data.data || [];
@@ -185,7 +132,7 @@ export default function ShortsScreen() {
           const [targetShort] = randomizedShorts.splice(targetIndex, 1);
           randomizedShorts.unshift(targetShort);
         } else {
-          // Fetch target short directly if not included in random 50
+          // Fetch target short directly if not included in list
           try {
             const targetRes = await api.get(`/videos/${targetId}`);
             if (targetRes.data?.success && targetRes.data?.data) {
@@ -214,6 +161,11 @@ export default function ShortsScreen() {
       }
       setShorts(withAds);
 
+      // Cache global shorts so we can instantly restore them when exiting a channel
+      if (!activeChannelId) {
+        globalShortsCacheRef.current = withAds;
+      }
+
       if (targetId && withAds.length > 0) {
         const index = withAds.findIndex((s) => s._id === targetId);
         const finalIdx = index !== -1 ? index : 0;
@@ -221,13 +173,138 @@ export default function ShortsScreen() {
         setTimeout(() => {
           flatListRef.current?.scrollToOffset({ offset: finalIdx * containerHeight, animated: false });
         }, 50);
+      } else {
+        setActiveVideoIndex(0);
+        setTimeout(() => {
+          flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+        }, 50);
       }
     } catch (e) {
       console.log('Failed to load shorts', e);
     } finally {
       setLoading(false);
     }
-  };
+  }, [fromChannelId, initialShortId, user?._id, isAuthenticated, containerHeight]);
+
+  const handleBack = useCallback(() => {
+    if (fromChannelId || initialShortId) {
+      router.setParams({ fromChannelId: '', initialShortId: '' });
+      isChannelModeRef.current = false;
+      if (globalShortsCacheRef.current && globalShortsCacheRef.current.length > 0) {
+        setShorts(globalShortsCacheRef.current);
+        setActiveVideoIndex(0);
+      } else {
+        loadShorts(undefined, true);
+      }
+    }
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)');
+    }
+  }, [router, fromChannelId, initialShortId, loadShorts]);
+
+  useEffect(() => {
+    if (!isFocused) return;
+    const onBackPress = () => {
+      if ((fromChannelId || initialShortId) && router.canGoBack()) {
+        router.setParams({ fromChannelId: '', initialShortId: '' });
+        isChannelModeRef.current = false;
+        if (globalShortsCacheRef.current && globalShortsCacheRef.current.length > 0) {
+          setShorts(globalShortsCacheRef.current);
+          setActiveVideoIndex(0);
+        } else {
+          loadShorts(undefined, true);
+        }
+        router.back();
+        return true;
+      }
+      return false;
+    };
+
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [isFocused, fromChannelId, initialShortId, router, loadShorts]);
+
+  // Listen for bottom tab press to reset to global feed if currently showing a channel's shorts
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('resetShortsFeedToGlobal', () => {
+      router.setParams({ fromChannelId: '', initialShortId: '' });
+      if (isChannelModeRef.current) {
+        isChannelModeRef.current = false;
+        if (globalShortsCacheRef.current && globalShortsCacheRef.current.length > 0) {
+          setShorts(globalShortsCacheRef.current);
+          setActiveVideoIndex(0);
+          setTimeout(() => {
+            flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+          }, 50);
+        } else {
+          loadShorts(undefined, true);
+        }
+      } else {
+        setActiveVideoIndex(0);
+        flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+      }
+    });
+
+    return () => sub.remove();
+  }, [loadShorts, router]);
+
+  // When tab is refocused without fromChannelId, restore global feed if previously in channel mode
+  useFocusEffect(
+    useCallback(() => {
+      if (!fromChannelId && isChannelModeRef.current) {
+        isChannelModeRef.current = false;
+        if (globalShortsCacheRef.current && globalShortsCacheRef.current.length > 0) {
+          setShorts(globalShortsCacheRef.current);
+          setActiveVideoIndex(0);
+          setTimeout(() => {
+            flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+          }, 50);
+        } else {
+          loadShorts(undefined, true);
+        }
+      }
+    }, [fromChannelId, loadShorts])
+  );
+
+  useEffect(() => {
+    loadShorts(initialShortId);
+  }, [isAuthenticated, fromChannelId, loadShorts]);
+
+  useEffect(() => {
+    if (!initialShortId) return;
+
+    const syncTargetShort = async () => {
+      const existing = shortsRef.current.find((s) => s._id === initialShortId);
+      if (existing) {
+        setShorts((prev) => [existing, ...prev.filter((s) => s._id !== initialShortId)]);
+        setActiveVideoIndex(0);
+        setTimeout(() => {
+          flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+        }, 50);
+        return;
+      }
+
+      try {
+        const res = await api.get(`/videos/${initialShortId}`);
+        if (res.data?.success && res.data?.data) {
+          const formatted = formatShortItem(res.data.data, user?._id, isAuthenticated);
+          setShorts((prev) => [formatted, ...prev.filter((s) => s._id !== initialShortId)]);
+          setActiveVideoIndex(0);
+          setTimeout(() => {
+            flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+          }, 50);
+        }
+      } catch (err) {
+        console.error('Failed to fetch initial short by id:', err);
+      }
+    };
+
+    if (isFocused) {
+      syncTargetShort();
+    }
+  }, [initialShortId, isFocused]);
 
   const loadMoreShorts = async () => {
     if (isFetchingMore.current || !hasMore.current || loading) return;
@@ -267,7 +344,11 @@ export default function ShortsScreen() {
               });
             }
           }
-          return [...prev, ...withAds];
+          const nextCombined = [...prev, ...withAds];
+          if (!fromChannelId && !isChannelModeRef.current) {
+            globalShortsCacheRef.current = nextCombined;
+          }
+          return nextCombined;
         });
         setPage(nextPage);
         if (rawList.length < 50) hasMore.current = false;

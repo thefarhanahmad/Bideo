@@ -226,6 +226,11 @@ export default function TabsLayout() {
             <Ionicons name="play-circle-outline" size={size} color={color} />
           ),
         }}
+        listeners={() => ({
+          tabPress: () => {
+            DeviceEventEmitter.emit('resetShortsFeedToGlobal');
+          },
+        })}
       />
       <Tabs.Screen
         name="upload"
