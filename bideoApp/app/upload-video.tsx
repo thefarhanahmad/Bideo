@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, KeyboardAvoidingView, Platform, Modal, Animated, Easing } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +19,7 @@ const FALLBACK_THUMBNAIL = 'https://via.placeholder.com/640x360.png?text=Tube+In
 
 export default function UploadVideoScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user } = useSelector((state: RootState) => state.auth);
   const { editId, type } = useLocalSearchParams<{ editId?: string; type?: 'video' | 'short' }>();
 
@@ -470,7 +472,7 @@ export default function UploadVideoScreen() {
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) + 8 }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.headerBack}>
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
@@ -708,9 +710,8 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 50,
-    paddingBottom: 15,
-    paddingHorizontal: 15,
+    paddingBottom: 10,
+    paddingHorizontal: 16,
     backgroundColor: Colors.white,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
@@ -719,38 +720,40 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
-    marginLeft: 12,
+    marginLeft: 10,
     color: Colors.text,
   },
   container: {
     flex: 1,
   },
   content: {
-    padding: 20,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 24,
   },
   label: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: Colors.text,
-    marginBottom: 8,
-    marginTop: 18,
+    marginBottom: 6,
+    marginTop: 12,
   },
   labelRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
-    marginTop: 18,
+    marginBottom: 6,
+    marginTop: 12,
   },
   labelInRow: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: Colors.text,
   },
   charCount: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: Colors.textGray,
   },
@@ -758,90 +761,91 @@ const styles = StyleSheet.create({
     color: '#EF4444',
   },
   picker: {
-    height: 130,
-    borderWidth: 2,
+    height: 105,
+    borderWidth: 1.5,
     borderStyle: 'dashed',
     borderColor: Colors.primary + '55',
-    borderRadius: 16,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.primary + '08',
   },
   thumbnailPicker: {
-    height: 180,
+    height: 130,
   },
   thumbnailPreview: {
     width: '100%',
     height: '100%',
-    borderRadius: 14,
+    borderRadius: 10,
   },
   pickerIconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     backgroundColor: Colors.primary + '14',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
+    marginBottom: 6,
   },
   pickerText: {
     color: Colors.text,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
   },
   pickerSubText: {
     color: Colors.textGray,
-    fontSize: 12,
-    marginTop: 3,
+    fontSize: 11,
+    marginTop: 2,
   },
   fileSelected: {
     alignItems: 'center',
     paddingHorizontal: 16,
   },
   fileBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: '#10B981',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   fileName: {
     color: Colors.text,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     maxWidth: 240,
   },
   changeHint: {
     color: Colors.primary,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
-    marginTop: 4,
+    marginTop: 2,
   },
   input: {
     borderWidth: 1,
     borderColor: Colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    fontSize: 15,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
     color: Colors.text,
     backgroundColor: '#F9FAFB',
   },
   textArea: {
-    height: 100,
+    height: 85,
     textAlignVertical: 'top',
   },
   selectContainer: {
-    marginBottom: 6,
+    marginBottom: 4,
   },
   selectTrigger: {
     borderWidth: 1,
     borderColor: Colors.border,
-    borderRadius: 12,
-    minHeight: 50,
-    paddingHorizontal: 14,
+    borderRadius: 10,
+    minHeight: 44,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -849,14 +853,14 @@ const styles = StyleSheet.create({
   },
   selectValue: {
     color: Colors.text,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '500',
   },
   selectMenu: {
     borderWidth: 1,
     borderColor: Colors.border,
-    borderRadius: 12,
-    marginTop: 6,
+    borderRadius: 10,
+    marginTop: 4,
     overflow: 'hidden',
     backgroundColor: Colors.white,
     shadowColor: '#000',
@@ -866,13 +870,14 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   selectOption: {
-    paddingVertical: 13,
-    paddingHorizontal: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
   },
   selectOptionText: {
     color: Colors.text,
+    fontSize: 14,
   },
   selectOptionTextActive: {
     color: Colors.primary,
@@ -881,13 +886,13 @@ const styles = StyleSheet.create({
   uploadButton: {
     backgroundColor: Colors.primary,
     borderRadius: 999,
-    paddingVertical: 16,
+    paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    marginTop: 32,
-    marginBottom: 40,
+    marginTop: 20,
+    marginBottom: 28,
     shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.3,
@@ -899,7 +904,7 @@ const styles = StyleSheet.create({
   },
   uploadButtonText: {
     color: Colors.white,
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
   },
   progressOverlay: {

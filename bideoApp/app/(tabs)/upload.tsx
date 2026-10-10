@@ -8,6 +8,7 @@ import { useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import AuthModal from '../../components/AuthModal';
 import { hapticSelection } from '../../utils/haptics';
+import { AppAdBanner } from '../../components/AppAds';
 
 export default function UploadScreen() {
   const router = useRouter();
@@ -93,9 +94,7 @@ export default function UploadScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-      <View style={styles.headerRow}>
-        <Text style={styles.headerTitle}>Create</Text>
-      </View>
+      <AppAdBanner containerStyle={{ marginBottom: 10 }} />
 
       <Text style={styles.createSubtitle}>What would you like to share today?</Text>
       <View style={styles.typeGrid}>
@@ -121,6 +120,8 @@ export default function UploadScreen() {
           </TouchableOpacity>
         ))}
       </View>
+
+      <AppAdBanner containerStyle={{ marginVertical: 14 }} />
 
       <View style={styles.instructionsSection}>
         <Text style={styles.instructionsTitle}>Quick Guide</Text>
@@ -261,10 +262,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   createSubtitle: {
-    fontSize: 14,
-    color: Colors.textGray,
-    marginTop: 2,
-    marginBottom: 18,
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.text,
+    marginTop: 4,
+    marginBottom: 14,
+    textAlign: 'center',
   },
   typeGrid: {
     flexDirection: 'row',
