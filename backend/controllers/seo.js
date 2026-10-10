@@ -124,23 +124,28 @@ function renderLauncherHtml({
   <meta property="al:web:url" content="${canonicalUrl}">
 
   ${!isCrawlerReq ? `
+  <meta http-equiv="refresh" content="0;url=${intentLink}">
   <script>
     (function() {
       var ua = navigator.userAgent || '';
       var isAndroid = /android/i.test(ua);
       var isIOS = /iphone|ipad|ipod/i.test(ua);
       var intentUrl = "${intentLink}";
+      var playStoreUrl = "${PLAY_STORE_URL}";
       var deepLink = "${deepLink}";
 
-      // Attempt non-intrusive automatic launch for mobile browsers
       if (isAndroid) {
-        try {
-          window.location.replace(intentUrl);
-        } catch (e) {}
+        window.location.href = intentUrl;
+        setTimeout(function() {
+          window.location.href = playStoreUrl;
+        }, 1500);
       } else if (isIOS) {
-        try {
-          window.location.replace(deepLink);
-        } catch (e) {}
+        window.location.href = deepLink;
+        setTimeout(function() {
+          window.location.href = playStoreUrl;
+        }, 1500);
+      } else {
+        window.location.href = playStoreUrl;
       }
     })();
   </script>
@@ -160,140 +165,14 @@ function renderLauncherHtml({
       padding: 24px 16px;
       text-align: center;
     }
-    .launcher-card {
-      background: #181818;
-      border: 1px solid #282828;
-      border-radius: 24px;
-      padding: 28px 22px;
-      max-width: 440px;
-      width: 100%;
-      box-shadow: 0 12px 36px rgba(0,0,0,0.6);
-    }
-    .app-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 20px;
-    }
-    .logo-box {
-      width: 40px;
-      height: 40px;
-      background: #FF7A00;
-      border-radius: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 900;
-      color: #FFF;
-      font-size: 22px;
-    }
-    .app-name {
-      font-size: 22px;
-      font-weight: 800;
-      color: #FFF;
-      letter-spacing: -0.5px;
-    }
-    .app-name span { color: #FF7A00; }
-    .media-preview {
-      width: 100%;
-      aspect-ratio: 16/9;
-      border-radius: 14px;
-      object-fit: cover;
-      background: #000;
-      margin-bottom: 16px;
-      border: 1px solid #333;
-    }
-    .avatar-preview {
-      width: 84px;
-      height: 84px;
-      border-radius: 42px;
-      object-fit: cover;
-      margin: 0 auto 16px;
-      border: 3px solid #FF7A00;
-      display: block;
-    }
-    .title {
-      font-size: 18px;
-      font-weight: 700;
-      line-height: 1.4;
-      margin-bottom: 8px;
-      color: #FFF;
-    }
-    .desc {
-      font-size: 13.5px;
-      color: #9CA3AF;
-      line-height: 1.5;
-      margin-bottom: 22px;
-      max-height: 3.8em;
-      overflow: hidden;
-    }
-    .status-text {
-      font-size: 13px;
-      color: #FF7A00;
-      font-weight: 600;
-      margin-bottom: 16px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-    }
-    .btn-group {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      width: 100%;
-    }
-    .primary-btn {
-      background: #FF7A00;
-      color: #FFF;
-      text-decoration: none;
-      padding: 15px 20px;
-      border-radius: 28px;
-      font-weight: 700;
-      font-size: 15px;
-      display: block;
-      box-shadow: 0 4px 14px rgba(255, 122, 0, 0.4);
-    }
-    .primary-btn:active { opacity: 0.9; }
-    .secondary-btn {
-      background: #262626;
-      color: #E5E7EB;
-      border: 1px solid #383838;
-      text-decoration: none;
-      padding: 14px 20px;
-      border-radius: 28px;
-      font-weight: 600;
-      font-size: 14px;
-      display: block;
-    }
   </style>
 </head>
 <body>
-  <div class="launcher-card">
-    <div class="app-badge">
-      <div class="logo-box">B</div>
-      <div class="app-name">Bideo<span>.in</span></div>
-    </div>
-
-    ${ogType === 'profile'
-      ? (imageUrl ? `<img src="${imageUrl}" alt="${escapeHtml(title)}" class="avatar-preview" />` : '')
-      : (videoUrl
-          ? `<video controls playsinline poster="${imageUrl || ''}" preload="metadata" class="media-preview">
-               <source src="${videoUrl}" type="video/mp4">
-               Your browser does not support the video tag.
-             </video>`
-          : (imageUrl ? `<img src="${imageUrl}" alt="${escapeHtml(title)}" class="media-preview" />` : '')
-        )
-    }
-
-    <h1 class="title">${escapeHtml(title)}</h1>
-    ${description ? `<p class="desc">${escapeHtml(description)}</p>` : ''}
-
-    <div class="status-text">⚡ Opening in Bideo App...</div>
-
-    <div class="btn-group">
-      <a id="openAppBtn" href="${intentLink}" class="primary-btn">▶ Open in Bideo App</a>
-      <a href="${PLAY_STORE_URL}" class="secondary-btn" target="_blank" rel="noopener">Get on Google Play</a>
+  <div style="display:flex;height:100vh;align-items:center;justify-content:center;background:#0F0F0F;color:#FFF;font-family:sans-serif;text-align:center;padding:20px;">
+    <div>
+      <div style="font-size:36px;margin-bottom:12px;">⚡</div>
+      <div style="font-size:18px;font-weight:700;">Opening in Bideo App...</div>
+      <div style="font-size:13px;color:#9CA3AF;margin-top:8px;">If app is not installed, opening Google Play Store...</div>
     </div>
   </div>
 </body>

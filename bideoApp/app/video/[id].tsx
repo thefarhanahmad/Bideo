@@ -68,6 +68,35 @@ export default function VideoScreen() {
     p.loop = false;
   });
 
+  // Controls & floating back button visibility (show on click/pause, auto-hide when playing)
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handlePlayerTouch = useCallback(() => {
+    setControlsVisible((prev) => {
+      if (controlsTimeoutRef.current) {
+        clearTimeout(controlsTimeoutRef.current);
+        controlsTimeoutRef.current = null;
+      }
+      if (!prev) {
+        // Was hidden -> user clicked video to show toolbar, so reveal controls & back button
+        if (player?.playing) {
+          controlsTimeoutRef.current = setTimeout(() => {
+            setControlsVisible(false);
+          }, 3500);
+        }
+        return true;
+      } else {
+        // Was visible -> if currently playing, tapping video area hides toolbar & back button
+        if (player?.playing) {
+          return false;
+        }
+        // If paused, keep controls visible
+        return true;
+      }
+    });
+  }, [player]);
+
   const [video, setVideo] = useState<any>(null);
   const [recommendedVideos, setRecommendedVideos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -165,6 +194,35 @@ export default function VideoScreen() {
 
     return () => {
       sub?.remove?.();
+    };
+  }, [player]);
+
+  // Listen for playback state changes to coordinate toolbar / back button visibility
+  useEffect(() => {
+    if (!player) return;
+    const sub = (player as any).addListener?.('playingChange', (event: any) => {
+      const isPlaying = event?.isPlaying ?? player.playing;
+      if (isPlaying) {
+        if (controlsTimeoutRef.current) {
+          clearTimeout(controlsTimeoutRef.current);
+        }
+        controlsTimeoutRef.current = setTimeout(() => {
+          setControlsVisible(false);
+        }, 3500);
+      } else {
+        if (controlsTimeoutRef.current) {
+          clearTimeout(controlsTimeoutRef.current);
+          controlsTimeoutRef.current = null;
+        }
+        setControlsVisible(true);
+      }
+    });
+
+    return () => {
+      sub?.remove?.();
+      if (controlsTimeoutRef.current) {
+        clearTimeout(controlsTimeoutRef.current);
+      }
     };
   }, [player]);
 
@@ -533,7 +591,7 @@ export default function VideoScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.white} />
-      <View style={[styles.videoPlayerContainer, { height: playerHeight }]}>
+      <View style={[styles.videoPlayerContainer, { height: playerHeight }]} onTouchStart={handlePlayerTouch}>
         {loading ? (
           <View style={styles.videoLoadingPlaceholder}>
             <ActivityIndicator size="large" color={Colors.primary} />
@@ -550,19 +608,6 @@ export default function VideoScreen() {
           <View style={styles.adPlayerPlaceholder}>
             <ActivityIndicator size="large" color={Colors.primary} />
             <Text style={{ color: Colors.white, marginTop: 10, fontSize: 13, fontWeight: '600' }}>Loading Sponsor Ad...</Text>
-          </View>
-        ) : (
-          <>
-            <VideoView
-              player={player}
-              style={[styles.videoPlayer, { height: playerHeight }]}
-              contentFit="contain"
-              nativeControls
-              fullscreenOptions={{ enable: true }}
-              allowsPictureInPicture
-              onFullscreenEnter={handleFullscreenEnter}
-              onFullscreenExit={handleFullscreenExit}
-            />
             <TouchableOpacity
               style={styles.floatingBackButton}
               onPress={handleBack}
@@ -571,6 +616,30 @@ export default function VideoScreen() {
             >
               <Ionicons name="arrow-back" size={22} color={Colors.white} />
             </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            <VideoView
+              player={player}
+              style={[styles.videoPlayer, { height: playerHeight }]}
+              contentFit="contain"
+              nativeControls
+              requiresLinearPlayback={false}
+              fullscreenOptions={{ enable: true }}
+              allowsPictureInPicture
+              onFullscreenEnter={handleFullscreenEnter}
+              onFullscreenExit={handleFullscreenExit}
+            />
+            {controlsVisible && (
+              <TouchableOpacity
+                style={styles.floatingBackButton}
+                onPress={handleBack}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="arrow-back" size={22} color={Colors.white} />
+              </TouchableOpacity>
+            )}
           </>
         )}
       </View>

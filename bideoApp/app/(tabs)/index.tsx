@@ -406,10 +406,11 @@ export default function HomeScreen() {
           onRefresh={handleRefresh}
           onEndReached={selectedCategory === 'Posts' ? undefined : loadMoreVideos}
           onEndReachedThreshold={0.5}
-          removeClippedSubviews={Platform.OS === 'android'}
-          initialNumToRender={4}
-          maxToRenderPerBatch={4}
-          windowSize={5}
+          removeClippedSubviews={false}
+          initialNumToRender={8}
+          maxToRenderPerBatch={8}
+          windowSize={11}
+          updateCellsBatchingPeriod={40}
           ListFooterComponent={
             loadingMore && selectedCategory !== 'Posts' ? (
               <View style={{ paddingVertical: 18, alignItems: 'center' }}>

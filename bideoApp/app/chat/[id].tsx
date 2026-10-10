@@ -919,7 +919,7 @@ export default function ChatRoomScreen() {
     const videoMatch = url.match(/(?:bideo\.in|bideo\.app|\/)\/(?:v|video)\/([a-zA-Z0-9_-]+)/i);
     if (videoMatch && videoMatch[1]) {
       hapticSelection();
-      router.push(`/v/${videoMatch[1]}`);
+      router.push(`/video/${videoMatch[1]}`);
       return;
     }
 
@@ -1089,7 +1089,7 @@ export default function ChatRoomScreen() {
               if (item.video.isShort) {
                 router.push({ pathname: '/shorts', params: { initialShortId: item.video._id } });
               } else {
-                router.push(`/v/${item.video._id}`);
+                router.push(`/video/${item.video._id}`);
               }
             }}
           >

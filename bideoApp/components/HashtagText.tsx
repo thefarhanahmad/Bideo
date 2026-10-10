@@ -57,6 +57,32 @@ export const HashtagText: React.FC<HashtagTextProps> = ({
       if (!/^https?:\/\//i.test(target)) {
         target = `https://${target}`;
       }
+
+      // Check if this is an internal Bideo link (video, short, channel, post)
+      const videoMatch = target.match(/(?:bideo\.(?:in|app)|localhost:\d+)?\/(?:v|video)\/([a-zA-Z0-9_-]+)/i);
+      if (videoMatch && videoMatch[1]) {
+        router.push(`/video/${videoMatch[1]}`);
+        return;
+      }
+
+      const shortsMatch = target.match(/(?:bideo\.(?:in|app)|localhost:\d+)?\/shorts\/([a-zA-Z0-9_-]+)/i);
+      if (shortsMatch && shortsMatch[1]) {
+        router.push({ pathname: '/shorts', params: { initialShortId: shortsMatch[1] } });
+        return;
+      }
+
+      const channelMatch = target.match(/(?:bideo\.(?:in|app)|localhost:\d+)?\/(?:c|channel)\/([a-zA-Z0-9_@.-]+)/i);
+      if (channelMatch && channelMatch[1]) {
+        router.push(`/channel/${channelMatch[1]}`);
+        return;
+      }
+
+      const postMatch = target.match(/(?:bideo\.(?:in|app)|localhost:\d+)?\/(?:p|post)\/([a-zA-Z0-9_-]+)/i);
+      if (postMatch && postMatch[1]) {
+        router.push(`/post/${postMatch[1]}`);
+        return;
+      }
+
       const supported = await Linking.canOpenURL(target);
       if (supported) {
         await Linking.openURL(target);

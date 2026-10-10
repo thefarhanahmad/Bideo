@@ -12,7 +12,7 @@ import { AlertHost, showAlert } from '../components/AppAlert';
 import Constants from 'expo-constants';
 import { registerForPushNotificationsAsync, setupNotificationListeners } from '../services/notifications';
 import { initSocket, disconnectSocket } from '../services/socket';
-import { AppState, AppStateStatus } from 'react-native';
+import { AppState, AppStateStatus, StatusBar } from 'react-native';
 
 // Keep native splash screen visible while app initializes
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -234,6 +234,7 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent={false} />
       <Provider store={store}>
         <Startup onReady={handleAppReady} />
         <DeletionGuard>

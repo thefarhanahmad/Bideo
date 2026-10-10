@@ -204,12 +204,7 @@ function PostLinkPreviewComponent({
   }, [propPreviewData, text]);
 
   if (loading && !data) {
-    return (
-      <View style={[styles.loadingBox, style]}>
-        <ActivityIndicator size="small" color={Colors.primary} />
-        <Text style={styles.loadingText}>Loading link preview...</Text>
-      </View>
-    );
+    return null;
   }
 
   if (!data) return null;
@@ -219,7 +214,7 @@ function PostLinkPreviewComponent({
     hapticLight();
 
     if (data.mediaType === 'video') {
-      router.push(`/v/${data.targetId}`);
+      router.push(`/video/${data.targetId}`);
     } else if (data.mediaType === 'short') {
       router.push({ pathname: '/shorts', params: { initialShortId: data.targetId } });
     } else if (data.mediaType === 'channel') {

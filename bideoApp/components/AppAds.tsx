@@ -500,11 +500,13 @@ const adStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   container: {
+    width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
+    paddingVertical: 8,
     backgroundColor: 'transparent',
-    overflow: 'hidden',
+    overflow: 'visible',
+    alignSelf: 'center',
   },
   bannerAdWrapper: {
     width: '92%',

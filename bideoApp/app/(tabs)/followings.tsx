@@ -137,6 +137,11 @@ export default function FollowingsScreen() {
       <FlatList
         data={feedItems}
         keyExtractor={(item) => item._id}
+        removeClippedSubviews={false}
+        initialNumToRender={8}
+        maxToRenderPerBatch={8}
+        windowSize={11}
+        updateCellsBatchingPeriod={40}
         renderItem={({ item }) =>
           item.itemType === 'post' ? (
             <PostCard post={item} />

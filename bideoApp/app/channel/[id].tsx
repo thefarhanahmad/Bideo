@@ -316,6 +316,11 @@ export default function ChannelScreen() {
         numColumns={filter === 'shorts' ? 3 : 1}
         keyExtractor={(item) => item._id}
         columnWrapperStyle={filter === 'shorts' ? styles.shortsRow : null}
+        removeClippedSubviews={false}
+        initialNumToRender={8}
+        maxToRenderPerBatch={8}
+        windowSize={11}
+        updateCellsBatchingPeriod={40}
         renderItem={({ item }) => {
           if (item.itemType === 'post') return (
             <PostCard 
