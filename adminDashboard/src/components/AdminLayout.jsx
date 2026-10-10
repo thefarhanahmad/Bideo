@@ -20,6 +20,7 @@ import {
   ServerIcon,
   MessageSquareIcon,
   StoryIcon,
+  MegaphoneIcon,
 } from "./Icons";
 
 const nav = [
@@ -31,7 +32,7 @@ const nav = [
   { to: "/admin/server-videos", label: "Server Videos", icon: ServerIcon },
   { to: "/admin/conversations", label: "Conversations", icon: MessageSquareIcon },
   { to: "/admin/reports", label: "Reports", icon: FlagIcon },
-  { to: "/admin/ads", label: "Ads", icon: TvIcon },
+  { to: "/admin/announcements", label: "Announcements", icon: MegaphoneIcon },
   { to: "/admin/monetization", label: "Monetization", icon: WalletIcon },
   { to: "/admin/earnings", label: "User Earnings", icon: TrendingUpIcon },
   { to: "/admin/boost", label: "Channel Boost", icon: RocketIcon },

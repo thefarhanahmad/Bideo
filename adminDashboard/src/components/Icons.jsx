@@ -136,4 +136,13 @@ export const StoryIcon = (p) => (
   </Svg>
 );
 
+export const MegaphoneIcon = (p) => (
+  <Svg {...p}>
+    <path d="M3 11v3a1 1 0 0 0 1 1h2l4 4V5L6 9H4a1 1 0 0 0-1 1v1z" />
+    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+  </Svg>
+);
+
+
 

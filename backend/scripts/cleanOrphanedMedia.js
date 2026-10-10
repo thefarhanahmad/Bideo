@@ -30,7 +30,7 @@ dotenv.config({ path: path.join(__dirname, '../.env') });
 const Video = require('../models/Video');
 const Post = require('../models/Post');
 const User = require('../models/User');
-const Ad = require('../models/Ad');
+const Announcement = require('../models/Announcement');
 
 const shouldDelete = process.argv.includes('--delete');
 const GRACE_PERIOD_MS = 2 * 60 * 60 * 1000; // 2 hours
@@ -96,13 +96,13 @@ const runAudit = async () => {
   });
   console.log(`   ✔ Users indexed:      ${users.length} users`);
 
-  // 4. Index Ads
-  const ads = await Ad.find({}, 'image').lean();
-  ads.forEach((a) => {
+  // 4. Index Announcements
+  const announcements = await Announcement.find({}, 'image').lean();
+  announcements.forEach((a) => {
     const aFile = extractFilename(a.image);
     if (aFile) activeFilenames.add(aFile);
   });
-  console.log(`   ✔ Ads indexed:        ${ads.length} ads`);
+  console.log(`   ✔ Announcements indexed: ${announcements.length} announcements`);
 
   console.log(`\n📦 Total unique active media files in DB: ${activeFilenames.size}\n`);
 

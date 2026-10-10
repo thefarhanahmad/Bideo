@@ -19,7 +19,7 @@ import Categories from './pages/Categories';
 import Videos from './pages/Videos';
 import ServerVideos from './pages/ServerVideos';
 import Reports from './pages/Reports';
-import Ads from './pages/Ads';
+import Announcements from './pages/Announcements';
 import Monetization from './pages/Monetization';
 import UserEarnings from './pages/UserEarnings';
 import Boost from './pages/Boost';
@@ -67,7 +67,8 @@ function App() {
           <Route path="server-videos" element={<ServerVideos />} />
           <Route path="conversations" element={<Conversations />} />
           <Route path="reports" element={<Reports />} />
-          <Route path="ads" element={<Ads />} />
+          <Route path="announcements" element={<Announcements />} />
+          <Route path="ads" element={<Navigate to="/admin/announcements" replace />} />
           <Route path="monetization" element={<Monetization />} />
           <Route path="earnings" element={<UserEarnings />} />
           <Route path="boost" element={<Boost />} />

@@ -7,7 +7,7 @@ const ErrorLog = require('../models/ErrorLog');
 const Video = require('../models/Video');
 const Post = require('../models/Post');
 const User = require('../models/User');
-const Ad = require('../models/Ad');
+const Announcement = require('../models/Announcement');
 const { runOrphanMediaCleanup, initOrphanMediaScheduler } = require('../utils/orphanMediaScheduler');
 const { deleteLocalFile } = require('../utils/localUpload');
 
@@ -110,15 +110,15 @@ const runVerification = async () => {
   const authController = require('../controllers/auth');
   const videoController = require('../controllers/video');
   const postController = require('../controllers/post');
-  const adController = require('../controllers/ad');
+  const announcementController = require('../controllers/announcement');
 
   assert(typeof authController.updateChannel === 'function', 'auth.updateChannel is defined');
   assert(typeof videoController.uploadVideo === 'function', 'video.uploadVideo is defined');
   assert(typeof videoController.updateVideo === 'function', 'video.updateVideo is defined');
   assert(typeof postController.createPost === 'function', 'post.createPost is defined');
   assert(typeof postController.updatePost === 'function', 'post.updatePost is defined');
-  assert(typeof adController.createAd === 'function', 'ad.createAd is defined');
-  assert(typeof adController.updateAd === 'function', 'ad.updateAd is defined');
+  assert(typeof announcementController.createAnnouncement === 'function', 'announcement.createAnnouncement is defined');
+  assert(typeof announcementController.updateAnnouncement === 'function', 'announcement.updateAnnouncement is defined');
 
   // ----------------------------------------------------
   // TEST 5: deleteLocalFile URL Sanitization & Path Traversal Guard

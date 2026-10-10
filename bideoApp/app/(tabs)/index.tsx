@@ -21,6 +21,7 @@ import AuthModal from '../../components/AuthModal';
 import PlaylistModal from '../../components/PlaylistModal';
 import { formatViews } from '../../utils/formatDate';
 import { AppAdBanner, AppNativeAd } from '../../components/AppAds';
+import AnnouncementModal from '../../components/AnnouncementModal';
 
 const CACHED_VIDEOS_STORAGE_KEY = 'bideo_cached_home_videos';
 
@@ -494,6 +495,8 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
+
+      <AnnouncementModal />
     </View>
   );
 }

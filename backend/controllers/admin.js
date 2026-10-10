@@ -7,7 +7,7 @@ const VideoMonetizationReview = require('../models/VideoMonetizationReview');
 const MonetizationApplication = require('../models/MonetizationApplication');
 const WithdrawalRequest = require('../models/WithdrawalRequest');
 const ErrorLog = require('../models/ErrorLog');
-const Ad = require('../models/Ad');
+const Announcement = require('../models/Announcement');
 const Post = require('../models/Post');
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
@@ -1577,7 +1577,7 @@ exports.globalAdminSearch = async (req, res, next) => {
       reports,
       monetizationApps,
       payouts,
-      ads,
+      announcements,
       approvedMonetizationApps,
     ] = await Promise.all([
       // Videos: Title, description, tags, matching owners, or exact ID
@@ -1664,8 +1664,8 @@ exports.globalAdminSearch = async (req, res, next) => {
         .limit(15)
         .lean(),
 
-      // Ads
-      Ad.find({
+      // Announcements
+      Announcement.find({
         $or: [
           ...(phraseRegex ? [{ title: phraseRegex }, { link: phraseRegex }, { type: phraseRegex }] : []),
           ...regexes.map((r) => ({ title: r })),
@@ -1706,7 +1706,7 @@ exports.globalAdminSearch = async (req, res, next) => {
       reports.length +
       monetizationApps.length +
       payouts.length +
-      ads.length;
+      announcements.length;
 
     res.status(200).json({
       success: true,
@@ -1717,7 +1717,8 @@ exports.globalAdminSearch = async (req, res, next) => {
         reports,
         monetization: monetizationApps,
         payouts,
-        ads,
+        announcements,
+        ads: announcements,
       },
       counts: {
         videos: scoredVideos.length,
@@ -1726,7 +1727,8 @@ exports.globalAdminSearch = async (req, res, next) => {
         reports: reports.length,
         monetization: monetizationApps.length,
         payouts: payouts.length,
-        ads: ads.length,
+        announcements: announcements.length,
+        ads: announcements.length,
         total: totalCount,
       },
     });

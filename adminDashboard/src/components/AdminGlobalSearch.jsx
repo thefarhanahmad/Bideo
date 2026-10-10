@@ -13,6 +13,7 @@ import {
   GridIcon,
   CloseIcon,
   ArrowRightIcon,
+  MegaphoneIcon,
 } from "./Icons";
 
 const resolveMediaUrl = (url) => {
@@ -61,7 +62,7 @@ const quickPages = [
   { label: "Reported Content", path: "/admin/reports", icon: FlagIcon, category: "Reports" },
   { label: "Monetization Audits", path: "/admin/monetization", icon: WalletIcon, category: "Monetization" },
   { label: "Creator Payouts", path: "/admin/payouts", icon: CashIcon, category: "Payouts" },
-  { label: "Ads Management", path: "/admin/ads", icon: TvIcon, category: "Ads" },
+  { label: "Announcements", path: "/admin/announcements", icon: MegaphoneIcon, category: "Announcements" },
   { label: "System Error Logs", path: "/admin/error-logs", icon: AlertOctagonIcon, category: "Logs" },
   { label: "Dashboard Overview", path: "/admin", icon: GridIcon, category: "Overview" },
 ];

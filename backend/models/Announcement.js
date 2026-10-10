@@ -1,19 +1,19 @@
 const mongoose = require('mongoose');
 
-const adSchema = new mongoose.Schema({
+const announcementSchema = new mongoose.Schema({
   title: {
     type: String,
-    required: [true, 'Please add an ad title'],
+    required: [true, 'Please add an announcement title'],
     trim: true,
   },
   image: {
     type: String,
-    required: [true, 'Please add an ad image URL'],
+    required: [true, 'Please add an announcement image URL'],
   },
   type: {
     type: String,
     enum: ['banner', 'full'],
-    default: 'banner',
+    default: 'full',
   },
   activeStatus: {
     type: Boolean,
@@ -38,4 +38,5 @@ const adSchema = new mongoose.Schema({
   },
 });
 
-module.exports = mongoose.model('Ad', adSchema);
+// Explicitly use the 'ads' collection in MongoDB so all existing records are fully preserved
+module.exports = mongoose.model('Announcement', announcementSchema, 'ads');

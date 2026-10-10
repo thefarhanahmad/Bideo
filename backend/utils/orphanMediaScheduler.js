@@ -4,7 +4,7 @@ const cron = require('node-cron');
 const Video = require('../models/Video');
 const Post = require('../models/Post');
 const User = require('../models/User');
-const Ad = require('../models/Ad');
+const Announcement = require('../models/Announcement');
 
 const GRACE_PERIOD_MS = 2 * 60 * 60 * 1000; // 2 hours in-flight safety shield
 
@@ -59,9 +59,9 @@ const runOrphanMediaCleanup = async () => {
       if (cFile) activeFilenames.add(cFile);
     });
 
-    // 4. Index Ads
-    const ads = await Ad.find({}, 'image').lean();
-    ads.forEach((a) => {
+    // 4. Index Announcements
+    const announcements = await Announcement.find({}, 'image').lean();
+    announcements.forEach((a) => {
       const aFile = extractFilename(a.image);
       if (aFile) activeFilenames.add(aFile);
     });
