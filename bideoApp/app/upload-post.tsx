@@ -419,8 +419,24 @@ export default function UploadPostScreen() {
 }
 
 const ProgressOverlay = ({ visible, progress, label }: { visible: boolean; progress: number; label?: string }) => {
+  const spin = useRef(new Animated.Value(0)).current;
   const animatedProgress = useRef(new Animated.Value(0)).current;
   const progressValue = Math.max(0, Math.min(progress || 0, 100));
+
+  useEffect(() => {
+    if (!visible) return;
+    spin.setValue(0);
+    const loop = Animated.loop(
+      Animated.timing(spin, {
+        toValue: 1,
+        duration: 1200,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [visible, spin]);
 
   useEffect(() => {
     Animated.timing(animatedProgress, {
@@ -431,6 +447,10 @@ const ProgressOverlay = ({ visible, progress, label }: { visible: boolean; progr
     }).start();
   }, [animatedProgress, progressValue]);
 
+  const spinRotation = spin.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
   const progressWidth = animatedProgress.interpolate({
     inputRange: [0, 100],
     outputRange: ['0%', '100%'],
@@ -449,20 +469,17 @@ const ProgressOverlay = ({ visible, progress, label }: { visible: boolean; progr
         <AppAdBanner containerStyle={styles.progressAdBanner} />
 
         <View style={styles.progressBox}>
-          <View style={styles.progressIconRow}>
-            <View style={styles.progressIconBadge}>
-              <Ionicons name="cloud-upload" size={24} color={Colors.primary} />
+          <View style={styles.progressRing}>
+            <Animated.View style={[styles.progressArc, { transform: [{ rotate: spinRotation }] }]} />
+            <View style={styles.progressRingInner}>
+              <Text style={styles.progressPercent}>{progressValue}%</Text>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.progressLabel}>{displayText}</Text>
-              <Text style={styles.progressHint}>Please keep app open</Text>
-            </View>
-            <Text style={styles.progressPercent}>{progressValue}%</Text>
           </View>
-
+          <Text style={styles.progressLabel}>{displayText}</Text>
           <View style={styles.progressTrack}>
             <Animated.View style={[styles.progressBar, { width: progressWidth }]} />
           </View>
+          <Text style={styles.progressHint}>Keep this screen open</Text>
         </View>
 
         {/* Banner Ad below progress */}
@@ -662,65 +679,83 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.65)',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 20,
+    padding: 20,
   },
   progressAdBanner: {
     alignSelf: 'center',
     marginVertical: 12,
   },
   progressBox: {
-    width: '100%',
-    maxWidth: 360,
+    width: 250,
+    alignItems: 'center',
     backgroundColor: Colors.white,
-    borderRadius: 20,
-    padding: 20,
+    borderRadius: 24,
+    padding: 24,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.15,
     shadowRadius: 16,
     elevation: 8,
   },
-  progressIconRow: {
-    flexDirection: 'row',
+  progressRing: {
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    borderWidth: 9,
+    borderColor: Colors.border,
     alignItems: 'center',
-    marginBottom: 16,
-    gap: 12,
+    justifyContent: 'center',
+    overflow: 'hidden',
   },
-  progressIconBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.primary + '14',
+  progressArc: {
+    position: 'absolute',
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    borderTopWidth: 9,
+    borderRightWidth: 9,
+    borderBottomWidth: 9,
+    borderLeftWidth: 9,
+    borderColor: Colors.primary,
+    borderLeftColor: 'transparent',
+    borderBottomColor: 'transparent',
+  },
+  progressRingInner: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: Colors.white,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  progressLabel: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  progressHint: {
-    fontSize: 12,
-    color: Colors.textGray,
-    marginTop: 2,
-  },
   progressPercent: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: Colors.primary,
+    color: Colors.text,
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  progressLabel: {
+    marginTop: 14,
+    color: Colors.text,
+    fontWeight: '700',
+    fontSize: 15,
   },
   progressTrack: {
     width: '100%',
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: Colors.border,
+    marginTop: 16,
     overflow: 'hidden',
   },
   progressBar: {
     height: '100%',
     borderRadius: 4,
     backgroundColor: Colors.primary,
+  },
+  progressHint: {
+    marginTop: 10,
+    color: Colors.textGray,
+    fontSize: 12,
   },
   topBannerContainer: {
     alignSelf: 'center',
