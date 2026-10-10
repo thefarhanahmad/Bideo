@@ -199,15 +199,17 @@ export default function ShortsScreen() {
     }
     if (router.canGoBack()) {
       router.back();
+    } else if (fromChannelId) {
+      router.replace(`/channel/${fromChannelId}`);
     } else {
-      router.replace('/(tabs)');
+      router.replace('/(tabs)/shorts');
     }
   }, [router, fromChannelId, initialShortId, loadShorts]);
 
   useEffect(() => {
     if (!isFocused) return;
     const onBackPress = () => {
-      if ((fromChannelId || initialShortId) && router.canGoBack()) {
+      if ((fromChannelId || initialShortId)) {
         router.setParams({ fromChannelId: '', initialShortId: '' });
         isChannelModeRef.current = false;
         if (globalShortsCacheRef.current && globalShortsCacheRef.current.length > 0) {
@@ -216,7 +218,13 @@ export default function ShortsScreen() {
         } else {
           loadShorts(undefined, true);
         }
-        router.back();
+        if (router.canGoBack()) {
+          router.back();
+        } else if (fromChannelId) {
+          router.replace(`/channel/${fromChannelId}`);
+        } else {
+          router.replace('/(tabs)/shorts');
+        }
         return true;
       }
       return false;

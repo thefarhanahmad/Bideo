@@ -247,7 +247,7 @@ export default function ChannelScreen() {
     return (
       <TouchableOpacity 
         style={styles.shortGridItem} 
-        onPress={() => router.push({ pathname: '/shorts', params: { initialShortId: item._id, fromChannelId: id } })}
+        onPress={() => router.push({ pathname: '/channel-shorts', params: { initialShortId: item._id, fromChannelId: id } })}
         activeOpacity={0.9}
       >
         <View style={styles.shortGridThumbnailContainer}>

@@ -244,6 +244,7 @@ export default function RootLayout() {
                 <Stack.Screen name="(tabs)" />
                 <Stack.Screen name="video/[id]" options={{ presentation: 'modal' }} />
                 <Stack.Screen name="channel/[id]" />
+                <Stack.Screen name="channel-shorts" />
                 <Stack.Screen name="notifications" />
                 <Stack.Screen name="chat" />
                 <Stack.Screen name="upload-video" />
