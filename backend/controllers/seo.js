@@ -42,7 +42,7 @@ function resolveMediaUrl(url) {
 
 function isCrawler(ua) {
   if (!ua || typeof ua !== 'string') return false;
-  return /bot|crawler|spider|facebookexternalhit|whatsapp|telegram|twitter|slack|discord|linkedin|pinterest|applebot|bingbot|googlebot|meta|instagram|snapchat|skype|viber/i.test(
+  return /google|bot|crawler|spider|inspectiontool|lighthouse|mediapartners|adsbot|feedfetcher|facebookexternalhit|whatsapp|telegram|twitter|slack|discord|linkedin|pinterest|applebot|bingbot|meta|instagram|snapchat|skype|viber/i.test(
     ua
   );
 }
@@ -168,7 +168,6 @@ function renderLauncherHtml({
   ` : ''}
 
   ${!isCrawlerReq ? `
-  <meta http-equiv="refresh" content="0;url=${intentLink}">
   <script>
     (function() {
       var ua = navigator.userAgent || '';
