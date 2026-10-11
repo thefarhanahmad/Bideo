@@ -8,7 +8,57 @@
     <link rel="manifest" href="/site.webmanifest">
     <link rel="shortcut icon" href="/favicon.ico">
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Bideo — watch, create and grow. A modern video platform for India. Download the app." />
+    <meta name="description" content="Bideo — watch, create and grow. India's modern short & long video sharing platform. Download the app on Google Play." />
+    <link rel="canonical" href="https://bideo.in/" />
+
+    <!-- OpenGraph / Social Previews -->
+    <meta property="og:site_name" content="Bideo" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Bideo — Watch. Create. Grow." />
+    <meta property="og:description" content="Bideo — watch, create and grow. India's modern short & long video sharing platform. Download the app on Google Play." />
+    <meta property="og:url" content="https://bideo.in/" />
+    <meta property="og:image" content="https://play-lh.googleusercontent.com/IG8UtEAD8gMWrdjAt8_LR4JDoofZVXM-A99932YQBhc16nO0KAcIxqb35MAJgP-DSuKXo6G9E3NkqtEqZNiI5Q4=w480-h960-rw" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Bideo — Watch. Create. Grow." />
+    <meta name="twitter:description" content="Bideo — watch, create and grow. India's modern short & long video sharing platform. Download the app on Google Play." />
+
+    <!-- Schema.org Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "name": "Bideo",
+          "url": "https://bideo.in",
+          "logo": "https://bideo.in/android-chrome-512x512.png",
+          "sameAs": [
+            "https://play.google.com/store/apps/details?id=com.farhan.bideoapp"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "name": "Bideo",
+          "url": "https://bideo.in"
+        },
+        {
+          "@type": "MobileApplication",
+          "name": "Bideo",
+          "operatingSystem": "Android",
+          "applicationCategory": "MultimediaApplication",
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "INR"
+          },
+          "installUrl": "https://play.google.com/store/apps/details?id=com.farhan.bideoapp"
+        }
+      ]
+    }
+    </script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -18,7 +68,15 @@
     <title>Bideo — Watch. Create. Grow.</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <noscript>
+        <div style="font-family: sans-serif; text-align: center; padding: 40px 20px;">
+          <h1>Bideo — Watch. Create. Grow.</h1>
+          <p>A modern short and long video sharing platform for India. Discover trending creators, watch fresh videos, and earn rewards.</p>
+          <p><a href="https://play.google.com/store/apps/details?id=com.farhan.bideoapp" style="background:#FF7A00;color:#fff;padding:12px 24px;border-radius:24px;text-decoration:none;font-weight:bold;">Download on Google Play</a></p>
+        </div>
+      </noscript>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

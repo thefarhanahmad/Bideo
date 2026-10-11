@@ -81,13 +81,19 @@ function renderLauncherHtml({
   creatorName = '',
   creatorAvatar = '',
   isCrawlerReq = false,
+  duration = 0,
+  uploadDate = null,
 }) {
+  const cleanHeadTitle = String(title || '').toLowerCase().includes('bideo')
+    ? title
+    : `${title} - Bideo`;
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
-  <title>${escapeHtml(title)} - Bideo</title>
+  <title>${escapeHtml(cleanHeadTitle)}</title>
   <meta name="description" content="${escapeHtml(description)}">
   <link rel="canonical" href="${canonicalUrl}">
   <meta name="robots" content="index, follow, max-image-preview:large">
@@ -122,6 +128,44 @@ function renderLauncherHtml({
   <meta property="al:android:app_name" content="Bideo">
   <meta property="al:android:package" content="${APP_PACKAGE}">
   <meta property="al:web:url" content="${canonicalUrl}">
+
+  ${ogType === 'video.other' ? `
+  <!-- Schema.org VideoObject for Google Search & Video Rich Results -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "VideoObject",
+    "name": "${escapeJson(title)}",
+    "description": "${escapeJson(description)}",
+    "thumbnailUrl": ["${imageUrl}"],
+    "uploadDate": "${new Date(uploadDate || Date.now()).toISOString()}",
+    "duration": "${formatIsoDuration(duration)}",
+    "contentUrl": "${videoUrl || canonicalUrl}",
+    "embedUrl": "${canonicalUrl}",
+    "author": {
+      "@type": "Person",
+      "name": "${escapeJson(creatorName || 'Bideo Creator')}"
+    }
+  }
+  </script>
+  ` : ''}
+
+  ${ogType === 'profile' ? `
+  <!-- Schema.org ProfilePage & Person for Google Search -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "ProfilePage",
+    "name": "${escapeJson(title)}",
+    "mainEntity": {
+      "@type": "Person",
+      "name": "${escapeJson(creatorName || 'Bideo Creator')}",
+      "url": "${canonicalUrl}",
+      "image": "${imageUrl}"
+    }
+  }
+  </script>
+  ` : ''}
 
   ${!isCrawlerReq ? `
   <meta http-equiv="refresh" content="0;url=${intentLink}">
@@ -174,6 +218,12 @@ function renderLauncherHtml({
       <div style="font-size:18px;font-weight:700;">Opening in Bideo App...</div>
       <div style="font-size:13px;color:#9CA3AF;margin-top:8px;">If app is not installed, opening Google Play Store...</div>
     </div>
+  </div>
+  <!-- Semantic metadata for search engine indexing without altering visual UX -->
+  <div style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;">
+    <h1>${escapeHtml(title)}</h1>
+    <p>${escapeHtml(description)}</p>
+    <span>${escapeHtml(creatorName)}</span>
   </div>
 </body>
 </html>`;
@@ -230,6 +280,8 @@ exports.getVideoPage = async (req, res, next) => {
       creatorName: channelName,
       creatorAvatar: channelAvatar,
       isCrawlerReq,
+      duration: video.duration,
+      uploadDate: video.createdAt,
     });
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -351,19 +403,19 @@ exports.getSitemap = async (req, res, next) => {
 
     const videos = await Video.find({ visibility: 'public', isBlocked: { $ne: true } })
       .sort({ createdAt: -1 })
-      .limit(1000)
+      .limit(5000)
       .select('title description thumbnail videoUrl views createdAt duration')
       .lean();
 
     const channels = await User.find({ isBlocked: { $ne: true } })
       .sort({ followersCount: -1 })
-      .limit(200)
+      .limit(1000)
       .select('_id updatedAt')
       .lean();
 
     const posts = await Post.find({ visibility: 'public' })
       .sort({ createdAt: -1 })
-      .limit(200)
+      .limit(1000)
       .select('_id createdAt')
       .lean();
 
@@ -383,6 +435,7 @@ exports.getSitemap = async (req, res, next) => {
       const pubDate = new Date(v.createdAt || Date.now()).toISOString();
       const title = escapeHtml(v.title || 'Bideo Video');
       const desc = escapeHtml(v.description || v.title || 'Watch on Bideo');
+      const durationSec = Math.max(1, Math.round(Number(v.duration || 0)));
 
       xml += `
   <url>
@@ -393,6 +446,7 @@ exports.getSitemap = async (req, res, next) => {
       <video:description>${desc}</video:description>
       <video:content_loc>${contentLoc}</video:content_loc>
       <video:publication_date>${pubDate}</video:publication_date>
+      <video:duration>${durationSec}</video:duration>
       <video:view_count>${v.views || 0}</video:view_count>
       <video:family_friendly>yes</video:family_friendly>
     </video:video>
@@ -478,3 +532,33 @@ exports.getAssetLinks = (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   res.status(200).json(assetLinks);
 };
+
+// @desc    Standard plain-text summary for AI assistants (ChatGPT, Perplexity, Claude, Gemini)
+// @route   GET /llms.txt and /api/llms.txt
+// @access  Public
+exports.getLlmsTxt = (req, res) => {
+  const content = `# Bideo (bideo.in)
+> Watch. Create. Grow. India's modern short & long video sharing platform.
+
+## About Bideo
+Bideo is a fast-growing, free video sharing community designed for Indian creators and audiences across Hindi, Bhojpuri, Tamil, Telugu, and other regional languages.
+Creators can publish short and long videos, build their channel follower base, and participate in the creator monetization program.
+
+## Mobile Application
+- Package ID: com.farhan.bideoapp
+- Google Play Store: https://play.google.com/store/apps/details?id=com.farhan.bideoapp
+- Website: https://bideo.in
+
+## Official Links & Policies
+- Terms of Service: https://bideo.in/terms
+- Privacy Policy: https://bideo.in/privacy
+- Community Guidelines: https://bideo.in/guidelines
+- Content Moderation: https://bideo.in/moderation
+- Copyright Policy: https://bideo.in/copyright
+- Account Deletion: https://bideo.in/account-deletion
+- Contact & Support: https://bideo.in/contact
+`;
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.status(200).send(content);
+};
+

@@ -85,24 +85,28 @@ const applyVideoTypeFilter = (query, type) => {
 const getVideoQuery = (req) => {
   const query = {};
   const isAdmin = req.user && req.user.role === "admin";
-
   const filter = (req.query.filter || "").toLowerCase();
   if (filter === "long") {
     query.isShort = { $ne: true };
   } else if (filter === "shorts") {
     query.isShort = true;
-  } else if (filter === "public") {
-    query.visibility = "public";
-  } else if (filter === "private") {
-    query.visibility = { $in: ["private", "unlisted"] };
   } else if (filter === "pinned") {
     query.isPinned = true;
   }
 
-  // Admin can view all or specific visibility; public users only see public videos
-  if (req.query.visibility && req.query.visibility !== "all") {
-    query.visibility = req.query.visibility;
-  } else if (!isAdmin && !query.visibility) {
+  // Admin or the authenticated video owner can view non-public videos; guests and public users strictly see public videos
+  const isOwnerQuery = req.user && req.query.owner && req.query.owner.toString() === req.user.id.toString();
+  const canViewNonPublic = isAdmin || isOwnerQuery;
+
+  if (canViewNonPublic) {
+    if (req.query.visibility && req.query.visibility !== "all") {
+      query.visibility = req.query.visibility;
+    } else if (filter === "private") {
+      query.visibility = { $in: ["private", "unlisted"] };
+    } else if (filter === "public") {
+      query.visibility = "public";
+    }
+  } else {
     query.visibility = "public";
   }
 
@@ -192,12 +196,23 @@ const formatMediaUrl = (url, req) => {
 };
 
 const decorateVideos = async (videos, req) => {
+  const isAdmin = req.user && req.user.role === "admin";
+  const currentUserId = req.user ? (req.user.id || req.user._id)?.toString() : null;
+
   let results = videos.map((v) => {
     const obj = typeof v.toObject === "function" ? v.toObject() : { ...v };
     if (obj.thumbnail) obj.thumbnail = formatMediaUrl(obj.thumbnail, req);
     if (obj.videoUrl) obj.videoUrl = formatMediaUrl(obj.videoUrl, req);
     if (obj.owner && obj.owner.avatar)
       obj.owner.avatar = formatMediaUrl(obj.owner.avatar, req);
+
+    // Safeguard creator earnings: only the video owner or an admin can see revenue details
+    const isOwner = currentUserId && obj.owner && ((obj.owner._id || obj.owner).toString() === currentUserId);
+    if (!isAdmin && !isOwner) {
+      delete obj.revenue;
+      delete obj.pendingRevenue;
+    }
+
     return obj;
   });
 
@@ -760,7 +775,7 @@ exports.getVideos = async (req, res, next) => {
       const populatedVideos = await Video.find({ _id: { $in: chosenIds } })
         .populate(
           "owner",
-          "name avatar channelName followersCount isVerified email phone",
+          "name avatar channelName followersCount isVerified",
         )
         .populate("category", "name")
         .lean();
@@ -825,7 +840,7 @@ exports.getVideos = async (req, res, next) => {
       Video.find(query)
         .populate(
           "owner",
-          "name avatar channelName followersCount isVerified email phone",
+          "name avatar channelName followersCount isVerified",
         )
         .populate("category", "name")
         .sort(getSort(sortOption))
