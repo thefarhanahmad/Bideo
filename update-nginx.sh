@@ -4,11 +4,27 @@ set -e
 echo "⚙️ Configuring Nginx for Bideo SEO, Deep Linking, and App Links..."
 
 cat << 'EOF' > /etc/nginx/sites-available/bideo
+# 1. Main Bideo server (HTTPS)
 server {
-    server_name bideo.in www.bideo.in;
+    server_name bideo.in;
     client_max_body_size 500M;
     root /var/www/bideo;
     index index.html;
+
+    # Gzip Compression
+    gzip on;
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_comp_level 6;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css text/xml application/json application/javascript application/xml+rss application/atom+xml image/svg+xml;
+
+    # Production Security Headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 
     # 1. Public video and channel pages (rich preview + Open In App button)
     location ~ ^/(v|c|video|channel)/ {
@@ -20,8 +36,8 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # 2. Android App Links verification & SEO
-    location ~ ^/(sitemap\.xml|robots\.txt|app-ads\.txt|\.well-known/assetlinks\.json) {
+    # 2. Search engine crawlers, AI discovery & Android App Links
+    location ~ ^/(sitemap\.xml|robots\.txt|app-ads\.txt|llms\.txt|\.well-known/assetlinks\.json) {
         proxy_pass http://127.0.0.1:5000;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -80,20 +96,27 @@ server {
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
 }
 
+# 2. HTTPS www redirect to non-www
 server {
-    if ($host = www.bideo.in) {
-        return 301 https://$host$request_uri;
-    } # managed by Certbot
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name www.bideo.in;
 
-    if ($host = bideo.in) {
-        return 301 https://$host$request_uri;
-    } # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/bideo.in/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/bideo.in/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
 
+    return 301 https://bideo.in$request_uri;
+}
+
+# 3. HTTP redirect all traffic to HTTPS
+server {
     listen 80;
     listen [::]:80;
-
     server_name bideo.in www.bideo.in;
-    return 404; # managed by Certbot
+
+    return 301 https://bideo.in$request_uri;
 }
 EOF
 
