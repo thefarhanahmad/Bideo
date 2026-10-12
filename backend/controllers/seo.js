@@ -569,7 +569,7 @@ exports.getLlmsTxt = (req, res) => {
 
 ## About Bideo
 Bideo is a fast-growing, free video sharing community designed for Indian creators and audiences across Hindi, Bhojpuri, Tamil, Telugu, and other regional languages.
-Creators can publish short and long videos, build their channel follower base, and participate in the creator monetization program.
+Creators can publish short and long videos, build their channel follower base, and participate in the creator monetization program. Over 80K+ videos are published on the platform.
 
 ## Mobile Application
 - Package ID: com.farhan.bideoapp

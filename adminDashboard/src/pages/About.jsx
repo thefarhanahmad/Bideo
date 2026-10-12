@@ -57,7 +57,7 @@ const About = () => {
             <div className="text-xs text-muted">Play Store Installs</div>
           </div>
           <div>
-            <div className="font-display text-2xl font-black text-brand sm:text-3xl">40,000+</div>
+            <div className="font-display text-2xl font-black text-brand sm:text-3xl">80K+</div>
             <div className="text-xs text-muted">Videos Published</div>
           </div>
           <div className="col-span-2 sm:col-span-1">
