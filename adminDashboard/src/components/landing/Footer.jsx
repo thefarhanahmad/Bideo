@@ -68,8 +68,8 @@ const cols = [
     links: [
       { label: "Features", href: "/#features" },
       { label: "How it works", href: "/#how" },
-      { label: "Creators", href: "/#earn" },
-      { label: "FAQ", href: "/#faq" },
+      { label: "Creators", to: "/creators" },
+      { label: "FAQ", to: "/faq" },
     ],
   },
   {

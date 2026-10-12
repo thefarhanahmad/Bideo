@@ -426,14 +426,34 @@ exports.getSitemap = async (req, res, next) => {
       .select('_id createdAt')
       .lean();
 
+    const staticPages = [
+      { path: '', priority: '1.0', changefreq: 'daily' },
+      { path: '/about', priority: '0.8', changefreq: 'monthly' },
+      { path: '/creators', priority: '0.9', changefreq: 'weekly' },
+      { path: '/faq', priority: '0.8', changefreq: 'weekly' },
+      { path: '/contact', priority: '0.8', changefreq: 'monthly' },
+      { path: '/terms', priority: '0.5', changefreq: 'monthly' },
+      { path: '/privacy', priority: '0.5', changefreq: 'monthly' },
+      { path: '/guidelines', priority: '0.6', changefreq: 'monthly' },
+      { path: '/copyright', priority: '0.5', changefreq: 'monthly' },
+      { path: '/moderation', priority: '0.5', changefreq: 'monthly' },
+      { path: '/account-deletion', priority: '0.4', changefreq: 'monthly' },
+      { path: '/child-safety', priority: '0.5', changefreq: 'monthly' },
+      { path: '/refunds', priority: '0.4', changefreq: 'monthly' },
+    ];
+
     let xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
-        xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">
+        xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">`;
+
+    for (const page of staticPages) {
+      xml += `
   <url>
-    <loc>${BASE_URL}</loc>
-    <changefreq>hourly</changefreq>
-    <priority>1.0</priority>
+    <loc>${BASE_URL}${page.path}</loc>
+    <changefreq>${page.changefreq}</changefreq>
+    <priority>${page.priority}</priority>
   </url>`;
+    }
 
     for (const v of videos) {
       const loc = `${BASE_URL}/v/${v._id}`;

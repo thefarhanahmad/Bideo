@@ -55,8 +55,8 @@ const AccountDeletion = () => {
             </p>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-sm">
-            <table className="w-full text-left text-sm">
+          <div className="overflow-x-auto rounded-2xl border border-line bg-white shadow-sm">
+            <table className="min-w-[500px] w-full text-left text-sm">
               <thead className="border-b border-line bg-surface/80 text-xs font-bold uppercase tracking-wider text-ink">
                 <tr>
                   <th className="p-3.5">Data Category</th>

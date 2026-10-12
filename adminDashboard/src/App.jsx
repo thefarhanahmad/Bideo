@@ -6,6 +6,8 @@ import Privacy from './pages/Privacy';
 import Guidelines from './pages/Guidelines';
 import About from './pages/About';
 import Contact from './pages/Contact';
+import Creators from './pages/Creators';
+import FaqPage from './pages/FaqPage';
 import CopyrightPolicy from './pages/CopyrightPolicy';
 import ModerationPolicy from './pages/ModerationPolicy';
 import CookiePolicy from './pages/CookiePolicy';
@@ -42,11 +44,14 @@ function App() {
         <Route path="/" element={<Landing />} />
 
         {/* Public info & legal pages */}
+        <Route path="/about" element={<About />} />
+        <Route path="/creators" element={<Creators />} />
+        <Route path="/for-creators" element={<Creators />} />
+        <Route path="/faq" element={<FaqPage />} />
+        <Route path="/contact" element={<Contact />} />
         <Route path="/terms" element={<Terms />} />
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/guidelines" element={<Guidelines />} />
-        <Route path="/about" element={<About />} />
-        <Route path="/contact" element={<Contact />} />
         <Route path="/copyright" element={<CopyrightPolicy />} />
         <Route path="/moderation" element={<ModerationPolicy />} />
         <Route path="/cookies" element={<CookiePolicy />} />
