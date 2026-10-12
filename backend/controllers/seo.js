@@ -573,17 +573,20 @@ Creators can publish short and long videos, build their channel follower base, a
 
 ## Mobile Application
 - Package ID: com.farhan.bideoapp
-- Google Play Store: https://play.google.com/store/apps/details?id=com.farhan.bideoapp
+- Google Play Store: https://play.google.com/store/apps/details?id=com.farhan.bideoapp (50K+ Installs, 4.7★ Rating)
 - Website: https://bideo.in
 
 ## Official Links & Policies
+- About Us: https://bideo.in/about
+- For Creators: https://bideo.in/creators
+- Frequently Asked Questions: https://bideo.in/faq
 - Terms of Service: https://bideo.in/terms
 - Privacy Policy: https://bideo.in/privacy
 - Community Guidelines: https://bideo.in/guidelines
 - Content Moderation: https://bideo.in/moderation
 - Copyright Policy: https://bideo.in/copyright
 - Account Deletion: https://bideo.in/account-deletion
-- Contact & Support: https://bideo.in/contact
+- Contact & Grievance Redressal: https://bideo.in/contact
 `;
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.status(200).send(content);
