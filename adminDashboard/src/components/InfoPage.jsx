@@ -4,10 +4,35 @@ import Footer from "./landing/Footer";
 
 /** Shared layout for static info/legal pages (Navbar + hero + content + Footer). */
 const InfoPage = ({ title, subtitle, updated, children }) => {
-  // Always start these pages at the top.
   useEffect(() => {
     window.scrollTo(0, 0);
-  }, []);
+    if (title) {
+      document.title = `${title} — Bideo`;
+    }
+    if (subtitle) {
+      const metaDesc = document.querySelector('meta[name="description"]');
+      if (metaDesc) {
+        metaDesc.setAttribute("content", subtitle);
+      }
+      const ogDesc = document.querySelector('meta[property="og:description"]');
+      if (ogDesc) {
+        ogDesc.setAttribute("content", subtitle);
+      }
+      const ogTitle = document.querySelector('meta[property="og:title"]');
+      if (ogTitle) {
+        ogTitle.setAttribute("content", `${title} — Bideo`);
+      }
+    }
+    const currentUrl = window.location.origin + window.location.pathname;
+    const canonical = document.querySelector('link[rel="canonical"]');
+    if (canonical) {
+      canonical.setAttribute("href", currentUrl);
+    }
+    const ogUrl = document.querySelector('meta[property="og:url"]');
+    if (ogUrl) {
+      ogUrl.setAttribute("content", currentUrl);
+    }
+  }, [title, subtitle]);
 
   return (
     <div className="min-h-screen bg-white font-sans text-ink">

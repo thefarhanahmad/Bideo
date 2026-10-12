@@ -40,10 +40,21 @@ const DownloadButton = ({
     );
   }
 
+  const handleClick = () => {
+    if (typeof window !== "undefined" && typeof window.gtag === "function") {
+      window.gtag("event", "download_app_click", {
+        event_category: "acquisition",
+        event_label: label || "Download App",
+        value: 1,
+      });
+    }
+  };
+
   return (
     <a
       href={APP_DOWNLOAD_URL}
       download="Bideo.apk"
+      onClick={handleClick}
       className={cls}
     >
       <DownloadIcon className="h-5 w-5" />

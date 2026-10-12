@@ -26,8 +26,8 @@ server {
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 
-    # 1. Public video and channel pages (rich preview + Open In App button)
-    location ~ ^/(v|c|video|channel)/ {
+    # 1. Public video, channel, and post pages (rich preview + Open In App button)
+    location ~ ^/(v|c|p|video|channel|post)/ {
         proxy_pass http://127.0.0.1:5000;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
