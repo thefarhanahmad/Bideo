@@ -187,22 +187,11 @@ export default function ShareModal({ visible, onClose, item }: ShareModalProps) 
     }
   };
 
-  // WhatsApp share
+  // WhatsApp & Social Apps share (triggers native ACTION_SEND so WhatsApp generates rich thumbnail & title preview card)
   const handleWhatsAppShare = async () => {
     onClose();
 
     if (isChannel) {
-      const cleanName = (item.channelName || item.name || 'Creator').trim();
-      const text = `${shareUrl}\n\nCheck out @${cleanName} on Bideo`;
-      const whatsappUrl = `whatsapp://send?text=${encodeURIComponent(text)}`;
-      try {
-        const canOpen = await Linking.canOpenURL(whatsappUrl);
-        if (canOpen) {
-          await Linking.openURL(whatsappUrl);
-          return;
-        }
-      } catch {}
-
       await shareChannel({
         _id: item._id,
         name: item.name,
@@ -211,24 +200,6 @@ export default function ShareModal({ visible, onClose, item }: ShareModalProps) 
       return;
     }
 
-    const cleanTitle = (item.title || item.text || '').trim();
-    const contentType = isVideo ? (item.isShort ? 'Short' : 'Video') : 'Post';
-    const text = cleanTitle
-      ? `${shareUrl}\n\nWatch "${cleanTitle}" on Bideo`
-      : `${shareUrl}\n\nWatch this ${contentType} on Bideo`;
-
-    const whatsappUrl = `whatsapp://send?text=${encodeURIComponent(text)}`;
-    try {
-      const canOpen = await Linking.canOpenURL(whatsappUrl);
-      if (canOpen) {
-        await Linking.openURL(whatsappUrl);
-        return;
-      }
-    } catch {
-      // Fallback to system share
-    }
-
-    // System share fallback
     if (isVideo) {
       await shareVideo({ _id: item._id, title: item.title, isShort: item.isShort });
     } else {

@@ -96,7 +96,7 @@ server {
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
 }
 
-# 2. HTTPS www redirect to non-www
+# 2. HTTPS www redirect to non-www (except .well-known for Android App Links)
 server {
     listen 443 ssl;
     listen [::]:443 ssl;
@@ -107,7 +107,18 @@ server {
     include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
 
-    return 301 https://bideo.in$request_uri;
+    location = /.well-known/assetlinks.json {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Host bideo.in;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location / {
+        return 301 https://bideo.in$request_uri;
+    }
 }
 
 # 3. HTTP redirect all traffic to HTTPS

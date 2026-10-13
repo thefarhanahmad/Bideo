@@ -88,6 +88,9 @@ function renderLauncherHtml({
     ? title
     : `${title} - Bideo`;
 
+  const fallbackThumb = DEFAULT_SHARE_IMAGE;
+  const displayImage = imageUrl || fallbackThumb;
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -104,9 +107,9 @@ function renderLauncherHtml({
   <meta property="og:title" content="${escapeHtml(title)}">
   <meta property="og:description" content="${escapeHtml(description)}">
   <meta property="og:url" content="${canonicalUrl}">
-  ${imageUrl ? `
-  <meta property="og:image" content="${imageUrl}">
-  <meta property="og:image:secure_url" content="${imageUrl}">
+  ${displayImage ? `
+  <meta property="og:image" content="${displayImage}">
+  <meta property="og:image:secure_url" content="${displayImage}">
   <meta property="og:image:type" content="image/jpeg">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="720">
@@ -118,7 +121,7 @@ function renderLauncherHtml({
   <meta name="twitter:site" content="@BideoApp">
   <meta name="twitter:title" content="${escapeHtml(title)}">
   <meta name="twitter:description" content="${escapeHtml(description)}">
-  ${imageUrl ? `<meta name="twitter:image" content="${imageUrl}">` : ''}
+  ${displayImage ? `<meta name="twitter:image" content="${displayImage}">` : ''}
   <meta name="twitter:app:name:googleplay" content="Bideo">
   <meta name="twitter:app:id:googleplay" content="${APP_PACKAGE}">
   <meta name="twitter:app:url:googleplay" content="${deepLink}">
@@ -137,7 +140,7 @@ function renderLauncherHtml({
     "@type": "VideoObject",
     "name": "${escapeJson(title)}",
     "description": "${escapeJson(description)}",
-    "thumbnailUrl": ["${imageUrl}"],
+    "thumbnailUrl": ["${displayImage}"],
     "uploadDate": "${new Date(uploadDate || Date.now()).toISOString()}",
     "duration": "${formatIsoDuration(duration)}",
     "contentUrl": "${videoUrl || canonicalUrl}",
@@ -161,7 +164,7 @@ function renderLauncherHtml({
       "@type": "Person",
       "name": "${escapeJson(creatorName || 'Bideo Creator')}",
       "url": "${canonicalUrl}",
-      "image": "${imageUrl}"
+      "image": "${displayImage}"
     }
   }
   </script>
@@ -176,36 +179,12 @@ function renderLauncherHtml({
     gtag('js', new Date());
     gtag('config', 'G-9RWMB59HW1');
   </script>
-  <script>
-    (function() {
-      var ua = navigator.userAgent || '';
-      var isAndroid = /android/i.test(ua);
-      var isIOS = /iphone|ipad|ipod/i.test(ua);
-      var intentUrl = "${intentLink}";
-      var playStoreUrl = "${PLAY_STORE_URL}";
-      var deepLink = "${deepLink}";
-
-      if (isAndroid) {
-        window.location.href = intentUrl;
-        setTimeout(function() {
-          window.location.href = playStoreUrl;
-        }, 1500);
-      } else if (isIOS) {
-        window.location.href = deepLink;
-        setTimeout(function() {
-          window.location.href = playStoreUrl;
-        }, 1500);
-      } else {
-        window.location.href = playStoreUrl;
-      }
-    })();
-  </script>
   ` : ''}
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      background: #0F0F0F;
+      background: #0B0B0E;
       color: #FFFFFF;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       min-height: 100vh;
@@ -213,20 +192,199 @@ function renderLauncherHtml({
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 24px 16px;
+      padding: 20px 16px;
       text-align: center;
+    }
+    .container {
+      width: 100%;
+      max-width: 440px;
+      background: #16161C;
+      border: 1px solid #272730;
+      border-radius: 20px;
+      padding: 24px 20px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .header-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 20px;
+      font-weight: 800;
+      color: #FFFFFF;
+      margin-bottom: 20px;
+      text-decoration: none;
+    }
+    .header-logo span {
+      color: #FF7A00;
+    }
+    .thumb-wrap {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background: #000;
+      border-radius: 14px;
+      overflow: hidden;
+      position: relative;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+    }
+    .thumb-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .play-badge {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: rgba(255, 122, 0, 0.92);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 18px rgba(255, 122, 0, 0.5);
+    }
+    .play-badge svg {
+      width: 24px;
+      height: 24px;
+      fill: #FFF;
+      margin-left: 3px;
+    }
+    .title {
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1.4;
+      color: #F3F4F6;
+      margin-bottom: 8px;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      text-align: left;
+      width: 100%;
+    }
+    .creator-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      margin-bottom: 22px;
+    }
+    .creator-name {
+      font-size: 13px;
+      color: #9CA3AF;
+      font-weight: 500;
+    }
+    .btn-open {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      background: linear-gradient(135deg, #FF7A00 0%, #FF5500 100%);
+      color: #FFFFFF;
+      text-decoration: none;
+      font-size: 16px;
+      font-weight: 700;
+      padding: 15px 20px;
+      border-radius: 14px;
+      box-shadow: 0 6px 20px rgba(255, 122, 0, 0.35);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      cursor: pointer;
+    }
+    .btn-open:active {
+      transform: scale(0.98);
+    }
+    .btn-store {
+      display: block;
+      width: 100%;
+      background: #23232C;
+      color: #D1D5DB;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 12px 16px;
+      border-radius: 12px;
+      margin-top: 10px;
+      border: 1px solid #32323D;
+      transition: background 0.15s ease;
+    }
+    .btn-store:hover {
+      background: #2D2D38;
+      color: #FFFFFF;
+    }
+    .hint-text {
+      font-size: 11px;
+      color: #6B7280;
+      margin-top: 14px;
     }
   </style>
 </head>
 <body>
-  <div style="display:flex;height:100vh;align-items:center;justify-content:center;background:#0F0F0F;color:#FFF;font-family:sans-serif;text-align:center;padding:20px;">
-    <div>
-      <div style="font-size:36px;margin-bottom:12px;">⚡</div>
-      <div style="font-size:18px;font-weight:700;">Opening in Bideo App...</div>
-      <div style="font-size:13px;color:#9CA3AF;margin-top:8px;">If app is not installed, opening Google Play Store...</div>
+  <div class="container">
+    <a href="${canonicalUrl}" class="header-logo">
+      <span>▶</span> Bideo
+    </a>
+
+    <div class="thumb-wrap">
+      <img src="${escapeHtml(displayImage)}" alt="${escapeHtml(title)}" loading="eager" />
+      <div class="play-badge">
+        <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+      </div>
     </div>
+
+    <h1 class="title">${escapeHtml(title)}</h1>
+    <div class="creator-row">
+      <span class="creator-name">${escapeHtml(creatorName || 'Bideo Creator')}</span>
+    </div>
+
+    <a id="open-app-btn" href="${intentLink}" class="btn-open">
+      Open in Bideo App
+    </a>
+
+    <a href="${PLAY_STORE_URL}" class="btn-store">
+      Install from Google Play
+    </a>
+
+    <p id="status-hint" class="hint-text">Opening Bideo App... Tap button above if not opened.</p>
   </div>
-  <!-- Semantic metadata for search engine indexing without altering visual UX -->
+
+  ${!isCrawlerReq ? `
+  <script>
+    (function() {
+      var ua = navigator.userAgent || '';
+      var isAndroid = /android/i.test(ua);
+      var isIOS = /iphone|ipad|ipod/i.test(ua);
+      var intentUrl = "${intentLink}";
+      var deepLink = "${deepLink}";
+      var playStoreUrl = "${PLAY_STORE_URL}";
+      var btn = document.getElementById('open-app-btn');
+
+      if (isIOS) {
+        if (btn) btn.href = deepLink;
+        window.location.href = deepLink;
+      } else if (isAndroid) {
+        if (btn) btn.href = intentUrl;
+        // Automatic launch attempt on load
+        try {
+          window.location.href = intentUrl;
+        } catch (e) {}
+      } else {
+        if (btn) {
+          btn.href = playStoreUrl;
+          btn.innerText = 'Get on Google Play';
+        }
+      }
+    })();
+  </script>
+  ` : ''}
+
+  <!-- Semantic metadata for search engine crawlers -->
   <div style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;">
     <h1>${escapeHtml(title)}</h1>
     <p>${escapeHtml(description)}</p>
@@ -539,7 +697,7 @@ Sitemap: ${BASE_URL}/sitemap.xml
 exports.getAssetLinks = (req, res) => {
   const fingerprints = (
     process.env.ANDROID_SHA256_FINGERPRINTS ||
-    '32:53:A0:82:A7:36:DB:97:00:8F:CC:1A:44:CB:25:00:33:61:9B:6D:3A:CC:A0:55:37:93:40:E2:FF:7C:73:9A,14:6D:E9:7D:0F:52:AB:F9:EE:4B:E4:36:9C:2C:19:D4:58:62:3B:5A:F3:11:79:2E:39:69:BD:24:D1:D7:9F:DF,FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C'
+    'B3:A1:30:B7:6F:0F:CB:DE:3B:BF:A9:5E:64:A8:B5:5E:E6:7D:6F:54:AF:46:81:17:1A:AF:F4:51:92:A8:4B:CE,32:53:A0:82:A7:36:DB:97:00:8F:CC:1A:44:CB:25:00:33:61:9B:6D:3A:CC:A0:55:37:93:40:E2:FF:7C:73:9A,14:6D:E9:7D:0F:52:AB:F9:EE:4B:E4:36:9C:2C:19:D4:58:62:3B:5A:F3:11:79:2E:39:69:BD:24:D1:D7:9F:DF,FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C'
   )
     .split(',')
     .map((s) => s.trim())

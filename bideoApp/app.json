@@ -67,7 +67,17 @@
               "scheme": "https",
               "host": "bideo.in",
               "pathPrefix": "/post"
-            },
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
             {
               "scheme": "https",
               "host": "www.bideo.in",
