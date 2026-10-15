@@ -13,6 +13,7 @@ import Constants from 'expo-constants';
 import { registerForPushNotificationsAsync, setupNotificationListeners } from '../services/notifications';
 import { initSocket, disconnectSocket } from '../services/socket';
 import { AppState, AppStateStatus, StatusBar } from 'react-native';
+import { logScreen, logEvent, setAnalyticsUser } from '../services/analytics';
 
 // Keep native splash screen visible while app initializes
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -75,6 +76,10 @@ function Startup({ onReady }: { onReady: () => void }) {
               dispatch(logout());
             } else {
               dispatch(loginSuccess({ user: initialUser, token } as any));
+              setAnalyticsUser(initialUser._id, {
+                name: initialUser.name || '',
+                channelName: initialUser.channelName || '',
+              });
             }
           } else {
             dispatch(loginStart());
@@ -83,6 +88,7 @@ function Startup({ onReady }: { onReady: () => void }) {
           // Fast unblock splash screen immediately
           clearTimeout(fallbackTimer);
           onReady();
+          logEvent('app_open');
 
           // Background verification of current user profile (timeout in 6s)
           api
@@ -223,6 +229,18 @@ function ChatPresenceManager({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function ScreenTracker({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+
+  useEffect(() => {
+    if (pathname) {
+      logScreen(pathname);
+    }
+  }, [pathname]);
+
+  return <>{children}</>;
+}
+
 export default function RootLayout() {
   const handleAppReady = useCallback(async () => {
     try {
@@ -240,20 +258,22 @@ export default function RootLayout() {
         <DeletionGuard>
           <NotificationManager>
             <ChatPresenceManager>
-              <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="(tabs)" />
-                <Stack.Screen name="video/[id]" options={{ presentation: 'modal' }} />
-                <Stack.Screen name="channel/[id]" />
-                <Stack.Screen name="channel-shorts" />
-                <Stack.Screen name="notifications" />
-                <Stack.Screen name="chat" />
-                <Stack.Screen name="upload-video" />
-                <Stack.Screen name="upload-post" />
-                <Stack.Screen name="settings/privacy" />
-                <Stack.Screen name="settings/delete-profile" />
-                <Stack.Screen name="account-recovery" />
-              </Stack>
-              <AlertHost />
+              <ScreenTracker>
+                <Stack screenOptions={{ headerShown: false }}>
+                  <Stack.Screen name="(tabs)" />
+                  <Stack.Screen name="video/[id]" options={{ presentation: 'modal' }} />
+                  <Stack.Screen name="channel/[id]" />
+                  <Stack.Screen name="channel-shorts" />
+                  <Stack.Screen name="notifications" />
+                  <Stack.Screen name="chat" />
+                  <Stack.Screen name="upload-video" />
+                  <Stack.Screen name="upload-post" />
+                  <Stack.Screen name="settings/privacy" />
+                  <Stack.Screen name="settings/delete-profile" />
+                  <Stack.Screen name="account-recovery" />
+                </Stack>
+                <AlertHost />
+              </ScreenTracker>
             </ChatPresenceManager>
           </NotificationManager>
         </DeletionGuard>

@@ -32,6 +32,7 @@ import {
   clearWatchProgress,
   isVideoFinished,
 } from '../../utils/watchProgress';
+import { logVideoStart, trackVideoWatched } from '../../services/analytics';
 
 const FALLBACK_IMAGE = 'https://via.placeholder.com/80x80.png?text=User';
 const REQUIRED_WATCH_TIME = 3; // 3 seconds minimum watch time to count a view
@@ -215,6 +216,9 @@ export default function VideoScreen() {
           } catch {}
         }
         player.play();
+        if (video?._id) {
+          logVideoStart(video._id, Boolean(video.isShort), video.category);
+        }
       } else {
         // Mid-roll ad finished: resume playback right where it was paused
         player.play();
@@ -396,6 +400,7 @@ export default function VideoScreen() {
 
             if (watchTimeRef.current >= targetTime) {
               viewRecordedRef.current = true;
+              trackVideoWatched(video._id, Boolean(video.isShort), video.category);
               videoService.recordView(video._id)
                 .then((res) => {
                   if (res?.views) {

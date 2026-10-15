@@ -13,6 +13,7 @@ import { authService, setAuthToken } from '../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from "expo-router";
 import { registerForPushNotificationsAsync } from '../services/notifications';
+import { setAnalyticsUser, logSignUp } from '../services/analytics';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -58,6 +59,13 @@ const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onLoginSuccess 
       setAuthToken(token);
     }
     dispatch(loginSuccess({ user: userData, token } as any));
+    setAnalyticsUser(userData._id, {
+      name: userData.name || '',
+      channelName: userData.channelName || '',
+    });
+    if (isSignup) {
+      logSignUp('phone_password');
+    }
     onLoginSuccess?.(userData);
     onClose();
 
@@ -67,7 +75,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onLoginSuccess 
     if (userData.deletionScheduled) {
       router.push('/account-recovery');
     }
-  }, [dispatch, onLoginSuccess, onClose, router]);
+  }, [dispatch, onLoginSuccess, onClose, router, isSignup]);
 
   const getUserInfo = useCallback(async (accessToken: string) => {
     try {

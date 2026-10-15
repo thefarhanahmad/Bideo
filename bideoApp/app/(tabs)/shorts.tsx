@@ -23,6 +23,7 @@ import Constants from 'expo-constants';
 import HashtagText from '../../components/HashtagText';
 import { shareVideo } from '../../utils/shareHelper';
 import ShareModal from '../../components/ShareModal';
+import { logVideoStart, trackVideoWatched } from '../../services/analytics';
 
 const shuffleArray = <T,>(array: T[]): T[] => {
   const shuffled = [...array];
@@ -960,6 +961,9 @@ const ShortItem = ({ item, index, activeVideoIndex, containerHeight, isFocused, 
     try {
       if (isActive && !isPaused) {
         player.play();
+        if (item?._id) {
+          logVideoStart(item._id, true, item.category);
+        }
       } else {
         player.pause();
       }
@@ -989,6 +993,7 @@ const ShortItem = ({ item, index, activeVideoIndex, containerHeight, isFocused, 
 
             if (watchTimeRef.current >= targetTime) {
               viewRecordedRef.current = true;
+              trackVideoWatched(item._id, true, item.category);
               videoService.recordView(item._id)
                 .then((res: any) => {
                   if (res?.viewerCoinsEarned > 0 && res?.viewerTotalCoins !== undefined && onCoinsEarned) {

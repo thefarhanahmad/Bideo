@@ -1,4 +1,5 @@
 import { Share, Platform } from 'react-native';
+import { logShare } from '../services/analytics';
 
 const BASE_WEB_URL = 'https://bideo.in';
 
@@ -58,6 +59,7 @@ export const shareVideo = async ({ _id, title = '', isShort = false }: ShareVide
         dialogTitle: cleanTitle ? `Share "${cleanTitle}"` : `Share ${contentType}`,
       }
     );
+    logShare(_id);
   } catch (err: any) {
     if (err?.message !== 'User did not share') {
       console.warn('[shareVideo] Share dismissed or failed:', err?.message || err);

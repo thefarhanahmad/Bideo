@@ -965,8 +965,20 @@ export default function ChatRoomScreen() {
   }, [messages]);
 
   const renderMessageBubble = ({ item }: { item: any }) => {
-    // Check if system message
-    if (item.system) {
+    // Check if system message (joined, left, added, removed, role change, or group creation)
+    const isSystem =
+      Boolean(item.system) ||
+      Boolean(item.isSystem) ||
+      item.messageType === 'system' ||
+      (isGroup &&
+        typeof item.text === 'string' &&
+        !item.video &&
+        !item.post &&
+        /(?:left the group|left group|joined the group|joined group|added to the group|removed from the group|created the group|created group|Group ".*" created|added\s+|removed\s+|made\s+.*a group admin|dismissed\s+.*as admin)/i.test(
+          item.text
+        ));
+
+    if (isSystem) {
       return (
         <View style={styles.systemMessageContainer}>
           <View style={styles.systemMessagePill}>
@@ -2598,21 +2610,23 @@ const styles = StyleSheet.create({
   systemMessageContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: 8,
+    marginVertical: 6,
     width: '100%',
+    paddingHorizontal: 20,
   },
   systemMessagePill: {
-    backgroundColor: 'rgba(0, 0, 0, 0.06)',
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
     paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 12,
-    maxWidth: '85%',
+    paddingVertical: 4,
+    borderRadius: 8,
+    maxWidth: '88%',
   },
   systemMessageText: {
-    fontSize: 12,
-    color: Colors.textGray,
+    fontSize: 11.5,
+    color: '#64748B',
     fontWeight: '500',
     textAlign: 'center',
+    lineHeight: 16,
   },
   // Swipe to reply styles
   swipeContainer: {

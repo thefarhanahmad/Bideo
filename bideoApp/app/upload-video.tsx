@@ -16,6 +16,7 @@ import Constants from 'expo-constants';
 import MentionSuggestions from '../components/MentionSuggestions';
 import { AppAdBanner } from '../components/AppAds';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import { logVideoUploaded } from '../services/analytics';
 
 const FALLBACK_THUMBNAIL = 'https://via.placeholder.com/640x360.png?text=Tube+India';
 
@@ -395,6 +396,7 @@ export default function UploadVideoScreen() {
       });
 
       setUploadProgress(100);
+      logVideoUploaded(uploadType === 'short', category);
       showAlert('Success', 'Video uploaded successfully!');
       router.replace('/');
     } catch (err: any) {
