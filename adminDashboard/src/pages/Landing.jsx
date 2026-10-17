@@ -14,18 +14,18 @@ const Landing = () => {
   useScrollReveal();
 
   useEffect(() => {
-    document.title = "Bideo — Watch. Create. Grow.";
+    document.title = "Bideo App — India's Short Video, Reels & Entertainment Platform";
     const metaDesc = document.querySelector('meta[name="description"]');
     if (metaDesc) {
-      metaDesc.setAttribute("content", "Bideo — watch, create and grow. India's modern short & long video sharing platform. Download the app on Google Play.");
+      metaDesc.setAttribute("content", "Download Bideo App — India's premier short video and reels platform. Watch trending viral shorts, comedy sketches, romantic shayari, WhatsApp status clips, and earn creator rewards. Free on Google Play.");
     }
     const ogTitle = document.querySelector('meta[property="og:title"]');
     if (ogTitle) {
-      ogTitle.setAttribute("content", "Bideo — Watch. Create. Grow.");
+      ogTitle.setAttribute("content", "Bideo App — Watch Trending Reels & Short Videos");
     }
     const ogDesc = document.querySelector('meta[property="og:description"]');
     if (ogDesc) {
-      ogDesc.setAttribute("content", "Bideo — watch, create and grow. India's modern short & long video sharing platform. Download the app on Google Play.");
+      ogDesc.setAttribute("content", "India's premier short video and reels platform. Watch viral comedy, dance, shayari, and trending shorts on Bideo App. Download free on Google Play.");
     }
     const canonical = document.querySelector('link[rel="canonical"]');
     if (canonical) {

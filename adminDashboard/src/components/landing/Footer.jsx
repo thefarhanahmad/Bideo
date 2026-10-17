@@ -56,9 +56,9 @@ const socialLinks = [
   },
   {
     name: "Google Play Store",
-    href: "https://play.google.com/store/apps/details?id=com.farhan.bideoapp&utm_source=ig&utm_medium=social&utm_content=link_in_bio&fbclid=PAcGRvZgJleHRuA2FlbQIxMQBzcnRjBmFwcF9pZA85MzY2MTk3NDMzOTI0NTkAAac1S4A0KmtIWVXPUFuBb7Q1iB3a_-29GvSfO82s_MBlIw7jDqid1ZgaKKWztQ_aem_DXZ73qMl7_R9ZVUDSaz1NQ",
+    href: "https://play.google.com/store/apps/details?id=com.farhan.bideoapp",
     icon: PlayStoreIcon,
-    title: "Download Bideo on Google Play Store",
+    title: "Download Bideo App on Google Play Store",
   },
 ];
 

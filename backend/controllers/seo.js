@@ -86,7 +86,7 @@ function renderLauncherHtml({
 }) {
   const cleanHeadTitle = String(title || '').toLowerCase().includes('bideo')
     ? title
-    : `${title} - Bideo`;
+    : `${title} - Bideo App`;
 
   const fallbackThumb = DEFAULT_SHARE_IMAGE;
   const displayImage = imageUrl || fallbackThumb;
@@ -102,7 +102,7 @@ function renderLauncherHtml({
   <meta name="robots" content="index, follow, max-image-preview:large">
 
   <!-- OpenGraph / Facebook / WhatsApp -->
-  <meta property="og:site_name" content="Bideo">
+  <meta property="og:site_name" content="Bideo App">
   <meta property="og:type" content="${ogType}">
   <meta property="og:title" content="${escapeHtml(title)}">
   <meta property="og:description" content="${escapeHtml(description)}">
@@ -122,7 +122,7 @@ function renderLauncherHtml({
   <meta name="twitter:title" content="${escapeHtml(title)}">
   <meta name="twitter:description" content="${escapeHtml(description)}">
   ${displayImage ? `<meta name="twitter:image" content="${displayImage}">` : ''}
-  <meta name="twitter:app:name:googleplay" content="Bideo">
+  <meta name="twitter:app:name:googleplay" content="Bideo App">
   <meta name="twitter:app:id:googleplay" content="${APP_PACKAGE}">
   <meta name="twitter:app:url:googleplay" content="${deepLink}">
 

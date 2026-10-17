@@ -14,29 +14,30 @@ const Hero = () => (
     <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-2 lg:gap-8 lg:px-8">
       <div className="text-center lg:text-left">
         <span className="inline-flex items-center gap-2 rounded-full border border-brand/30 bg-brand/8 px-4 py-1.5 text-sm font-semibold text-brand shadow-sm">
-          <SparkIcon className="h-4 w-4" /> Mobile-first video sharing
+          <SparkIcon className="h-4 w-4" /> India's Trending Short Video App
         </span>
 
         <h1 className="mt-6 font-display text-4xl font-extrabold leading-[1.1] tracking-tight text-ink sm:text-5xl lg:text-6xl">
-          Watch, upload &amp; grow on{" "}
+          Watch, create &amp; earn on{" "}
           <span className="bg-gradient-to-r from-brand-dark to-brand bg-clip-text text-transparent">
-            Bideo
+            Bideo App
           </span>
         </h1>
 
         <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-muted lg:mx-0">
-          Bideo helps people discover videos, watch shorts, create channels, and
-          share original content in a clean, mobile-first experience.
+          Bideo App is India's premier short video and reels platform. Watch trending viral shorts, comedy sketches, romantic shayari, and earn creator rewards.
         </p>
 
         <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row lg:justify-start">
-          <DownloadButton size="lg" />
           <a
-            href="#features"
-            className="inline-flex items-center justify-center gap-2 rounded-full border-2 border-brand bg-brand/5 px-7 py-4 text-base font-semibold text-brand transition-all hover:-translate-y-0.5 hover:bg-brand hover:text-white hover:border-brand-dark shadow-md hover:shadow-lg"
+            href="https://play.google.com/store/apps/details?id=com.farhan.bideoapp"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-[#c44b00] border border-[#b24500] text-white px-7 py-4 text-base font-semibold shadow-[0_22px_60px_rgba(196,75,0,0.35)] hover:bg-[#e26b00] hover:shadow-[0_26px_70px_rgba(226,107,0,0.40)] transform hover:-translate-y-1 transition-all"
           >
-            <PlayIcon className="h-5 w-5" /> See features
+            Get it on Google Play
           </a>
+          <DownloadButton size="lg" variant="white" label="Download APK" />
         </div>
 
         <div className="mt-8 flex flex-col items-center gap-3 text-sm text-muted lg:flex-row lg:justify-start">
