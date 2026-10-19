@@ -19,6 +19,7 @@ const { checkAndApplyChannelVerification } = require('../utils/channelVerificati
 const { notifyAndPush } = require('../utils/pushNotification');
 const { getUserEarningsSummary, processPendingWalletCredits, getRewardRates } = require('../services/walletSettlementService');
 const { createTtlCache } = require('../utils/ttlCache');
+const { findFirstUserByOr } = require('../utils/userLookup');
 
 // Weekly per-creator view totals, shared by every channel page and refreshed in the
 // background every 5 min (the build is slow, so visitors get the last result meanwhile).
@@ -256,13 +257,11 @@ exports.getChannelProfile = async (req, res, next) => {
     if (!channelObj && cleanId) {
       const escaped = cleanId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const regex = new RegExp(`^${escaped}$`, 'i');
-      channelObj = await User.findOne({
-        $or: [
-          { channelName: regex },
-          { name: regex },
-          { email: regex },
-        ],
-      }).select(channelSelect);
+      channelObj = await findFirstUserByOr([
+        { channelName: regex },
+        { name: regex },
+        { email: regex },
+      ], channelSelect);
     }
 
     if (!channelObj) return res.status(404).json({ success: false, message: 'Channel not found' });

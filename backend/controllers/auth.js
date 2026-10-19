@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const { cleanPhone } = require('../validators');
+const { findFirstUserByOr } = require('../utils/userLookup');
 
 const escapeRegex = (str) => {
   if (!str || typeof str !== 'string') return '';
@@ -39,19 +40,17 @@ exports.signupWithPhone = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Please provide a valid 10-digit phone number' });
     }
 
-    const existingPhone = await User.findOne({
-      $or: [
-        { phone },
-        { phone: { $regex: new RegExp(`${phone}$`) } },
-      ],
-    });
+    const existingPhone = await findFirstUserByOr([
+      { phone },
+      { phone: { $regex: new RegExp(`${phone}$`) } },
+    ]);
     if (existingPhone) {
       return res.status(400).json({ success: false, message: 'This phone number is already registered. Please login instead.' });
     }
 
-    const existingUsername = await User.findOne({
-      name: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') },
-    });
+    const existingUsername = await findFirstUserByOr([
+      { name: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') } },
+    ]);
     if (existingUsername) {
       return res.status(400).json({ success: false, message: 'Username already exists. Please choose another username.' });
     }
@@ -98,7 +97,7 @@ exports.loginWithPhone = async (req, res, next) => {
       }
     }
 
-    const user = await User.findOne({ $or: orConditions }).select('+password');
+    const user = await findFirstUserByOr(orConditions, '+password');
 
     if (!user) {
       return res.status(401).json({ success: false, message: 'Incorrect phone number or password' });
@@ -164,7 +163,7 @@ exports.forgotPassword = async (req, res, next) => {
       orConditions.push({ name: { $regex: new RegExp(`^${escapeRegex(rawIdentifier)}$`, 'i') } });
     }
 
-    const user = await User.findOne({ $or: orConditions });
+    const user = await findFirstUserByOr(orConditions);
     if (!user) {
       return res.status(404).json({ success: false, message: 'No account found with this phone number' });
     }
@@ -216,7 +215,7 @@ exports.resetPassword = async (req, res, next) => {
       orConditions.push({ name: { $regex: new RegExp(`^${escapeRegex(rawIdentifier)}$`, 'i') } });
     }
 
-    const user = await User.findOne({ $or: orConditions });
+    const user = await findFirstUserByOr(orConditions);
     if (!user) {
       return res.status(404).json({ success: false, message: 'No account found with this phone number' });
     }
