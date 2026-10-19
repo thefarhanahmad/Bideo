@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
@@ -29,7 +30,11 @@ import Payouts from './pages/Payouts';
 import ErrorLogs from './pages/ErrorLogs';
 import Conversations from './pages/Conversations';
 import Stories from './pages/Stories';
+import LoadingSkeleton from './components/LoadingSkeleton';
 import './App.css';
+
+// Loaded on demand: only admins opening a profile download this page.
+const UserProfile = lazy(() => import('./pages/UserProfile'));
 
 const PrivateRoute = ({ children }) => {
   const token = localStorage.getItem('admin_token');
@@ -66,6 +71,14 @@ function App() {
         <Route path="/admin" element={<PrivateRoute><AdminLayout /></PrivateRoute>}>
           <Route index element={<DashboardHome />} />
           <Route path="users" element={<Users />} />
+          <Route
+            path="users/:id"
+            element={
+              <Suspense fallback={<LoadingSkeleton type="cards" count={4} />}>
+                <UserProfile />
+              </Suspense>
+            }
+          />
           <Route path="categories" element={<Categories />} />
           <Route path="videos" element={<Videos />} />
           <Route path="stories" element={<Stories />} />

@@ -4,6 +4,8 @@ import Pagination from "../components/Pagination";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import { useTableParams } from "../hooks/useTableParams";
 import { API_URL } from "../config";
+import UserLink from "../components/UserLink";
+import VideoPreviewModal from "../components/VideoPreviewModal";
 
 const resolveMediaUrl = (url) => {
   if (!url) return "https://via.placeholder.com/640x360.png?text=No+Thumbnail";
@@ -24,6 +26,7 @@ const Reports = () => {
     dismissed: 0,
   });
   const API = API_URL;
+  const [previewVideo, setPreviewVideo] = useState(null);
 
   // URL-synced search, filter, and pagination
   const { search, setSearch, filter, setFilter, page, setPage, limit, setLimit } =
@@ -170,31 +173,48 @@ const Reports = () => {
                     <td className="p-4">
                       <div className="flex gap-3 min-w-0">
                         {report.video?.thumbnail && (
-                          <img
-                            src={resolveMediaUrl(report.video.thumbnail)}
-                            alt=""
-                            className="h-12 w-20 shrink-0 rounded-lg bg-surface object-cover border border-line"
-                            onError={(e) => {
-                              e.currentTarget.style.visibility = "hidden";
-                            }}
-                          />
+                          <button
+                            type="button"
+                            onClick={() => setPreviewVideo(report.video)}
+                            className="group relative shrink-0"
+                            title="Play video"
+                          >
+                            <img
+                              src={resolveMediaUrl(report.video.thumbnail)}
+                              alt=""
+                              className="h-12 w-20 rounded-lg bg-surface object-cover border border-line"
+                              onError={(e) => {
+                                e.currentTarget.style.visibility = "hidden";
+                              }}
+                            />
+                            <span className="absolute inset-0 grid place-items-center rounded-lg bg-black/0 text-white opacity-0 transition-all group-hover:bg-black/35 group-hover:opacity-100">
+                              ▶
+                            </span>
+                          </button>
                         )}
                         <div className="min-w-0 flex-1">
-                          <div className="truncate font-semibold text-ink text-sm">
-                            {report.video?.title || "Deleted video"}
-                          </div>
-                          <div className="truncate text-xs text-muted mt-0.5">
-                            Creator:{" "}
-                            {report.video?.owner?.channelName ||
-                              report.video?.owner?.name ||
-                              "Unknown"}
+                          {report.video ? (
+                            <button
+                              type="button"
+                              onClick={() => setPreviewVideo(report.video)}
+                              className="block max-w-full truncate text-left font-semibold text-ink text-sm hover:text-brand hover:underline underline-offset-2"
+                              title="Play video"
+                            >
+                              {report.video.title || "Untitled video"}
+                            </button>
+                          ) : (
+                            <div className="truncate font-semibold text-ink text-sm">Deleted video</div>
+                          )}
+                          <div className="flex min-w-0 items-center gap-1 text-xs text-muted mt-0.5">
+                            <span className="shrink-0">Creator:</span>
+                            <UserLink user={report.video?.owner} />
                           </div>
                         </div>
                       </div>
                     </td>
                     <td className="p-4 text-muted text-xs">
                       <div className="font-semibold text-ink">
-                        {report.reporter?.channelName || report.reporter?.name || "Anonymous"}
+                        {report.reporter ? <UserLink user={report.reporter} /> : "Anonymous"}
                       </div>
                       <div className="text-muted mt-0.5">{report.reporter?.phone || report.reporter?.email || ""}</div>
                     </td>
@@ -260,6 +280,7 @@ const Reports = () => {
           />
         </div>
       )}
+      {previewVideo && <VideoPreviewModal video={previewVideo} onClose={() => setPreviewVideo(null)} />}
     </div>
   );
 };
