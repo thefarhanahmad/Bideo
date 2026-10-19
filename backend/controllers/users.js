@@ -18,6 +18,36 @@ const CoinTransaction = require('../models/CoinTransaction');
 const { checkAndApplyChannelVerification } = require('../utils/channelVerification');
 const { notifyAndPush } = require('../utils/pushNotification');
 const { getUserEarningsSummary, processPendingWalletCredits, getRewardRates } = require('../services/walletSettlementService');
+const { createTtlCache } = require('../utils/ttlCache');
+
+// Weekly per-creator view totals, shared by every channel page and refreshed in the
+// background every 5 min (the build is slow, so visitors get the last result meanwhile).
+// Grouping by video before the $lookup keeps lookups to distinct videos, not every view.
+const weeklyCreatorTotalsCache = createTtlCache(5 * 60 * 1000, 1, { staleWhileRevalidate: true });
+const getWeeklyCreatorTotals = () =>
+  weeklyCreatorTotalsCache('weekly', () => {
+    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    return VideoView.aggregate([
+      { $match: { createdAt: { $gte: oneWeekAgo } } },
+      { $group: { _id: '$video', views: { $sum: 1 } } },
+      { $lookup: { from: 'videos', localField: '_id', foreignField: '_id', as: 'videoDoc' } },
+      { $unwind: '$videoDoc' },
+      { $match: { 'videoDoc.visibility': 'public' } },
+      { $group: { _id: '$videoDoc.owner', total: { $sum: '$views' } } },
+      { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'user' } },
+      { $unwind: '$user' },
+      { $match: { 'user.role': 'user', 'user.isBlocked': { $ne: true } } },
+      { $project: { total: 1, followersCount: '$user.followersCount', createdAt: '$user.createdAt' } },
+    ]);
+  });
+
+// Warm the ranking shortly after boot (once the DB is connected) so early visitors rarely wait.
+const WEEKLY_TOTALS_WARMUP_DELAY_MS = 15 * 1000;
+setTimeout(() => {
+  getWeeklyCreatorTotals().catch((err) => {
+    console.error('[channels] weekly ranking warm-up failed:', err.message);
+  });
+}, WEEKLY_TOTALS_WARMUP_DELAY_MS).unref();
 
 const escapeRegex = (str) => {
   if (!str || typeof str !== 'string') return '';
@@ -331,21 +361,11 @@ exports.getChannelProfile = async (req, res, next) => {
 
     // Calculate channel views for this week (last 7 days) and check if in Top 3 weekly leaderboard
     const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const channelWeeklyViews = await VideoView.aggregate([
-      { $match: { createdAt: { $gte: oneWeekAgo } } },
-      {
-        $lookup: {
-          from: 'videos',
-          localField: 'video',
-          foreignField: '_id',
-          as: 'videoDoc',
-        },
-      },
-      { $unwind: '$videoDoc' },
-      { $match: { 'videoDoc.owner': channel._id, 'videoDoc.visibility': 'public' } },
-      { $count: 'weeklyViews' },
-    ]);
-    const myWeeklyViews = channelWeeklyViews[0]?.weeklyViews || 0;
+    // Same result as scanning every view this week, but uses the {video, createdAt} index
+    const publicVideoIds = await Video.find({ owner: channel._id, visibility: 'public' }).distinct('_id');
+    const myWeeklyViews = publicVideoIds.length > 0
+      ? await VideoView.countDocuments({ video: { $in: publicVideoIds }, createdAt: { $gte: oneWeekAgo } })
+      : 0;
     channel.weeklyViews = myWeeklyViews;
 
     let leaderboardRank = null;
@@ -353,48 +373,15 @@ exports.getChannelProfile = async (req, res, next) => {
       const myFollowers = channelObj.followersCount || 0;
       const myCreatedAt = channelObj.createdAt ? new Date(channelObj.createdAt) : new Date(0);
 
-      const higherCount = await VideoView.aggregate([
-        { $match: { createdAt: { $gte: oneWeekAgo } } },
-        {
-          $lookup: {
-            from: 'videos',
-            localField: 'video',
-            foreignField: '_id',
-            as: 'videoDoc',
-          },
-        },
-        { $unwind: '$videoDoc' },
-        { $match: { 'videoDoc.visibility': 'public' } },
-        { $group: { _id: '$videoDoc.owner', total: { $sum: 1 } } },
-        {
-          $lookup: {
-            from: 'users',
-            localField: '_id',
-            foreignField: '_id',
-            as: 'user',
-          },
-        },
-        { $unwind: '$user' },
-        { $match: { 'user.role': 'user', 'user.isBlocked': { $ne: true } } },
-        {
-          $match: {
-            $or: [
-              { total: { $gt: myWeeklyViews } },
-              {
-                total: myWeeklyViews,
-                'user.followersCount': { $gt: myFollowers },
-              },
-              {
-                total: myWeeklyViews,
-                'user.followersCount': myFollowers,
-                'user.createdAt': { $lt: myCreatedAt },
-              },
-            ],
-          },
-        },
-        { $count: 'higher' },
-      ]);
-      const rank = (higherCount[0]?.higher || 0) + 1;
+      const weeklyTotals = await getWeeklyCreatorTotals();
+      const higher = weeklyTotals.filter((c) =>
+        c.total > myWeeklyViews
+        || (c.total === myWeeklyViews && c.followersCount > myFollowers)
+        || (c.total === myWeeklyViews
+          && c.followersCount === myFollowers
+          && c.createdAt && new Date(c.createdAt) < myCreatedAt),
+      ).length;
+      const rank = higher + 1;
       if (rank <= 3) {
         leaderboardRank = rank;
       }
@@ -407,6 +394,123 @@ exports.getChannelProfile = async (req, res, next) => {
   }
 };
 
+// Weekly top-50 leaderboard, shared by all requests and refreshed in the background
+// every 5 min (the weekly views aggregation is slow). Per-viewer fields stay live.
+const weeklyLeaderboardCache = createTtlCache(5 * 60 * 1000, 1, { staleWhileRevalidate: true });
+const computeWeeklyLeaderboardTop50 = async () => {
+  const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+  const aggregated = await VideoView.aggregate([
+    // 1. Only views from this week (last 7 days)
+    { $match: { createdAt: { $gte: oneWeekAgo } } },
+    // 2. Lookup video
+    {
+      $lookup: {
+        from: 'videos',
+        localField: 'video',
+        foreignField: '_id',
+        as: 'videoDoc',
+      },
+    },
+    { $unwind: '$videoDoc' },
+    // 3. Only public videos
+    { $match: { 'videoDoc.visibility': 'public' } },
+    // 4. Group by creator
+    {
+      $group: {
+        _id: '$videoDoc.owner',
+        weeklyViews: { $sum: 1 },
+        videoCount: { $addToSet: '$videoDoc._id' },
+      },
+    },
+    // 5. Lookup user details
+    {
+      $lookup: {
+        from: 'users',
+        localField: '_id',
+        foreignField: '_id',
+        as: 'user',
+      },
+    },
+    { $unwind: '$user' },
+    // 6. Filter strictly non-admin user accounts and non-blocked accounts
+    {
+      $match: {
+        'user.role': 'user',
+        'user.isBlocked': { $ne: true },
+      },
+    },
+    {
+      $project: {
+        _id: '$user._id',
+        name: '$user.name',
+        channelName: '$user.channelName',
+        avatar: '$user.avatar',
+        isVerified: '$user.isVerified',
+        followersCount: '$user.followersCount',
+        about: '$user.about',
+        createdAt: '$user.createdAt',
+        totalViews: '$weeklyViews',
+        weeklyViews: '$weeklyViews',
+        videoCount: { $size: '$videoCount' },
+      },
+    },
+  ]);
+
+  let leaderboard = [...aggregated];
+
+  // If fewer than 50 creators have views this week, fill remaining slots up to 50 with other active user accounts
+  if (leaderboard.length < 50) {
+    const existingIds = leaderboard.map((item) => item._id);
+    const remainingCount = 50 - leaderboard.length;
+    const additionalUsers = await User.find({
+      _id: { $nin: existingIds },
+      role: 'user',
+      isBlocked: { $ne: true },
+    })
+      .select('_id name channelName avatar isVerified followersCount about createdAt')
+      .sort({ followersCount: -1, createdAt: -1 })
+      .limit(remainingCount)
+      .lean();
+
+    for (const u of additionalUsers) {
+      leaderboard.push({
+        _id: u._id,
+        name: u.name,
+        channelName: u.channelName,
+        avatar: u.avatar,
+        isVerified: u.isVerified,
+        followersCount: u.followersCount || 0,
+        about: u.about,
+        createdAt: u.createdAt,
+        totalViews: 0,
+        weeklyViews: 0,
+        videoCount: 0,
+      });
+    }
+  }
+
+  // Sort strictly: Primary by weeklyViews descending, Secondary by followersCount descending, Tertiary by createdAt
+  leaderboard.sort((a, b) => {
+    const viewsA = a.weeklyViews || a.totalViews || 0;
+    const viewsB = b.weeklyViews || b.totalViews || 0;
+    if (viewsB !== viewsA) {
+      return viewsB - viewsA;
+    }
+    const followersA = a.followersCount || 0;
+    const followersB = b.followersCount || 0;
+    if (followersB !== followersA) {
+      return followersB - followersA;
+    }
+    const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return dateB - dateA;
+  });
+
+  return leaderboard.slice(0, 50);
+};
+const getWeeklyLeaderboardTop50 = () => weeklyLeaderboardCache('top50', computeWeeklyLeaderboardTop50);
+
 // @desc    Get top creators by views for this week (Weekly Leaderboard) & top 10 by followers
 // @route   GET /api/users/leaderboard
 // @access  Public
@@ -414,112 +518,7 @@ exports.getLeaderboard = async (req, res, next) => {
   try {
     const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-    const aggregated = await VideoView.aggregate([
-      // 1. Only views from this week (last 7 days)
-      { $match: { createdAt: { $gte: oneWeekAgo } } },
-      // 2. Lookup video
-      {
-        $lookup: {
-          from: 'videos',
-          localField: 'video',
-          foreignField: '_id',
-          as: 'videoDoc',
-        },
-      },
-      { $unwind: '$videoDoc' },
-      // 3. Only public videos
-      { $match: { 'videoDoc.visibility': 'public' } },
-      // 4. Group by creator
-      {
-        $group: {
-          _id: '$videoDoc.owner',
-          weeklyViews: { $sum: 1 },
-          videoCount: { $addToSet: '$videoDoc._id' },
-        },
-      },
-      // 5. Lookup user details
-      {
-        $lookup: {
-          from: 'users',
-          localField: '_id',
-          foreignField: '_id',
-          as: 'user',
-        },
-      },
-      { $unwind: '$user' },
-      // 6. Filter strictly non-admin user accounts and non-blocked accounts
-      {
-        $match: {
-          'user.role': 'user',
-          'user.isBlocked': { $ne: true },
-        },
-      },
-      {
-        $project: {
-          _id: '$user._id',
-          name: '$user.name',
-          channelName: '$user.channelName',
-          avatar: '$user.avatar',
-          isVerified: '$user.isVerified',
-          followersCount: '$user.followersCount',
-          about: '$user.about',
-          createdAt: '$user.createdAt',
-          totalViews: '$weeklyViews',
-          weeklyViews: '$weeklyViews',
-          videoCount: { $size: '$videoCount' },
-        },
-      },
-    ]);
-
-    let leaderboard = [...aggregated];
-
-    // If fewer than 50 creators have views this week, fill remaining slots up to 50 with other active user accounts
-    if (leaderboard.length < 50) {
-      const existingIds = leaderboard.map((item) => item._id);
-      const remainingCount = 50 - leaderboard.length;
-      const additionalUsers = await User.find({
-        _id: { $nin: existingIds },
-        role: 'user',
-        isBlocked: { $ne: true },
-      })
-        .select('_id name channelName avatar isVerified followersCount about createdAt')
-        .sort({ followersCount: -1, createdAt: -1 })
-        .limit(remainingCount)
-        .lean();
-
-      for (const u of additionalUsers) {
-        leaderboard.push({
-          _id: u._id,
-          name: u.name,
-          channelName: u.channelName,
-          avatar: u.avatar,
-          isVerified: u.isVerified,
-          followersCount: u.followersCount || 0,
-          about: u.about,
-          createdAt: u.createdAt,
-          totalViews: 0,
-          weeklyViews: 0,
-          videoCount: 0,
-        });
-      }
-    }
-
-    // Sort strictly: Primary by weeklyViews descending, Secondary by followersCount descending, Tertiary by createdAt
-    leaderboard.sort((a, b) => {
-      const viewsA = a.weeklyViews || a.totalViews || 0;
-      const viewsB = b.weeklyViews || b.totalViews || 0;
-      if (viewsB !== viewsA) {
-        return viewsB - viewsA;
-      }
-      const followersA = a.followersCount || 0;
-      const followersB = b.followersCount || 0;
-      if (followersB !== followersA) {
-        return followersB - followersA;
-      }
-      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return dateB - dateA;
-    });
+    const leaderboard = await getWeeklyLeaderboardTop50();
 
     let userFollowings = new Set();
     if (req.user) {

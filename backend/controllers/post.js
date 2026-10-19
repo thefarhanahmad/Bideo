@@ -8,6 +8,21 @@ const { saveLocalFile, deleteLocalFile } = require('../utils/localUpload');
 const { getUserInterestProfile, rankAndShufflePosts } = require('../utils/recommendation');
 const { sendPushForEvent, notifyFollowersOfUpload } = require('../utils/pushNotification');
 const { schedulePostModeration } = require('../services/moderationService');
+const { createTtlCache } = require('../utils/ttlCache');
+
+// The posts feed used to load every public post (with owners) on each request.
+// Now the eligible post IDs and blocked-user IDs are cached for 60s; the posts
+// actually returned are always fetched fresh.
+const POSTS_CACHE_TTL_MS = 60 * 1000;
+const POSTS_FEED_CACHE_MAX_KEYS = 100;
+const blockedIdsCache = createTtlCache(POSTS_CACHE_TTL_MS, 1);
+const feedPostIdsCache = createTtlCache(POSTS_CACHE_TTL_MS, POSTS_FEED_CACHE_MAX_KEYS);
+
+const getBlockedUserIds = () =>
+  blockedIdsCache('blocked', async () => {
+    const blockedUsers = await User.find({ isBlocked: true }).select('_id').lean();
+    return blockedUsers.map((u) => u._id);
+  });
 
 const createNotification = async ({ recipient, actor, type, video, post, comment, message }) => {
   if (!recipient || !actor || recipient.toString() === actor.toString()) return;
@@ -250,8 +265,7 @@ exports.getPosts = async (req, res, next) => {
     }
 
     if (!isAdmin) {
-      const blockedUsers = await User.find({ isBlocked: true }).select('_id').lean();
-      const blockedIds = blockedUsers.map((u) => u._id);
+      const blockedIds = await getBlockedUserIds();
       if (blockedIds.length > 0) {
         if (query.owner) {
           if (blockedIds.some((bId) => bId.toString() === query.owner.toString())) {
@@ -267,12 +281,19 @@ exports.getPosts = async (req, res, next) => {
 
     if (!req.query.owner && !isAdmin) {
       // Randomized posts feed: sample across public posts rather than only newest 30
-      const allPosts = await Post.find(query)
+      const candidateIds = await feedPostIdsCache(JSON.stringify(query), async () => {
+        const rows = await Post.find(query).select('_id').lean();
+        return rows.map((p) => p._id);
+      });
+
+      const chosenIds = rankAndShufflePosts(candidateIds).slice(0, limit);
+      const freshPosts = await Post.find({ ...query, _id: { $in: chosenIds } })
         .populate('owner', 'name avatar channelName isVerified')
         .lean();
-
-      const shuffled = rankAndShufflePosts(allPosts);
-      const results = shuffled.slice(0, limit);
+      const postsById = new Map(freshPosts.map((p) => [p._id.toString(), p]));
+      const results = chosenIds
+        .map((id) => postsById.get(id.toString()))
+        .filter(Boolean);
       return res.status(200).json({ success: true, count: results.length, data: results });
     }
 

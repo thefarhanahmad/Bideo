@@ -595,8 +595,9 @@ exports.updatePushToken = async (req, res, next) => {
     }
 
     // 1. Remove this device push token from ANY OTHER user accounts (e.g. previous user on this device)
+    // Filter on pushTokens so only accounts holding this token are touched (uses the index)
     await User.updateMany(
-      { _id: { $ne: req.user.id } },
+      { _id: { $ne: req.user.id }, pushTokens: pushToken },
       {
         $pull: { pushTokens: pushToken },
       }
@@ -645,7 +646,7 @@ exports.removePushToken = async (req, res, next) => {
           { $set: { pushToken: null } }
         );
         await User.updateMany(
-          {},
+          { pushTokens: pushToken },
           { $pull: { pushTokens: pushToken } }
         );
       } else {
@@ -662,7 +663,7 @@ exports.removePushToken = async (req, res, next) => {
         { $set: { pushToken: null } }
       );
       await User.updateMany(
-        {},
+        { pushTokens: pushToken },
         { $pull: { pushTokens: pushToken } }
       );
     }

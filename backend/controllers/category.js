@@ -1,5 +1,15 @@
 const Category = require('../models/Category');
 const Video = require('../models/Video');
+const { createTtlCache } = require('../utils/ttlCache');
+
+// Per-category video counts scan every video, so they are cached for 60s.
+// The category list itself is always read live.
+const videoCountsCache = createTtlCache(60 * 1000, 1);
+const getVideoCountsByCategory = () =>
+  videoCountsCache('counts', () => Video.aggregate([
+    { $match: { category: { $ne: null } } },
+    { $group: { _id: '$category', count: { $sum: 1 } } },
+  ]));
 
 // @desc Get all categories with video counts
 // @route GET /api/categories
@@ -17,10 +27,7 @@ exports.getCategories = async (req, res, next) => {
 
     const [categories, videoCounts] = await Promise.all([
       Category.find(query).sort('name').lean(),
-      Video.aggregate([
-        { $match: { category: { $ne: null } } },
-        { $group: { _id: '$category', count: { $sum: 1 } } },
-      ]),
+      getVideoCountsByCategory(),
     ]);
 
     const countMap = {};

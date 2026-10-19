@@ -157,10 +157,45 @@ const getSort = (sort) => {
   return { isPinned: -1, createdAt: -1 };
 };
 
-const getBlockedUserIds = async () => {
-  const blockedUsers = await User.find({ isBlocked: true }).select("_id").lean();
-  return blockedUsers.map((u) => u._id);
+// Short-lived in-memory caches. The feed and blocked-user lists were re-read
+// from MongoDB on every request (tens of thousands of docs), which pinned the CPU.
+// Concurrent requests share one in-flight query; results live for CACHE_TTL_MS.
+const CACHE_TTL_MS = 60 * 1000;
+const FEED_CACHE_MAX_KEYS = 100;
+
+const createTtlCache = (ttlMs, maxKeys) => {
+  const entries = new Map();
+  return async (key, loader) => {
+    const now = Date.now();
+    const hit = entries.get(key);
+    if (hit && (hit.pending || hit.expiresAt > now)) {
+      return hit.pending || hit.value;
+    }
+    const pending = loader()
+      .then((value) => {
+        entries.set(key, { value, expiresAt: Date.now() + ttlMs, pending: null });
+        return value;
+      })
+      .catch((err) => {
+        entries.delete(key);
+        throw err;
+      });
+    entries.set(key, { value: hit ? hit.value : null, expiresAt: 0, pending });
+    if (entries.size > maxKeys) {
+      entries.delete(entries.keys().next().value);
+    }
+    return pending;
+  };
 };
+
+const blockedIdsCache = createTtlCache(CACHE_TTL_MS, 1);
+const feedCandidatesCache = createTtlCache(CACHE_TTL_MS, FEED_CACHE_MAX_KEYS);
+
+const getBlockedUserIds = () =>
+  blockedIdsCache("blocked", async () => {
+    const blockedUsers = await User.find({ isBlocked: true }).select("_id").lean();
+    return blockedUsers.map((u) => u._id);
+  });
 
 const formatMediaUrl = (url, req) => {
   if (!url) return url;
@@ -662,9 +697,11 @@ exports.getVideos = async (req, res, next) => {
     if (isFeedRequest) {
       // Pure randomized feed across the entire eligible database collection
       // Query candidate video metadata (IDs, pinned status, short vs long, boostType, boostExpiresAt)
-      const candidates = await Video.find(query)
-        .select("_id isPinned isShort boostType boostExpiresAt")
-        .lean();
+      const candidates = await feedCandidatesCache(JSON.stringify(query), () =>
+        Video.find(query)
+          .select("_id isPinned isShort boostType boostExpiresAt")
+          .lean(),
+      );
       const total = candidates.length;
 
       const now = new Date();
