@@ -18,6 +18,11 @@ services:
       - ./backend/uploads:/app/uploads
     networks:
       - bideo-network
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
 
   # Option B: Run frontend container (Nginx serving static frontend + reverse proxying /api)
   # Uncomment the lines below if you want a FULLY containerized setup in Docker.
