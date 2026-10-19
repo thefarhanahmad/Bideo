@@ -97,4 +97,7 @@ const commentSchema = new mongoose.Schema({
 commentSchema.index({ video: 1, isPinned: -1, createdAt: -1 });
 commentSchema.index({ post: 1, isPinned: -1, createdAt: -1 });
 
+// Admin user profile: a user's comments, newest first (added 2026-10-19).
+commentSchema.index({ user: 1, createdAt: -1 });
+
 module.exports = mongoose.model('Comment', commentSchema);

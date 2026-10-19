@@ -381,7 +381,7 @@ exports.getVideoReports = async (req, res, next) => {
       VideoReport.find(query)
         .populate({
           path: 'video',
-          select: 'title thumbnail videoUrl views visibility owner',
+          select: 'title thumbnail videoUrl views visibility owner isShort duration createdAt',
           populate: { path: 'owner', select: 'name channelName avatar' },
         })
         .populate('reporter', 'name channelName avatar phone email')

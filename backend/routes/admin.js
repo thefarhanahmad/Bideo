@@ -30,6 +30,7 @@ const {
   deleteAdminStory,
   deleteAdminUserStories,
 } = require('../controllers/admin');
+const { getUserOverview, getUserProfileTab } = require('../controllers/adminUserProfile');
 const { protect, authorize } = require('../middlewares/auth');
 
 const router = express.Router();
@@ -41,6 +42,8 @@ router.use(protect);
 router.use(authorize('admin'));
 
 router.get('/stats', getStats);
+router.get('/users/:id/overview', getUserOverview);
+router.get('/users/:id/tab/:tab', getUserProfileTab);
 router.get('/search', globalAdminSearch);
 router.get('/earnings', getUserEarnings);
 router.get('/boost', getAdminBoostData);
