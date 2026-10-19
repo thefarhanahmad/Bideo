@@ -109,4 +109,10 @@ const videoSchema = new mongoose.Schema({
   },
 });
 
+// Query-performance indexes (added 2026-10-19; already present in production).
+videoSchema.index({ visibility: 1, isShort: 1 });
+videoSchema.index({ owner: 1, isShort: 1, createdAt: -1 });
+videoSchema.index({ category: 1 });
+videoSchema.index({ isPinned: 1 });
+
 module.exports = mongoose.model('Video', videoSchema);

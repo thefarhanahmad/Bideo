@@ -26,6 +26,9 @@ videoViewSchema.index({ video: 1, deviceId: 1, createdAt: -1 });
 videoViewSchema.index({ user: 1 });
 videoViewSchema.index({ deviceId: 1 });
 
+// Query-performance indexes (added 2026-10-19; already present in production).
+videoViewSchema.index({ createdAt: 1 });
+
 const VideoView = mongoose.model('VideoView', videoViewSchema);
 
 // Safely attempt dropping old unique indexes if they exist in MongoDB

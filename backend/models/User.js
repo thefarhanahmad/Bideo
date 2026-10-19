@@ -317,4 +317,11 @@ userSchema.index({ isVerified: 1, verifiedSource: 1, verifiedUntil: 1 });
 userSchema.index({ watchHistory: 1 });
 userSchema.index({ 'watchProgress.video': 1 });
 
+// Query-performance indexes (added 2026-10-19; already present in production).
+userSchema.index({ isBlocked: 1 });
+userSchema.index({ pushTokens: 1 });
+userSchema.index({ pushToken: 1 });
+userSchema.index({ name: 1 });
+userSchema.index({ followersCount: -1, createdAt: -1 });
+
 module.exports = mongoose.model('User', userSchema);

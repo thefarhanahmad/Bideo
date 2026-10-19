@@ -93,4 +93,8 @@ const commentSchema = new mongoose.Schema({
   },
 });
 
+// Query-performance indexes (added 2026-10-19; already present in production).
+commentSchema.index({ video: 1, isPinned: -1, createdAt: -1 });
+commentSchema.index({ post: 1, isPinned: -1, createdAt: -1 });
+
 module.exports = mongoose.model('Comment', commentSchema);
