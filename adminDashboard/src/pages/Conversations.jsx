@@ -5,6 +5,7 @@ import LoadingSkeleton from "../components/LoadingSkeleton";
 import ConfirmModal from "../components/ConfirmModal";
 import Modal from "../components/Modal";
 import StatCard from "../components/StatCard";
+import UserLink from "../components/UserLink";
 import { MessageSquareIcon, UsersIcon, ShieldIcon, AlertOctagonIcon } from "../components/Icons";
 import { useTableParams } from "../hooks/useTableParams";
 import { API_URL } from "../config";
@@ -279,18 +280,23 @@ const Conversations = () => {
                         <div className="flex flex-col gap-2.5">
                           {/* User 1 */}
                           {p1 && (
-                            <div className="flex items-center gap-2.5 min-w-0">
+                            <UserLink
+                              user={p1}
+                              tab="chats"
+                              className="flex items-center gap-2.5 min-w-0 group"
+                              title="Open participant profile & stats"
+                            >
                               <img
                                 src={resolveMediaUrl(p1.avatar)}
                                 alt=""
-                                className="h-9 w-9 shrink-0 rounded-full bg-surface object-cover border border-line"
+                                className="h-9 w-9 shrink-0 rounded-full bg-surface object-cover border border-line group-hover:ring-2 group-hover:ring-brand/40 transition-all"
                                 onError={(e) => {
                                   e.currentTarget.src = "https://via.placeholder.com/100x100.png?text=User";
                                 }}
                               />
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-1.5">
-                                  <span className="font-semibold text-ink text-sm truncate">
+                                  <span className="font-semibold text-ink text-sm truncate group-hover:text-brand group-hover:underline underline-offset-2">
                                     {p1.channelName || p1.name || "User"}
                                   </span>
                                   {p1.isVerified && (
@@ -302,27 +308,32 @@ const Conversations = () => {
                                     </span>
                                   )}
                                 </div>
-                                <div className="truncate text-xs text-muted">
+                                <div className="truncate text-xs text-muted group-hover:text-ink">
                                   {p1.email || p1.phone || `@${p1._id?.toString().slice(-6)}`}
                                 </div>
                               </div>
-                            </div>
+                            </UserLink>
                           )}
 
                           {/* User 2 */}
                           {p2 && (
-                            <div className="flex items-center gap-2.5 min-w-0">
+                            <UserLink
+                              user={p2}
+                              tab="chats"
+                              className="flex items-center gap-2.5 min-w-0 group"
+                              title="Open participant profile & stats"
+                            >
                               <img
                                 src={resolveMediaUrl(p2.avatar)}
                                 alt=""
-                                className="h-9 w-9 shrink-0 rounded-full bg-surface object-cover border border-line"
+                                className="h-9 w-9 shrink-0 rounded-full bg-surface object-cover border border-line group-hover:ring-2 group-hover:ring-brand/40 transition-all"
                                 onError={(e) => {
                                   e.currentTarget.src = "https://via.placeholder.com/100x100.png?text=User";
                                 }}
                               />
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-1.5">
-                                  <span className="font-semibold text-ink text-sm truncate">
+                                  <span className="font-semibold text-ink text-sm truncate group-hover:text-brand group-hover:underline underline-offset-2">
                                     {p2.channelName || p2.name || "User"}
                                   </span>
                                   {p2.isVerified && (
@@ -334,11 +345,11 @@ const Conversations = () => {
                                     </span>
                                   )}
                                 </div>
-                                <div className="truncate text-xs text-muted">
+                                <div className="truncate text-xs text-muted group-hover:text-ink">
                                   {p2.email || p2.phone || `@${p2._id?.toString().slice(-6)}`}
                                 </div>
                               </div>
-                            </div>
+                            </UserLink>
                           )}
                         </div>
                       </td>
@@ -355,7 +366,15 @@ const Conversations = () => {
                         </span>
                         {conv.status === "blocked" && conv.blockedBy && (
                           <div className="mt-1 text-[11px] text-muted">
-                            By: {conv.blockedBy.channelName || conv.blockedBy.name || "User"}
+                            By:{" "}
+                            <UserLink
+                              user={conv.blockedBy}
+                              tab="chats"
+                              className="font-medium text-ink hover:text-brand hover:underline"
+                              title="Open user profile & stats"
+                            >
+                              {conv.blockedBy.channelName || conv.blockedBy.name || "User"}
+                            </UserLink>
                           </div>
                         )}
                       </td>
@@ -441,17 +460,25 @@ const Conversations = () => {
             <div className="flex items-center justify-between border-b border-line bg-surface/50 px-6 py-3">
               <div className="flex items-center gap-4 text-xs">
                 {selectedConv.participants?.map((p, idx) => (
-                  <div key={p._id || idx} className="flex items-center gap-2">
+                  <UserLink
+                    key={p._id || idx}
+                    user={p}
+                    tab="chats"
+                    className="flex items-center gap-2 group"
+                    title="Open participant profile & stats"
+                  >
                     <img
                       src={resolveMediaUrl(p.avatar)}
                       alt=""
-                      className="h-7 w-7 rounded-full object-cover border border-line"
+                      className="h-7 w-7 rounded-full object-cover border border-line group-hover:ring-2 group-hover:ring-brand/40 transition-all"
                     />
                     <div>
-                      <span className="font-semibold text-ink">{p.channelName || p.name}</span>
+                      <span className="font-semibold text-ink group-hover:text-brand group-hover:underline underline-offset-2">
+                        {p.channelName || p.name}
+                      </span>
                       <span className="text-muted ml-1.5 text-[11px]">{p.email || ""}</span>
                     </div>
-                  </div>
+                  </UserLink>
                 ))}
               </div>
               <span
@@ -485,14 +512,16 @@ const Conversations = () => {
                       key={msg._id || index}
                       className={`flex gap-3 max-w-[85%] ${isP1 ? "mr-auto" : "ml-auto flex-row-reverse"}`}
                     >
-                      <img
-                        src={senderAvatar}
-                        alt=""
-                        className="h-8 w-8 shrink-0 rounded-full object-cover border border-line"
-                        onError={(e) => {
-                          e.currentTarget.src = "https://via.placeholder.com/100x100.png?text=User";
-                        }}
-                      />
+                      <UserLink user={msg.sender} tab="chats" title={`Open ${senderName}'s profile & stats`}>
+                        <img
+                          src={senderAvatar}
+                          alt=""
+                          className="h-8 w-8 shrink-0 rounded-full object-cover border border-line hover:ring-2 hover:ring-brand/40 transition-all"
+                          onError={(e) => {
+                            e.currentTarget.src = "https://via.placeholder.com/100x100.png?text=User";
+                          }}
+                        />
+                      </UserLink>
                       <div
                         className={`rounded-2xl p-3.5 shadow-sm border ${
                           isP1

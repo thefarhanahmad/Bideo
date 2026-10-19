@@ -5,6 +5,7 @@ import DataTableToolbar from "../components/DataTableToolbar";
 import Pagination from "../components/Pagination";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import ChannelSelect from "../components/ChannelSelect";
+import UserLink from "../components/UserLink";
 import { useTableParams } from "../hooks/useTableParams";
 import { API_URL } from "../config";
 
@@ -856,19 +857,24 @@ const Videos = ({ isServerOnly = false }) => {
 
                     {/* Owner & Channel */}
                     <td className="p-4 text-muted">
-                      <div className="flex items-center gap-2">
+                      <UserLink
+                        user={p.owner}
+                        tab="posts"
+                        className="flex items-center gap-2 group"
+                        title="Open creator profile & stats"
+                      >
                         <img
                           src={resolveMediaUrl(p.owner?.avatar)}
                           alt={p.owner?.name}
-                          className="h-8 w-8 rounded-full object-cover border border-line shrink-0"
+                          className="h-8 w-8 rounded-full object-cover border border-line shrink-0 group-hover:ring-2 group-hover:ring-brand/40 transition-all"
                         />
                         <div className="min-w-0">
-                          <div className="font-semibold text-ink text-xs truncate">{p.owner?.name || "Unknown"}</div>
+                          <div className="font-semibold text-ink text-xs truncate group-hover:text-brand group-hover:underline underline-offset-2">{p.owner?.name || "Unknown"}</div>
                           {p.owner?.channelName && (
                             <div className="text-xs text-brand truncate">@{p.owner.channelName}</div>
                           )}
                         </div>
-                      </div>
+                      </UserLink>
                     </td>
 
                     {/* Likes */}
@@ -1064,10 +1070,19 @@ const Videos = ({ isServerOnly = false }) => {
                       </div>
                     </td>
                     <td className="p-4 text-muted">
-                      <div className="font-semibold text-ink text-xs">{v.owner?.name || "Unknown"}</div>
-                      {v.owner?.channelName && (
-                        <div className="text-xs text-brand mt-0.5">@{v.owner.channelName}</div>
-                      )}
+                      <UserLink
+                        user={v.owner}
+                        tab="videos"
+                        className="group block"
+                        title="Open creator profile & stats"
+                      >
+                        <div className="font-semibold text-ink text-xs group-hover:text-brand group-hover:underline underline-offset-2 truncate">
+                          {v.owner?.name || "Unknown"}
+                        </div>
+                        {v.owner?.channelName && (
+                          <div className="text-xs text-brand mt-0.5 truncate">@{v.owner.channelName}</div>
+                        )}
+                      </UserLink>
                     </td>
                     <td className="p-4 font-semibold text-ink whitespace-nowrap text-xs">
                       {formatDuration(v.duration)}
@@ -1289,15 +1304,22 @@ const Videos = ({ isServerOnly = false }) => {
               </div>
             )}
             <div className="flex items-center gap-3">
-              <img
-                src={resolveMediaUrl(viewingPost.owner?.avatar)}
-                alt={viewingPost.owner?.name}
-                className="h-10 w-10 rounded-full object-cover border border-line"
-              />
-              <div className="min-w-0">
-                <div className="font-bold text-ink text-sm">{viewingPost.owner?.name || "Unknown"}</div>
-                <div className="text-xs text-brand">@{viewingPost.owner?.channelName || "channel"}</div>
-              </div>
+              <UserLink
+                user={viewingPost.owner}
+                tab="posts"
+                className="flex items-center gap-3 group min-w-0"
+                title="Open creator profile & stats"
+              >
+                <img
+                  src={resolveMediaUrl(viewingPost.owner?.avatar)}
+                  alt={viewingPost.owner?.name}
+                  className="h-10 w-10 rounded-full object-cover border border-line group-hover:ring-2 group-hover:ring-brand/40 transition-all"
+                />
+                <div className="min-w-0">
+                  <div className="font-bold text-ink text-sm group-hover:text-brand group-hover:underline underline-offset-2">{viewingPost.owner?.name || "Unknown"}</div>
+                  <div className="text-xs text-brand">@{viewingPost.owner?.channelName || "channel"}</div>
+                </div>
+              </UserLink>
               <span className={`ml-auto rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                 viewingPost.visibility === "public"
                   ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
@@ -1383,9 +1405,14 @@ const Videos = ({ isServerOnly = false }) => {
             <div className="rounded-xl bg-surface border border-line p-3.5 text-xs space-y-2">
               <div className="flex justify-between items-center">
                 <span className="text-muted">Creator:</span>
-                <span className="font-semibold text-ink">
+                <UserLink
+                  user={previewingVideo.owner}
+                  tab="videos"
+                  className="font-semibold text-ink hover:text-brand hover:underline"
+                  title="Open creator profile & stats"
+                >
                   {previewingVideo.owner?.name || "Unknown"} (@{previewingVideo.owner?.channelName || "channel"})
-                </span>
+                </UserLink>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-muted">Server Media URL:</span>

@@ -3,6 +3,7 @@ import DataTableToolbar from "../components/DataTableToolbar";
 import Pagination from "../components/Pagination";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import Modal from "../components/Modal";
+import UserLink from "../components/UserLink";
 import { useTableParams } from "../hooks/useTableParams";
 import { API_URL } from "../config";
 import {
@@ -10,9 +11,6 @@ import {
   CoinsIcon,
   TvIcon,
   TrendingUpIcon,
-  SparkIcon,
-  EyeIcon,
-  UsersIcon,
 } from "../components/Icons";
 
 const resolveMediaUrl = (url) => {
@@ -397,25 +395,32 @@ const Boost = () => {
                           >
                             #{rankNumber}
                           </span>
-                          <img
-                            src={resolveMediaUrl(u.avatar)}
-                            alt={u.name}
-                            className="h-10 w-10 shrink-0 rounded-full object-cover border border-line"
-                          />
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-bold text-ink truncate">{u.name}</span>
-                              {u.isVerified && (
-                                <span className="text-brand text-xs font-bold" title="Verified Creator">
-                                  ✓
-                                </span>
-                              )}
+                          <UserLink
+                            user={u}
+                            tab="boosts"
+                            className="flex items-center gap-3 min-w-0 group"
+                            title="Open creator profile & stats"
+                          >
+                            <img
+                              src={resolveMediaUrl(u.avatar)}
+                              alt={u.name}
+                              className="h-10 w-10 shrink-0 rounded-full object-cover border border-line group-hover:ring-2 group-hover:ring-brand/40 transition-all"
+                            />
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-ink truncate group-hover:text-brand group-hover:underline underline-offset-2">{u.name}</span>
+                                {u.isVerified && (
+                                  <span className="text-brand text-xs font-bold" title="Verified Creator">
+                                    ✓
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-muted truncate group-hover:text-ink">
+                                @{u.channelName || "no_channel"}
+                              </div>
+                              <div className="text-[11px] text-muted/80 truncate">{u.email || "-"}</div>
                             </div>
-                            <div className="text-xs text-muted truncate">
-                              @{u.channelName || "no_channel"}
-                            </div>
-                            <div className="text-[11px] text-muted/80 truncate">{u.email || "-"}</div>
-                          </div>
+                          </UserLink>
                         </div>
                       </td>
 
@@ -765,32 +770,46 @@ const Boost = () => {
             <div className="space-y-6">
               {/* User Overview Header */}
               <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-surface p-4 border border-line">
-                <div className="flex items-center gap-3">
+                <UserLink
+                  user={userDetails.user}
+                  tab="boosts"
+                  className="flex items-center gap-3 group"
+                  title="Open full user profile & stats"
+                >
                   <img
                     src={resolveMediaUrl(userDetails.user?.avatar)}
                     alt={userDetails.user?.name}
-                    className="h-14 w-14 rounded-full object-cover border-2 border-white shadow-xs"
+                    className="h-14 w-14 rounded-full object-cover border-2 border-white shadow-xs group-hover:ring-2 group-hover:ring-brand/40 transition-all"
                   />
                   <div>
                     <div className="flex items-center gap-2">
-                      <h4 className="font-display font-extrabold text-ink text-base">
+                      <h4 className="font-display font-extrabold text-ink text-base group-hover:text-brand group-hover:underline underline-offset-2">
                         {userDetails.user?.name}
                       </h4>
                       {userDetails.user?.isVerified && (
                         <span className="text-brand text-xs font-bold">✓ Verified</span>
                       )}
                     </div>
-                    <div className="text-xs text-muted">
+                    <div className="text-xs text-muted group-hover:text-ink">
                       @{userDetails.user?.channelName || "no_channel"} • {userDetails.user?.email}
                     </div>
                     <div className="mt-1 text-[11px] text-muted">
                       Joined: {formatDate(userDetails.user?.createdAt)}
                     </div>
                   </div>
-                </div>
+                </UserLink>
 
-                {/* Quick Balances */}
+                {/* Quick Balances & Profile Button */}
                 <div className="flex flex-wrap items-center gap-3">
+                  <UserLink
+                    user={userDetails.user}
+                    tab="boosts"
+                    className="rounded-xl bg-brand-50 px-3.5 py-2.5 border border-brand/20 text-brand font-bold text-xs hover:bg-brand hover:text-white transition-all shadow-2xs flex items-center gap-1.5"
+                    title="Open full user profile & stats"
+                  >
+                    <span>📊</span>
+                    <span>View Profile & Stats</span>
+                  </UserLink>
                   <div className="rounded-xl bg-amber-50 px-4 py-2 border border-amber-200 text-right">
                     <span className="block text-[10px] font-bold uppercase tracking-wider text-amber-800">
                       Coins Balance

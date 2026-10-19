@@ -1,8 +1,9 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Modal from "../components/Modal";
 import DataTableToolbar from "../components/DataTableToolbar";
 import Pagination from "../components/Pagination";
 import LoadingSkeleton from "../components/LoadingSkeleton";
+import UserLink from "../components/UserLink";
 import { useTableParams } from "../hooks/useTableParams";
 import { API_URL } from "../config";
 
@@ -229,22 +230,27 @@ const Payouts = () => {
                 {withdrawals.map((w) => (
                   <tr key={w._id} className="border-t border-line align-top hover:bg-surface/50 transition-colors">
                     <td className="p-4">
-                      <div className="flex items-center gap-3">
+                      <UserLink
+                        user={w.user}
+                        tab="earnings"
+                        className="flex items-center gap-3 group"
+                        title="Open creator profile & stats"
+                      >
                         <img
                           src={resolveMediaUrl(w.user?.avatar)}
                           alt="avatar"
-                          className="h-10 w-10 shrink-0 rounded-full bg-surface object-cover border border-line"
+                          className="h-10 w-10 shrink-0 rounded-full bg-surface object-cover border border-line group-hover:ring-2 group-hover:ring-brand/40 transition-all"
                           onError={(e) => {
                             e.currentTarget.src = "https://via.placeholder.com/80x80.png?text=User";
                           }}
                         />
                         <div className="min-w-0">
-                          <div className="font-bold text-ink text-sm truncate">{w.payoutDetails?.holderName || w.user?.name}</div>
-                          <div className="text-xs text-muted truncate">
+                          <div className="font-bold text-ink text-sm truncate group-hover:text-brand group-hover:underline underline-offset-2">{w.payoutDetails?.holderName || w.user?.name}</div>
+                          <div className="text-xs text-muted truncate group-hover:text-ink">
                             @{w.user?.channelName || "channel"} • {w.user?.phone || w.user?.email || "No contact"}
                           </div>
                         </div>
-                      </div>
+                      </UserLink>
                     </td>
 
                     <td className="p-4 whitespace-nowrap">
@@ -400,7 +406,15 @@ const Payouts = () => {
           <form onSubmit={handleApprove} className="space-y-4">
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3.5 text-xs text-emerald-900">
               <p className="font-semibold text-sm text-emerald-800">
-                Confirm ₹{Number(selectedWithdrawal.amount).toLocaleString("en-IN")} Payout to {selectedWithdrawal.payoutDetails?.holderName || selectedWithdrawal.user?.name}
+                Confirm ₹{Number(selectedWithdrawal.amount).toLocaleString("en-IN")} Payout to{" "}
+                <UserLink
+                  user={selectedWithdrawal.user}
+                  tab="earnings"
+                  className="underline hover:text-emerald-950 font-bold"
+                  title="Open user profile & stats"
+                >
+                  {selectedWithdrawal.payoutDetails?.holderName || selectedWithdrawal.user?.name}
+                </UserLink>
               </p>
               <p className="mt-1">
                 Please transfer the funds to the creator's {selectedWithdrawal.payoutMethod.toUpperCase()} destination, then enter the Bank UTR / Transaction Reference ID below.

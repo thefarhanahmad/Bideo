@@ -8,7 +8,6 @@ import {
   FlagIcon,
   WalletIcon,
   CashIcon,
-  TvIcon,
   AlertOctagonIcon,
   GridIcon,
   CloseIcon,
@@ -515,7 +514,7 @@ const AdminGlobalSearch = () => {
                       {results.users.slice(0, activeTab === "users" ? 20 : 5).map((u) => (
                         <button
                           key={u._id}
-                          onClick={() => handleNavigate("/admin/users", u.channelName || u.name || u._id)}
+                          onClick={() => handleNavigate(`/admin/users/${u._id}`)}
                           className="flex items-center gap-3 rounded-xl p-2 text-left hover:bg-blue-50/70 transition-colors group border border-transparent hover:border-blue-200"
                         >
                           {/* Avatar */}

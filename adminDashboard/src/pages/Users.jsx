@@ -519,31 +519,37 @@ const Users = () => {
                       {/* User Avatar & Name */}
                       <td className="p-4 font-medium text-ink">
                         <div className="flex items-center gap-3">
-                          {avatarUrl ? (
-                            <img
-                              src={avatarUrl}
-                              alt={u.name || ""}
-                              className="h-10 w-10 shrink-0 rounded-full object-cover border border-line bg-surface"
-                              onError={(e) => {
-                                e.currentTarget.style.display = "none";
-                                if (e.currentTarget.nextSibling) {
-                                  e.currentTarget.nextSibling.style.display = "grid";
-                                }
-                              }}
-                            />
-                          ) : null}
-                          <span
-                            style={{ display: avatarUrl ? "none" : "grid" }}
-                            className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-50 text-sm font-bold text-brand border border-brand/20"
+                          <Link
+                            to={`/admin/users/${u._id}`}
+                            className="shrink-0 group"
+                            title="Open user profile & stats"
                           >
-                            {(u.name || "?").charAt(0).toUpperCase()}
-                          </span>
+                            {avatarUrl ? (
+                              <img
+                                src={avatarUrl}
+                                alt={u.name || ""}
+                                className="h-10 w-10 shrink-0 rounded-full object-cover border border-line bg-surface group-hover:ring-2 group-hover:ring-brand/40 transition-all"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = "none";
+                                  if (e.currentTarget.nextSibling) {
+                                    e.currentTarget.nextSibling.style.display = "grid";
+                                  }
+                                }}
+                              />
+                            ) : null}
+                            <span
+                              style={{ display: avatarUrl ? "none" : "grid" }}
+                              className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-50 text-sm font-bold text-brand border border-brand/20 group-hover:ring-2 group-hover:ring-brand/40 transition-all"
+                            >
+                              {(u.name || "?").charAt(0).toUpperCase()}
+                            </span>
+                          </Link>
 
                           <div className="min-w-0 flex-1">
                             <Link
                               to={`/admin/users/${u._id}`}
                               className="block font-bold text-ink text-sm truncate hover:text-brand hover:underline underline-offset-2"
-                              title="Open user profile"
+                              title="Open user profile & stats"
                             >
                               {u.name || "Unnamed"}
                             </Link>
@@ -574,9 +580,17 @@ const Users = () => {
 
                       {/* Channel Name */}
                       <td className="p-4">
-                        <div className="font-semibold text-ink text-xs truncate">
-                          {u.channelName || "—"}
-                        </div>
+                        {u.channelName ? (
+                          <Link
+                            to={`/admin/users/${u._id}`}
+                            className="font-semibold text-ink text-xs truncate hover:text-brand hover:underline block"
+                            title="Open user profile & stats"
+                          >
+                            @{u.channelName}
+                          </Link>
+                        ) : (
+                          <div className="font-semibold text-muted text-xs truncate">—</div>
+                        )}
                       </td>
 
                       {/* Wallet Balance & Earnings */}
@@ -708,6 +722,13 @@ const Users = () => {
                             )
                           ) : (
                             <>
+                              <Link
+                                to={`/admin/users/${u._id}`}
+                                className="rounded-lg bg-brand-50 border border-brand/20 px-2.5 py-1 text-xs font-semibold text-brand hover:bg-brand hover:text-white transition-colors shadow-2xs"
+                                title="Open full user profile & stats"
+                              >
+                                📊 Stats
+                              </Link>
                               <button
                                 type="button"
                                 onClick={() => promptToggleMonetize(u)}

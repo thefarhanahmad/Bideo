@@ -51,9 +51,23 @@ const UserProfile = () => {
 
   return (
     <div className="space-y-5 min-w-0 max-w-full">
-      <Link to="/admin/users" className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted hover:text-brand">
-        ← Back to users
-      </Link>
+      <div className="flex items-center gap-2.5 text-xs font-semibold text-muted">
+        <button
+          type="button"
+          onClick={() => (window.history.length > 1 ? navigate(-1) : navigate("/admin/users"))}
+          className="inline-flex items-center gap-1 hover:text-brand transition-colors cursor-pointer"
+        >
+          ← Back
+        </button>
+        <span className="text-line">|</span>
+        <Link to="/admin/users" className="hover:text-brand transition-colors">
+          All Users
+        </Link>
+        <span className="text-line">|</span>
+        <Link to="/admin/earnings" className="hover:text-brand transition-colors">
+          Earnings
+        </Link>
+      </div>
 
       {overview.error && !data ? (
         <ErrorState message={overview.error} onRetry={refresh} />

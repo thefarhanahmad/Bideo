@@ -4,6 +4,7 @@ import Pagination from "../components/Pagination";
 import ConfirmModal from "../components/ConfirmModal";
 import Modal from "../components/Modal";
 import StatCard from "../components/StatCard";
+import UserLink from "../components/UserLink";
 import { TableSkeleton } from "../components/LoadingSkeleton";
 import {
   StoryIcon,
@@ -386,10 +387,15 @@ const Stories = () => {
                     >
                       {/* Creator Profile */}
                       <td className="py-4 px-4 sm:px-6">
-                        <div className="flex items-center gap-3 min-w-0">
+                        <UserLink
+                          user={creator}
+                          tab="stories"
+                          className="flex items-center gap-3 min-w-0 group"
+                          title="Open creator profile & stats"
+                        >
                           {/* Story Avatar Ring (Instagram style) */}
                           <div className="relative shrink-0">
-                            <div className="h-11 w-11 rounded-full p-[2px] bg-gradient-to-tr from-[#F58529] via-[#DD2A7B] to-[#8134AF]">
+                            <div className="h-11 w-11 rounded-full p-[2px] bg-gradient-to-tr from-[#F58529] via-[#DD2A7B] to-[#8134AF] group-hover:scale-105 transition-transform">
                               <img
                                 src={avatarUrl}
                                 alt={creator.name || "User"}
@@ -403,7 +409,7 @@ const Stories = () => {
 
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-bold text-ink text-sm truncate">
+                              <span className="font-bold text-ink text-sm truncate group-hover:text-brand group-hover:underline underline-offset-2">
                                 {creator.channelName || creator.name || "Creator"}
                               </span>
                               {creator.isVerified && (
@@ -412,7 +418,7 @@ const Stories = () => {
                                 </span>
                               )}
                             </div>
-                            <div className="text-xs text-muted truncate">
+                            <div className="text-xs text-muted truncate group-hover:text-ink">
                               @{creator.name || "user"}
                               {creator.email && (
                                 <span className="ml-1 text-muted/70 hidden md:inline">
@@ -421,7 +427,7 @@ const Stories = () => {
                               )}
                             </div>
                           </div>
-                        </div>
+                        </UserLink>
                       </td>
 
                       {/* Active Stories Count */}
@@ -511,8 +517,13 @@ const Stories = () => {
           <div className="space-y-5">
             {/* Creator Header Summary */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-4 rounded-2xl bg-surface/70 border border-line">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="h-12 w-12 rounded-full p-[2px] bg-gradient-to-tr from-[#F58529] via-[#DD2A7B] to-[#8134AF] shrink-0">
+              <UserLink
+                user={selectedUserGroup.user}
+                tab="stories"
+                className="flex items-center gap-3 min-w-0 group"
+                title="Open creator profile & stats"
+              >
+                <div className="h-12 w-12 rounded-full p-[2px] bg-gradient-to-tr from-[#F58529] via-[#DD2A7B] to-[#8134AF] shrink-0 group-hover:scale-105 transition-transform">
                   <img
                     src={resolveAvatarUrl(selectedUserGroup.user?.avatar)}
                     alt="Creator"
@@ -521,7 +532,7 @@ const Stories = () => {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <h3 className="font-bold text-base text-ink truncate">
+                    <h3 className="font-bold text-base text-ink truncate group-hover:text-brand group-hover:underline underline-offset-2">
                       {selectedUserGroup.user?.channelName ||
                         selectedUserGroup.user?.name ||
                         "Creator"}
@@ -530,12 +541,12 @@ const Stories = () => {
                       <span className="text-blue-500 text-xs font-bold">✓ Verified</span>
                     )}
                   </div>
-                  <p className="text-xs text-muted truncate">
+                  <p className="text-xs text-muted truncate group-hover:text-ink">
                     @{selectedUserGroup.user?.name || "user"}{" "}
                     {selectedUserGroup.user?.email && `• ${selectedUserGroup.user.email}`}
                   </p>
                 </div>
-              </div>
+              </UserLink>
 
               {/* Badges Overview & Delete All */}
               <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
@@ -804,26 +815,30 @@ const Stories = () => {
                     key={viewer._id}
                     className="flex items-center justify-between py-2.5 px-2 hover:bg-surface/50 rounded-xl transition-colors"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
+                    <UserLink
+                      user={viewer}
+                      className="flex items-center gap-3 min-w-0 group"
+                      title="Open viewer profile & stats"
+                    >
                       <img
                         src={resolveAvatarUrl(viewer.avatar)}
                         alt={viewer.name || "Viewer"}
-                        className="h-10 w-10 rounded-full object-cover border border-line bg-surface shrink-0"
+                        className="h-10 w-10 rounded-full object-cover border border-line bg-surface shrink-0 group-hover:ring-2 group-hover:ring-brand/40 transition-all"
                       />
                       <div className="min-w-0">
                         <div className="flex items-center gap-1">
-                          <span className="text-sm font-semibold text-ink truncate">
+                          <span className="text-sm font-semibold text-ink truncate group-hover:text-brand group-hover:underline underline-offset-2">
                             {viewer.channelName || viewer.name || "User"}
                           </span>
                           {viewer.isVerified && (
                             <span className="text-blue-500 text-xs">✓</span>
                           )}
                         </div>
-                        <span className="text-xs text-muted truncate block">
+                        <span className="text-xs text-muted truncate block group-hover:text-ink">
                           @{viewer.name || "user"}
                         </span>
                       </div>
-                    </div>
+                    </UserLink>
                     {viewer.email && (
                       <span className="text-xs text-muted/80 truncate ml-2 hidden sm:inline">
                         {viewer.email}

@@ -5,6 +5,7 @@ import LoadingSkeleton from "../components/LoadingSkeleton";
 import { useTableParams } from "../hooks/useTableParams";
 import { API_URL } from "../config";
 import { CashIcon, TrendingUpIcon, WalletIcon, UsersIcon } from "../components/Icons";
+import UserLink from "../components/UserLink";
 
 const resolveMediaUrl = (url) => {
   if (!url) return "https://via.placeholder.com/80x80.png?text=User";
@@ -243,14 +244,15 @@ const UserEarnings = () => {
                 <th className="p-4 text-right">Pending (24h)</th>
                 <th className="p-4 text-center">Status</th>
                 <th className="p-4 text-center">Joined</th>
+                <th className="p-4 text-center">Profile / Stats</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
               {loading ? (
-                <LoadingSkeleton rows={5} cols={8} />
+                <LoadingSkeleton rows={5} cols={9} />
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="p-8 text-center text-muted">
+                  <td colSpan="9" className="p-8 text-center text-muted">
                     No creators found matching your criteria.
                   </td>
                 </tr>
@@ -263,7 +265,7 @@ const UserEarnings = () => {
                       <td className="p-4">
                         <div className="flex items-center gap-3 min-w-[200px]">
                           <span
-                            className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-extrabold ${
+                            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-extrabold ${
                               rankNumber === 1
                                 ? "bg-amber-100 text-amber-800"
                                 : rankNumber === 2
@@ -275,24 +277,28 @@ const UserEarnings = () => {
                           >
                             #{rankNumber}
                           </span>
-                          <img
-                            src={resolveMediaUrl(u.avatar)}
-                            alt={u.name}
-                            className="h-10 w-10 shrink-0 rounded-full object-cover border border-line"
-                          />
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-bold text-ink truncate">{u.name}</span>
-                              {u.isVerified && (
-                                <span className="text-brand text-xs font-bold" title="Verified Creator">
-                                  ✓
+                          <UserLink user={u} tab="earnings" className="flex items-center gap-3 min-w-0 group" title="Open creator profile & stats">
+                            <img
+                              src={resolveMediaUrl(u.avatar)}
+                              alt={u.name}
+                              className="h-10 w-10 shrink-0 rounded-full object-cover border border-line group-hover:ring-2 group-hover:ring-brand/40 transition-all"
+                            />
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-ink truncate group-hover:text-brand group-hover:underline underline-offset-2">
+                                  {u.name}
                                 </span>
-                              )}
+                                {u.isVerified && (
+                                  <span className="text-brand text-xs font-bold" title="Verified Creator">
+                                    ✓
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-muted truncate group-hover:text-ink">
+                                @{u.channelName || "no_channel"}
+                              </div>
                             </div>
-                            <div className="text-xs text-muted truncate">
-                              @{u.channelName || "no_channel"}
-                            </div>
-                          </div>
+                          </UserLink>
                         </div>
                       </td>
 
@@ -354,6 +360,19 @@ const UserEarnings = () => {
                       {/* Joined Date */}
                       <td className="p-4 text-center text-xs text-muted">
                         {formatDate(u.createdAt)}
+                      </td>
+
+                      {/* Profile / Stats */}
+                      <td className="p-4 text-center whitespace-nowrap">
+                        <UserLink
+                          user={u}
+                          tab="earnings"
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-brand/20 bg-brand-50/60 px-3 py-1.5 text-xs font-bold text-brand hover:bg-brand hover:text-white transition-all shadow-2xs"
+                          title="Open full stats & profile"
+                        >
+                          <span>📊</span>
+                          <span>Stats</span>
+                        </UserLink>
                       </td>
                     </tr>
                   );

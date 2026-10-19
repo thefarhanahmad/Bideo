@@ -1,8 +1,9 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Modal from "../components/Modal";
 import DataTableToolbar from "../components/DataTableToolbar";
 import Pagination from "../components/Pagination";
 import LoadingSkeleton from "../components/LoadingSkeleton";
+import UserLink from "../components/UserLink";
 import { useTableParams } from "../hooks/useTableParams";
 import { API_URL } from "../config";
 
@@ -400,21 +401,28 @@ const Monetization = () => {
                 >
                   {/* Creator Header */}
                   <div className="flex items-center gap-3 border-b border-gray-200 pb-4 mb-4">
-                    <img
-                      src={resolveMediaUrl(group.user?.avatar)}
-                      alt="avatar"
-                      loading="lazy"
-                      className="h-10 w-10 rounded-full bg-surface object-cover border border-line"
-                      onError={(e) => {
-                        e.currentTarget.src = "https://via.placeholder.com/80x80.png?text=User";
-                      }}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <h4 className="font-display font-bold text-ink text-base truncate">{group.user?.name}</h4>
-                      <p className="text-xs text-muted truncate">
-                        @{group.user?.channelName || "No channel"} • {group.user?.phone || "No phone"} • {group.user?.email || "No email"}
-                      </p>
-                    </div>
+                    <UserLink
+                      user={group.user}
+                      tab="earnings"
+                      className="flex items-center gap-3 min-w-0 group flex-1"
+                      title="Open creator profile & stats"
+                    >
+                      <img
+                        src={resolveMediaUrl(group.user?.avatar)}
+                        alt="avatar"
+                        loading="lazy"
+                        className="h-10 w-10 rounded-full bg-surface object-cover border border-line group-hover:ring-2 group-hover:ring-brand/40 transition-all shrink-0"
+                        onError={(e) => {
+                          e.currentTarget.src = "https://via.placeholder.com/80x80.png?text=User";
+                        }}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <h4 className="font-display font-bold text-ink text-base truncate group-hover:text-brand group-hover:underline underline-offset-2">{group.user?.name}</h4>
+                        <p className="text-xs text-muted truncate group-hover:text-ink">
+                          @{group.user?.channelName || "No channel"} • {group.user?.phone || "No phone"} • {group.user?.email || "No email"}
+                        </p>
+                      </div>
+                    </UserLink>
                     <div className="ml-auto flex items-center gap-2 shrink-0 flex-wrap justify-end">
                       {group.passedCount > 0 && (
                         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 border border-emerald-200">
@@ -659,21 +667,26 @@ const Monetization = () => {
                               />
                             </td>
                             <td className="p-4">
-                              <div className="flex items-center gap-3">
+                              <UserLink
+                                user={app.user}
+                                tab="earnings"
+                                className="flex items-center gap-3 group"
+                                title="Open creator profile & stats"
+                              >
                                 <img
                                   src={resolveMediaUrl(app.user?.avatar)}
                                   alt="avatar"
                                   loading="lazy"
-                                  className="h-10 w-10 shrink-0 rounded-full bg-surface object-cover border border-line"
+                                  className="h-10 w-10 shrink-0 rounded-full bg-surface object-cover border border-line group-hover:ring-2 group-hover:ring-brand/40 transition-all"
                                   onError={(e) => {
                                     e.currentTarget.src = "https://via.placeholder.com/80x80.png?text=User";
                                   }}
                                 />
                                 <div>
-                                  <div className="font-semibold text-ink">{app.name}</div>
-                                  <div className="text-xs text-muted">@{app.user?.channelName || app.user?.name}</div>
+                                  <div className="font-semibold text-ink group-hover:text-brand group-hover:underline underline-offset-2">{app.name}</div>
+                                  <div className="text-xs text-muted group-hover:text-ink">@{app.user?.channelName || app.user?.name}</div>
                                 </div>
-                              </div>
+                              </UserLink>
                             </td>
                             <td className="p-4 text-muted whitespace-nowrap text-xs">
                               <div>{app.phone}</div>
@@ -767,18 +780,23 @@ const Monetization = () => {
                     {monetizedUsers.map((app) => (
                       <tr key={app._id} className="border-t border-line align-top hover:bg-surface/50 transition-colors">
                         <td className="p-4">
-                          <div className="flex items-center gap-3">
+                          <UserLink
+                            user={app.user}
+                            tab="earnings"
+                            className="flex items-center gap-3 group"
+                            title="Open creator profile & stats"
+                          >
                             <img
                               src={resolveMediaUrl(app.user?.avatar)}
                               alt="avatar"
                               loading="lazy"
-                              className="h-10 w-10 shrink-0 rounded-full bg-surface object-cover border border-line"
+                              className="h-10 w-10 shrink-0 rounded-full bg-surface object-cover border border-line group-hover:ring-2 group-hover:ring-brand/40 transition-all"
                               onError={(e) => {
                                 e.currentTarget.src = "https://via.placeholder.com/80x80.png?text=User";
                               }}
                             />
                             <div>
-                              <div className="font-semibold text-ink flex items-center gap-1.5">
+                              <div className="font-semibold text-ink flex items-center gap-1.5 group-hover:text-brand group-hover:underline underline-offset-2">
                                 <span>{app.name}</span>
                                 <span
                                   className="inline-block rounded-full bg-emerald-100 p-0.5 text-[10px] text-emerald-700"
@@ -787,9 +805,9 @@ const Monetization = () => {
                                   ✓
                                 </span>
                               </div>
-                              <div className="text-xs text-muted">@{app.user?.channelName || app.user?.name}</div>
+                              <div className="text-xs text-muted group-hover:text-ink">@{app.user?.channelName || app.user?.name}</div>
                             </div>
-                          </div>
+                          </UserLink>
                         </td>
                         <td className="p-4 text-muted whitespace-nowrap text-xs">
                           <div>{app.phone}</div>
@@ -1110,18 +1128,23 @@ const Monetization = () => {
           }}
         >
           <div className="space-y-4">
-            <div className="flex items-center gap-4 rounded-xl border border-line bg-surface/40 p-4">
+            <UserLink
+              user={selectedMonetizedUser.user}
+              tab="earnings"
+              className="flex items-center gap-4 rounded-xl border border-line bg-surface/40 p-4 group"
+              title="Open full creator profile & stats"
+            >
               <img
                 src={resolveMediaUrl(selectedMonetizedUser.user?.avatar)}
                 alt="avatar"
-                className="h-16 w-16 rounded-full bg-white object-cover border-2 border-brand/20 shadow-sm"
+                className="h-16 w-16 rounded-full bg-white object-cover border-2 border-brand/20 shadow-sm group-hover:ring-2 group-hover:ring-brand/40 transition-all"
                 onError={(e) => {
                   e.currentTarget.src = "https://via.placeholder.com/80x80.png?text=User";
                 }}
               />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-display font-bold text-ink text-lg truncate">{selectedMonetizedUser.name}</h3>
+                  <h3 className="font-display font-bold text-ink text-lg truncate group-hover:text-brand group-hover:underline underline-offset-2">{selectedMonetizedUser.name}</h3>
                   <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
                     Monetized
                   </span>
@@ -1132,7 +1155,7 @@ const Monetization = () => {
                   {new Date(selectedMonetizedUser.user?.createdAt || selectedMonetizedUser.createdAt).toLocaleDateString("en-IN")}
                 </p>
               </div>
-            </div>
+            </UserLink>
 
             <div className="rounded-xl border border-line bg-white p-4 space-y-3">
               <div className="flex items-center justify-between border-b border-line pb-2">

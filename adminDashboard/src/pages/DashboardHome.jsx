@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { API_URL } from '../config';
 import StatCard from '../components/StatCard';
+import UserLink from '../components/UserLink';
 import { UsersIcon, PlayIcon, WalletIcon, FlagIcon, EyeIcon, ArrowRightIcon } from '../components/Icons';
 import {
   UserGrowthChart,
@@ -229,7 +230,19 @@ const DashboardHome = () => {
                 <div className="min-w-0 flex-1 overflow-hidden">
                   <p className="truncate text-xs sm:text-sm font-semibold text-ink">{v.title || 'Untitled'}</p>
                   <p className="truncate text-[11px] sm:text-xs text-muted mt-0.5">
-                    {v.owner?.channelName || v.owner?.name || 'Unknown'} · {fmt(v.views)} views
+                    {v.owner ? (
+                      <UserLink
+                        user={v.owner}
+                        tab="videos"
+                        className="font-medium text-ink hover:text-brand hover:underline"
+                        title="Open creator profile & stats"
+                      >
+                        {v.owner?.channelName || v.owner?.name || 'Unknown'}
+                      </UserLink>
+                    ) : (
+                      'Unknown'
+                    )}{' '}
+                    · {fmt(v.views)} views
                   </p>
                 </div>
                 <span className="shrink-0 rounded-full bg-surface px-2 py-0.5 text-[10px] sm:text-xs capitalize text-muted">
@@ -253,18 +266,23 @@ const DashboardHome = () => {
               <p className="text-sm text-muted">No users yet.</p>
             )}
             {stats.recentUsers.map((u) => (
-              <div key={u._id} className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-                <span className="grid h-8 w-8 sm:h-9 sm:w-9 shrink-0 place-items-center rounded-full bg-brand-50 text-xs sm:text-sm font-bold text-brand">
+              <UserLink
+                key={u._id}
+                user={u}
+                className="flex items-center gap-2.5 sm:gap-3 min-w-0 group hover:bg-surface/50 p-1.5 -mx-1.5 rounded-xl transition-colors block"
+                title="Open user profile & stats"
+              >
+                <span className="grid h-8 w-8 sm:h-9 sm:w-9 shrink-0 place-items-center rounded-full bg-brand-50 text-xs sm:text-sm font-bold text-brand group-hover:ring-2 group-hover:ring-brand/40 transition-all">
                   {(u.name || '?').charAt(0).toUpperCase()}
                 </span>
                 <div className="min-w-0 flex-1 overflow-hidden">
-                  <p className="truncate text-xs sm:text-sm font-semibold text-ink">{u.name || 'Unnamed'}</p>
+                  <p className="truncate text-xs sm:text-sm font-semibold text-ink group-hover:text-brand group-hover:underline underline-offset-2">{u.name || 'Unnamed'}</p>
                   <p className="truncate text-[11px] sm:text-xs text-muted mt-0.5">{u.email || u.phone || '—'}</p>
                 </div>
                 <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] sm:text-xs font-medium capitalize ${u.role === 'admin' ? 'bg-brand-50 text-brand' : 'bg-surface text-muted'}`}>
                   {u.role}
                 </span>
-              </div>
+              </UserLink>
             ))}
           </div>
         </section>
