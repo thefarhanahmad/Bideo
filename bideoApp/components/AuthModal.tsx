@@ -134,19 +134,31 @@ interface AuthModalProps {
   visible: boolean;
   onClose: () => void;
   onLoginSuccess?: (user?: any) => void;
+  initialMode?: 'login' | 'signup';
 }
 
-const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose, onLoginSuccess }) => {
+const AuthModal: React.FC<AuthModalProps> = ({
+  visible,
+  onClose,
+  onLoginSuccess,
+  initialMode = 'login',
+}) => {
   const dispatch = useDispatch();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [isSignup, setIsSignup] = useState(false);
+  const [isSignup, setIsSignup] = useState(initialMode === 'signup');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [focusedField, setFocusedField] = useState<'name' | 'phone' | 'password' | null>(null);
+
+  useEffect(() => {
+    if (visible && initialMode) {
+      setIsSignup(initialMode === 'signup');
+    }
+  }, [visible, initialMode]);
 
   // Input refs for instant touch response anywhere on the row
   const nameInputRef = useRef<TextInput>(null);

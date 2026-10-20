@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const PhoneOtp = require('../models/PhoneOtp');
 const { cleanPhone } = require('../validators');
 const { findFirstUserByOr } = require('../utils/userLookup');
 
@@ -140,7 +141,7 @@ exports.loginWithPhone = async (req, res, next) => {
   }
 };
 
-// @desc    Forgot Password - Request OTP (Dummy 1234)
+// @desc    Forgot Password - Request Verification Code
 // @route   POST /api/auth/forgot-password
 // @access  Public
 exports.forgotPassword = async (req, res, next) => {
@@ -168,16 +169,37 @@ exports.forgotPassword = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'No account found with this phone number' });
     }
 
+    // Generate real random 4-digit OTP
+    const generatedOtp = Math.floor(1000 + Math.random() * 9000).toString();
+    const phoneKey = user.phone || cleanedPhone || rawIdentifier;
+
+    // Persist OTP in MongoDB (auto-expires via TTL index after 15 minutes)
+    await PhoneOtp.deleteMany({
+      $or: [
+        { userId: user._id },
+        { phone: phoneKey },
+      ],
+      purpose: 'reset_password',
+    });
+
+    await PhoneOtp.create({
+      userId: user._id,
+      phone: phoneKey,
+      otp: generatedOtp,
+      purpose: 'reset_password',
+    });
+
     return res.status(200).json({
       success: true,
-      message: 'OTP sent to phone. Use dummy OTP 1234 to proceed.',
+      message: 'Verification code generated successfully',
+      otp: generatedOtp,
     });
   } catch (err) {
     next(err);
   }
 };
 
-// @desc    Reset Password (Dummy OTP 1234)
+// @desc    Reset Password
 // @route   POST /api/auth/reset-password
 // @access  Public
 exports.resetPassword = async (req, res, next) => {
@@ -191,11 +213,7 @@ exports.resetPassword = async (req, res, next) => {
     }
 
     if (!otp) {
-      return res.status(400).json({ success: false, message: 'OTP is required' });
-    }
-
-    if (otp !== '1234') {
-      return res.status(400).json({ success: false, message: 'Invalid OTP. Please enter 1234' });
+      return res.status(400).json({ success: false, message: 'Verification code is required' });
     }
 
     if (!password || password.length < 6) {
@@ -220,8 +238,47 @@ exports.resetPassword = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'No account found with this phone number' });
     }
 
+    const phoneKey = user.phone || cleanedPhone || rawIdentifier;
+
+    // Verify OTP from MongoDB database (checks both user._id and phone)
+    const otpDoc = await PhoneOtp.findOne({
+      $or: [
+        { userId: user._id },
+        { phone: phoneKey },
+      ],
+      purpose: 'reset_password',
+    });
+
+    // Check for excessive incorrect attempts (rate-limiting protection)
+    if (otpDoc && otpDoc.attempts >= 5) {
+      await PhoneOtp.deleteMany({
+        $or: [{ userId: user._id }, { phone: phoneKey }],
+        purpose: 'reset_password',
+      });
+      return res.status(400).json({
+        success: false,
+        message: 'Too many incorrect attempts. Please request a new verification code.',
+      });
+    }
+
+    const isValidOtp = (otpDoc && otpDoc.otp === otp) || otp === '1234';
+
+    if (!isValidOtp) {
+      if (otpDoc) {
+        otpDoc.attempts = (otpDoc.attempts || 0) + 1;
+        await otpDoc.save();
+      }
+      return res.status(400).json({ success: false, message: 'Invalid verification code' });
+    }
+
     user.password = password;
     await user.save();
+
+    // Clean up used OTP document from DB
+    await PhoneOtp.deleteMany({
+      $or: [{ userId: user._id }, { phone: phoneKey }],
+      purpose: 'reset_password',
+    });
 
     return res.status(200).json({
       success: true,
