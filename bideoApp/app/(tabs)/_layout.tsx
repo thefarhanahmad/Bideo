@@ -1,15 +1,58 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Tabs, useRouter } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { TouchableOpacity, DeviceEventEmitter, View, Text } from 'react-native';
+import {
+  TouchableOpacity,
+  DeviceEventEmitter,
+  View,
+  Text,
+  StyleSheet,
+  Platform,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { PlatformPressable } from '@react-navigation/elements';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { useSelector } from 'react-redux';
 import Colors from '../../constants/Colors';
 import { RootState } from '../../redux/store';
 import api from '../../services/api';
+import { hapticSelection } from '../../utils/haptics';
+
+const CustomUploadTabButton: React.FC<{ onPress?: () => void }> = ({ onPress }) => {
+  return (
+    <View style={styles.centerTabSlot} pointerEvents="box-none">
+      <TouchableOpacity
+        onPress={() => {
+          hapticSelection();
+          onPress?.();
+        }}
+        activeOpacity={0.85}
+        style={styles.uploadButtonTouchable}
+      >
+        {/* Soft amber ambient halo glow */}
+        <View style={styles.uploadButtonGlow} />
+
+        {/* Elevated white dome bezel */}
+        <View style={styles.uploadButtonBezel}>
+          <LinearGradient
+            colors={['#FFA033', '#FF7A00', '#F35500']}
+            style={styles.uploadButtonGradient}
+            start={{ x: 0.15, y: 0 }}
+            end={{ x: 0.85, y: 1 }}
+          >
+            <Ionicons name="add" size={28} color="#FFFFFF" />
+          </LinearGradient>
+        </View>
+      </TouchableOpacity>
+    </View>
+  );
+};
 
 export default function TabsLayout() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const safeBottom = Math.max(insets.bottom, 0);
   const { isAuthenticated } = useSelector((state: RootState) => state.auth);
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [unreadChatCount, setUnreadChatCount] = useState<number>(0);
@@ -89,14 +132,49 @@ export default function TabsLayout() {
       clearInterval(interval);
     };
   }, [fetchUnreadCount, fetchUnreadChatCount, isAuthenticated]);
+
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.textGray,
+        tabBarActiveTintColor: '#FF7A00',
+        tabBarInactiveTintColor: '#1E293B',
+        tabBarButton: (props) => (
+          <PlatformPressable
+            {...props}
+            style={[
+              props.style,
+              styles.tabBarItemButton,
+            ]}
+          />
+        ),
+        tabBarItemStyle: {
+          justifyContent: 'center',
+          alignItems: 'center',
+        },
+        tabBarIconStyle: {
+          marginTop: 0,
+          marginBottom: 1,
+        },
+        tabBarLabelStyle: {
+          fontSize: 10.5,
+          fontWeight: '600',
+          marginTop: 0,
+          marginBottom: 0,
+          letterSpacing: 0.1,
+        },
         tabBarStyle: {
-          backgroundColor: Colors.white,
-          borderTopColor: Colors.border,
+          backgroundColor: '#FFFFFF',
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: 'rgba(0, 0, 0, 0.08)',
+          height: 52 + safeBottom,
+          paddingTop: 0,
+          paddingBottom: safeBottom,
+          shadowColor: '#000000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.04,
+          shadowRadius: 6,
+          elevation: 8,
+          overflow: 'visible',
         },
         headerStyle: {
           backgroundColor: Colors.white,
@@ -236,10 +314,10 @@ export default function TabsLayout() {
         name="upload"
         options={{
           title: 'Upload',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="add-circle-outline" size={40} color={Colors.primary} />
-          ),
           tabBarLabel: () => null,
+          tabBarButton: () => (
+            <CustomUploadTabButton onPress={() => router.push('/upload')} />
+          ),
         }}
         listeners={{
           tabPress: (e) => {
@@ -252,7 +330,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="followings"
         options={{
-          title: 'Followings',
+          title: 'Following',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="copy-outline" size={size} color={color} />
           ),
@@ -266,12 +344,9 @@ export default function TabsLayout() {
             <TouchableOpacity 
               style={{ marginRight: 15 }} 
               onPress={() => {
-                // We'll trigger a logout via a custom event or shared state if needed, 
-                // but for now let's keep it simple or use a better way.
-                // Actually, it's easier to handle logout in the screen itself if it has its own header.
+                // Logout or custom header action
               }}
-            >
-            </TouchableOpacity>
+            />
           ),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="library-outline" size={size} color={color} />
@@ -281,3 +356,53 @@ export default function TabsLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBarItemButton: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  centerTabSlot: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 20,
+  },
+  uploadButtonTouchable: {
+    position: 'absolute',
+    top: -16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 58,
+    height: 58,
+  },
+  uploadButtonGlow: {
+    position: 'absolute',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255, 122, 0, 0.20)',
+  },
+  uploadButtonBezel: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 122, 0, 0.16)',
+    shadowColor: '#FF7A00',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.32,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  uploadButtonGradient: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
