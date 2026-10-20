@@ -1,14 +1,6 @@
-import {
-  getAnalytics,
-  logEvent as firebaseLogEvent,
-  setUserId as firebaseSetUserId,
-  setUserProperty as firebaseSetUserProperty,
-  logScreenView as firebaseLogScreenView,
-  logAppOpen as firebaseLogAppOpen,
-  type Analytics,
-} from '@react-native-firebase/analytics';
 import * as StoreReview from 'expo-store-review';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 
 const STORAGE_KEYS = {
   WATCHED_VIDEOS_COUNT: 'bideo_analytics_watched_videos_count',
@@ -20,11 +12,28 @@ const STORAGE_KEYS = {
 const ACTIVATION_THRESHOLD = 3; // 3 videos watched within 24h = "Activated User"
 const REVIEW_THRESHOLD = 10;     // 10 videos watched = Happy moment for Play Store rating
 
-let cachedAnalytics: Analytics | null = null;
-function getSafeAnalytics(): Analytics | null {
+let cachedAnalytics: any = null;
+let firebaseAnalyticsModule: any = null;
+
+function getSafeAnalytics(): any {
+  // Never load native Firebase in Expo Go or storeClient (avoids NativeRNFBTurboApp crash)
+  const isExpoGo =
+    Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
+  if (isExpoGo) {
+    return null;
+  }
+
   if (!cachedAnalytics) {
     try {
-      cachedAnalytics = getAnalytics();
+      if (!firebaseAnalyticsModule) {
+        firebaseAnalyticsModule = require('@react-native-firebase/analytics');
+      }
+      const getAnalyticsFn =
+        firebaseAnalyticsModule.getAnalytics ||
+        (firebaseAnalyticsModule.default && firebaseAnalyticsModule.default.getAnalytics);
+      if (typeof getAnalyticsFn === 'function') {
+        cachedAnalytics = getAnalyticsFn();
+      }
     } catch {
       // In dev or web environment without native Firebase setup
     }
@@ -38,8 +47,13 @@ function getSafeAnalytics(): Analytics | null {
 export async function logEvent(name: string, params?: Record<string, any>): Promise<void> {
   try {
     const a = getSafeAnalytics();
-    if (a) {
-      firebaseLogEvent(a, name as any, params as any);
+    if (a && firebaseAnalyticsModule) {
+      const firebaseLogEvent =
+        firebaseAnalyticsModule.logEvent ||
+        (firebaseAnalyticsModule.default && firebaseAnalyticsModule.default.logEvent);
+      if (typeof firebaseLogEvent === 'function') {
+        firebaseLogEvent(a, name as any, params as any);
+      }
       if (__DEV__) {
         console.log(`[Analytics] ${name}:`, params);
       }
@@ -57,13 +71,22 @@ export async function logEvent(name: string, params?: Record<string, any>): Prom
 export async function setAnalyticsUser(userId?: string, properties?: Record<string, string>): Promise<void> {
   try {
     const a = getSafeAnalytics();
-    if (a) {
-      if (userId) {
-        await firebaseSetUserId(a, userId);
-      } else {
-        await firebaseSetUserId(a, null);
+    if (a && firebaseAnalyticsModule) {
+      const firebaseSetUserId =
+        firebaseAnalyticsModule.setUserId ||
+        (firebaseAnalyticsModule.default && firebaseAnalyticsModule.default.setUserId);
+      const firebaseSetUserProperty =
+        firebaseAnalyticsModule.setUserProperty ||
+        (firebaseAnalyticsModule.default && firebaseAnalyticsModule.default.setUserProperty);
+
+      if (typeof firebaseSetUserId === 'function') {
+        if (userId) {
+          await firebaseSetUserId(a, userId);
+        } else {
+          await firebaseSetUserId(a, null);
+        }
       }
-      if (properties) {
+      if (properties && typeof firebaseSetUserProperty === 'function') {
         for (const [key, value] of Object.entries(properties)) {
           await firebaseSetUserProperty(a, key, value);
         }
@@ -82,11 +105,16 @@ export async function setAnalyticsUser(userId?: string, properties?: Record<stri
 export async function logScreen(screenName: string, screenClassOverride?: string): Promise<void> {
   try {
     const a = getSafeAnalytics();
-    if (a) {
-      await firebaseLogScreenView(a, {
-        screen_name: screenName,
-        screen_class: screenClassOverride || screenName,
-      });
+    if (a && firebaseAnalyticsModule) {
+      const firebaseLogScreenView =
+        firebaseAnalyticsModule.logScreenView ||
+        (firebaseAnalyticsModule.default && firebaseAnalyticsModule.default.logScreenView);
+      if (typeof firebaseLogScreenView === 'function') {
+        await firebaseLogScreenView(a, {
+          screen_name: screenName,
+          screen_class: screenClassOverride || screenName,
+        });
+      }
     }
   } catch (err) {}
 }
@@ -97,8 +125,13 @@ export async function logScreen(screenName: string, screenClassOverride?: string
 export async function logAppLaunch(): Promise<void> {
   try {
     const a = getSafeAnalytics();
-    if (a) {
-      await firebaseLogAppOpen(a);
+    if (a && firebaseAnalyticsModule) {
+      const firebaseLogAppOpen =
+        firebaseAnalyticsModule.logAppOpen ||
+        (firebaseAnalyticsModule.default && firebaseAnalyticsModule.default.logAppOpen);
+      if (typeof firebaseLogAppOpen === 'function') {
+        await firebaseLogAppOpen(a);
+      }
     }
   } catch (err) {}
 }
