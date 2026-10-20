@@ -37,22 +37,40 @@ function Startup({ onReady }: { onReady: () => void }) {
         const isExpoGo =
           Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
         if (!isExpoGo) {
-          try {
-            const googleMobileAds = require('react-native-google-mobile-ads');
-            const mobileAds = googleMobileAds.default || googleMobileAds;
-            if (typeof mobileAds === 'function') {
-              mobileAds()
-                .initialize()
-                .then((adapterStatuses: any) => {
-                  console.log('AdMob initialized successfully in background:', adapterStatuses);
-                })
-                .catch((adErr: any) => {
-                  console.log('AdMob background init error:', adErr);
-                });
+          (async () => {
+            try {
+              const googleMobileAds = require('react-native-google-mobile-ads');
+              const mobileAds = googleMobileAds.default || googleMobileAds;
+              const AdsConsent =
+                googleMobileAds.AdsConsent ||
+                (googleMobileAds.default && googleMobileAds.default.AdsConsent);
+
+              // Check consent status (Google detects location: silent for Indian users, shows popup only for EEA/UK)
+              if (AdsConsent && typeof AdsConsent.requestInfoUpdate === 'function') {
+                try {
+                  await AdsConsent.requestInfoUpdate();
+                  if (typeof AdsConsent.loadAndShowConsentFormIfRequired === 'function') {
+                    await AdsConsent.loadAndShowConsentFormIfRequired();
+                  }
+                } catch (consentError) {
+                  console.log('Consent check skipped/failed:', consentError);
+                }
+              }
+
+              if (typeof mobileAds === 'function') {
+                mobileAds()
+                  .initialize()
+                  .then((adapterStatuses: any) => {
+                    console.log('AdMob initialized successfully in background:', adapterStatuses);
+                  })
+                  .catch((adErr: any) => {
+                    console.log('AdMob background init error:', adErr);
+                  });
+              }
+            } catch (adError) {
+              console.log('AdMob native module not found:', adError);
             }
-          } catch (adError) {
-            console.log('AdMob native module not found:', adError);
-          }
+          })();
         }
 
         // 2. Fast local token & cached user profile hydration
