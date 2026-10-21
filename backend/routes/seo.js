@@ -4,6 +4,7 @@ const {
   getChannelPage,
   getPostPage,
   getSitemap,
+  getSitemapPart,
   getRobots,
   getAssetLinks,
   getLlmsTxt,
@@ -15,6 +16,7 @@ router.get(['/v/:id', '/video/:id', '/watch/:id'], getVideoPage);
 router.get(['/c/:id', '/channel/:id'], getChannelPage);
 router.get(['/p/:id', '/post/:id'], getPostPage);
 router.get('/sitemap.xml', getSitemap);
+router.get(/^\/sitemap-(pages|channels|posts|videos)(?:-(\d+))?\.xml$/, getSitemapPart);
 router.get('/robots.txt', getRobots);
 router.get('/llms.txt', getLlmsTxt);
 router.get('/.well-known/assetlinks.json', getAssetLinks);

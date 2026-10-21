@@ -10,6 +10,34 @@ const PLAY_STORE_URL =
 const APP_PACKAGE = 'com.farhan.bideoapp';
 const DEFAULT_SHARE_IMAGE = 'https://play-lh.googleusercontent.com/IG8UtEAD8gMWrdjAt8_LR4JDoofZVXM-A99932YQBhc16nO0KAcIxqb35MAJgP-DSuKXo6G9E3NkqtEqZNiI5Q4=w480-h960-rw';
 
+const RELATED_LIMIT = 6;
+const CHANNEL_VIDEOS_LIMIT = 12;
+const MAX_TAGS = 10;
+const MAX_BODY_DESCRIPTION = 1000;
+
+// Public videos shown as internal links on video/channel pages (indexed by owner).
+async function findChannelVideos(ownerId, excludeId, limit) {
+  if (!ownerId) return [];
+  const filter = { owner: ownerId, visibility: 'public' };
+  if (excludeId) filter._id = { $ne: excludeId };
+  const rows = await Video.find(filter)
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .select('title thumbnail')
+    .lean();
+  return rows.map((v) => ({
+    url: `${BASE_URL}/v/${v._id}`,
+    title: v.title || 'Bideo video',
+    thumbnail: resolveMediaUrl(v.thumbnail),
+  }));
+}
+
+const cleanTags = (tags) =>
+  (Array.isArray(tags) ? tags : [])
+    .map((t) => String(t || '').replace(/^#/, '').trim())
+    .filter(Boolean)
+    .slice(0, MAX_TAGS);
+
 function escapeHtml(str) {
   if (!str) return '';
   return String(str)
@@ -83,6 +111,12 @@ function renderLauncherHtml({
   isCrawlerReq = false,
   duration = 0,
   uploadDate = null,
+  isShort = false,
+  bodyDescription = '',
+  tags = [],
+  creatorUrl = '',
+  related = [],
+  relatedTitle = '',
 }) {
   const cleanHeadTitle = String(title || '').toLowerCase().includes('bideo')
     ? title
@@ -323,25 +357,116 @@ function renderLauncherHtml({
       color: #6B7280;
       margin-top: 14px;
     }
+    .thumb-wrap.is-short {
+      aspect-ratio: 9 / 16;
+      max-height: 70vh;
+      width: auto;
+      max-width: 100%;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .thumb-wrap video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #000;
+      display: block;
+    }
+    a.creator-name {
+      color: #E5E7EB;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    a.creator-name:hover { color: #FF7A00; }
+    .desc {
+      width: 100%;
+      text-align: left;
+      font-size: 13px;
+      line-height: 1.55;
+      color: #C4C7CE;
+      white-space: pre-line;
+      word-break: break-word;
+      margin: -10px 0 14px;
+    }
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      width: 100%;
+      margin-bottom: 18px;
+    }
+    .tag {
+      font-size: 11px;
+      color: #FFB066;
+      background: rgba(255, 122, 0, 0.1);
+      border: 1px solid rgba(255, 122, 0, 0.25);
+      border-radius: 999px;
+      padding: 3px 9px;
+    }
+    .related {
+      width: 100%;
+      margin-top: 22px;
+      text-align: left;
+    }
+    .related h2 {
+      font-size: 14px;
+      font-weight: 700;
+      color: #F3F4F6;
+      margin-bottom: 10px;
+    }
+    .related-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .related-item {
+      color: #D1D5DB;
+      text-decoration: none;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    .related-item img {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      object-fit: cover;
+      border-radius: 10px;
+      background: #000;
+      display: block;
+      margin-bottom: 6px;
+    }
+    .related-item span {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <a href="${canonicalUrl}" class="header-logo">
+    <a href="${BASE_URL}/" class="header-logo">
       <span>▶</span> Bideo
     </a>
 
+    ${ogType === 'video.other' && videoUrl ? `
+    <div class="thumb-wrap${isShort ? ' is-short' : ''}">
+      <video controls playsinline preload="none" poster="${escapeHtml(displayImage)}" src="${escapeHtml(videoUrl)}" title="${escapeHtml(title)}"></video>
+    </div>` : `
     <div class="thumb-wrap">
       <img src="${escapeHtml(displayImage)}" alt="${escapeHtml(title)}" loading="eager" />
       <div class="play-badge">
         <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
       </div>
-    </div>
+    </div>`}
 
     <h1 class="title">${escapeHtml(title)}</h1>
     <div class="creator-row">
-      <span class="creator-name">${escapeHtml(creatorName || 'Bideo Creator')}</span>
+      ${creatorUrl
+        ? `<a class="creator-name" href="${escapeHtml(creatorUrl)}">${escapeHtml(creatorName || 'Bideo Creator')}</a>`
+        : `<span class="creator-name">${escapeHtml(creatorName || 'Bideo Creator')}</span>`}
     </div>
+    ${bodyDescription ? `<p class="desc">${escapeHtml(bodyDescription)}</p>` : ''}
+    ${tags.length ? `<div class="tags">${tags.map((t) => `<span class="tag">#${escapeHtml(t)}</span>`).join('')}</div>` : ''}
 
     <a id="open-app-btn" href="${intentLink}" class="btn-open">
       Open in Bideo App
@@ -352,6 +477,14 @@ function renderLauncherHtml({
     </a>
 
     <p id="status-hint" class="hint-text">Opening Bideo App... Tap button above if not opened.</p>
+
+    ${related.length ? `
+    <section class="related">
+      <h2>${escapeHtml(relatedTitle || 'More videos')}</h2>
+      <div class="related-grid">
+        ${related.map((r) => `<a class="related-item" href="${escapeHtml(r.url)}"><img src="${escapeHtml(r.thumbnail || DEFAULT_SHARE_IMAGE)}" alt="${escapeHtml(r.title)}" loading="lazy" /><span>${escapeHtml(r.title)}</span></a>`).join('')}
+      </div>
+    </section>` : ''}
   </div>
 
   ${!isCrawlerReq ? `
@@ -359,45 +492,143 @@ function renderLauncherHtml({
     (function() {
       var ua = navigator.userAgent || '';
       var isAndroid = /android/i.test(ua);
-      var isIOS = /iphone|ipad|ipod/i.test(ua);
       var intentUrl = "${intentLink}";
-      var deepLink = "${deepLink}";
       var playStoreUrl = "${PLAY_STORE_URL}";
       var btn = document.getElementById('open-app-btn');
 
-      if (isIOS) {
-        if (btn) btn.href = deepLink;
-        window.location.href = deepLink;
-      } else if (isAndroid) {
+      if (isAndroid) {
         if (btn) btn.href = intentUrl;
         // Automatic launch attempt on load
         try {
           window.location.href = intentUrl;
         } catch (e) {}
       } else {
+        // Desktop and iPhone (Android-only app): stay on the page, link to Google Play
         if (btn) {
           btn.href = playStoreUrl;
           btn.innerText = 'Get on Google Play';
         }
+        var hint = document.getElementById('status-hint');
+        if (hint) hint.style.display = 'none';
       }
     })();
   </script>
   ` : ''}
-
-  <!-- Semantic metadata for search engine crawlers -->
-  <div style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;">
-    <h1>${escapeHtml(title)}</h1>
-    <p>${escapeHtml(description)}</p>
-    <span>${escapeHtml(creatorName)}</span>
-  </div>
 </body>
 </html>`;
 }
 
-// In-memory cache for sitemap (1 hour)
-let sitemapCache = {
-  xml: '',
-  expiresAt: 0,
+// Sitemaps are cached in memory for 1 hour (per file)
+const SITEMAP_TTL_MS = 60 * 60 * 1000;
+const VIDEOS_PER_SITEMAP = 5000;
+const sitemapCache = new Map();
+
+const cachedXml = async (key, build) => {
+  const hit = sitemapCache.get(key);
+  if (hit && hit.expiresAt > Date.now()) return hit.xml;
+  const xml = await build();
+  sitemapCache.set(key, { xml, expiresAt: Date.now() + SITEMAP_TTL_MS });
+  return xml;
+};
+
+const isoDate = (d) => new Date(d || Date.now()).toISOString();
+const PUBLIC_VIDEO_FILTER = { visibility: 'public', isBlocked: { $ne: true } };
+
+const STATIC_PAGES = [
+  { path: '/', priority: '1.0', changefreq: 'daily' },
+  { path: '/about', priority: '0.8', changefreq: 'monthly' },
+  { path: '/creators', priority: '0.9', changefreq: 'weekly' },
+  { path: '/faq', priority: '0.8', changefreq: 'weekly' },
+  { path: '/contact', priority: '0.8', changefreq: 'monthly' },
+  { path: '/terms', priority: '0.5', changefreq: 'monthly' },
+  { path: '/privacy', priority: '0.5', changefreq: 'monthly' },
+  { path: '/guidelines', priority: '0.6', changefreq: 'monthly' },
+  { path: '/copyright', priority: '0.5', changefreq: 'monthly' },
+  { path: '/moderation', priority: '0.5', changefreq: 'monthly' },
+  { path: '/cookies', priority: '0.4', changefreq: 'monthly' },
+  { path: '/account-deletion', priority: '0.4', changefreq: 'monthly' },
+  { path: '/child-safety', priority: '0.5', changefreq: 'monthly' },
+  { path: '/refunds', priority: '0.4', changefreq: 'monthly' },
+];
+
+const urlset = (body, withVideo = false) => `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"${withVideo ? `
+        xmlns:video="http://www.google.com/schemas/sitemap-video/1.1"` : ''}>${body}
+</urlset>`;
+
+const buildPagesSitemap = () =>
+  urlset(STATIC_PAGES.map((page) => `
+  <url>
+    <loc>${BASE_URL}${page.path}</loc>
+    <changefreq>${page.changefreq}</changefreq>
+    <priority>${page.priority}</priority>
+  </url>`).join(''));
+
+const buildVideosSitemap = async (part) => {
+  const videos = await Video.find(PUBLIC_VIDEO_FILTER)
+    .sort({ _id: 1 })
+    .skip((part - 1) * VIDEOS_PER_SITEMAP)
+    .limit(VIDEOS_PER_SITEMAP)
+    .select('title description thumbnail videoUrl views createdAt duration')
+    .lean();
+  return urlset(videos.map((v) => `
+  <url>
+    <loc>${BASE_URL}/v/${v._id}</loc>
+    <lastmod>${isoDate(v.createdAt)}</lastmod>
+    <video:video>
+      <video:thumbnail_loc>${escapeHtml(resolveMediaUrl(v.thumbnail))}</video:thumbnail_loc>
+      <video:title>${escapeHtml(v.title || 'Bideo Video')}</video:title>
+      <video:description>${escapeHtml(v.description || v.title || 'Watch on Bideo')}</video:description>
+      <video:content_loc>${escapeHtml(resolveMediaUrl(v.videoUrl))}</video:content_loc>
+      <video:publication_date>${isoDate(v.createdAt)}</video:publication_date>
+      <video:duration>${Math.max(1, Math.round(Number(v.duration || 0)))}</video:duration>
+      <video:view_count>${v.views || 0}</video:view_count>
+      <video:family_friendly>yes</video:family_friendly>
+    </video:video>
+  </url>`).join(''), true);
+};
+
+// Only channels that have at least one public video (empty profiles are thin pages).
+const buildChannelsSitemap = async () => {
+  const ownerIds = await Video.distinct('owner', PUBLIC_VIDEO_FILTER);
+  const channels = await User.find({ _id: { $in: ownerIds }, isBlocked: { $ne: true } })
+    .select('_id updatedAt')
+    .lean();
+  return urlset(channels.map((ch) => `
+  <url>
+    <loc>${BASE_URL}/c/${ch._id}</loc>
+    <lastmod>${isoDate(ch.updatedAt)}</lastmod>
+  </url>`).join(''));
+};
+
+const buildPostsSitemap = async () => {
+  const posts = await Post.find({ visibility: 'public' }).sort({ _id: 1 }).select('_id createdAt').lean();
+  return urlset(posts.map((p) => `
+  <url>
+    <loc>${BASE_URL}/p/${p._id}</loc>
+    <lastmod>${isoDate(p.createdAt)}</lastmod>
+  </url>`).join(''));
+};
+
+const buildSitemapIndex = async () => {
+  const videoCount = await Video.countDocuments(PUBLIC_VIDEO_FILTER);
+  const videoParts = Math.max(1, Math.ceil(videoCount / VIDEOS_PER_SITEMAP));
+  const files = ['sitemap-pages.xml', 'sitemap-channels.xml', 'sitemap-posts.xml'];
+  for (let i = 1; i <= videoParts; i += 1) files.push(`sitemap-videos-${i}.xml`);
+  const now = isoDate();
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${files.map((f) => `
+  <sitemap>
+    <loc>${BASE_URL}/${f}</loc>
+    <lastmod>${now}</lastmod>
+  </sitemap>`).join('')}
+</sitemapindex>`;
+};
+
+const sendXml = (res, xml) => {
+  res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  res.status(200).send(xml);
 };
 
 // @desc    Public web landing page for a video (SEO, OpenGraph & Deep Linking)
@@ -432,6 +663,7 @@ exports.getVideoPage = async (req, res, next) => {
     const deepLink = `bideo://video/${video._id}`;
     const intentLink = `intent://video/${video._id}#Intent;scheme=bideo;package=${APP_PACKAGE};S.browser_fallback_url=${encodeURIComponent(PLAY_STORE_URL)};end`;
     const isCrawlerReq = isCrawler(req.headers['user-agent']);
+    const related = await findChannelVideos(video.owner?._id, video._id, RELATED_LIMIT);
 
     const html = renderLauncherHtml({
       title,
@@ -447,6 +679,12 @@ exports.getVideoPage = async (req, res, next) => {
       isCrawlerReq,
       duration: video.duration,
       uploadDate: video.createdAt,
+      isShort: Boolean(video.isShort),
+      bodyDescription: (video.description || '').trim().slice(0, MAX_BODY_DESCRIPTION),
+      tags: cleanTags(video.tags),
+      creatorUrl: video.owner?._id ? `${BASE_URL}/c/${video.owner._id}` : '',
+      related,
+      relatedTitle: `More from ${channelName}`,
     });
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -483,6 +721,7 @@ exports.getChannelPage = async (req, res, next) => {
     const deepLink = `bideo://channel/${channel._id}`;
     const intentLink = `intent://channel/${channel._id}#Intent;scheme=bideo;package=${APP_PACKAGE};S.browser_fallback_url=${encodeURIComponent(PLAY_STORE_URL)};end`;
     const isCrawlerReq = isCrawler(req.headers['user-agent']);
+    const latestVideos = await findChannelVideos(channel._id, null, CHANNEL_VIDEOS_LIMIT);
 
     const html = renderLauncherHtml({
       title: `${channelName} on Bideo`,
@@ -495,6 +734,9 @@ exports.getChannelPage = async (req, res, next) => {
       creatorName: channelName,
       creatorAvatar: avatar,
       isCrawlerReq,
+      bodyDescription: (channel.about || '').trim().slice(0, MAX_BODY_DESCRIPTION),
+      related: latestVideos,
+      relatedTitle: `Latest videos from ${channelName}`,
     });
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -546,6 +788,8 @@ exports.getPostPage = async (req, res, next) => {
       creatorName: channelName,
       creatorAvatar: channelAvatar,
       isCrawlerReq,
+      bodyDescription: (post.text || '').trim().slice(0, MAX_BODY_DESCRIPTION),
+      creatorUrl: post.owner?._id ? `${BASE_URL}/c/${post.owner._id}` : '',
     });
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -555,119 +799,33 @@ exports.getPostPage = async (req, res, next) => {
   }
 };
 
-// @desc    Dynamic Google Video Sitemap (XML)
+// @desc    Sitemap index pointing to the page, channel, post and video sitemaps
 // @route   GET /sitemap.xml and /api/sitemap.xml
 // @access  Public
 exports.getSitemap = async (req, res, next) => {
   try {
-    const now = Date.now();
-    if (sitemapCache.xml && sitemapCache.expiresAt > now) {
-      res.setHeader('Content-Type', 'application/xml');
-      return res.status(200).send(sitemapCache.xml);
+    sendXml(res, await cachedXml('index', buildSitemapIndex));
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    One sitemap file: pages, channels, posts or videos-N
+// @route   GET /sitemap-<part>.xml and /sitemap-videos-<n>.xml
+// @access  Public
+exports.getSitemapPart = async (req, res, next) => {
+  try {
+    const [kind, numberStr] = [req.params[0], req.params[1]];
+    if (kind === 'pages' && !numberStr) return sendXml(res, await cachedXml('pages', async () => buildPagesSitemap()));
+    if (kind === 'channels' && !numberStr) return sendXml(res, await cachedXml('channels', buildChannelsSitemap));
+    if (kind === 'posts' && !numberStr) return sendXml(res, await cachedXml('posts', buildPostsSitemap));
+    const part = parseInt(numberStr, 10);
+    if (kind === 'videos' && part >= 1) {
+      const xml = await cachedXml(`videos-${part}`, () => buildVideosSitemap(part));
+      if (part > 1 && !xml.includes('<url>')) return res.status(404).type('text/plain').send('Sitemap not found');
+      return sendXml(res, xml);
     }
-
-    const videos = await Video.find({ visibility: 'public', isBlocked: { $ne: true } })
-      .sort({ createdAt: -1 })
-      .limit(5000)
-      .select('title description thumbnail videoUrl views createdAt duration')
-      .lean();
-
-    const channels = await User.find({ isBlocked: { $ne: true } })
-      .sort({ followersCount: -1 })
-      .limit(1000)
-      .select('_id updatedAt')
-      .lean();
-
-    const posts = await Post.find({ visibility: 'public' })
-      .sort({ createdAt: -1 })
-      .limit(1000)
-      .select('_id createdAt')
-      .lean();
-
-    const staticPages = [
-      { path: '', priority: '1.0', changefreq: 'daily' },
-      { path: '/about', priority: '0.8', changefreq: 'monthly' },
-      { path: '/creators', priority: '0.9', changefreq: 'weekly' },
-      { path: '/faq', priority: '0.8', changefreq: 'weekly' },
-      { path: '/contact', priority: '0.8', changefreq: 'monthly' },
-      { path: '/terms', priority: '0.5', changefreq: 'monthly' },
-      { path: '/privacy', priority: '0.5', changefreq: 'monthly' },
-      { path: '/guidelines', priority: '0.6', changefreq: 'monthly' },
-      { path: '/copyright', priority: '0.5', changefreq: 'monthly' },
-      { path: '/moderation', priority: '0.5', changefreq: 'monthly' },
-      { path: '/account-deletion', priority: '0.4', changefreq: 'monthly' },
-      { path: '/child-safety', priority: '0.5', changefreq: 'monthly' },
-      { path: '/refunds', priority: '0.4', changefreq: 'monthly' },
-    ];
-
-    let xml = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
-        xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">`;
-
-    for (const page of staticPages) {
-      xml += `
-  <url>
-    <loc>${BASE_URL}${page.path}</loc>
-    <changefreq>${page.changefreq}</changefreq>
-    <priority>${page.priority}</priority>
-  </url>`;
-    }
-
-    for (const v of videos) {
-      const loc = `${BASE_URL}/v/${v._id}`;
-      const thumb = resolveMediaUrl(v.thumbnail);
-      const contentLoc = resolveMediaUrl(v.videoUrl);
-      const pubDate = new Date(v.createdAt || Date.now()).toISOString();
-      const title = escapeHtml(v.title || 'Bideo Video');
-      const desc = escapeHtml(v.description || v.title || 'Watch on Bideo');
-      const durationSec = Math.max(1, Math.round(Number(v.duration || 0)));
-
-      xml += `
-  <url>
-    <loc>${loc}</loc>
-    <video:video>
-      <video:thumbnail_loc>${thumb}</video:thumbnail_loc>
-      <video:title>${title}</video:title>
-      <video:description>${desc}</video:description>
-      <video:content_loc>${contentLoc}</video:content_loc>
-      <video:publication_date>${pubDate}</video:publication_date>
-      <video:duration>${durationSec}</video:duration>
-      <video:view_count>${v.views || 0}</video:view_count>
-      <video:family_friendly>yes</video:family_friendly>
-    </video:video>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>`;
-    }
-
-    for (const ch of channels) {
-      xml += `
-  <url>
-    <loc>${BASE_URL}/c/${ch._id}</loc>
-    <changefreq>daily</changefreq>
-    <priority>0.7</priority>
-  </url>`;
-    }
-
-    for (const p of posts) {
-      xml += `
-  <url>
-    <loc>${BASE_URL}/p/${p._id}</loc>
-    <changefreq>daily</changefreq>
-    <priority>0.6</priority>
-  </url>`;
-    }
-
-    xml += `
-</urlset>`;
-
-    sitemapCache = {
-      xml,
-      expiresAt: now + 60 * 60 * 1000, // cache for 1 hour
-    };
-
-    res.setHeader('Content-Type', 'application/xml');
-    res.status(200).send(xml);
+    return res.status(404).type('text/plain').send('Sitemap not found');
   } catch (err) {
     next(err);
   }
@@ -727,11 +885,13 @@ exports.getLlmsTxt = (req, res) => {
 
 ## About Bideo
 Bideo is a fast-growing, free video sharing community designed for Indian creators and audiences across Hindi, Bhojpuri, Tamil, Telugu, and other regional languages.
-Creators can publish short and long videos, build their channel follower base, and participate in the creator monetization program. Over 80K+ videos are published on the platform.
+Creators can publish short and long videos, build their channel follower base, and participate in the creator monetization program.
 
 ## Mobile Application
+- App name on Google Play: Bideo - India's Video Platform
+- Platform: Android (free)
 - Package ID: com.farhan.bideoapp
-- Google Play Store: https://play.google.com/store/apps/details?id=com.farhan.bideoapp (50K+ Installs, 4.7★ Rating)
+- Google Play Store: https://play.google.com/store/apps/details?id=com.farhan.bideoapp
 - Website: https://bideo.in
 
 ## Official Links & Policies
