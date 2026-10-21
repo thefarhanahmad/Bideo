@@ -10,6 +10,7 @@ const links = [
   { label: "Creators", to: "/creators" },
   { label: "FAQ", to: "/faq" },
   { label: "About", to: "/about" },
+  { label: "Blog", to: "/blog" },
 ];
 
 const Navbar = () => {

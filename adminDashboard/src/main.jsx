@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
+import { isBlogPath, preloadBlog } from './pages/blog'
 
 // Global fetch interceptor to handle 401 Unauthorized (Token Expiration)
 const originalFetch = window.fetch;
@@ -19,8 +20,17 @@ window.fetch = async (...args) => {
   }
 };
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-)
+const mount = () =>
+  ReactDOM.createRoot(document.getElementById('root')).render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>,
+  )
+
+// Blog pages are pre-rendered; load the blog chunk first so React replaces the
+// static HTML with identical content (no blank flash). Mount anyway if it fails.
+if (isBlogPath(window.location.pathname)) {
+  preloadBlog().then(mount, mount)
+} else {
+  mount()
+}

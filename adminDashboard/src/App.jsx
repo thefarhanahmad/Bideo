@@ -31,6 +31,7 @@ import ErrorLogs from './pages/ErrorLogs';
 import Conversations from './pages/Conversations';
 import Stories from './pages/Stories';
 import LoadingSkeleton from './components/LoadingSkeleton';
+import { BlogIndex, BlogPost, BlogCategory } from './pages/blog';
 import './App.css';
 
 // Loaded on demand: only admins opening a profile download this page.
@@ -63,6 +64,10 @@ function App() {
         <Route path="/account-deletion" element={<AccountDeletion />} />
         <Route path="/child-safety" element={<ChildSafety />} />
         <Route path="/refunds" element={<RefundPolicy />} />
+        <Route path="/blog" element={<Suspense fallback={null}><BlogIndex lang="en" /></Suspense>} />
+        <Route path="/blog/hi" element={<Suspense fallback={null}><BlogIndex lang="hi" /></Suspense>} />
+        <Route path="/blog/category/:category" element={<Suspense fallback={null}><BlogCategory /></Suspense>} />
+        <Route path="/blog/:slug" element={<Suspense fallback={null}><BlogPost /></Suspense>} />
 
         {/* Admin login */}
         <Route path="/login" element={<Login />} />
