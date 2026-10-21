@@ -50,13 +50,31 @@ const withHead = (template, page, siteUrl) => {
   html = replaceOnce(html, /<meta property="og:url" content="[^"]*"\s*\/?>/, `<meta property="og:url" content="${url}" />`, "og:url");
   html = replaceOnce(html, /<meta name="twitter:title" content="[^"]*"\s*\/?>/, `<meta name="twitter:title" content="${escapeAttr(page.title)}" />`, "twitter:title");
   html = replaceOnce(html, /<meta name="twitter:description" content="[^"]*"\s*\/?>/, `<meta name="twitter:description" content="${escapeAttr(page.description)}" />`, "twitter:description");
-  // Home-only structured data (app, FAQ) is replaced by this page's own WebPage + breadcrumb.
+  // Home-only structured data (app, FAQ) is replaced by this page's own structured data.
+  const jsonLd = page.jsonLd ? JSON.stringify(page.jsonLd) : pageJsonLd(page, siteUrl);
   html = replaceOnce(
     html,
     /<script type="application\/ld\+json">[\s\S]*?<\/script>/,
-    `<script type="application/ld+json">${pageJsonLd(page, siteUrl)}</script>`,
+    `<script type="application/ld+json">${jsonLd.replace(/</g, "\\u003c")}</script>`,
     "JSON-LD block"
   );
+  if (page.ogType) {
+    html = replaceOnce(html, /<meta property="og:type" content="[^"]*"\s*\/?>/, `<meta property="og:type" content="${page.ogType}" />`, "og:type");
+  }
+  if (page.lang && page.lang !== "en") {
+    html = replaceOnce(html, /<html lang="en">/, `<html lang="${page.lang}">`, "html lang");
+  }
+  const extra = [
+    ...(page.alternates || []).map((a) => `<link rel="alternate" hreflang="${a.hreflang}" href="${a.href}" />`),
+    ...(page.articleMeta
+      ? [
+          `<meta property="article:published_time" content="${page.articleMeta.published}" />`,
+          `<meta property="article:modified_time" content="${page.articleMeta.modified}" />`,
+          `<meta property="article:section" content="${escapeAttr(page.articleMeta.section)}" />`,
+        ]
+      : []),
+  ];
+  if (extra.length) html = replaceOnce(html, /<\/head>/, `    ${extra.join("\n    ")}\n  </head>`, "</head>");
   return html;
 };
 
@@ -65,16 +83,22 @@ const withBody = (html, appHtml) =>
 
 const main = async () => {
   const template = fs.readFileSync(path.join(dist, "index.html"), "utf8");
-  const { render, PUBLIC_PAGES, SITE_URL } = await import(pathToFileURL(ssrEntry).href);
+  const { render, getPrerenderPages, extraFiles, SITE_URL } = await import(pathToFileURL(ssrEntry).href);
 
-  for (const page of PUBLIC_PAGES) {
-    const appHtml = render(page.path);
+  for (const page of getPrerenderPages()) {
+    const appHtml = render(page.element, page.path);
     const head = page.path === "/" ? template : withHead(template, page, SITE_URL);
     const html = withBody(head, appHtml);
     const out = page.file ? path.join(dist, page.file) : path.join(dist, page.path.slice(1), "index.html");
     fs.mkdirSync(path.dirname(out), { recursive: true });
     fs.writeFileSync(out, html);
     console.log(`prerendered ${page.path} -> ${path.relative(dist, out)} (${appHtml.length} chars of HTML)`);
+  }
+  for (const [file, content] of Object.entries(extraFiles())) {
+    const out = path.join(dist, file);
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    fs.writeFileSync(out, content);
+    console.log(`wrote ${file} (${content.length} bytes)`);
   }
   fs.rmSync(path.join(root, "dist-ssr"), { recursive: true, force: true });
 };

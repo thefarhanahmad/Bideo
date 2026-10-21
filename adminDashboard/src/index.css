@@ -84,3 +84,75 @@
   }
 }
 
+
+/* Blog article typography (rendered Markdown) */
+@layer components {
+  .blog-prose {
+    @apply max-w-none text-[1.0625rem] leading-[1.8];
+    color: rgb(18 18 18 / 0.85);
+  }
+  .blog-prose > * + * {
+    @apply mt-5;
+  }
+  .blog-prose h2 {
+    @apply mt-12 scroll-mt-24 font-display text-2xl font-bold leading-snug text-ink sm:text-[1.7rem];
+  }
+  .blog-prose h3 {
+    @apply mt-8 scroll-mt-24 font-display text-xl font-bold text-ink;
+  }
+  .blog-prose a {
+    @apply font-semibold text-brand underline underline-offset-2;
+    text-decoration-color: rgb(229 106 0 / 0.3);
+  }
+  .blog-prose a:hover {
+    text-decoration-color: #E56A00;
+  }
+  .blog-prose strong {
+    @apply font-semibold text-ink;
+  }
+  .blog-prose ul,
+  .blog-prose ol {
+    @apply space-y-2 pl-6;
+  }
+  .blog-prose ul {
+    @apply list-disc marker:text-brand;
+  }
+  .blog-prose ol {
+    @apply list-decimal marker:font-semibold marker:text-brand;
+  }
+  .blog-prose li > p {
+    @apply mt-0;
+  }
+  .blog-prose blockquote {
+    @apply rounded-r-2xl border-l-4 border-brand bg-brand-50 px-5 py-4;
+    color: rgb(18 18 18 / 0.8);
+  }
+  .blog-prose blockquote p {
+    @apply m-0;
+  }
+  .blog-prose hr {
+    @apply my-10 border-line;
+  }
+  .blog-prose code {
+    @apply rounded bg-surface px-1.5 py-0.5 text-[0.9em] text-ink;
+  }
+  .blog-prose .blog-table {
+    @apply overflow-x-auto rounded-2xl border border-line;
+  }
+  .blog-prose table {
+    @apply w-full min-w-[480px] border-collapse text-left text-[0.95rem];
+  }
+  .blog-prose thead {
+    @apply bg-surface;
+  }
+  .blog-prose th {
+    @apply px-4 py-3 font-semibold text-ink;
+  }
+  .blog-prose td {
+    @apply border-t border-line px-4 py-3 align-top;
+  }
+  .blog-prose :lang(hi),
+  [lang="hi"] .blog-prose {
+    @apply leading-[1.9];
+  }
+}
