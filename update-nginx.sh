@@ -17,7 +17,7 @@ server {
     gzip_proxied any;
     gzip_comp_level 6;
     gzip_min_length 1024;
-    gzip_types text/plain text/css text/xml application/json application/javascript application/xml+rss application/atom+xml image/svg+xml;
+    gzip_types text/plain text/css text/xml application/xml application/json application/javascript application/xml+rss application/atom+xml image/svg+xml;
 
     # Production Security Headers
     add_header X-Frame-Options "SAMEORIGIN" always;
@@ -37,7 +37,7 @@ server {
     }
 
     # 2. Search engine crawlers, AI discovery & Android App Links
-    location ~ ^/(sitemap\.xml|robots\.txt|app-ads\.txt|llms\.txt|\.well-known/assetlinks\.json) {
+    location ~ ^/(sitemap(-[a-z]+(-[0-9]+)?)?\.xml|robots\.txt|app-ads\.txt|llms\.txt|\.well-known/assetlinks\.json) {
         proxy_pass http://127.0.0.1:5000;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -83,9 +83,21 @@ server {
         proxy_read_timeout 86400s;
     }
 
-    # 5. Frontend React SPA
+    # 5. Built JS/CSS/images have content-hashed names: cache for a year, never fall back to index.html
+    location /assets/ {
+        expires 1y;
+        try_files $uri =404;
+    }
+
+    # 6. Homepage: pre-rendered HTML (falls back to the SPA shell if missing)
+    location = / {
+        try_files /home.html /index.html;
+    }
+
+    # 7. Frontend React SPA (pre-rendered public pages live in <page>/index.html;
+    #    served directly so /about does not redirect to /about/)
     location / {
-        try_files $uri $uri/ /index.html;
+        try_files $uri $uri/index.html /index.html;
     }
 
     listen [::]:443 ssl ipv6only=on; # managed by Certbot
