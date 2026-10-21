@@ -4,7 +4,7 @@ import { API_URL } from '../config';
 import Logo from '../components/Logo';
 
 const Login = () => {
-  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -25,7 +25,7 @@ const Login = () => {
       const res = await fetch(API_URL + '/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, password }),
+        body: JSON.stringify({ email: email.trim(), password }),
         credentials: 'include'
       });
       const data = await res.json();
@@ -61,12 +61,14 @@ const Login = () => {
             <div className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>
           )}
 
-          <label className="mt-5 block text-sm font-medium text-ink">Phone</label>
+          <label htmlFor="admin-email" className="mt-5 block text-sm font-medium text-ink">Email</label>
           <input
-            value={phone}
-            maxLength={10}
-            onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
-            placeholder="10-digit phone number"
+            id="admin-email"
+            type="email"
+            autoComplete="username"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Admin email"
             className="mt-1.5 w-full rounded-lg border border-line p-2.5 outline-none transition-colors focus:border-brand focus:ring-2 focus:ring-brand/20"
           />
 
@@ -74,6 +76,7 @@ const Login = () => {
           <div className="relative mt-1.5">
             <input
               type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter your password"
@@ -107,7 +110,7 @@ const Login = () => {
           </button>
 
           <p className="mt-3 text-center text-sm text-muted">
-            Use the admin phone/password from your database.
+            For Bideo admins only.
           </p>
         </form>
 

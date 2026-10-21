@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const VideoReport = require('../models/VideoReport');
 const Video = require('../models/Video');
@@ -313,23 +314,30 @@ exports.getStats = async (req, res, next) => {
 // @desc    Admin login using database credentials
 // @route   POST /api/admin/login
 // @access  Public
+const ADMIN_TOKEN_HOURS = 24;
 exports.loginAdmin = async (req, res, next) => {
   try {
-    const { phone, password } = req.body;
+    const email = String(req.body.email || '').trim().toLowerCase();
+    const password = String(req.body.password || '');
 
-    if (!phone || !password) {
-      return res.status(400).json({ success: false, message: 'Phone and password required' });
+    if (!email || !password) {
+      return res.status(400).json({ success: false, message: 'Email and password required' });
     }
-    const user = await User.findOne({ phone }).select('+password');
-    if (!user || user.role !== 'admin' || !(await user.matchPassword(password))) {
+    if (!process.env.ADMIN_JWT_SECRET) {
+      return res.status(503).json({ success: false, message: 'Admin login is not configured' });
+    }
+    const user = await User.findOne({ email, role: 'admin' }).select('+password');
+    if (!user || !(await user.matchPassword(password))) {
       return res.status(401).json({ success: false, message: 'Invalid admin credentials' });
     }
 
-    // Create token
-    const token = user.getSignedJwtToken();
+    // Admin tokens use their own secret, so app tokens can never open the admin panel
+    const token = jwt.sign({ id: user._id, scope: 'admin' }, process.env.ADMIN_JWT_SECRET, {
+      expiresIn: ADMIN_TOKEN_HOURS * 60 * 60,
+    });
 
     const options = {
-      expires: new Date(Date.now() + process.env.JWT_COOKIE_EXPIRE * 24 * 60 * 60 * 1000),
+      expires: new Date(Date.now() + ADMIN_TOKEN_HOURS * 60 * 60 * 1000),
       httpOnly: true,
     };
 
