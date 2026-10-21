@@ -99,7 +99,8 @@ exports.loginWithPhone = async (req, res, next) => {
 
     const user = await findFirstUserByOr(orConditions, '+password');
 
-    if (!user) {
+    // Admin accounts sign in only on the admin website
+    if (!user || user.role === 'admin') {
       return res.status(401).json({ success: false, message: 'Incorrect phone number or password' });
     }
 
@@ -164,7 +165,8 @@ exports.forgotPassword = async (req, res, next) => {
     }
 
     const user = await findFirstUserByOr(orConditions);
-    if (!user) {
+    // Admin passwords are changed only on the server, never through the app
+    if (!user || user.role === 'admin') {
       return res.status(404).json({ success: false, message: 'No account found with this phone number' });
     }
 
@@ -216,7 +218,8 @@ exports.resetPassword = async (req, res, next) => {
     }
 
     const user = await findFirstUserByOr(orConditions);
-    if (!user) {
+    // Admin passwords are changed only on the server, never through the app
+    if (!user || user.role === 'admin') {
       return res.status(404).json({ success: false, message: 'No account found with this phone number' });
     }
 
@@ -240,6 +243,11 @@ exports.googleLogin = async (req, res, next) => {
     const { name, email, avatar: providedAvatar } = req.body;
 
     let user = await User.findOne({ email }).select('+password');
+
+    // Admin accounts sign in only on the admin website
+    if (user && user.role === 'admin') {
+      return res.status(401).json({ success: false, message: 'This account cannot sign in here' });
+    }
 
     if (!user) {
       user = await User.create({

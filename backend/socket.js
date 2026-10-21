@@ -1,6 +1,6 @@
 const { Server } = require('socket.io');
-const jwt = require('jsonwebtoken');
 const User = require('./models/User');
+const { decodeToken, tokenFitsUser } = require('./middlewares/auth');
 
 let ioInstance = null;
 
@@ -49,10 +49,10 @@ function initSocket(server) {
         return next(new Error('Authentication token required'));
       }
 
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'supersecretkey');
-      const user = await User.findById(decoded.id).select('_id name channelName avatar isBlocked');
+      const { decoded, isAdminToken } = decodeToken(token);
+      const user = await User.findById(decoded.id).select('_id name channelName avatar isBlocked role');
 
-      if (!user || user.isBlocked) {
+      if (!user || user.isBlocked || !tokenFitsUser(user, isAdminToken)) {
         return next(new Error('User unauthorized or suspended'));
       }
 

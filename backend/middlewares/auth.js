@@ -1,6 +1,25 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
+// Admin accounts sign in only through /api/admin/login, which issues a token
+// signed with ADMIN_JWT_SECRET. App tokens never grant access to an admin account.
+const decodeToken = (token) => {
+  try {
+    return { decoded: jwt.verify(token, process.env.JWT_SECRET || 'supersecretkey'), isAdminToken: false };
+  } catch (appErr) {
+    if (!process.env.ADMIN_JWT_SECRET) throw appErr;
+    const decoded = jwt.verify(token, process.env.ADMIN_JWT_SECRET);
+    if (decoded.scope !== 'admin') throw appErr;
+    return { decoded, isAdminToken: true };
+  }
+};
+exports.decodeToken = decodeToken;
+
+// True when the token type matches the account: admin accounts need an admin
+// token, and admin tokens are only valid for admin accounts.
+const tokenFitsUser = (user, isAdminToken) => (user.role === 'admin') === isAdminToken;
+exports.tokenFitsUser = tokenFitsUser;
+
 // Protect routes
 exports.protect = async (req, res, next) => {
   let token;
@@ -22,11 +41,11 @@ exports.protect = async (req, res, next) => {
   }
 
   try {
-    const secret = process.env.JWT_SECRET || 'supersecretkey';
-    const decoded = jwt.verify(token, secret);
+    const { decoded, isAdminToken } = decodeToken(token);
     req.user = await User.findById(decoded.id);
+    req.isAdminToken = isAdminToken;
 
-    if (!req.user) {
+    if (!req.user || !tokenFitsUser(req.user, isAdminToken)) {
       return res.status(401).json({
         success: false,
         message: 'Not authorized to access this route',
@@ -86,9 +105,12 @@ exports.softProtect = async (req, res, next) => {
   }
 
   try {
-    const secret = process.env.JWT_SECRET || 'supersecretkey';
-    const decoded = jwt.verify(token, secret);
-    req.user = await User.findById(decoded.id);
+    const { decoded, isAdminToken } = decodeToken(token);
+    const user = await User.findById(decoded.id);
+    if (user && tokenFitsUser(user, isAdminToken)) {
+      req.user = user;
+      req.isAdminToken = isAdminToken;
+    }
     next();
   } catch (err) {
     next();
@@ -98,7 +120,7 @@ exports.softProtect = async (req, res, next) => {
 // Grant access to specific roles
 exports.authorize = (...roles) => {
   return (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
+    if (!roles.includes(req.user.role) || (req.user.role === 'admin' && !req.isAdminToken)) {
       return res.status(403).json({
         success: false,
         message: `User role ${req.user.role} is not authorized to access this route`,
