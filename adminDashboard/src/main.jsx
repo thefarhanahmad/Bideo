@@ -8,16 +8,12 @@ import { isBlogPath, preloadBlog } from './pages/blog'
 const originalFetch = window.fetch;
 window.fetch = async (...args) => {
   const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
-  try {
-    const response = await originalFetch(...args);
-    if (response.status === 401 && !url.includes('/api/admin/login')) {
-      localStorage.removeItem('admin_token');
-      window.location.href = '/login';
-    }
-    return response;
-  } catch (error) {
-    throw error;
+  const response = await originalFetch(...args);
+  if (response.status === 401 && !url.includes('/api/admin/login')) {
+    localStorage.removeItem('admin_token');
+    window.location.href = '/login';
   }
+  return response;
 };
 
 const mount = () =>
