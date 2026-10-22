@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
@@ -94,6 +94,15 @@ const getTerm = (item: any): string => {
   return (item.term || '').toString().trim();
 };
 
+type SearchType = 'all' | 'videos' | 'shorts' | 'channels';
+
+const SEARCH_FILTERS: Array<{ id: SearchType; label: string }> = [
+  { id: 'all', label: 'All' },
+  { id: 'videos', label: 'Videos' },
+  { id: 'shorts', label: 'Shorts' },
+  { id: 'channels', label: 'Channels' },
+];
+
 export default function SearchScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ q?: string; query?: string; tag?: string }>();
@@ -105,6 +114,9 @@ export default function SearchScreen() {
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
   const [showResults, setShowResults] = useState(Boolean(initialQuery));
+  const [searchType, setSearchType] = useState<SearchType>('all');
+  // Ignore responses from older searches when the user switches filters quickly
+  const latestSearchId = useRef(0);
 
   useEffect(() => {
     loadHistory();
@@ -169,25 +181,41 @@ export default function SearchScreen() {
     }
   };
 
-  const handleSearch = async (term = query) => {
+  const handleSearch = async (term = query, type: SearchType = searchType) => {
     const cleanTerm = term.trim();
     if (!cleanTerm) return;
+    const searchId = ++latestSearchId.current;
     setQuery(cleanTerm);
     saveToHistory(cleanTerm);
     setLoading(true);
     setShowResults(true);
     try {
-      const res = await api.get('/videos/search', { params: { q: cleanTerm } });
+      const params: Record<string, string> = { q: cleanTerm };
+      if (type !== 'all') params.type = type;
+      const res = await api.get('/videos/search', { params });
+      if (searchId !== latestSearchId.current) return;
       if (res.data.success) {
         const { channels = [], videos = [] } = res.data.data || {};
         const formattedChannels = channels.map((c: any) => ({ ...c, isChannel: true }));
-        setResults([...formattedChannels, ...videos]);
+        // Also filter here so the chips work even with a server that ignores `type`
+        const isShortVideo = (v: any) => v?.isShort === true || v?.isShort === 'true';
+        if (type === 'channels') setResults(formattedChannels);
+        else if (type === 'shorts') setResults(videos.filter(isShortVideo));
+        else if (type === 'videos') setResults(videos.filter((v: any) => !isShortVideo(v)));
+        else setResults([...formattedChannels, ...videos]);
       }
     } catch (err) {
       console.error('Search failed', err);
     } finally {
-      setLoading(false);
+      if (searchId === latestSearchId.current) setLoading(false);
     }
+  };
+
+  const handleSelectFilter = (type: SearchType) => {
+    if (type === searchType) return;
+    hapticLight();
+    setSearchType(type);
+    if (query.trim()) handleSearch(query, type);
   };
 
   const handleRemoveHistoryItem = (termToRemove: string) => {
@@ -273,6 +301,33 @@ export default function SearchScreen() {
         </TouchableOpacity>
       </View>
 
+      {showResults && (
+        <View style={styles.filterBar}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterRow}
+            keyboardShouldPersistTaps="handled"
+          >
+            {SEARCH_FILTERS.map((f) => {
+              const selected = searchType === f.id;
+              return (
+                <TouchableOpacity
+                  key={f.id}
+                  style={[styles.filterChip, selected && styles.filterChipSelected]}
+                  onPress={() => handleSelectFilter(f.id)}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                >
+                  <Text style={[styles.filterChipText, selected && styles.filterChipTextSelected]}>{f.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
+
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={Colors.primary} />
@@ -336,7 +391,11 @@ export default function SearchScreen() {
               <EmptyState
                 icon="search-outline"
                 title="No results found"
-                subtitle={`We couldn't find anything for "${query}". Try a different search.`}
+                subtitle={
+                  searchType === 'all'
+                    ? `We couldn't find anything for "${query}". Try a different search.`
+                    : `No ${searchType} found for "${query}". Try "All" or a different search.`
+                }
               />
             ) : !showResults ? (
               <EmptyState
@@ -382,6 +441,35 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: Colors.text,
+  },
+  filterBar: {
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  filterRow: {
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  filterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: Colors.background,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  filterChipSelected: {
+    backgroundColor: Colors.text,
+    borderColor: Colors.text,
+  },
+  filterChipText: {
+    fontSize: 13.5,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  filterChipTextSelected: {
+    color: Colors.white,
   },
   center: {
     flex: 1,

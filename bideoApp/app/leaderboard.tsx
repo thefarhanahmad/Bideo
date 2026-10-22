@@ -19,7 +19,7 @@ import api from '../services/api';
 import { RootState } from '../redux/store';
 import VerifiedBadge from '../components/VerifiedBadge';
 import { formatViews } from '../utils/formatDate';
-import { AppNativeAd } from '../components/AppAds';
+import { AppAdBanner } from '../components/AppAds';
 
 const FALLBACK_AVATAR = 'https://via.placeholder.com/100x100.png?text=User';
 
@@ -315,8 +315,8 @@ export default function LeaderboardScreen() {
               renderItem={renderItem}
               ListHeaderComponent={
                 <View>
-                  {/* Native Ad after top 10 followers section and before views creators section */}
-                  <AppNativeAd style={{ paddingHorizontal: 12, marginTop: 8, marginBottom: 0 }} />
+                  {/* Banner Ad after top 10 followers section and before views creators section */}
+                  <AppAdBanner containerStyle={{ paddingHorizontal: 12, marginTop: 8, marginBottom: 0 }} />
 
                   {/* Top 50 by Views Section Header */}
                   {viewLeaderboard.length > 0 && (

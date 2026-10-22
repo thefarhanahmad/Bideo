@@ -21,7 +21,7 @@ import Colors from '../constants/Colors';
 import api from '../services/api';
 import { showAlert } from '../components/AppAlert';
 import { RootState } from '../redux/store';
-import { AppInterstitialAd, AppNativeAd, loadAndShowRewardedAd } from '../components/AppAds';
+import { AppInterstitialAd, AppAdBanner, loadAndShowRewardedAd } from '../components/AppAds';
 
 const MIN_WITHDRAWAL = 1000;
 
@@ -406,7 +406,7 @@ export default function EarningsScreen() {
             </TouchableOpacity>
           </LinearGradient>
 
-          <AppNativeAd style={{ marginHorizontal: 12, marginBottom: 8 }} />
+          <AppAdBanner containerStyle={{ marginHorizontal: 12, marginBottom: 8 }} />
 
           {/* Withdrawal & Payout History */}
           <View style={styles.statsSection}>

@@ -18,7 +18,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatViews, formatTimeAgo } from '../../utils/formatDate';
 import { hapticLight } from '../../utils/haptics';
-import { AppInterstitialAd, AppAdBanner, AppNativeAd } from '../../components/AppAds';
+import { AppInterstitialAd, AppAdBanner } from '../../components/AppAds';
 import Constants from 'expo-constants';
 import HashtagText from '../../components/HashtagText';
 import { shareVideo } from '../../utils/shareHelper';
@@ -55,6 +55,7 @@ const formatShortItem = (v: any, currentUserId?: string, isAuth?: boolean) => ({
 });
 
 const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
+const SCROLLABLE_AD_BANNER_COUNT = 4;
 
 const { height: WINDOW_HEIGHT, width: WINDOW_WIDTH } = Dimensions.get('window');
 
@@ -791,18 +792,17 @@ const ScrollableAdItem = ({
   const isExpoGo =
     Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
 
-  const [banner1Loaded, setBanner1Loaded] = useState(false);
-  const [nativeLoaded, setNativeLoaded] = useState(false);
-  const [banner2Loaded, setBanner2Loaded] = useState(false);
-
-  const [banner1Failed, setBanner1Failed] = useState(false);
-  const [nativeFailed, setNativeFailed] = useState(false);
-  const [banner2Failed, setBanner2Failed] = useState(false);
+  // One loaded/failed flag per banner slot (native ads are paused; AppNativeAd is kept for later)
+  const [bannerLoaded, setBannerLoaded] = useState<boolean[]>(() => Array(SCROLLABLE_AD_BANNER_COUNT).fill(false));
+  const [bannerFailed, setBannerFailed] = useState<boolean[]>(() => Array(SCROLLABLE_AD_BANNER_COUNT).fill(false));
 
   const [timedOut, setTimedOut] = useState(false);
 
-  const hasAnyAd = banner1Loaded || nativeLoaded || banner2Loaded;
-  const allFailed = banner1Failed && nativeFailed && banner2Failed;
+  const markBanner = (setter: React.Dispatch<React.SetStateAction<boolean[]>>, slot: number) =>
+    setter((prev) => (prev[slot] ? prev : prev.map((v, i) => (i === slot ? true : v))));
+
+  const hasAnyAd = bannerLoaded.some(Boolean);
+  const allFailed = bannerFailed.every(Boolean);
 
   // Safety timer: if none of the ads have loaded within 3 seconds, or immediately in Expo Go
   useEffect(() => {
@@ -862,23 +862,14 @@ const ScrollableAdItem = ({
         showsVerticalScrollIndicator={false}
         nestedScrollEnabled={true}
       >
-        <AppAdBanner
-          containerStyle={{ marginVertical: 8 }}
-          onAdLoaded={() => setBanner1Loaded(true)}
-          onAdFailedToLoad={() => setBanner1Failed(true)}
-        />
-
-        <AppNativeAd
-          style={{ marginVertical: 12, width: '100%' }}
-          onAdLoaded={() => setNativeLoaded(true)}
-          onAdFailedToLoad={() => setNativeFailed(true)}
-        />
-
-        <AppAdBanner
-          containerStyle={{ marginVertical: 8 }}
-          onAdLoaded={() => setBanner2Loaded(true)}
-          onAdFailedToLoad={() => setBanner2Failed(true)}
-        />
+        {Array.from({ length: SCROLLABLE_AD_BANNER_COUNT }, (_, slot) => (
+          <AppAdBanner
+            key={`scroll-banner-${slot}`}
+            containerStyle={{ marginVertical: 8 }}
+            onAdLoaded={() => markBanner(setBannerLoaded, slot)}
+            onAdFailedToLoad={() => markBanner(setBannerFailed, slot)}
+          />
+        ))}
       </ScrollView>
     </View>
   );

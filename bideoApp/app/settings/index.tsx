@@ -10,7 +10,7 @@ import { RootState } from '../../redux/store';
 import { logout } from '../../redux/slices/authSlice';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api, { clearAuthSession, setAuthToken } from '../../services/api';
-import { AppNativeAd } from '../../components/AppAds';
+import { AppAdBanner } from '../../components/AppAds';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -161,7 +161,7 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        <AppNativeAd style={{ paddingHorizontal: 15 }} />
+        <AppAdBanner containerStyle={{ paddingHorizontal: 15 }} />
 
         <View style={styles.menuSection}>
           <Text style={styles.sectionTitle}>General</Text>
