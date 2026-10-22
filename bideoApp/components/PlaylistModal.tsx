@@ -16,6 +16,8 @@ const PlaylistModal: React.FC<PlaylistModalProps> = ({ visible, onClose, videoId
   const [loading, setLoading] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  // New playlists are private unless the user picks Public
+  const [newPlaylistPrivate, setNewPlaylistPrivate] = useState(true);
 
   useEffect(() => {
     if (visible) {
@@ -50,9 +52,10 @@ const PlaylistModal: React.FC<PlaylistModalProps> = ({ visible, onClose, videoId
   const createAndAdd = async () => {
     if (!newPlaylistName.trim()) return;
     try {
-      await api.post('/playlists', { name: newPlaylistName, videoId });
+      await api.post('/playlists', { name: newPlaylistName.trim(), videoId, isPrivate: newPlaylistPrivate });
       showAlert('Success', 'Playlist created and video added');
       setNewPlaylistName('');
+      setNewPlaylistPrivate(true);
       setIsCreating(false);
       onClose();
     } catch (err: any) {
@@ -92,6 +95,7 @@ const PlaylistModal: React.FC<PlaylistModalProps> = ({ visible, onClose, videoId
               )}
               ListFooterComponent={
                 isCreating ? (
+                  <View>
                   <View style={styles.createBox}>
                     <TextInput
                       style={styles.input}
@@ -110,6 +114,28 @@ const PlaylistModal: React.FC<PlaylistModalProps> = ({ visible, onClose, videoId
                     >
                       <Text style={styles.createBtnText}>Create</Text>
                     </TouchableOpacity>
+                  </View>
+                  <View style={styles.visibilityRow}>
+                    {[
+                      { value: true, label: 'Private', icon: 'lock-closed-outline' },
+                      { value: false, label: 'Public', icon: 'globe-outline' },
+                    ].map((opt) => {
+                      const selected = newPlaylistPrivate === opt.value;
+                      return (
+                        <TouchableOpacity
+                          key={opt.label}
+                          style={[styles.visibilityChip, selected && styles.visibilityChipSelected]}
+                          onPress={() => setNewPlaylistPrivate(opt.value)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name={opt.icon as any} size={14} color={selected ? Colors.white : Colors.textGray} />
+                          <Text style={[styles.visibilityChipText, selected && styles.visibilityChipTextSelected]}>
+                            {opt.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
                   </View>
                 ) : (
                   <TouchableOpacity style={styles.newItem} onPress={() => setIsCreating(true)}>
@@ -208,6 +234,35 @@ const styles = StyleSheet.create({
   },
   createBtnDisabled: {
     opacity: 0.45,
+  },
+  visibilityRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: -4,
+    marginBottom: 8,
+  },
+  visibilityChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: '#F9FAFB',
+  },
+  visibilityChipSelected: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  visibilityChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.textGray,
+  },
+  visibilityChipTextSelected: {
+    color: Colors.white,
   },
   createBtnText: {
     color: Colors.white,

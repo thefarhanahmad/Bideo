@@ -13,6 +13,8 @@ import { useRouter, useNavigation, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { formatViews } from '../../utils/formatDate';
 import { AppAdBanner } from '../../components/AppAds';
+import PlaylistFormModal from '../../components/PlaylistFormModal';
+import { showAlert } from '../../components/AppAlert';
 
 const getAvatarUri = (avatar?: string) => {
   if (!avatar) return null;
@@ -42,6 +44,7 @@ export default function LibraryScreen() {
   const [likedVideos, setLikedVideos] = useState<any[]>([]);
   const [loadingMyVideos, setLoadingMyVideos] = useState(false);
   const [playlists, setPlaylists] = useState<any[]>([]);
+  const [createPlaylistVisible, setCreatePlaylistVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   useFocusEffect(
@@ -98,6 +101,17 @@ export default function LibraryScreen() {
       console.error('Failed to load your videos', err);
     } finally {
       setLoadingMyVideos(false);
+    }
+  };
+
+  const handleCreatePlaylist = async (name: string, isPrivate: boolean) => {
+    try {
+      await api.post('/playlists', { name, isPrivate });
+      setCreatePlaylistVisible(false);
+      loadPlaylists();
+    } catch (err: any) {
+      showAlert('Error', err?.response?.data?.message || 'Failed to create playlist');
+      throw err;
     }
   };
 
@@ -378,6 +392,15 @@ export default function LibraryScreen() {
             <Ionicons name="list-outline" size={24} color={Colors.text} />
             <Text style={styles.sectionTitle}>Playlists</Text>
           </View>
+          <TouchableOpacity
+            style={styles.newPlaylistBtn}
+            onPress={() => setCreatePlaylistVisible(true)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel="Create a new playlist"
+          >
+            <Ionicons name="add" size={18} color={Colors.primary} />
+            <Text style={styles.viewAll}>New</Text>
+          </TouchableOpacity>
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalListContent}>
           {playlists.map(item => {
@@ -402,13 +425,28 @@ export default function LibraryScreen() {
                   </View>
                 </View>
                 <Text style={styles.horizontalText} numberOfLines={1}>{item.name}</Text>
-                <Text style={styles.horizontalOwner}>{item.isPrivate ? 'Private' : 'Public'}</Text>
+                <View style={styles.playlistVisibilityRow}>
+                  <Ionicons
+                    name={item.isPrivate ? 'lock-closed-outline' : 'globe-outline'}
+                    size={12}
+                    color={Colors.textGray}
+                  />
+                  <Text style={[styles.horizontalOwner, { marginTop: 0 }]}>{item.isPrivate ? 'Private' : 'Public'}</Text>
+                </View>
               </TouchableOpacity>
             );
           })}
           {playlists.length === 0 && <Text style={{ color: Colors.textGray }}>No playlists yet</Text>}
         </ScrollView>
       </View>
+
+      <PlaylistFormModal
+        visible={createPlaylistVisible}
+        mode="create"
+        initialPrivate
+        onClose={() => setCreatePlaylistVisible(false)}
+        onSubmit={handleCreatePlaylist}
+      />
     </ScrollView>
   );
 }
@@ -688,6 +726,17 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: Colors.border,
+  },
+  newPlaylistBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  playlistVisibilityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
   },
   playlistPlaceholder: {
     backgroundColor: Colors.textGray,
