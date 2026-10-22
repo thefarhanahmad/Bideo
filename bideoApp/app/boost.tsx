@@ -21,6 +21,7 @@ import api from '../services/api';
 import { showAlert } from '../components/AppAlert';
 import { formatViews, formatDuration } from '../utils/formatDate';
 import { loadAndShowRewardedAd, AppAdBanner, AppInterstitialAd } from '../components/AppAds';
+import BannerAdModalFrame from '../components/BannerAdModalFrame';
 import { RootState } from '../redux/store';
 import { updateUser } from '../redux/slices/authSlice';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -1008,6 +1009,9 @@ export default function BoostScreen() {
             )}
           </View>
 
+          {/* Banner pinned above the list (the list scrolls between the two banners) */}
+          <AppAdBanner containerStyle={{ paddingTop: 0, paddingBottom: 6 }} />
+
           {loadingVideos ? (
             <View style={styles.centerContainer}>
               <ActivityIndicator size="large" color={Colors.primary} />
@@ -1058,12 +1062,17 @@ export default function BoostScreen() {
               )}
             </ScrollView>
           )}
+
+          {/* Banner pinned to the bottom edge */}
+          <View style={{ paddingBottom: insets.bottom, backgroundColor: Colors.white, borderTopWidth: 1, borderTopColor: '#EEEEEE' }}>
+            <AppAdBanner containerStyle={{ paddingVertical: 4 }} />
+          </View>
         </View>
       </Modal>
 
       {/* Confirmation & Tier Selection Modal */}
       <Modal visible={confirmModalVisible} transparent animationType="fade" onRequestClose={() => setConfirmModalVisible(false)}>
-        <View style={styles.modalOverlay}>
+        <BannerAdModalFrame overlayStyle={styles.modalOverlay}>
           <View style={styles.confirmBox}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Choose Duration & Confirm</Text>
@@ -1136,12 +1145,12 @@ export default function BoostScreen() {
               )}
             </TouchableOpacity>
           </View>
-        </View>
+        </BannerAdModalFrame>
       </Modal>
 
       {/* Verified Badge Purchase Modal */}
       <Modal visible={verifiedModalVisible} transparent animationType="fade" onRequestClose={() => setVerifiedModalVisible(false)}>
-        <View style={styles.modalOverlay}>
+        <BannerAdModalFrame overlayStyle={styles.modalOverlay}>
           <View style={styles.verifiedModalBox}>
             <View style={styles.modalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -1243,7 +1252,7 @@ export default function BoostScreen() {
               )}
             </TouchableOpacity>
           </View>
-        </View>
+        </BannerAdModalFrame>
       </Modal>
 
       {/* Verified Badge Confirmation Modal */}

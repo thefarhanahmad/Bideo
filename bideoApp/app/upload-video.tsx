@@ -19,6 +19,8 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { logVideoUploaded } from '../services/analytics';
 
 const FALLBACK_THUMBNAIL = 'https://via.placeholder.com/640x360.png?text=Tube+India';
+// Must match the server's upload limit (backend multer + nginx client_max_body_size)
+const MAX_UPLOAD_BYTES = 500 * 1024 * 1024;
 
 export default function UploadVideoScreen() {
   const router = useRouter();
@@ -208,10 +210,7 @@ export default function UploadVideoScreen() {
 
       if (!result.canceled) {
         const asset: any = result.assets[0];
-        if (asset.fileSize && asset.fileSize > 500 * 1024 * 1024) {
-          showAlert('File Too Large', 'Please select a video file under 500MB.');
-          return;
-        }
+        // No size limit when picking: the video is compressed before upload and checked after that
         if (uploadType === 'short') {
           if (asset.width && asset.height && Math.abs((asset.width / asset.height) - (9 / 16)) > 0.035) {
             showAlert('Invalid short', 'Shorts must be portrait 9:16 videos.');
@@ -301,6 +300,24 @@ export default function UploadVideoScreen() {
         }
       } else {
         console.log('Expo Go detected: skipping video compression');
+      }
+
+      // The server accepts up to 500MB per upload, so check the compressed file before sending it
+      if (!isExpoGo) {
+        let compressedBytes = 0;
+        try {
+          const { getFileSize } = require('react-native-compressor');
+          compressedBytes = Number(await getFileSize(finalVideoUri)) || 0;
+        } catch {
+          // size unknown: let the server decide
+        }
+        if (compressedBytes > MAX_UPLOAD_BYTES) {
+          showAlert(
+            'Video Too Large',
+            'This video is still over 500MB after compression. Please trim it or upload a shorter video.'
+          );
+          return;
+        }
       }
 
       const formData = new FormData();

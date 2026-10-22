@@ -15,6 +15,10 @@ import { AppAdBanner } from '../components/AppAds';
 
 const FALLBACK_AVATAR = 'https://via.placeholder.com/100x100.png?text=User';
 
+// Server messages start with "Recommended for you: …"; users read that as the title, so drop it.
+const RECOMMENDED_PREFIX = /^\s*recommended for you\s*:\s*/i;
+const stripRecommendedPrefix = (msg: string) => msg.replace(RECOMMENDED_PREFIX, '') || msg;
+
 export default function NotificationsScreen() {
   const router = useRouter();
   const { isAuthenticated } = useSelector((state: RootState) => state.auth);
@@ -272,7 +276,8 @@ export default function NotificationsScreen() {
                   <Text style={styles.message} numberOfLines={3}>
                     {(() => {
                       const actorName = item.actor?.channelName || item.actor?.name;
-                      const msg = item.message || 'New activity on your content';
+                      // "Recommended for you:" is shown as a small chip below, not as part of the message
+                      const msg = stripRecommendedPrefix(item.message || 'New activity on your content');
                       if (actorName && (msg.toLowerCase().startsWith(actorName.toLowerCase()) || msg.toLowerCase().startsWith('recommended'))) {
                         return msg;
                       }
@@ -284,7 +289,14 @@ export default function NotificationsScreen() {
                       );
                     })()}
                   </Text>
-                  <Text style={styles.time}>{formatTimeAgo(item.createdAt)}</Text>
+                  <View style={styles.metaRow}>
+                    <Text style={styles.time}>{formatTimeAgo(item.createdAt)}</Text>
+                    {isRecommendationNotification(item) && (
+                      <View style={styles.recommendedChip}>
+                        <Text style={styles.recommendedChipText}>Recommended</Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
 
                 {/* Thumbnail Preview on Right if Video or Post Attached */}
@@ -423,7 +435,15 @@ const styles = StyleSheet.create({
   itemText: { flex: 1, marginLeft: 12, marginRight: 8 },
   actorName: { fontWeight: '700', color: Colors.text },
   message: { color: Colors.text, fontSize: 13.5, lineHeight: 18 },
-  time: { color: Colors.textGray, fontSize: 11.5, marginTop: 4 },
+  time: { color: Colors.textGray, fontSize: 11.5 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 6 },
+  recommendedChip: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 999,
+    backgroundColor: `${Colors.primary}15`,
+  },
+  recommendedChipText: { color: Colors.primary, fontSize: 10, fontWeight: '600' },
   thumbnailPreview: {
     width: 46,
     height: 46,

@@ -16,6 +16,7 @@ import VerifiedBadge from '../../components/VerifiedBadge';
 import { formatTimeAgo, formatViews, formatJoinedDate } from '../../utils/formatDate';
 import { hapticLight, hapticSelection } from '../../utils/haptics';
 import { shareChannel, shareVideo } from '../../utils/shareHelper';
+import { detectSocialPlatform, toSocialUrl } from '../../utils/socialLinks';
 import ShareModal, { ShareModalItem } from '../../components/ShareModal';
 
 const { width, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -662,7 +663,8 @@ export default function ChannelScreen() {
                 <View style={styles.aboutSection}>
                   <Text style={styles.aboutSectionTitle}>Links</Text>
                   {channel.socialLinks.map((link: any, idx: number) => {
-                    const platform = (link.platform || 'website').toLowerCase();
+                    // The link's own domain wins over the saved chip (some links were saved under the wrong platform)
+                    const platform = detectSocialPlatform(link.url) || (link.platform || 'website').toLowerCase();
                     let iconName = 'globe-outline';
                     let iconColor = '#6366F1';
                     let defaultLabel = 'Website';
@@ -696,9 +698,11 @@ export default function ChannelScreen() {
                         onPress={async () => {
                           if (!url) return;
                           hapticSelection();
-                          let targetUrl = url;
-                          if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
-                            targetUrl = `https://${targetUrl}`;
+                          // Usernames like "john_123" or "@mychannel" become the full profile link
+                          const targetUrl = toSocialUrl(platform, url);
+                          if (!targetUrl) {
+                            showAlert('Link Error', 'This link is not a valid profile address.');
+                            return;
                           }
                           try {
                             await Linking.openURL(targetUrl);

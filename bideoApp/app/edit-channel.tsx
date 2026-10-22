@@ -9,6 +9,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { useRouter } from 'expo-router';
 import Colors from '../constants/Colors';
 import { hapticLight, hapticSelection, hapticSuccess } from '../utils/haptics';
+import { MAX_SOCIAL_LINKS, detectSocialPlatform, toSocialUrl } from '../utils/socialLinks';
 import api, { userService } from '../services/api';
 import { RootState } from '../redux/store';
 import { loginSuccess, updateUser } from '../redux/slices/authSlice';
@@ -63,9 +64,17 @@ export default function EditChannelScreen() {
   const [about, setAbout] = useState(user?.about || '');
   const [avatar, setAvatar] = useState(user?.avatar || '');
   const [coverImage, setCoverImage] = useState(user?.coverImage || '');
-  const [socialLinks, setSocialLinks] = useState<Array<{ platform: string; label: string; url: string }>>(
-    Array.isArray((user as any)?.socialLinks) ? (user as any).socialLinks : []
+  // _key is a client-only id so each card keeps its own inputs when cards are added or removed
+  const [socialLinks, setSocialLinks] = useState<Array<{ _key: string; platform: string; label: string; url: string }>>(
+    () =>
+      (Array.isArray((user as any)?.socialLinks) ? (user as any).socialLinks : []).map((l: any, i: number) => ({
+        _key: `saved-${i}-${l?._id || ''}`,
+        platform: l?.platform || 'website',
+        label: l?.label || '',
+        url: l?.url || '',
+      }))
   );
+  const [focusLinkKey, setFocusLinkKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Email verification state
@@ -220,24 +229,38 @@ export default function EditChannelScreen() {
   };
 
   const handleAddSocialLink = () => {
+    if (socialLinks.length >= MAX_SOCIAL_LINKS) {
+      showAlert('Limit Reached', `You can add up to ${MAX_SOCIAL_LINKS} social links.`);
+      return;
+    }
     hapticSelection();
+    const key = `new-${Date.now()}`;
     setSocialLinks((prev) => [
       ...prev,
-      { platform: 'instagram', label: '', url: '' },
+      { _key: key, platform: 'instagram', label: '', url: '' },
     ]);
+    // Focus the new card's input so it scrolls into view (otherwise it opens below the screen)
+    setFocusLinkKey(key);
   };
 
-  const handleUpdateSocialLink = (index: number, field: string, val: string) => {
-    setSocialLinks((prev) => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], [field]: val };
-      return updated;
-    });
+  const handleUpdateSocialLink = (key: string, field: 'platform' | 'label' | 'url', val: string) => {
+    setSocialLinks((prev) =>
+      prev.map((link) => {
+        if (link._key !== key) return link;
+        const next = { ...link, [field]: val };
+        // A pasted instagram/facebook/youtube/x link sets the matching platform chip
+        if (field === 'url') {
+          const detected = detectSocialPlatform(val);
+          if (detected) next.platform = detected;
+        }
+        return next;
+      })
+    );
   };
 
-  const handleRemoveSocialLink = (index: number) => {
+  const handleRemoveSocialLink = (key: string) => {
     hapticLight();
-    setSocialLinks((prev) => prev.filter((_, i) => i !== index));
+    setSocialLinks((prev) => prev.filter((link) => link._key !== key));
   };
 
   const handleSave = async () => {
@@ -268,6 +291,27 @@ export default function EditChannelScreen() {
       }
     }
 
+    // Turn usernames into full profile links; empty rows are dropped (the server drops them too)
+    const cleanedSocialLinks: Array<{ platform: string; label: string; url: string }> = [];
+    for (let i = 0; i < socialLinks.length; i++) {
+      const link = socialLinks[i];
+      if (!(link.url || '').trim()) continue;
+      const url = toSocialUrl(link.platform, link.url);
+      if (!url) {
+        showAlert(
+          'Invalid Link',
+          `Link #${i + 1}: enter a ${link.platform === 'website' ? 'website address' : 'username or profile link'} without spaces.`
+        );
+        return;
+      }
+      const duplicateOf = cleanedSocialLinks.findIndex((l) => l.url.toLowerCase() === url.toLowerCase());
+      if (duplicateOf !== -1) {
+        showAlert('Duplicate Link', `Link #${i + 1} is the same as an earlier link. Please remove one of them.`);
+        return;
+      }
+      cleanedSocialLinks.push({ platform: link.platform, label: (link.label || '').trim(), url });
+    }
+
     hapticLight();
 
     setLoading(true);
@@ -277,7 +321,7 @@ export default function EditChannelScreen() {
       formData.append('channelName', trimmedChannelName);
       formData.append('about', about);
       formData.append('email', trimmedEmail);
-      formData.append('socialLinks', JSON.stringify(socialLinks));
+      formData.append('socialLinks', JSON.stringify(cleanedSocialLinks));
       
       const isLocalAvatar = avatar?.startsWith('file://') || avatar?.startsWith('content://');
       const isRemoteAvatar = avatar?.startsWith('http://') || avatar?.startsWith('https://');
@@ -648,11 +692,11 @@ export default function EditChannelScreen() {
             </View>
           ) : (
             socialLinks.map((item, index) => (
-              <View key={index} style={styles.socialLinkCard}>
+              <View key={item._key} style={styles.socialLinkCard}>
                 <View style={styles.socialLinkCardHeader}>
                   <Text style={styles.socialLinkCardTitle}>Link #{index + 1}</Text>
                   <TouchableOpacity
-                    onPress={() => handleRemoveSocialLink(index)}
+                    onPress={() => handleRemoveSocialLink(item._key)}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
                     <Ionicons name="trash-outline" size={18} color="#EF4444" />
@@ -678,7 +722,7 @@ export default function EditChannelScreen() {
                         ]}
                         onPress={() => {
                           hapticSelection();
-                          handleUpdateSocialLink(index, 'platform', p.id);
+                          handleUpdateSocialLink(item._key, 'platform', p.id);
                         }}
                       >
                         <Ionicons
@@ -696,25 +740,28 @@ export default function EditChannelScreen() {
                 </ScrollView>
 
                 {/* URL Input */}
-                <Text style={styles.fieldLabelSmall}>Profile URL</Text>
+                <Text style={styles.fieldLabelSmall}>
+                  {item.platform === 'website' ? 'Website URL' : 'Username or Profile URL'}
+                </Text>
                 <TextInput
                   style={styles.textInputSmall}
                   placeholder={
                     item.platform === 'instagram'
-                      ? 'https://instagram.com/username'
+                      ? 'username or https://instagram.com/username'
                       : item.platform === 'facebook'
-                      ? 'https://facebook.com/username'
+                      ? 'username or https://facebook.com/username'
                       : item.platform === 'youtube'
-                      ? 'https://youtube.com/@channel'
+                      ? '@channel or https://youtube.com/@channel'
                       : item.platform === 'twitter'
-                      ? 'https://x.com/username'
+                      ? 'username or https://x.com/username'
                       : 'https://example.com'
                   }
                   placeholderTextColor={Colors.textGray}
                   autoCapitalize="none"
                   autoCorrect={false}
                   value={item.url}
-                  onChangeText={(val) => handleUpdateSocialLink(index, 'url', val)}
+                  autoFocus={item._key === focusLinkKey}
+                  onChangeText={(val) => handleUpdateSocialLink(item._key, 'url', val)}
                 />
 
                 {/* Optional Label Input */}
@@ -730,10 +777,18 @@ export default function EditChannelScreen() {
                   }
                   placeholderTextColor={Colors.textGray}
                   value={item.label}
-                  onChangeText={(val) => handleUpdateSocialLink(index, 'label', val)}
+                  onChangeText={(val) => handleUpdateSocialLink(item._key, 'label', val)}
                 />
               </View>
             ))
+          )}
+
+          {/* Second Add button under the last card, so a new link is added where the user is looking */}
+          {socialLinks.length > 0 && socialLinks.length < MAX_SOCIAL_LINKS && (
+            <TouchableOpacity style={styles.addAnotherLinkBtn} onPress={handleAddSocialLink} activeOpacity={0.8}>
+              <Ionicons name="add-circle-outline" size={18} color={Colors.primary} />
+              <Text style={styles.addAnotherLinkText}>Add another link</Text>
+            </TouchableOpacity>
           )}
         </View>
 
@@ -1255,6 +1310,23 @@ const styles = StyleSheet.create({
   addSocialBtnText: {
     color: Colors.white,
     fontSize: 13,
+    fontWeight: '700',
+  },
+  addAnotherLinkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: Colors.primary,
+    backgroundColor: '#FFF7F0',
+  },
+  addAnotherLinkText: {
+    color: Colors.primary,
+    fontSize: 14,
     fontWeight: '700',
   },
   emptySocialBox: {

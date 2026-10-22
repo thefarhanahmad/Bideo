@@ -20,7 +20,7 @@ import api from '../../services/api';
 import AuthModal from '../../components/AuthModal';
 import PlaylistModal from '../../components/PlaylistModal';
 import { formatViews } from '../../utils/formatDate';
-import { AppAdBanner, AppNativeAd } from '../../components/AppAds';
+import { AppAdBanner } from '../../components/AppAds';
 import AnnouncementModal from '../../components/AnnouncementModal';
 
 const CACHED_VIDEOS_STORAGE_KEY = 'bideo_cached_home_videos';
@@ -384,8 +384,9 @@ export default function HomeScreen() {
             if (item.itemType === 'ad_banner') {
               return <AppAdBanner />;
             }
+            // Native ads are paused for now (AppNativeAd is kept for later); show a banner in that slot
             if (item.itemType === 'ad_native') {
-              return <AppNativeAd />;
+              return <AppAdBanner />;
             }
             if (item.itemType === 'shorts_shelf') {
               return renderShortsShelf(item.data);

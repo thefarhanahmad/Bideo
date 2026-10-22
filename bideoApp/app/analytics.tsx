@@ -18,7 +18,7 @@ import Colors from '../constants/Colors';
 import api from '../services/api';
 import { RootState } from '../redux/store';
 import { formatViews } from '../utils/formatDate';
-import { AppInterstitialAd, AppNativeAd } from '../components/AppAds';
+import { AppInterstitialAd, AppAdBanner } from '../components/AppAds';
 
 type FilterType = 'views' | 'revenue' | 'newest' | 'oldest';
 
@@ -211,8 +211,8 @@ export default function AnalyticsScreen() {
             </View>
           </LinearGradient>
 
-          {/* Native Ad after orange card and before content performance */}
-          <AppNativeAd style={{ marginTop: 14, marginBottom: 0 }} />
+          {/* Banner Ad after orange card and before content performance */}
+          <AppAdBanner containerStyle={{ marginTop: 14, marginBottom: 0 }} />
 
           {/* Performance by Content Type */}
           <View style={styles.section}>
