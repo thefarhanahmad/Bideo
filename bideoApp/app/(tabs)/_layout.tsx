@@ -29,21 +29,19 @@ const CustomUploadTabButton: React.FC<{ onPress?: () => void }> = ({ onPress }) 
         }}
         activeOpacity={0.85}
         style={styles.uploadButtonTouchable}
+        accessibilityRole="button"
+        accessibilityLabel="Upload"
       >
-        {/* Soft amber ambient halo glow */}
-        <View style={styles.uploadButtonGlow} />
-
-        {/* Elevated white dome bezel */}
-        <View style={styles.uploadButtonBezel}>
-          <LinearGradient
-            colors={['#FFA033', '#FF7A00', '#F35500']}
-            style={styles.uploadButtonGradient}
-            start={{ x: 0.15, y: 0 }}
-            end={{ x: 0.85, y: 1 }}
-          >
-            <Ionicons name="add" size={28} color="#FFFFFF" />
-          </LinearGradient>
-        </View>
+        {/* Same row as the other tabs: icon on the icon line, label on the label line */}
+        <LinearGradient
+          colors={['#FFA033', '#FF7A00', '#F35500']}
+          style={styles.uploadButtonGradient}
+          start={{ x: 0.15, y: 0 }}
+          end={{ x: 0.85, y: 1 }}
+        >
+          <Ionicons name="add" size={20} color="#FFFFFF" />
+        </LinearGradient>
+        <Text style={styles.uploadButtonLabel}>Upload</Text>
       </TouchableOpacity>
     </View>
   );
@@ -369,40 +367,25 @@ const styles = StyleSheet.create({
     zIndex: 20,
   },
   uploadButtonTouchable: {
-    position: 'absolute',
-    top: -16,
+    flex: 1,
+    width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    width: 58,
-    height: 58,
   },
-  uploadButtonGlow: {
-    position: 'absolute',
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(255, 122, 0, 0.20)',
-  },
-  uploadButtonBezel: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 122, 0, 0.16)',
-    shadowColor: '#FF7A00',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.32,
-    shadowRadius: 8,
-    elevation: 8,
-  },
+  // Sized like the other tab icons so the row lines up
   uploadButtonGradient: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 1,
+  },
+  // Matches tabBarLabelStyle and the inactive tint used by the other tabs
+  uploadButtonLabel: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    letterSpacing: 0.1,
+    color: '#1E293B',
   },
 });
