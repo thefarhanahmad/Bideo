@@ -442,6 +442,8 @@ const scoreUserRelevance = (u, { phrase, terms }) => {
   return score;
 };
 
+const SEARCH_RESULT_TYPES = new Set(["videos", "shorts", "channels"]);
+
 exports.searchVideos = async (req, res, next) => {
   try {
     const rawQ = req.query.q || req.query.search || "";
@@ -455,6 +457,8 @@ exports.searchVideos = async (req, res, next) => {
     const isObjectId = mongoose.Types.ObjectId.isValid(q);
     const isAdmin = req.user && req.user.role === "admin";
     const blockedUserIds = isAdmin ? [] : await getBlockedUserIds();
+    // Optional result filter from the app's search chips; without it the response is unchanged
+    const type = SEARCH_RESULT_TYPES.has(req.query.type) ? req.query.type : null;
 
     // 1. Search channels (users with a channelName or matching name/email/phone)
     const channelOrClauses = [];
@@ -516,11 +520,17 @@ exports.searchVideos = async (req, res, next) => {
       }
     }
 
-    const videos = await Video.find(videoQuery)
-      .populate("owner", "name avatar channelName followersCount isVerified")
-      .populate("category", "name")
-      .limit(60)
-      .lean();
+    if (type === "shorts") videoQuery.isShort = true;
+    if (type === "videos") videoQuery.isShort = { $ne: true };
+
+    const videos =
+      type === "channels"
+        ? []
+        : await Video.find(videoQuery)
+            .populate("owner", "name avatar channelName followersCount isVerified")
+            .populate("category", "name")
+            .limit(60)
+            .lean();
 
     // Score and rank channels
     const scoredChannels = channels
@@ -529,7 +539,8 @@ exports.searchVideos = async (req, res, next) => {
       .slice(0, 20);
 
     const channelsData = [];
-    for (let c of scoredChannels) {
+    const channelsToReturn = type === "videos" || type === "shorts" ? [] : scoredChannels;
+    for (let c of channelsToReturn) {
       const channelObj = typeof c === "object" ? { ...c } : c;
       if (req.user) {
         const isFollowing = await Follower.findOne({

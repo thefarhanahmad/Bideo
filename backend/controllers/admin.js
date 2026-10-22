@@ -2330,6 +2330,84 @@ exports.getAdminBoostData = async (req, res, next) => {
 // @desc    Get detailed boost and coin transaction history for a specific user
 // @route   GET /api/admin/boost/user/:userId
 // @access  Private/Admin
+// @desc    Blue tick (verified badge) purchases paid with coins, newest first
+// @route   GET /api/admin/boost/verified-purchases
+// @access  Private/Admin
+exports.getAdminVerifiedBadgePurchases = async (req, res, next) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+    const skip = (page - 1) * limit;
+    const search = String(req.query.search || '').trim();
+    const now = new Date();
+
+    const match = { type: 'verified_badge_spend' };
+    if (search) {
+      const regex = new RegExp(escapeRegex(search), 'i');
+      const matchingUsers = await User.find({ $or: [{ name: regex }, { channelName: regex }, { email: regex }] })
+        .select('_id')
+        .limit(500)
+        .lean();
+      match.user = { $in: matchingUsers.map((u) => u._id) };
+    }
+
+    const [rows, total, totalsAgg, activeNow] = await Promise.all([
+      CoinTransaction.find(match)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate('user', 'name channelName avatar email isVerified verifiedSource verifiedUntil')
+        .lean(),
+      CoinTransaction.countDocuments(match),
+      CoinTransaction.aggregate([
+        { $match: { type: 'verified_badge_spend' } },
+        { $group: { _id: null, purchases: { $sum: 1 }, coins: { $sum: '$amount' }, buyers: { $addToSet: '$user' } } },
+      ]),
+      User.countDocuments({ isVerified: true, verifiedSource: 'coin_purchase', verifiedUntil: { $gt: now } }),
+    ]);
+
+    const badgeStatus = (user) => {
+      if (!user || !user.isVerified) return 'expired';
+      if (user.verifiedSource !== 'coin_purchase') return 'verified_other';
+      return user.verifiedUntil && new Date(user.verifiedUntil) > now ? 'active' : 'expired';
+    };
+
+    const purchases = rows.map((tx) => ({
+      _id: tx._id,
+      purchasedAt: tx.createdAt,
+      coinsSpent: Math.abs(tx.amount || 0),
+      validUntil: tx.metadata?.verifiedUntil || null,
+      badgeStatus: badgeStatus(tx.user),
+      currentVerifiedUntil: tx.user?.verifiedUntil || null,
+      user: tx.user
+        ? {
+            _id: tx.user._id,
+            name: tx.user.name,
+            channelName: tx.user.channelName,
+            avatar: tx.user.avatar,
+            email: tx.user.email,
+          }
+        : null,
+    }));
+
+    const totals = totalsAgg[0] || { purchases: 0, coins: 0, buyers: [] };
+
+    res.status(200).json({
+      success: true,
+      data: purchases,
+      summary: {
+        totalPurchases: totals.purchases,
+        totalCoinsSpent: Math.abs(totals.coins || 0),
+        uniqueBuyers: (totals.buyers || []).length,
+        activeNow,
+      },
+      pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 exports.getAdminUserBoostDetails = async (req, res, next) => {
   try {
     const { userId } = req.params;

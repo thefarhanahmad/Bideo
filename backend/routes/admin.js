@@ -22,6 +22,7 @@ const {
   getAdminPosts,
   getAdminBoostData,
   getAdminUserBoostDetails,
+  getAdminVerifiedBadgePurchases,
   getAdminConversations,
   getAdminConversationMessages,
   deleteAdminConversation,
@@ -48,6 +49,7 @@ router.get('/search', globalAdminSearch);
 router.get('/earnings', getUserEarnings);
 router.get('/boost', getAdminBoostData);
 router.get('/boost/user/:userId', getAdminUserBoostDetails);
+router.get('/boost/verified-purchases', getAdminVerifiedBadgePurchases);
 router.get('/posts', getAdminPosts);
 router.get('/reports/videos', getVideoReports);
 router.put('/reports/videos/:id', updateVideoReport);
