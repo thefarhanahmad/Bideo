@@ -4,6 +4,7 @@ import Pagination from "../components/Pagination";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import Modal from "../components/Modal";
 import UserLink from "../components/UserLink";
+import VerifiedBadgePurchases from "../components/VerifiedBadgePurchases";
 import { useTableParams } from "../hooks/useTableParams";
 import { API_URL } from "../config";
 import {
@@ -747,6 +748,9 @@ const Boost = () => {
           onPageSizeChange={setLimit}
         />
       </div>
+
+      {/* Blue tick (verified badge) purchases paid with coins */}
+      <VerifiedBadgePurchases />
 
       {/* User Boost & Coins Details Modal */}
       {selectedUserId && (
