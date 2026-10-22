@@ -199,9 +199,9 @@ export default function HomeScreen() {
     setSelectedCategory(cat);
   };
 
-  const handleDeletePost = (postId: string) => {
+  const handleDeletePost = useCallback((postId: string) => {
     setPosts((prev) => prev.filter((p) => p._id !== postId));
-  };
+  }, []);
 
   const handlePlaylistPress = useCallback((videoId: string) => {
     if (!isAuthenticated) return setAuthModalVisible(true);
@@ -216,114 +216,130 @@ export default function HomeScreen() {
     setReportModalVisible(true);
   }, [isAuthenticated]);
 
-  const filteredVideos = selectedCategory === 'All'
-    ? videos
-    : selectedCategory === 'Posts'
-      ? []
-      : videos.filter((v: any) => v.category === selectedCategory);
+  // Same wrapper object per video/post across rebuilds, so loading more only renders the new cards
+  const feedItemCache = useRef(new WeakMap<object, any>());
+  const asFeedItem = useCallback((item: any, itemType: 'video' | 'post') => {
+    let wrapped = feedItemCache.current.get(item);
+    if (!wrapped || wrapped.itemType !== itemType) {
+      wrapped = { ...item, itemType };
+      feedItemCache.current.set(item, wrapped);
+    }
+    return wrapped;
+  }, []);
 
-  const pinnedVideos = filteredVideos
-    .filter((v: any) => (v.isPinned === true || v.isPinned === 'true') && !v.isShort)
-    .map((item: any) => ({ ...item, itemType: 'video' }));
+  // Rebuilt only when videos, posts or the category change. Rebuilding on every render made every
+  // card re-render (new objects) several times while loading more, which stuttered the scroll.
+  const feedData = useMemo(() => {
+    const filteredVideos = selectedCategory === 'All'
+      ? videos
+      : selectedCategory === 'Posts'
+        ? []
+        : videos.filter((v: any) => v.category === selectedCategory);
 
-  const regularLong = filteredVideos
-    .filter((v: any) => !v.isPinned && v.isPinned !== 'true' && !v.isShort)
-    .map((item: any) => ({ ...item, itemType: 'video' }));
+    const pinnedVideos = filteredVideos
+      .filter((v: any) => (v.isPinned === true || v.isPinned === 'true') && !v.isShort)
+      .map((item: any) => asFeedItem(item, 'video'));
 
-  const postItems = posts.map((item: any) => ({ ...item, itemType: 'post' }));
+    const regularLong = filteredVideos
+      .filter((v: any) => !v.isPinned && v.isPinned !== 'true' && !v.isShort)
+      .map((item: any) => asFeedItem(item, 'video'));
 
-  const shortsItems = filteredVideos.filter((v: any) => v.isShort);
+    const postItems = posts.map((item: any) => asFeedItem(item, 'post'));
 
-  const feedData: any[] = [];
-  if (selectedCategory === 'All') {
-    const longVideos = [...pinnedVideos, ...regularLong];
-    let postIndex = 0;
-    let videoCountAfterShorts = 0;
-    let shortsShelfInserted = false;
+    const shortsItems = filteredVideos.filter((v: any) => v.isShort);
 
-    for (let i = 0; i < longVideos.length; i++) {
-      feedData.push(longVideos[i]);
+    const items: any[] = [];
+    if (selectedCategory === 'All') {
+      const longVideos = [...pinnedVideos, ...regularLong];
+      let postIndex = 0;
+      let videoCountAfterShorts = 0;
+      let shortsShelfInserted = false;
 
-      // 1. Between 1st and 2nd video card (i === 0): show banner ad
-      if (i === 0) {
-        feedData.push({
-          _id: `feed_ad_banner_${longVideos[i]._id}`,
-          itemType: 'ad_banner',
-        });
+      for (let i = 0; i < longVideos.length; i++) {
+        items.push(longVideos[i]);
+
+        // 1. Between 1st and 2nd video card (i === 0): show banner ad
+        if (i === 0) {
+          items.push({
+            _id: `feed_ad_banner_${longVideos[i]._id}`,
+            itemType: 'ad_banner',
+          });
+        }
+
+        // 2. Insert shorts shelf after the 2nd video (i === 1) if shorts exist
+        if (i === 1 && shortsItems.length > 0) {
+          items.push({
+            _id: 'shorts_shelf',
+            itemType: 'shorts_shelf',
+            data: shortsItems.slice(0, 4),
+          });
+          shortsShelfInserted = true;
+          // Below shorts grid: show native ad
+          items.push({
+            _id: 'feed_ad_native_shorts',
+            itemType: 'ad_native',
+          });
+        }
+
+        // 3. After shorts grid, after every 4 video cards: show native ad
+        if (i >= 2) {
+          videoCountAfterShorts++;
+          if (videoCountAfterShorts % 4 === 0) {
+            items.push({
+              _id: `feed_ad_native_${longVideos[i]._id}`,
+              itemType: 'ad_native',
+            });
+          }
+        }
+
+        // After every 6 videos, insert 1 post (if available)
+        if ((i + 1) % 6 === 0 && postIndex < postItems.length) {
+          items.push(postItems[postIndex]);
+          postIndex++;
+        }
       }
 
-      // 2. Insert shorts shelf after the 2nd video (i === 1) if shorts exist
-      if (i === 1 && shortsItems.length > 0) {
-        feedData.push({
+      // Fallback if fewer than 2 videos but shorts exist
+      if (!shortsShelfInserted && shortsItems.length > 0) {
+        items.push({
           _id: 'shorts_shelf',
           itemType: 'shorts_shelf',
           data: shortsItems.slice(0, 4),
         });
-        shortsShelfInserted = true;
-        // Below shorts grid: show native ad
-        feedData.push({
+        items.push({
           _id: 'feed_ad_native_shorts',
           itemType: 'ad_native',
         });
       }
-
-      // 3. After shorts grid, after every 4 video cards: show native ad
-      if (i >= 2) {
-        videoCountAfterShorts++;
-        if (videoCountAfterShorts % 4 === 0) {
-          feedData.push({
-            _id: `feed_ad_native_${longVideos[i]._id}`,
-            itemType: 'ad_native',
+    } else if (selectedCategory === 'Posts') {
+      // Shuffled posts feed only
+      items.push(...postItems);
+    } else {
+      // Specific category: videos only
+      const catVideos = [...pinnedVideos, ...regularLong];
+      let catVideoCount = 0;
+      for (let i = 0; i < catVideos.length; i++) {
+        items.push(catVideos[i]);
+        if (i === 0) {
+          items.push({
+            _id: `cat_ad_banner_${catVideos[i]._id}`,
+            itemType: 'ad_banner',
           });
-        }
-      }
-
-      // After every 6 videos, insert 1 post (if available)
-      if ((i + 1) % 6 === 0 && postIndex < postItems.length) {
-        feedData.push(postItems[postIndex]);
-        postIndex++;
-      }
-    }
-
-    // Fallback if fewer than 2 videos but shorts exist
-    if (!shortsShelfInserted && shortsItems.length > 0) {
-      feedData.push({
-        _id: 'shorts_shelf',
-        itemType: 'shorts_shelf',
-        data: shortsItems.slice(0, 4),
-      });
-      feedData.push({
-        _id: 'feed_ad_native_shorts',
-        itemType: 'ad_native',
-      });
-    }
-  } else if (selectedCategory === 'Posts') {
-    // Shuffled posts feed only
-    feedData.push(...postItems);
-  } else {
-    // Specific category: videos only
-    const catVideos = [...pinnedVideos, ...regularLong];
-    let catVideoCount = 0;
-    for (let i = 0; i < catVideos.length; i++) {
-      feedData.push(catVideos[i]);
-      if (i === 0) {
-        feedData.push({
-          _id: `cat_ad_banner_${catVideos[i]._id}`,
-          itemType: 'ad_banner',
-        });
-      } else {
-        catVideoCount++;
-        if (catVideoCount % 4 === 0) {
-          feedData.push({
-            _id: `cat_ad_native_${catVideos[i]._id}`,
-            itemType: 'ad_native',
-          });
+        } else {
+          catVideoCount++;
+          if (catVideoCount % 4 === 0) {
+            items.push({
+              _id: `cat_ad_native_${catVideos[i]._id}`,
+              itemType: 'ad_native',
+            });
+          }
         }
       }
     }
-  }
+    return items;
+  }, [videos, posts, selectedCategory, asFeedItem]);
 
-  const renderShortsShelf = (shortsList: any[]) => (
+  const renderShortsShelf = useCallback((shortsList: any[]) => (
     <View style={styles.shortsShelf}>
       <View style={styles.shelfHeader}>
         <View style={styles.shelfHeaderLeft}>
@@ -358,7 +374,32 @@ export default function HomeScreen() {
         ))}
       </View>
     </View>
-  );
+  ), [router]);
+
+  const renderFeedItem = useCallback(({ item }: { item: any }) => {
+    if (item.itemType === 'ad_banner') {
+      return <AppAdBanner />;
+    }
+    // Native ads are paused for now (AppNativeAd is kept for later); show a banner in that slot
+    if (item.itemType === 'ad_native') {
+      return <AppAdBanner />;
+    }
+    if (item.itemType === 'shorts_shelf') {
+      return renderShortsShelf(item.data);
+    }
+    if (item.itemType === 'post') {
+      return <PostCard post={item} onDelete={handleDeletePost} />;
+    }
+    return (
+      <VideoCard
+        video={item}
+        onPlaylistPress={handlePlaylistPress}
+        onReportPress={handleReportPress}
+      />
+    );
+  }, [renderShortsShelf, handleDeletePost, handlePlaylistPress, handleReportPress]);
+
+  const feedKeyExtractor = useCallback((item: any) => item._id, []);
 
   return (
     <View style={styles.container}>
@@ -379,29 +420,8 @@ export default function HomeScreen() {
         <FlatList
           ref={flatListRef}
           data={feedData}
-          keyExtractor={(item) => item._id}
-          renderItem={({ item }) => {
-            if (item.itemType === 'ad_banner') {
-              return <AppAdBanner />;
-            }
-            // Native ads are paused for now (AppNativeAd is kept for later); show a banner in that slot
-            if (item.itemType === 'ad_native') {
-              return <AppAdBanner />;
-            }
-            if (item.itemType === 'shorts_shelf') {
-              return renderShortsShelf(item.data);
-            }
-            if (item.itemType === 'post') {
-              return <PostCard post={item} onDelete={handleDeletePost} />;
-            }
-            return (
-              <VideoCard
-                video={item}
-                onPlaylistPress={handlePlaylistPress}
-                onReportPress={handleReportPress}
-              />
-            );
-          }}
+          keyExtractor={feedKeyExtractor}
+          renderItem={renderFeedItem}
           contentContainerStyle={styles.listContainer}
           showsVerticalScrollIndicator={false}
           refreshing={selectedCategory === 'Posts' ? postsLoading : loading}
