@@ -33,7 +33,9 @@ export default function ChannelScreen() {
   const [channel, setChannel] = useState<any>(null);
   const [videos, setVideos] = useState<any[]>([]);
   const [posts, setPosts] = useState<any[]>([]);
-  const [filter, setFilter] = useState<'videos' | 'shorts' | 'posts'>('videos');
+  const [filter, setFilter] = useState<'videos' | 'shorts' | 'posts' | 'playlists'>('videos');
+  const [channelPlaylists, setChannelPlaylists] = useState<any[]>([]);
+  const [loadingPlaylists, setLoadingPlaylists] = useState(false);
   const [sort, setSort] = useState<'latest' | 'popular' | 'oldest'>('latest');
   const [error, setError] = useState<string | null>(null);
   const [authModalVisible, setAuthModalVisible] = useState(false);
@@ -46,8 +48,33 @@ export default function ChannelScreen() {
   const [shareItem, setShareItem] = useState<ShareModalItem | null>(null);
 
   useEffect(() => {
+    // The Playlists tab has its own API; the channel itself stays loaded from the other tabs
+    if (filter === 'playlists') return;
     loadChannel(filter, sort);
   }, [id, filter, sort]);
+
+  // Loaded once per channel (for the tab count) and again when the Playlists tab is opened
+  useEffect(() => {
+    loadChannelPlaylists();
+  }, [id]);
+
+  useEffect(() => {
+    if (filter === 'playlists') loadChannelPlaylists();
+  }, [filter]);
+
+  const loadChannelPlaylists = async () => {
+    if (!id) return;
+    setLoadingPlaylists(true);
+    try {
+      const res = await api.get(`/playlists/channel/${id}`);
+      setChannelPlaylists(res.data?.success ? res.data.data || [] : []);
+    } catch {
+      // Older servers have no public playlists: show the tab as empty
+      setChannelPlaylists([]);
+    } finally {
+      setLoadingPlaylists(false);
+    }
+  };
 
   const loadChannel = async (activeFilter = filter, activeSort = sort) => {
     if (!id) return;
@@ -244,6 +271,43 @@ export default function ChannelScreen() {
     );
   };
 
+  const renderPlaylistCard = (item: any) => {
+    const count = item.videoCount || 0;
+    return (
+      <TouchableOpacity
+        style={styles.horizontalCard}
+        onPress={() => router.push({ pathname: `/playlist/${item._id}`, params: { name: item.name } })}
+        activeOpacity={0.7}
+      >
+        <View style={styles.thumbnailContainer}>
+          {item.thumbnail ? (
+            <Image source={{ uri: item.thumbnail }} style={styles.thumbnail} contentFit="cover" transition={250} />
+          ) : (
+            <View style={[styles.thumbnail, styles.playlistPlaceholder]}>
+              <Ionicons name="list" size={28} color={Colors.textGray} />
+            </View>
+          )}
+          <View style={[styles.durationBadge, styles.playlistCountBadge]}>
+            <Ionicons name="list" size={11} color={Colors.white} />
+            <Text style={styles.durationText}>{count}</Text>
+          </View>
+        </View>
+        <View style={styles.videoInfo}>
+          <Text style={styles.videoTitle} numberOfLines={2}>{item.name}</Text>
+          <Text style={styles.videoMeta}>
+            Playlist • {count} video{count === 1 ? '' : 's'}
+          </Text>
+          {isOwner && (
+            <View style={styles.playlistVisibilityRow}>
+              <Ionicons name={item.isPrivate ? 'lock-closed-outline' : 'globe-outline'} size={12} color={Colors.textGray} />
+              <Text style={styles.videoMeta}>{item.isPrivate ? 'Private' : 'Public'}</Text>
+            </View>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
   const renderShortGridItem = (item: any) => {
     return (
       <TouchableOpacity 
@@ -279,6 +343,7 @@ export default function ChannelScreen() {
     { key: 'videos', label: 'Videos' },
     { key: 'shorts', label: 'Shorts' },
     { key: 'posts', label: 'Posts' },
+    { key: 'playlists', label: 'Playlists' },
   ] as const;
 
   const sortOptions = [
@@ -289,7 +354,10 @@ export default function ChannelScreen() {
 
   const content = filter === 'posts'
     ? posts.map((item) => ({ ...item, itemType: 'post' }))
+    : filter === 'playlists'
+    ? channelPlaylists.map((item) => ({ ...item, itemType: 'playlist' }))
     : videos.map((item) => ({ ...item, itemType: 'video' }));
+  const isListLoading = filter === 'playlists' ? loadingPlaylists : loading;
 
   if (loading && !channel) {
     return <View style={styles.center}><ActivityIndicator color={Colors.primary} size="large" /></View>;
@@ -329,6 +397,7 @@ export default function ChannelScreen() {
               onDelete={(postId) => setPosts(prev => prev.filter(p => p._id !== postId))} 
             />
           );
+          if (item.itemType === 'playlist') return renderPlaylistCard(item);
           if (filter === 'shorts') return renderShortGridItem(item);
           return renderHorizontalVideoCard(item);
         }}
@@ -515,6 +584,8 @@ export default function ChannelScreen() {
                     ? (channel?.videosCount ?? 0)
                     : item.key === 'shorts'
                     ? (channel?.shortsCount ?? 0)
+                    : item.key === 'playlists'
+                    ? channelPlaylists.length
                     : (channel?.postsCount ?? 0);
                   return (
                     <TouchableOpacity
@@ -538,6 +609,7 @@ export default function ChannelScreen() {
               </ScrollView>
             </View>
 
+            {filter !== 'playlists' && (
             <View style={styles.sortContainer}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 {sortOptions.map((opt) => (
@@ -553,16 +625,17 @@ export default function ChannelScreen() {
                 ))}
               </ScrollView>
             </View>
+            )}
           </View>
         }
-        ListEmptyComponent={!loading ? (
+        ListEmptyComponent={!isListLoading ? (
           <View style={styles.emptyContainer}>
             <Ionicons name="videocam-outline" size={60} color={Colors.border} />
             <Text style={styles.empty}>No {filter} found yet</Text>
           </View>
         ) : null}
-        refreshing={loading}
-        onRefresh={() => loadChannel(filter, sort)}
+        refreshing={isListLoading}
+        onRefresh={() => (filter === 'playlists' ? loadChannelPlaylists() : loadChannel(filter, sort))}
         contentContainerStyle={[
           styles.listContent,
           filter === 'shorts' ? styles.shortsListPadding : null
@@ -1138,6 +1211,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
+  },
+  playlistPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  playlistCountBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  playlistVisibilityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 3,
   },
   durationText: {
     color: Colors.white,
