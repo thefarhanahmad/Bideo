@@ -12,6 +12,7 @@ import api, { setAuthToken } from '../../services/api';
 import { useRouter, useNavigation, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { formatViews } from '../../utils/formatDate';
+import { AppAdBanner } from '../../components/AppAds';
 
 const getAvatarUri = (avatar?: string) => {
   if (!avatar) return null;
@@ -293,6 +294,9 @@ export default function LibraryScreen() {
           </ScrollView>
         )}
       </View>
+
+      {/* Banner between History and Liked Videos (hides itself if no ad loads, leaving the layout as before) */}
+      <AppAdBanner />
 
       <View style={styles.divider} />
 
