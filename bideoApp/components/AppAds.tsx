@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, Platform, Text, TouchableOpacity } from 'react-native';
 import Constants from 'expo-constants';
 import { Image } from 'expo-image';
@@ -55,6 +55,10 @@ export const AppAdBanner: React.FC<AppAdBannerProps> = ({ size, containerStyle, 
 
   const [adFailed, setAdFailed] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  // Height of the last banner that loaded. Kept as minHeight while the next one loads, so the
+  // 45s refresh does not collapse and re-expand the slot (that made lists jump while scrolling).
+  const [loadedHeight, setLoadedHeight] = useState(0);
+  const hasLoadedRef = useRef(false);
 
   // Auto-refresh banner ad every 45 seconds while user stays on the page.
   // Also automatically retries if AdMob had a temporary no-fill.
@@ -80,13 +84,20 @@ export const AppAdBanner: React.FC<AppAdBannerProps> = ({ size, containerStyle, 
     const unitId = isTestingAds ? (TestIds?.BANNER || TEST_BANNER_ID) : ADMOB_IDS.BANNER;
 
     return (
-      <View style={[styles.container, containerStyle]}>
+      <View
+        style={[styles.container, containerStyle, loadedHeight > 0 ? { minHeight: loadedHeight } : null]}
+        onLayout={(e) => {
+          const h = Math.round(e.nativeEvent.layout.height);
+          if (hasLoadedRef.current && h > loadedHeight) setLoadedHeight(h);
+        }}
+      >
         <BannerAd
           key={`${unitId}-${refreshKey}`}
           unitId={unitId}
           size={size || BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
           requestOptions={{ requestNonPersonalizedAdsOnly: false }}
           onAdLoaded={() => {
+            hasLoadedRef.current = true;
             setAdFailed(false);
             onAdLoaded?.();
           }}
