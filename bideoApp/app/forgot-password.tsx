@@ -128,6 +128,11 @@ export default function ForgotPasswordScreen() {
   const [showGuideModal, setShowGuideModal] = useState(false);
   const [authModalVisible, setAuthModalVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [guideConfig, setGuideConfig] = useState<{
+    enabled: boolean;
+    videoId?: string | null;
+    videoUrl?: string | null;
+  } | null>(null);
 
   // Input Refs
   const phoneInputRef = useRef<TextInput>(null);
@@ -138,6 +143,29 @@ export default function ForgotPasswordScreen() {
     useRef<TextInput>(null),
     useRef<TextInput>(null),
   ];
+
+  // Fetch forgot password guide video configuration from backend
+  useEffect(() => {
+    let isMounted = true;
+    authService
+      .getForgotPasswordGuide()
+      .then((res) => {
+        if (isMounted && res?.success && res?.enabled) {
+          setGuideConfig({
+            enabled: true,
+            videoId: res.videoId || null,
+            videoUrl: res.videoUrl || null,
+          });
+        }
+      })
+      .catch(() => {
+        // Silently ignore if guide is unavailable
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Keyboard height listener
   useEffect(() => {
@@ -228,6 +256,25 @@ export default function ForgotPasswordScreen() {
         'Please send an email directly to: bideoapps@gmail.com'
       );
     });
+  };
+
+  // Open guide video player
+  const handleOpenGuideVideo = () => {
+    hapticSelection();
+    if (guideConfig?.videoId) {
+      router.push(`/video/${guideConfig.videoId}`);
+    } else if (guideConfig?.videoUrl) {
+      const match = guideConfig.videoUrl.match(/[a-f0-9]{24}/i);
+      if (match) {
+        router.push(`/video/${match[0]}`);
+      } else {
+        Linking.openURL(guideConfig.videoUrl).catch(() => {
+          Alert.alert('Unable to Open Video', 'Could not open the guide video link.');
+        });
+      }
+    } else {
+      Alert.alert('Notice', 'Guide video is currently not available.');
+    }
   };
 
   // Open signup modal directly from guide
@@ -348,19 +395,33 @@ export default function ForgotPasswordScreen() {
         <Ionicons name="arrow-back" size={24} color="#0F172A" />
       </TouchableOpacity>
 
-      {/* Top Right Help / Guide Button */}
-      <TouchableOpacity
-        style={[styles.helpHeaderButton, { top: Math.max(insets.top, 16) + 8 }]}
-        onPress={() => {
-          hapticSelection();
-          setShowGuideModal(true);
-        }}
-        hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
-        activeOpacity={0.7}
-      >
-        <Ionicons name="help-circle-outline" size={18} color={Colors.primary} />
-        <Text style={styles.helpHeaderButtonText}>Help</Text>
-      </TouchableOpacity>
+      {/* Top Right Header Action Buttons */}
+      <View style={[styles.headerRightContainer, { top: Math.max(insets.top, 16) + 8 }]}>
+        {guideConfig?.enabled && (
+          <TouchableOpacity
+            style={styles.guideHeaderButton}
+            onPress={handleOpenGuideVideo}
+            hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="play-circle" size={17} color={Colors.primary} />
+            <Text style={styles.guideHeaderButtonText}>Guide</Text>
+          </TouchableOpacity>
+        )}
+
+        <TouchableOpacity
+          style={styles.helpHeaderButton}
+          onPress={() => {
+            hapticSelection();
+            setShowGuideModal(true);
+          }}
+          hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="help-circle-outline" size={18} color={Colors.primary} />
+          <Text style={styles.helpHeaderButtonText}>Help</Text>
+        </TouchableOpacity>
+      </View>
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -666,6 +727,27 @@ export default function ForgotPasswordScreen() {
               contentContainerStyle={styles.guideScrollContent}
               bounces={false}
             >
+              {/* Optional: Watch Full Video Tutorial */}
+              {guideConfig?.enabled && (
+                <TouchableOpacity
+                  style={styles.guideVideoBanner}
+                  onPress={() => {
+                    setShowGuideModal(false);
+                    handleOpenGuideVideo();
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.guideVideoIconWrap}>
+                    <Ionicons name="play" size={18} color="#FFFFFF" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.guideVideoBannerTitle}>Watch Video Guide</Text>
+                    <Text style={styles.guideVideoBannerSubtitle}>Watch the step-by-step video tutorial</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={Colors.primary} />
+                </TouchableOpacity>
+              )}
+
               {/* Important: Account Required First */}
               <View style={styles.guideAlertBox}>
                 <View style={styles.guideAlertHeader}>
@@ -1126,15 +1208,36 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
 
-  // Help button in header
-  helpHeaderButton: {
+  // Top right header action buttons container
+  headerRightContainer: {
     position: 'absolute',
     right: 20,
     zIndex: 50,
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+  },
+  guideHeaderButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    paddingVertical: 5,
+    paddingHorizontal: 11,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(203, 213, 225, 0.7)',
+  },
+  guideHeaderButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  helpHeaderButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
     paddingVertical: 5,
     paddingHorizontal: 11,
     borderRadius: 16,
@@ -1145,6 +1248,37 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: Colors.primary,
+  },
+
+  // Modal Video Tutorial Banner
+  guideVideoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 122, 0, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 122, 0, 0.25)',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 16,
+    gap: 12,
+  },
+  guideVideoIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  guideVideoBannerTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  guideVideoBannerSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
   },
 
   // Guide Bottom Sheet Modal & Backdrop

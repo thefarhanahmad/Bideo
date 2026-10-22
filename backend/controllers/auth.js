@@ -759,3 +759,60 @@ exports.logPushDiagnostic = async (req, res) => {
     res.status(200).json({ success: false });
   }
 };
+
+// @desc    Get forgot password guide video configuration from backend env
+// @route   GET /api/auth/forgot-password-guide
+// @access  Public
+exports.getForgotPasswordGuide = async (req, res) => {
+  try {
+    let rawVal = (
+      process.env.FORGOT_PASSWORD_GUIDE_VIDEO_URL ||
+      process.env.FORGOT_PASSWORD_GUIDE_VIDEO_ID ||
+      ''
+    ).trim();
+
+    // Hot-read .env from disk so editing backend/.env reflects instantly without restarting server
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const envPath = path.resolve(__dirname, '../.env');
+      if (fs.existsSync(envPath)) {
+        const content = fs.readFileSync(envPath, 'utf8');
+        const match = content.match(/^FORGOT_PASSWORD_GUIDE_VIDEO_URL\s*=\s*(.*)$/m);
+        if (match && match[1] !== undefined) {
+          rawVal = match[1].trim().replace(/^['"]|['"]$/g, '');
+        }
+      }
+    } catch (_) {
+      // fallback to process.env
+    }
+
+    if (!rawVal) {
+      return res.status(200).json({
+        success: true,
+        enabled: false,
+        videoUrl: null,
+        videoId: null,
+      });
+    }
+
+    // Try extracting 24-character hex MongoDB ObjectId if present
+    const match = rawVal.match(/[a-f0-9]{24}/i);
+    const videoId = match ? match[0] : null;
+
+    return res.status(200).json({
+      success: true,
+      enabled: true,
+      videoUrl: rawVal,
+      videoId: videoId,
+    });
+  } catch (err) {
+    return res.status(200).json({
+      success: true,
+      enabled: false,
+      videoUrl: null,
+      videoId: null,
+    });
+  }
+};
+

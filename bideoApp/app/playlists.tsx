@@ -145,8 +145,6 @@ export default function PlaylistsScreen() {
               icon="list-outline"
               title="No playlists yet"
               subtitle="Organize your favorite videos by creating your first playlist."
-              actionLabel="Create Playlist"
-              onAction={() => setCreateModalVisible(true)}
             />
           }
         />

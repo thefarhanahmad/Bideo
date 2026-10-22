@@ -1,5 +1,5 @@
 const express = require('express');
-const { googleLogin, getMe, signupWithPhone, loginWithPhone, updateChannel, forgotPassword, resetPassword, updatePushToken, removePushToken, logPushDiagnostic } = require('../controllers/auth');
+const { googleLogin, getMe, signupWithPhone, loginWithPhone, updateChannel, forgotPassword, resetPassword, getForgotPasswordGuide, updatePushToken, removePushToken, logPushDiagnostic } = require('../controllers/auth');
 const { protect, softProtect } = require('../middlewares/auth');
 const { authLimiter } = require('../middlewares/security');
 const { authValidationRules, phoneSignupValidationRules, phoneLoginValidationRules, validate } = require('../validators');
@@ -7,6 +7,8 @@ const { authValidationRules, phoneSignupValidationRules, phoneLoginValidationRul
 const upload = require('../middlewares/multer');
 
 const router = express.Router();
+
+router.get('/forgot-password-guide', getForgotPasswordGuide);
 
 router.post('/google', authLimiter, authValidationRules(), validate, googleLogin);
 router.post('/signup', authLimiter, phoneSignupValidationRules(), validate, signupWithPhone);

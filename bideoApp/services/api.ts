@@ -192,6 +192,10 @@ export const authService = {
     const response = await api.post('/auth/reset-password', data);
     return response.data;
   },
+  getForgotPasswordGuide: async () => {
+    const response = await api.get('/auth/forgot-password-guide');
+    return response.data;
+  },
 };
 
 export const userService = {
