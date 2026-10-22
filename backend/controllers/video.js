@@ -10,6 +10,7 @@ const VideoMonetizationReview = require("../models/VideoMonetizationReview");
 const MonetizationApplication = require("../models/MonetizationApplication");
 const Comment = require("../models/Comment");
 const Playlist = require("../models/Playlist");
+const Post = require("../models/Post");
 const CoinTransaction = require("../models/CoinTransaction");
 const fs = require("fs");
 const { saveLocalFile, deleteLocalFile } = require("../utils/localUpload");
@@ -442,7 +443,7 @@ const scoreUserRelevance = (u, { phrase, terms }) => {
   return score;
 };
 
-const SEARCH_RESULT_TYPES = new Set(["videos", "shorts", "channels"]);
+const SEARCH_RESULT_TYPES = new Set(["videos", "shorts", "channels", "posts", "playlists"]);
 
 exports.searchVideos = async (req, res, next) => {
   try {
@@ -451,7 +452,7 @@ exports.searchVideos = async (req, res, next) => {
     if (!q)
       return res
         .status(200)
-        .json({ success: true, count: 0, data: { channels: [], videos: [] } });
+        .json({ success: true, count: 0, data: { channels: [], videos: [], posts: [], playlists: [] } });
 
     const { phrase, terms, regexes, phraseRegex } = parseSearchKeywords(q);
     const isObjectId = mongoose.Types.ObjectId.isValid(q);
@@ -524,7 +525,7 @@ exports.searchVideos = async (req, res, next) => {
     if (type === "videos") videoQuery.isShort = { $ne: true };
 
     const videos =
-      type === "channels"
+      type === "channels" || type === "posts" || type === "playlists"
         ? []
         : await Video.find(videoQuery)
             .populate("owner", "name avatar channelName followersCount isVerified")
@@ -539,7 +540,10 @@ exports.searchVideos = async (req, res, next) => {
       .slice(0, 20);
 
     const channelsData = [];
-    const channelsToReturn = type === "videos" || type === "shorts" ? [] : scoredChannels;
+    const channelsToReturn =
+      type === "videos" || type === "shorts" || type === "posts" || type === "playlists"
+        ? []
+        : scoredChannels;
     for (let c of channelsToReturn) {
       const channelObj = typeof c === "object" ? { ...c } : c;
       if (req.user) {
@@ -561,12 +565,106 @@ exports.searchVideos = async (req, res, next) => {
 
     const results = await decorateVideos(scoredVideos, req);
 
+    // 3. Search posts (matches text, creator, or post ID)
+    let postsData = [];
+    if (!type || type === "posts") {
+      const postOrClauses = [];
+      if (phraseRegex) {
+        postOrClauses.push({ text: phraseRegex });
+      }
+      regexes.forEach((tRegex) => {
+        postOrClauses.push({ text: tRegex });
+      });
+      if (channelIds.length > 0) {
+        postOrClauses.push({ owner: { $in: channelIds } });
+      }
+      if (isObjectId) {
+        postOrClauses.push({ _id: q });
+      }
+
+      if (postOrClauses.length > 0) {
+        const postQuery = { $or: postOrClauses, visibility: "public" };
+        if (!isAdmin && blockedUserIds.length > 0) {
+          postQuery.owner = { ...(postQuery.owner || {}), $nin: blockedUserIds };
+        }
+
+        postsData = await Post.find(postQuery)
+          .populate("owner", "name avatar channelName isVerified")
+          .sort("-createdAt")
+          .limit(40)
+          .lean();
+      }
+    }
+
+    // 4. Search playlists (matches name, creator, or playlist ID)
+    let playlistsData = [];
+    if (!type || type === "playlists") {
+      const playlistOrClauses = [];
+      if (phraseRegex) {
+        playlistOrClauses.push({ name: phraseRegex });
+      }
+      regexes.forEach((tRegex) => {
+        playlistOrClauses.push({ name: tRegex });
+      });
+      if (channelIds.length > 0) {
+        playlistOrClauses.push({ owner: { $in: channelIds } });
+      }
+      if (isObjectId) {
+        playlistOrClauses.push({ _id: q });
+      }
+
+      if (playlistOrClauses.length > 0) {
+        const playlistQuery = { $or: playlistOrClauses };
+        if (!isAdmin) {
+          playlistQuery.isPrivate = { $ne: true };
+          if (blockedUserIds.length > 0) {
+            playlistQuery.owner = { ...(playlistQuery.owner || {}), $nin: blockedUserIds };
+          }
+        }
+
+        const rawPlaylists = await Playlist.find(playlistQuery)
+          .populate("owner", "name channelName avatar isVerified")
+          .populate({
+            path: "videos",
+            select: "thumbnail visibility owner",
+            populate: { path: "owner", select: "isBlocked" },
+          })
+          .sort("-createdAt")
+          .limit(30)
+          .lean();
+
+        playlistsData = rawPlaylists
+          .map((p) => {
+            const isOwner = req.user && String(p.owner?._id || p.owner) === String(req.user.id);
+            const pVideos = (p.videos || []).filter(
+              (v) => v && (isOwner || (v.visibility === "public" && !(v.owner && v.owner.isBlocked)))
+            );
+            const cover = pVideos.length ? pVideos[pVideos.length - 1] : null;
+            return {
+              _id: p._id,
+              name: p.name,
+              isPrivate: Boolean(p.isPrivate),
+              createdAt: p.createdAt,
+              videoCount: pVideos.length,
+              thumbnail: cover ? cover.thumbnail : null,
+              owner: p.owner,
+            };
+          })
+          .filter((p) => {
+            const isOwner = req.user && String(p.owner?._id || p.owner) === String(req.user.id);
+            return isOwner || p.videoCount > 0;
+          });
+      }
+    }
+
     res.status(200).json({
       success: true,
-      count: results.length,
+      count: results.length + channelsData.length + postsData.length + playlistsData.length,
       data: {
         channels: channelsData,
         videos: results,
+        posts: postsData,
+        playlists: playlistsData,
       },
     });
   } catch (err) {

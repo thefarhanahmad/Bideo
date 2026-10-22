@@ -12,7 +12,12 @@ import { AlertHost, showAlert } from '../components/AppAlert';
 import Constants from 'expo-constants';
 import { registerForPushNotificationsAsync, setupNotificationListeners } from '../services/notifications';
 import { initSocket, disconnectSocket } from '../services/socket';
-import { AppState, AppStateStatus, StatusBar } from 'react-native';
+import { AppState, AppStateStatus, StatusBar, LogBox } from 'react-native';
+
+LogBox.ignoreLogs([
+  '`expo-notifications` functionality is not fully supported in Expo Go',
+  'expo-notifications: Android Push notifications',
+]);
 import { logScreen, logEvent, setAnalyticsUser } from '../services/analytics';
 
 // Keep native splash screen visible while app initializes

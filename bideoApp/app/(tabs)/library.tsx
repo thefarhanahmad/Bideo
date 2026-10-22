@@ -392,15 +392,24 @@ export default function LibraryScreen() {
             <Ionicons name="list-outline" size={24} color={Colors.text} />
             <Text style={styles.sectionTitle}>Playlists</Text>
           </View>
-          <TouchableOpacity
-            style={styles.newPlaylistBtn}
-            onPress={() => setCreatePlaylistVisible(true)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            accessibilityLabel="Create a new playlist"
-          >
-            <Ionicons name="add" size={18} color={Colors.primary} />
-            <Text style={styles.viewAll}>New</Text>
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.newPlaylistBtn}
+              onPress={() => setCreatePlaylistVisible(true)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityLabel="Create a new playlist"
+            >
+              <Ionicons name="add" size={18} color={Colors.primary} />
+              <Text style={styles.newBtnText}>New</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => router.push('/playlists')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityLabel="View all playlists"
+            >
+              <Text style={styles.viewAll}>View all</Text>
+            </TouchableOpacity>
+          </View>
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalListContent}>
           {playlists.map(item => {
@@ -726,6 +735,16 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: Colors.border,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  newBtnText: {
+    fontSize: 14,
+    color: Colors.primary,
+    fontWeight: '600',
   },
   newPlaylistBtn: {
     flexDirection: 'row',

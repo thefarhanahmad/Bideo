@@ -3,12 +3,15 @@ import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, Activity
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+import VerifiedBadge from '../components/VerifiedBadge';
 import { useSelector } from 'react-redux';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '../constants/Colors';
 import VideoCard from '../components/VideoCard';
+import PostCard from '../components/PostCard';
 import { EmptyState } from '../components/ListStates';
-import api from '../services/api';
+import api, { resolveMediaUrl } from '../services/api';
 import { RootState } from '../redux/store';
 import AuthModal from '../components/AuthModal';
 import { showAlert } from '../components/AppAlert';
@@ -86,6 +89,76 @@ function ChannelSearchResultCard({ channel }: { channel: any }) {
   );
 }
 
+function PlaylistSearchResultCard({ playlist }: { playlist: any }) {
+  const router = useRouter();
+  const count = playlist.videoCount || 0;
+  const ownerName = playlist.owner?.channelName || playlist.owner?.name || 'Unknown';
+  const avatar = playlist.owner?.avatar || FALLBACK_AVATAR;
+
+  return (
+    <TouchableOpacity
+      style={styles.feedCardContainer}
+      onPress={() => router.push({ pathname: `/playlist/${playlist._id}`, params: { name: playlist.name } })}
+      activeOpacity={0.92}
+    >
+      <View style={styles.feedThumbContainer}>
+        {playlist.thumbnail ? (
+          <Image
+            source={{ uri: resolveMediaUrl(playlist.thumbnail) }}
+            style={styles.feedThumb}
+            contentFit="cover"
+            transition={150}
+          />
+        ) : (
+          <View style={[styles.feedThumb, styles.playlistThumbPlaceholder]}>
+            <Ionicons name="list" size={38} color={Colors.textGray} />
+          </View>
+        )}
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.55)']}
+          style={styles.thumbGradient}
+          pointerEvents="none"
+        />
+        <View style={styles.playlistBadge}>
+          <Ionicons name="list" size={11} color={Colors.white} />
+          <Text style={styles.playlistBadgeText}>{count} video{count === 1 ? '' : 's'}</Text>
+        </View>
+      </View>
+
+      <View style={styles.feedDetailsContainer}>
+        <TouchableOpacity onPress={() => playlist.owner?._id && router.push(`/channel/${playlist.owner._id}`)}>
+          <Image
+            source={{ uri: resolveMediaUrl(avatar) || FALLBACK_AVATAR }}
+            style={styles.feedAvatar}
+            contentFit="cover"
+            transition={150}
+          />
+        </TouchableOpacity>
+        <View style={styles.feedTextContainer}>
+          <Text style={styles.feedTitle} numberOfLines={2}>
+            {playlist.name}
+          </Text>
+          <View style={styles.feedChannelRow}>
+            <Text
+              style={styles.feedMetadataChannel}
+              numberOfLines={1}
+              onPress={() => playlist.owner?._id && router.push(`/channel/${playlist.owner._id}`)}
+            >
+              {ownerName}
+            </Text>
+            {Boolean(playlist.owner?.isVerified) && (
+              <VerifiedBadge size={13} style={{ marginHorizontal: 3 }} />
+            )}
+            <Text style={styles.feedMetadataStats} numberOfLines={1}>
+              {' • '}Playlist • {count} video{count === 1 ? '' : 's'}
+            </Text>
+          </View>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 const SEARCH_HISTORY_KEY = '@bideo_search_history';
 
 const getTerm = (item: any): string => {
@@ -94,13 +167,15 @@ const getTerm = (item: any): string => {
   return (item.term || '').toString().trim();
 };
 
-type SearchType = 'all' | 'videos' | 'shorts' | 'channels';
+type SearchType = 'all' | 'videos' | 'shorts' | 'channels' | 'posts' | 'playlists';
 
 const SEARCH_FILTERS: Array<{ id: SearchType; label: string }> = [
   { id: 'all', label: 'All' },
   { id: 'videos', label: 'Videos' },
   { id: 'shorts', label: 'Shorts' },
   { id: 'channels', label: 'Channels' },
+  { id: 'posts', label: 'Posts' },
+  { id: 'playlists', label: 'Playlists' },
 ];
 
 export default function SearchScreen() {
@@ -195,14 +270,18 @@ export default function SearchScreen() {
       const res = await api.get('/videos/search', { params });
       if (searchId !== latestSearchId.current) return;
       if (res.data.success) {
-        const { channels = [], videos = [] } = res.data.data || {};
+        const { channels = [], videos = [], posts = [], playlists = [] } = res.data.data || {};
         const formattedChannels = channels.map((c: any) => ({ ...c, isChannel: true }));
+        const formattedPosts = posts.map((p: any) => ({ ...p, isPost: true }));
+        const formattedPlaylists = playlists.map((pl: any) => ({ ...pl, isPlaylist: true }));
         // Also filter here so the chips work even with a server that ignores `type`
         const isShortVideo = (v: any) => v?.isShort === true || v?.isShort === 'true';
         if (type === 'channels') setResults(formattedChannels);
         else if (type === 'shorts') setResults(videos.filter(isShortVideo));
         else if (type === 'videos') setResults(videos.filter((v: any) => !isShortVideo(v)));
-        else setResults([...formattedChannels, ...videos]);
+        else if (type === 'posts') setResults(formattedPosts);
+        else if (type === 'playlists') setResults(formattedPlaylists);
+        else setResults([...formattedChannels, ...videos, ...formattedPlaylists, ...formattedPosts]);
       }
     } catch (err) {
       console.error('Search failed', err);
@@ -335,7 +414,11 @@ export default function SearchScreen() {
       ) : (
         <FlatList
           data={showResults ? results : filteredHistory}
-          keyExtractor={(item, index) => item._id || `${getTerm(item)}-${index}`}
+          keyExtractor={(item, index) =>
+            item._id
+              ? `${item.isPost ? 'post' : item.isPlaylist ? 'playlist' : item.isChannel ? 'channel' : 'video'}-${item._id}`
+              : `${getTerm(item)}-${index}`
+          }
           ListHeaderComponent={
             !showResults && filteredHistory.length > 0 ? (
               <View style={styles.historyHeaderRow}>
@@ -383,9 +466,19 @@ export default function SearchScreen() {
             if (item.isChannel) {
               return <ChannelSearchResultCard channel={item} />;
             }
+            if (item.isPlaylist) {
+              return <PlaylistSearchResultCard playlist={item} />;
+            }
+            if (item.isPost) {
+              return (
+                <View style={styles.postCardWrapper}>
+                  <PostCard post={item} />
+                </View>
+              );
+            }
             return <VideoCard video={item} />;
           }}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, !showResults && styles.historyList]}
           ListEmptyComponent={
             showResults && !loading ? (
               <EmptyState
@@ -401,7 +494,7 @@ export default function SearchScreen() {
               <EmptyState
                 icon="search-outline"
                 title="Search Bideo"
-                subtitle="Find videos, shorts and creators. Your recent searches will appear here."
+                subtitle="Find videos, shorts, channels, posts and playlists. Your recent searches will appear here."
               />
             ) : null
           }
@@ -414,16 +507,15 @@ export default function SearchScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.white,
+    backgroundColor: Colors.background,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 15,
     paddingTop: 50,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    paddingBottom: 8,
+    backgroundColor: Colors.white,
   },
   searchBar: {
     flex: 1,
@@ -443,12 +535,14 @@ const styles = StyleSheet.create({
     color: Colors.text,
   },
   filterBar: {
+    backgroundColor: Colors.white,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
   filterRow: {
     paddingHorizontal: 15,
-    paddingVertical: 10,
+    paddingTop: 4,
+    paddingBottom: 8,
     gap: 8,
   },
   filterChip: {
@@ -478,7 +572,14 @@ const styles = StyleSheet.create({
     paddingTop: 50,
   },
   list: {
+    paddingTop: 6,
     paddingBottom: 20,
+    paddingHorizontal: 8,
+  },
+  historyList: {
+    paddingTop: 0,
+    paddingHorizontal: 0,
+    backgroundColor: Colors.white,
   },
   emptyText: {
     color: Colors.textGray,
@@ -538,8 +639,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: '#F0F0F0',
     backgroundColor: Colors.white,
+    marginBottom: 5,
   },
   channelCardAvatar: {
     width: 60,
@@ -594,5 +696,99 @@ const styles = StyleSheet.create({
   },
   followingBtnText: {
     color: Colors.text,
+  },
+  feedCardContainer: {
+    marginHorizontal: 0,
+    marginBottom: 5,
+    backgroundColor: Colors.white,
+    borderRadius: 0,
+    overflow: 'hidden',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  feedThumbContainer: {
+    position: 'relative',
+    width: '100%',
+    aspectRatio: 16 / 9,
+  },
+  feedThumb: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#E5E7EB',
+  },
+  playlistThumbPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F0F2F5',
+  },
+  thumbGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 50,
+  },
+  playlistBadge: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    backgroundColor: 'rgba(0,0,0,0.82)',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  playlistBadgeText: {
+    color: Colors.white,
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  feedDetailsContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 12,
+  },
+  feedAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+    backgroundColor: '#E5E7EB',
+    borderWidth: 1.5,
+    borderColor: Colors.primary + '33',
+  },
+  feedTextContainer: {
+    flex: 1,
+  },
+  feedTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.text,
+    marginBottom: 3,
+    lineHeight: 20,
+  },
+  feedChannelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'nowrap',
+  },
+  feedMetadataChannel: {
+    fontSize: 12,
+    color: Colors.textGray,
+    fontWeight: '500',
+    flexShrink: 1,
+  },
+  feedMetadataStats: {
+    fontSize: 12,
+    color: Colors.textGray,
+    flexShrink: 0,
+  },
+  postCardWrapper: {
+    borderBottomWidth: 8,
+    borderBottomColor: Colors.background,
   },
 });

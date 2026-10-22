@@ -93,8 +93,9 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   list: {
-    paddingTop: 12,
+    paddingTop: 6,
     paddingBottom: 20,
+    paddingHorizontal: 8,
   },
   emptyText: {
     color: Colors.textGray,

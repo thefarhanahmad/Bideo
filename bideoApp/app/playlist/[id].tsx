@@ -1,19 +1,18 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Modal, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSelector } from 'react-redux';
 import Colors from '../../constants/Colors';
 import VideoCard from '../../components/VideoCard';
 import PlaylistFormModal from '../../components/PlaylistFormModal';
+import PlaylistModal from '../../components/PlaylistModal';
+import ShareModal from '../../components/ShareModal';
 import { showAlert } from '../../components/AppAlert';
 import { RootState } from '../../redux/store';
-import { hapticLight } from '../../utils/haptics';
+import { hapticLight, hapticSelection } from '../../utils/haptics';
 import api from '../../services/api';
-
-// Let the menu alert finish fading out before opening the next popup (iOS cannot stack them)
-const AFTER_ALERT_MS = 350;
-const afterAlertCloses = (fn: () => void) => setTimeout(fn, AFTER_ALERT_MS);
 
 interface PlaylistInfo {
   name: string;
@@ -25,12 +24,23 @@ interface PlaylistInfo {
 export default function PlaylistDetailsScreen() {
   const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { isAuthenticated } = useSelector((state: RootState) => state.auth);
+
   const [info, setInfo] = useState<PlaylistInfo>({ name: name || 'Playlist', isPrivate: false, isOwner: false });
   const [videos, setVideos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+
+  // Modals state
   const [editVisible, setEditVisible] = useState(false);
+  const [playlistMenuVisible, setPlaylistMenuVisible] = useState(false);
+  const [videoMenuVisible, setVideoMenuVisible] = useState(false);
+  const [selectedVideo, setSelectedVideo] = useState<any>(null);
+  const [shareModalVisible, setShareModalVisible] = useState(false);
+  const [shareItem, setShareItem] = useState<any>(null);
+  const [playlistModalVisible, setPlaylistModalVisible] = useState(false);
+  const [targetPlaylistVideoId, setTargetPlaylistVideoId] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -105,30 +115,24 @@ export default function PlaylistDetailsScreen() {
   };
 
   const openPlaylistMenu = () => {
-    hapticLight();
-    showAlert(info.name, undefined, [
-      { text: 'Edit name & visibility', onPress: () => afterAlertCloses(() => setEditVisible(true)) },
-      { text: 'Delete playlist', style: 'destructive', onPress: () => afterAlertCloses(confirmDelete) },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
+    hapticSelection();
+    setPlaylistMenuVisible(true);
   };
 
-  const confirmRemoveVideo = (video: any) => {
-    showAlert('Remove from playlist?', video.title, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await api.delete(`/playlists/${id}/videos/${video._id}`);
-            setVideos((prev) => prev.filter((v) => v._id !== video._id));
-          } catch (err: any) {
-            showAlert('Error', err?.response?.data?.message || 'Failed to remove video');
-          }
-        },
-      },
-    ]);
+  const openVideoMenu = (video: any) => {
+    hapticSelection();
+    setSelectedVideo(video);
+    setVideoMenuVisible(true);
+  };
+
+  const handleRemoveVideo = async (video: any) => {
+    setVideoMenuVisible(false);
+    try {
+      await api.delete(`/playlists/${id}/videos/${video._id}`);
+      setVideos((prev) => prev.filter((v) => v._id !== video._id));
+    } catch (err: any) {
+      showAlert('Error', err?.response?.data?.message || 'Failed to remove video');
+    }
   };
 
   const ownerName = info.owner?.channelName || info.owner?.name;
@@ -188,7 +192,7 @@ export default function PlaylistDetailsScreen() {
           data={videos}
           keyExtractor={(item) => item._id}
           renderItem={({ item }) => (
-            <VideoCard video={item} onMenuPress={info.isOwner ? () => confirmRemoveVideo(item) : undefined} />
+            <VideoCard video={item} onMenuPress={() => openVideoMenu(item)} />
           )}
           contentContainerStyle={styles.list}
           refreshing={loading}
@@ -201,6 +205,127 @@ export default function PlaylistDetailsScreen() {
         />
       )}
 
+      {/* Top Header Playlist Level Options Bottom Overlay Modal */}
+      <Modal
+        visible={playlistMenuVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPlaylistMenuVisible(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setPlaylistMenuVisible(false)}>
+          <Pressable
+            style={[styles.menuContent, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.grabber} />
+            <Text style={styles.sheetTitle} numberOfLines={1}>
+              {info.name}
+            </Text>
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setPlaylistMenuVisible(false);
+                setEditVisible(true);
+              }}
+            >
+              <Ionicons name="pencil-outline" size={22} color={Colors.text} />
+              <Text style={styles.menuText}>Edit name & visibility</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setPlaylistMenuVisible(false);
+                confirmDelete();
+              }}
+            >
+              <Ionicons name="trash-outline" size={22} color={Colors.primary} />
+              <Text style={[styles.menuText, { color: Colors.primary }]}>Delete playlist</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.cancelItem} onPress={() => setPlaylistMenuVisible(false)}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Video Level Options Bottom Overlay Modal */}
+      <Modal
+        visible={videoMenuVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setVideoMenuVisible(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setVideoMenuVisible(false)}>
+          <Pressable
+            style={[styles.menuContent, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.grabber} />
+            {selectedVideo && (
+              <Text style={styles.sheetTitle} numberOfLines={1}>
+                {selectedVideo.title}
+              </Text>
+            )}
+
+            {info.isOwner && (
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  if (selectedVideo) {
+                    handleRemoveVideo(selectedVideo);
+                  }
+                }}
+              >
+                <Ionicons name="trash-outline" size={22} color={Colors.primary} />
+                <Text style={[styles.menuText, { color: Colors.primary }]}>Remove from playlist</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setVideoMenuVisible(false);
+                if (selectedVideo) {
+                  setShareItem({
+                    type: 'video',
+                    _id: selectedVideo._id,
+                    title: selectedVideo.title,
+                    thumbnail: selectedVideo.thumbnail,
+                    isShort: Boolean(selectedVideo.isShort),
+                  });
+                  setShareModalVisible(true);
+                }
+              }}
+            >
+              <Ionicons name="share-social-outline" size={22} color={Colors.text} />
+              <Text style={styles.menuText}>Share video</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setVideoMenuVisible(false);
+                if (selectedVideo) {
+                  setTargetPlaylistVideoId(selectedVideo._id);
+                  setPlaylistModalVisible(true);
+                }
+              }}
+            >
+              <Ionicons name="add-circle-outline" size={22} color={Colors.text} />
+              <Text style={styles.menuText}>Add to another playlist</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.cancelItem} onPress={() => setVideoMenuVisible(false)}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Edit Playlist Modal */}
       <PlaylistFormModal
         visible={editVisible}
         mode="edit"
@@ -209,6 +334,25 @@ export default function PlaylistDetailsScreen() {
         onClose={() => setEditVisible(false)}
         onSubmit={handleEdit}
       />
+
+      {/* Share Modal */}
+      <ShareModal
+        visible={shareModalVisible}
+        onClose={() => setShareModalVisible(false)}
+        item={shareItem}
+      />
+
+      {/* Add To Playlist Modal */}
+      {targetPlaylistVideoId && (
+        <PlaylistModal
+          visible={playlistModalVisible}
+          videoId={targetPlaylistVideoId}
+          onClose={() => {
+            setPlaylistModalVisible(false);
+            setTargetPlaylistVideoId(null);
+          }}
+        />
+      )}
     </View>
   );
 }
@@ -216,7 +360,7 @@ export default function PlaylistDetailsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.white,
+    backgroundColor: Colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -226,6 +370,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingTop: 50,
     paddingBottom: 15,
+    backgroundColor: Colors.white,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
@@ -241,6 +386,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     paddingHorizontal: 15,
     paddingVertical: 10,
+    backgroundColor: Colors.white,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
@@ -267,11 +413,65 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   list: {
+    paddingTop: 6,
     paddingBottom: 20,
+    paddingHorizontal: 8,
   },
   emptyText: {
     color: Colors.textGray,
     fontSize: 16,
     textAlign: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  menuContent: {
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+  },
+  grabber: {
+    alignSelf: 'center',
+    width: 40,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: Colors.border,
+    marginBottom: 12,
+  },
+  sheetTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.text,
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  menuText: {
+    fontSize: 15.5,
+    marginLeft: 14,
+    color: Colors.text,
+    fontWeight: '500',
+  },
+  cancelItem: {
+    marginTop: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    backgroundColor: Colors.background,
+    borderRadius: 14,
+  },
+  cancelText: {
+    fontSize: 15.5,
+    fontWeight: 'bold',
+    color: Colors.textGray,
   },
 });

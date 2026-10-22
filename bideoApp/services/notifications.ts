@@ -1,12 +1,26 @@
 import { Platform, DeviceEventEmitter } from 'react-native';
-import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import Constants from 'expo-constants';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
+
+const isExpoGo =
+  Constants.appOwnership === 'expo' ||
+  Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+
+// Lazy load expo-notifications only outside Expo Go to avoid SDK 53 Android push warning/error
+let Notifications: typeof import('expo-notifications') | null = null;
+if (!isExpoGo) {
+  try {
+    Notifications = require('expo-notifications');
+  } catch (err) {
+    console.warn('Could not load expo-notifications:', err);
+  }
+}
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from './api';
 import { getActiveConversationId } from './socket';
 
 // 1. Configure foreground notification behavior: suppress if user is logged out or inside active chat
+if (Notifications) {
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
     // If user is completely logged out, never show foreground alert/sound
@@ -47,6 +61,7 @@ Notifications.setNotificationHandler({
     };
   },
 });
+}
 
 let lastNavKey = '';
 let lastNavTime = 0;
@@ -142,9 +157,7 @@ export async function handleNotificationNavigation(router: any, data: any) {
  */
 export async function registerForPushNotificationsAsync(retryCount = 0): Promise<string | null> {
   try {
-    const isExpoGo =
-      Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
-    if (isExpoGo) {
+    if (isExpoGo || !Notifications) {
       console.log('Skipping remote push notification registration in Expo Go (only supported in standalone/dev builds)');
       return null;
     }
@@ -231,9 +244,7 @@ export async function registerForPushNotificationsAsync(retryCount = 0): Promise
  * Setup tap handler when user taps a push notification from lock screen or status bar
  */
 export function setupNotificationListeners(router: any) {
-  const isExpoGo =
-    Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
-  if (isExpoGo) {
+  if (isExpoGo || !Notifications) {
     return () => {};
   }
 
