@@ -19,9 +19,10 @@ import { shareChannel, shareVideo } from '../../utils/shareHelper';
 import { detectSocialPlatform, toSocialUrl } from '../../utils/socialLinks';
 import ShareModal, { ShareModalItem } from '../../components/ShareModal';
 import VideoActionsMenu from '../../components/VideoActionsMenu';
+import { PLACEHOLDER_AVATAR } from '../../constants/placeholders';
 
 const { width, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const FALLBACK_AVATAR = 'https://via.placeholder.com/100x100.png?text=User';
+const FALLBACK_AVATAR = PLACEHOLDER_AVATAR;
 
 export default function ChannelScreen() {
   const dispatch = useDispatch();

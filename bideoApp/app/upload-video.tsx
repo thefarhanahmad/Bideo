@@ -18,7 +18,6 @@ import { AppAdBanner } from '../components/AppAds';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { logVideoUploaded } from '../services/analytics';
 
-const FALLBACK_THUMBNAIL = 'https://via.placeholder.com/640x360.png?text=Tube+India';
 // Must match the server's upload limit (backend multer + nginx client_max_body_size)
 const MAX_UPLOAD_BYTES = 500 * 1024 * 1024;
 

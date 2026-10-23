@@ -33,8 +33,9 @@ import CreateGroupModal from '../../components/CreateGroupModal';
 import { showAlert } from '../../components/AppAlert';
 import { AppAdBanner } from '../../components/AppAds';
 import { hapticSelection, hapticLight } from '../../utils/haptics';
+import { PLACEHOLDER_AVATAR } from '../../constants/placeholders';
 
-const FALLBACK_AVATAR = 'https://via.placeholder.com/100x100.png?text=User';
+const FALLBACK_AVATAR = PLACEHOLDER_AVATAR;
 
 /**
  * Format timestamps professionally like Telegram/WhatsApp

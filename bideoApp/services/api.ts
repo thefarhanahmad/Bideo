@@ -226,9 +226,10 @@ export const chatService = {
     const response = await api.post('/chat/conversations', { recipientId });
     return response.data?.data;
   },
-  getMessages: async (conversationId: string, page = 1, limit = 50) => {
+  /** `before` (a message id) loads the messages older than that one */
+  getMessages: async (conversationId: string, page = 1, limit = 50, before?: string) => {
     const response = await api.get(`/chat/conversations/${conversationId}/messages`, {
-      params: { page, limit },
+      params: before ? { limit, before } : { page, limit },
     });
     return response.data;
   },

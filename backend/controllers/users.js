@@ -17,6 +17,7 @@ const VideoView = require('../models/VideoView');
 const CoinTransaction = require('../models/CoinTransaction');
 const { checkAndApplyChannelVerification } = require('../utils/channelVerification');
 const { notifyAndPush } = require('../utils/pushNotification');
+const { readOffsetPage } = require('../utils/pagination');
 const { getUserEarningsSummary, processPendingWalletCredits, getRewardRates } = require('../services/walletSettlementService');
 const { createTtlCache } = require('../utils/ttlCache');
 const { findFirstUserByOr } = require('../utils/userLookup');
@@ -1181,14 +1182,41 @@ exports.getHistory = async (req, res, next) => {
   }
 };
 
+const LIKED_VIDEO_POPULATE = [
+  { path: 'owner', select: 'name channelName avatar isVerified' },
+  { path: 'category', select: 'name' },
+];
+
 exports.getLikedVideos = async (req, res, next) => {
   try {
+    const paging = readOffsetPage(req.query);
+    if (paging) {
+      // Newest like first. Deleted videos and repeated likes are dropped before paging, so
+      // offsets always line up with the rows the app has (otherwise pages would overlap).
+      const user = await User.findById(req.user.id).select('likedVideos').lean();
+      const newestFirst = [...new Set((user?.likedVideos || []).map(String).reverse())];
+      const existing = newestFirst.length
+        ? await Video.find({ _id: { $in: newestFirst } }).select('_id').lean()
+        : [];
+      const existingIds = new Set(existing.map((v) => String(v._id)));
+      const ids = newestFirst.filter((id) => existingIds.has(id));
+      const pageIds = ids.slice(paging.offset, paging.offset + paging.limit);
+      const videos = pageIds.length
+        ? await Video.find({ _id: { $in: pageIds } }).populate(LIKED_VIDEO_POPULATE)
+        : [];
+      const byId = new Map(videos.map((v) => [String(v._id), v]));
+      const data = pageIds.map((id) => byId.get(String(id))).filter(Boolean);
+      return res.status(200).json({
+        success: true,
+        count: data.length,
+        hasMore: paging.offset + paging.limit < ids.length,
+        data,
+      });
+    }
+
     const user = await User.findById(req.user.id).populate({
       path: 'likedVideos',
-      populate: [
-        { path: 'owner', select: 'name channelName avatar isVerified' },
-        { path: 'category', select: 'name' },
-      ],
+      populate: LIKED_VIDEO_POPULATE,
     });
     // Reverse array so the most recently liked video is at index 0 (first)
     const validLiked = (user?.likedVideos || []).filter(Boolean).reverse();

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import { View, Text, StyleSheet, Animated, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../constants/Colors';
 
@@ -21,6 +21,14 @@ export const EmptyState = ({
     {!!subtitle && <Text style={styles.emptySubtitle}>{subtitle}</Text>}
   </View>
 );
+
+/** Small spinner under a list while its next page loads (same look as the home feed's). */
+export const LoadMoreFooter = ({ visible }: { visible: boolean }) =>
+  visible ? (
+    <View style={styles.loadMore}>
+      <ActivityIndicator size="small" color={Colors.primary} />
+    </View>
+  ) : null;
 
 /** A single pulsing grey box. */
 export const Shimmer = ({ style }: { style?: any }) => {
@@ -100,6 +108,10 @@ export const VideoDetailSkeleton = () => (
 );
 
 const styles = StyleSheet.create({
+  loadMore: {
+    paddingVertical: 18,
+    alignItems: 'center',
+  },
   emptyWrap: {
     alignItems: 'center',
     justifyContent: 'center',

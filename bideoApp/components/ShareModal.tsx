@@ -28,9 +28,10 @@ import AuthModal from './AuthModal';
 import { AppAdBanner } from './AppAds';
 import { formatViews } from '../utils/formatDate';
 import { hapticLight, hapticSelection } from '../utils/haptics';
+import { PLACEHOLDER_AVATAR, PLACEHOLDER_THUMBNAIL } from '../constants/placeholders';
 
-const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
-const FALLBACK_THUMBNAIL = 'https://via.placeholder.com/320x180.png?text=Bideo';
+const FALLBACK_AVATAR = PLACEHOLDER_AVATAR;
+const FALLBACK_THUMBNAIL = PLACEHOLDER_THUMBNAIL;
 
 export interface ShareModalItem {
   type: 'video' | 'post' | 'channel';

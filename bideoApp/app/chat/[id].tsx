@@ -40,9 +40,11 @@ import AddGroupMembersModal from '../../components/AddGroupMembersModal';
 import { showAlert } from '../../components/AppAlert';
 import { hapticLight, hapticSelection } from '../../utils/haptics';
 import { AppAdBanner } from '../../components/AppAds';
+import { PLACEHOLDER_AVATAR, PLACEHOLDER_THUMBNAIL } from '../../constants/placeholders';
 
-const FALLBACK_AVATAR = 'https://via.placeholder.com/100x100.png?text=User';
-const FALLBACK_THUMBNAIL = 'https://via.placeholder.com/640x360.png?text=Bideo';
+const FALLBACK_AVATAR = PLACEHOLDER_AVATAR;
+const FALLBACK_THUMBNAIL = PLACEHOLDER_THUMBNAIL;
+const OLDER_MESSAGES_PAGE = 50;
 
 export interface ChatTheme {
   id: string;
@@ -315,6 +317,8 @@ export default function ChatRoomScreen() {
   const [addMembersModalVisible, setAddMembersModalVisible] = useState(false);
   const [replyingTo, setReplyingTo] = useState<any | null>(null);
   const [themeModalVisible, setThemeModalVisible] = useState(false);
+  const [hasOlder, setHasOlder] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
 
   const insets = useSafeAreaInsets();
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -322,6 +326,9 @@ export default function ChatRoomScreen() {
   const flatListRef = useRef<FlatList>(null);
   const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const otherParticipantIdRef = useRef<string | null>(null);
+  const loadingOlderRef = useRef(false);
+  // Bumped on every full reload, so an older page that arrives after a reload is dropped
+  const loadGenerationRef = useRef(0);
 
   const currentUserId = user?._id?.toString() || user?.id?.toString() || '';
   const currentThemeKey = conversation?.theme || 'default';
@@ -355,6 +362,7 @@ export default function ChatRoomScreen() {
   // Load conversation details and message history
   const loadData = useCallback(async () => {
     if (!conversationId) return;
+    loadGenerationRef.current += 1;
     try {
       setLoading(true);
       const [convData, msgData] = await Promise.all([
@@ -380,6 +388,7 @@ export default function ChatRoomScreen() {
 
       if (msgData?.data) {
         setMessages(msgData.data);
+        setHasOlder(Boolean(msgData.hasMore));
       }
 
       // Mark conversation as read
@@ -392,6 +401,36 @@ export default function ChatRoomScreen() {
       setLoading(false);
     }
   }, [conversationId]);
+
+  // Scrolling up to the top of the chat loads the next older messages
+  const loadOlderMessages = useCallback(async () => {
+    if (!conversationId || !hasOlder || loadingOlderRef.current) return;
+    const oldest = messages.find((m) => m?._id);
+    if (!oldest) return;
+
+    const generation = loadGenerationRef.current;
+    loadingOlderRef.current = true;
+    setLoadingOlder(true);
+    try {
+      const res = await chatService.getMessages(conversationId, 1, OLDER_MESSAGES_PAGE, oldest._id);
+      if (generation !== loadGenerationRef.current) return;
+      const older: any[] = Array.isArray(res?.data) ? res.data : [];
+      setMessages((prev) => {
+        const known = new Set(prev.map((m) => m?._id).filter(Boolean));
+        const fresh = older.filter((m) => m?._id && !known.has(m._id));
+        return fresh.length ? [...fresh, ...prev] : prev;
+      });
+      // Stop when nothing older came back (or a page included the anchor itself), so the
+      // list never keeps asking for the same page
+      const pageIsOlder = older.length > 0 && !older.some((m) => m?._id === oldest._id);
+      setHasOlder(Boolean(res?.hasMore) && pageIsOlder);
+    } catch (err: any) {
+      console.error('Failed to load older messages:', err);
+    } finally {
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+    }
+  }, [conversationId, hasOlder, messages]);
 
   useEffect(() => {
     loadData();
@@ -1519,6 +1558,15 @@ export default function ChatRoomScreen() {
           contentContainerStyle={styles.messagesList}
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
+          onEndReached={loadOlderMessages}
+          onEndReachedThreshold={0.3}
+          ListFooterComponent={
+            loadingOlder ? (
+              <View style={styles.olderLoader}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+              </View>
+            ) : null
+          }
           onScrollToIndexFailed={(info) => {
             flatListRef.current?.scrollToOffset({
               offset: info.averageItemLength > 0 ? info.index * info.averageItemLength : info.index * 60,
@@ -2160,6 +2208,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingTop: 8,
     paddingBottom: 14,
+  },
+  olderLoader: {
+    paddingVertical: 12,
+    alignItems: 'center',
   },
   emptyMessages: {
     flex: 1,

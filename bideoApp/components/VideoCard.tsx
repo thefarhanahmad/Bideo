@@ -15,9 +15,10 @@ import { RootState } from '../redux/store';
 import VerifiedBadge from './VerifiedBadge';
 import HashtagText from './HashtagText';
 import VideoActionsMenu, { VideoMenuItem } from './VideoActionsMenu';
+import { PLACEHOLDER_AVATAR, PLACEHOLDER_THUMBNAIL } from '../constants/placeholders';
 
-const FALLBACK_IMAGE = 'https://via.placeholder.com/640x360?text=No+Image';
-const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
+const FALLBACK_IMAGE = PLACEHOLDER_THUMBNAIL;
+const FALLBACK_AVATAR = PLACEHOLDER_AVATAR;
 
 interface VideoCardProps {
   video: {

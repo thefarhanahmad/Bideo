@@ -24,6 +24,7 @@ import HashtagText from '../../components/HashtagText';
 import { shareVideo } from '../../utils/shareHelper';
 import ShareModal from '../../components/ShareModal';
 import { logVideoStart, trackVideoWatched } from '../../services/analytics';
+import { PLACEHOLDER_AVATAR } from '../../constants/placeholders';
 
 const shuffleArray = <T,>(array: T[]): T[] => {
   const shuffled = [...array];
@@ -54,7 +55,7 @@ const formatShortItem = (v: any, currentUserId?: string, isAuth?: boolean) => ({
   createdAt: v.createdAt,
 });
 
-const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
+const FALLBACK_AVATAR = PLACEHOLDER_AVATAR;
 const SCROLLABLE_AD_BANNER_COUNT = 4;
 
 const { height: WINDOW_HEIGHT, width: WINDOW_WIDTH } = Dimensions.get('window');

@@ -21,8 +21,9 @@ import VerifiedBadge from './VerifiedBadge';
 import { showAlert } from './AppAlert';
 import { hapticLight, hapticMedium } from '../utils/haptics';
 import { chatService, resolveMediaUrl } from '../services/api';
+import { PLACEHOLDER_AVATAR, PLACEHOLDER_GROUP_AVATAR } from '../constants/placeholders';
 
-const FALLBACK_AVATAR = 'https://via.placeholder.com/100x100.png?text=Group';
+const FALLBACK_AVATAR = PLACEHOLDER_AVATAR;
 
 interface GroupInfoModalProps {
   visible: boolean;
@@ -244,7 +245,7 @@ export default function GroupInfoModal({
                 activeOpacity={0.8}
               >
                 <Image
-                  source={{ uri: resolveMediaUrl(conversation.groupAvatar) || FALLBACK_AVATAR }}
+                  source={{ uri: resolveMediaUrl(conversation.groupAvatar) || PLACEHOLDER_GROUP_AVATAR }}
                   style={styles.groupAvatar}
                   contentFit="cover"
                 />

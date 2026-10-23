@@ -1,37 +1,40 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import Colors from '../constants/Colors';
 import api from '../services/api';
-import { EmptyState } from '../components/ListStates';
+import { EmptyState, LoadMoreFooter } from '../components/ListStates';
+import usePagedList from '../hooks/usePagedList';
 import { formatTimeAgo, formatViews } from '../utils/formatDate';
+
+const PAGE_SIZE = 20;
+
+const fetchLikedPage = async (offset: number, limit: number) => {
+  const res = await api.get('/users/liked-videos', { params: { offset, limit } });
+  return { items: res.data?.data || [], hasMore: Boolean(res.data?.hasMore) };
+};
 
 export default function LikedVideosScreen() {
   const router = useRouter();
-  const [videos, setVideos] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const {
+    items: videos,
+    loading,
+    refreshing,
+    loadingMore,
+    reload,
+    loadMore,
+  } = usePagedList<any>(fetchLikedPage, PAGE_SIZE, 'liked videos');
+  const loadedOnceRef = useRef(false);
 
+  // First visit shows the spinner; coming back refreshes quietly
   useFocusEffect(
     useCallback(() => {
-      loadLikedVideos();
-    }, [])
+      reload(loadedOnceRef.current ? 'silent' : 'initial');
+      loadedOnceRef.current = true;
+    }, [reload])
   );
-
-  const loadLikedVideos = async () => {
-    setLoading(true);
-    try {
-      const res = await api.get('/users/liked-videos');
-      if (res.data.success) {
-        setVideos(res.data.data || []);
-      }
-    } catch (err) {
-      console.error('Failed to load liked videos', err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -91,8 +94,11 @@ export default function LikedVideosScreen() {
               subtitle="Tap the like button on videos you enjoy and they'll appear here."
             />
           }
-          refreshing={loading}
-          onRefresh={loadLikedVideos}
+          refreshing={refreshing}
+          onRefresh={() => reload('refresh')}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={<LoadMoreFooter visible={loadingMore} />}
         />
       )}
     </View>
