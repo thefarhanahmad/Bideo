@@ -343,11 +343,11 @@ async function notifyFollowersOfUpload({ creatorId, video, post }) {
 
     if (video) {
       const isShort = video.isShort === true || video.isShort === 'true';
-      const cleanTitle = video.title ? (video.title.length > 40 ? `${video.title.substring(0, 40)}...` : video.title) : 'a new video';
+      const cleanTitle = video.title ? (video.title.length > 70 ? `${video.title.substring(0, 70)}...` : video.title) : 'New video';
       notifType = 'video_upload';
-      notifMessage = `${creatorName} uploaded a new ${isShort ? 'Short' : 'video'}: "${cleanTitle}"`;
-      pushTitle = `🎬 ${creatorName}`;
-      pushBody = `Uploaded: "${cleanTitle}"`;
+      notifMessage = `${cleanTitle}\n${creatorName} • ${isShort ? 'Short' : 'video'}`;
+      pushTitle = cleanTitle;
+      pushBody = `${creatorName} uploaded a new ${isShort ? 'Short' : 'video'}`;
       pushData = {
         type: 'video_upload',
         videoId: video._id.toString(),
@@ -355,11 +355,11 @@ async function notifyFollowersOfUpload({ creatorId, video, post }) {
         screen: isShort ? `/shorts?initialShortId=${video._id}` : `/video/${video._id}`,
       };
     } else if (post) {
-      const cleanSnippet = post.text ? (post.text.length > 50 ? `${post.text.substring(0, 50)}...` : post.text) : 'Shared a new post';
+      const cleanSnippet = post.text ? (post.text.length > 70 ? `${post.text.substring(0, 70)}...` : post.text) : 'New community post';
       notifType = 'post_upload';
-      notifMessage = `${creatorName} shared a new community post`;
-      pushTitle = `📝 ${creatorName}`;
-      pushBody = cleanSnippet;
+      notifMessage = `${cleanSnippet}\n${creatorName} • post`;
+      pushTitle = cleanSnippet;
+      pushBody = `${creatorName} shared a new post`;
       pushData = {
         type: 'post_upload',
         postId: post._id.toString(),
@@ -557,14 +557,14 @@ async function notifyInterestedNonFollowersOfUpload({ creatorId, video, post, fo
     if (video) {
       const isShort = video.isShort === true || video.isShort === 'true';
       const cleanTitle = video.title
-        ? video.title.length > 40
-          ? `${video.title.substring(0, 40)}...`
+        ? video.title.length > 70
+          ? `${video.title.substring(0, 70)}...`
           : video.title
-        : 'a new video';
+        : 'New video';
 
-      notifMessage = `Recommended for you: ${creatorName} uploaded a new ${isShort ? 'Short' : 'video'}: "${cleanTitle}"`;
-      pushTitle = `💡 Recommended for you`;
-      pushBody = `${creatorName} uploaded: "${cleanTitle}"`;
+      notifMessage = `${cleanTitle}\n${creatorName} • ${isShort ? 'Short' : 'video'}`;
+      pushTitle = cleanTitle;
+      pushBody = `${creatorName} uploaded a new ${isShort ? 'Short' : 'video'}`;
       pushData = {
         type: 'video_upload',
         videoId: video._id.toString(),
@@ -572,10 +572,10 @@ async function notifyInterestedNonFollowersOfUpload({ creatorId, video, post, fo
         screen: isShort ? `/shorts?initialShortId=${video._id}` : `/video/${video._id}`,
       };
     } else if (post) {
-      const cleanSnippet = post.text ? (post.text.length > 50 ? `${post.text.substring(0, 50)}...` : post.text) : 'Shared a new post';
-      notifMessage = `Recommended for you: ${creatorName} shared a community post`;
-      pushTitle = `💡 New Post from ${creatorName}`;
-      pushBody = cleanSnippet;
+      const cleanSnippet = post.text ? (post.text.length > 70 ? `${post.text.substring(0, 70)}...` : post.text) : 'New community post';
+      notifMessage = `${cleanSnippet}\n${creatorName} • post`;
+      pushTitle = cleanSnippet;
+      pushBody = `${creatorName} shared a new post`;
       pushData = {
         type: 'post_upload',
         postId: post._id.toString(),

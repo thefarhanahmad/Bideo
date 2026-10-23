@@ -28,6 +28,83 @@ const fetchNotificationsPage = async (offset: number, limit: number) => {
 const RECOMMENDED_PREFIX = /^\s*recommended for you\s*:\s*/i;
 const stripRecommendedPrefix = (msg: string) => msg.replace(RECOMMENDED_PREFIX, '') || msg;
 
+/**
+ * Extracts clean video/post title, actor/channel name, and upload action from notification.
+ * Enables showing the content title first, followed by the channel name and timestamp below.
+ */
+const parseUploadNotification = (item: any) => {
+  const isVideoUpload = item.type === 'video_upload' || !!item.video;
+  const isPostUpload = item.type === 'post_upload' || (!!item.post && !item.type?.includes('like') && !item.type?.includes('comment'));
+
+  const actorName = item.actor?.channelName || item.actor?.name || '';
+  const isShort = Boolean(item.video?.isShort);
+
+  // 1. Check if populated video title or post text is available
+  if (isVideoUpload && item.video?.title) {
+    return {
+      isContentUpload: true,
+      contentTitle: item.video.title.trim(),
+      channelName: actorName,
+      contentTypeLabel: isShort ? 'Short' : 'video',
+    };
+  }
+
+  if (isPostUpload && item.post?.text) {
+    return {
+      isContentUpload: true,
+      contentTitle: item.post.text.trim(),
+      channelName: actorName,
+      contentTypeLabel: 'post',
+    };
+  }
+
+  // 2. Parse from message string (e.g. 'Papppu uploaded a new Short: "Title"' or 'Recommended for you: Channel uploaded a new video: "Title"')
+  const rawMsg = stripRecommendedPrefix(item.message || '');
+
+  // Check newline format: `${cleanTitle}\n${creatorName} • ${type}`
+  if (rawMsg.includes('\n')) {
+    const [titlePart, subPart] = rawMsg.split('\n');
+    const channelPart = subPart?.split('•')[0]?.trim() || actorName;
+    return {
+      isContentUpload: true,
+      contentTitle: titlePart.trim(),
+      channelName: channelPart,
+      contentTypeLabel: subPart?.toLowerCase().includes('short') ? 'Short' : subPart?.toLowerCase().includes('post') ? 'post' : 'video',
+    };
+  }
+
+  // Match: ChannelName uploaded a new (Short|video): "Title"
+  const videoMatch = rawMsg.match(/^(.*?)\s+uploaded\s+a\s+new\s+(Short|video)\s*:\s*"?([^"]*)"?$/i);
+  if (videoMatch) {
+    const extractedChannel = videoMatch[1]?.trim() || actorName;
+    const typeLabel = videoMatch[2]?.toLowerCase() === 'short' ? 'Short' : 'video';
+    const extractedTitle = videoMatch[3]?.trim();
+    if (extractedTitle) {
+      return {
+        isContentUpload: true,
+        contentTitle: extractedTitle,
+        channelName: extractedChannel,
+        contentTypeLabel: typeLabel,
+      };
+    }
+  }
+
+  // Match: ChannelName shared a new (community )?post(: "Title")?
+  const postMatch = rawMsg.match(/^(.*?)\s+shared\s+a\s+(?:new\s+)?(?:community\s+)?post(?:\s*:\s*"?([^"]*)"?)?$/i);
+  if (postMatch) {
+    const extractedChannel = postMatch[1]?.trim() || actorName;
+    const extractedTitle = postMatch[2]?.trim() || item.post?.text?.trim() || 'Shared a new community post';
+    return {
+      isContentUpload: true,
+      contentTitle: extractedTitle,
+      channelName: extractedChannel,
+      contentTypeLabel: 'post',
+    };
+  }
+
+  return { isContentUpload: false };
+};
+
 export default function NotificationsScreen() {
   const router = useRouter();
   const { isAuthenticated } = useSelector((state: RootState) => state.auth);
@@ -106,7 +183,7 @@ export default function NotificationsScreen() {
       const vidId = (videoObj._id || videoObj).toString();
       const isShort = Boolean(videoObj.isShort);
       if (isShort) {
-        router.push({ pathname: '/shorts', params: { initialShortId: vidId } });
+        router.push({ pathname: '/channel-shorts', params: { initialShortId: vidId } });
       } else {
         router.push(`/video/${vidId}`);
       }
@@ -289,30 +366,55 @@ export default function NotificationsScreen() {
 
                 {/* Message & Content Details */}
                 <View style={styles.itemText}>
-                  <Text style={styles.message} numberOfLines={3}>
-                    {(() => {
-                      const actorName = item.actor?.channelName || item.actor?.name;
-                      // "Recommended for you:" is shown as a small chip below, not as part of the message
-                      const msg = stripRecommendedPrefix(item.message || 'New activity on your content');
-                      if (actorName && (msg.toLowerCase().startsWith(actorName.toLowerCase()) || msg.toLowerCase().startsWith('recommended'))) {
-                        return msg;
-                      }
+                  {(() => {
+                    const parsed = parseUploadNotification(item);
+                    if (parsed.isContentUpload && parsed.contentTitle) {
                       return (
                         <>
-                          {actorName ? <Text style={styles.actorName}>{actorName} </Text> : null}
-                          {msg}
+                          <Text style={styles.contentTitle} numberOfLines={2}>
+                            {parsed.contentTitle}
+                          </Text>
+                          {parsed.channelName ? (
+                            <Text style={styles.channelSubtitle} numberOfLines={1}>
+                              {parsed.channelName}
+                            </Text>
+                          ) : null}
+                          <View style={styles.metaRow}>
+                            <Text style={styles.time}>{formatTimeAgo(item.createdAt)}</Text>
+                            {isRecommendationNotification(item) && (
+                              <View style={styles.recommendedChip}>
+                                <Text style={styles.recommendedChipText}>Recommended</Text>
+                              </View>
+                            )}
+                          </View>
                         </>
                       );
-                    })()}
-                  </Text>
-                  <View style={styles.metaRow}>
-                    <Text style={styles.time}>{formatTimeAgo(item.createdAt)}</Text>
-                    {isRecommendationNotification(item) && (
-                      <View style={styles.recommendedChip}>
-                        <Text style={styles.recommendedChipText}>Recommended</Text>
-                      </View>
-                    )}
-                  </View>
+                    }
+
+                    const actorName = item.actor?.channelName || item.actor?.name;
+                    // "Recommended for you:" is shown as a small chip below, not as part of the message
+                    const msg = stripRecommendedPrefix(item.message || 'New activity on your content');
+                    const hasActorPrefix = actorName && (msg.toLowerCase().startsWith(actorName.toLowerCase()) || msg.toLowerCase().startsWith('recommended'));
+
+                    return (
+                      <>
+                        <Text style={styles.message} numberOfLines={3}>
+                          {!hasActorPrefix && actorName ? (
+                            <Text style={styles.actorName}>{actorName} </Text>
+                          ) : null}
+                          {msg}
+                        </Text>
+                        <View style={styles.metaRow}>
+                          <Text style={styles.time}>{formatTimeAgo(item.createdAt)}</Text>
+                          {isRecommendationNotification(item) && (
+                            <View style={styles.recommendedChip}>
+                              <Text style={styles.recommendedChipText}>Recommended</Text>
+                            </View>
+                          )}
+                        </View>
+                      </>
+                    );
+                  })()}
                 </View>
 
                 {/* Thumbnail Preview on Right if Video or Post Attached */}
@@ -324,9 +426,6 @@ export default function NotificationsScreen() {
                     transition={150}
                   />
                 )}
-
-                {/* Unread indicator dot */}
-                {!item.read && <View style={styles.dot} />}
               </TouchableOpacity>
             );
           }}
@@ -414,7 +513,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   item: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -425,6 +524,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     width: 44,
     height: 44,
+    marginTop: 2,
   },
   avatar: {
     width: 44,
@@ -452,6 +552,19 @@ const styles = StyleSheet.create({
     borderColor: '#FFFFFF',
   },
   itemText: { flex: 1, marginLeft: 12, marginRight: 8 },
+  contentTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.text,
+    lineHeight: 19,
+    marginBottom: 2,
+  },
+  channelSubtitle: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#4B5563',
+    lineHeight: 17,
+  },
   actorName: { fontWeight: '700', color: Colors.text },
   message: { color: Colors.text, fontSize: 13.5, lineHeight: 18 },
   time: { color: Colors.textGray, fontSize: 11.5 },
@@ -469,13 +582,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: Colors.border,
     marginRight: 6,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.primary,
-    marginLeft: 4,
+    marginTop: 2,
   },
   authContainer: {
     flex: 1,

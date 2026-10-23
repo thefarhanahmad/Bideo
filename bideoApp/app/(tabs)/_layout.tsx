@@ -39,7 +39,7 @@ const CustomUploadTabButton: React.FC<{ onPress?: () => void }> = ({ onPress }) 
           start={{ x: 0.15, y: 0 }}
           end={{ x: 0.85, y: 1 }}
         >
-          <Ionicons name="add" size={20} color="#FFFFFF" />
+          <Ionicons name="add" size={22} color="#FFFFFF" />
         </LinearGradient>
         <Text style={styles.uploadButtonLabel}>Upload</Text>
       </TouchableOpacity>
@@ -150,22 +150,22 @@ export default function TabsLayout() {
           alignItems: 'center',
         },
         tabBarIconStyle: {
-          marginTop: 0,
+          marginTop: 1,
           marginBottom: 1,
         },
         tabBarLabelStyle: {
           fontSize: 10.5,
           fontWeight: '600',
           marginTop: 0,
-          marginBottom: 0,
+          marginBottom: 1,
           letterSpacing: 0.1,
         },
         tabBarStyle: {
           backgroundColor: '#FFFFFF',
           borderTopWidth: StyleSheet.hairlineWidth,
           borderTopColor: 'rgba(0, 0, 0, 0.08)',
-          height: 52 + safeBottom,
-          paddingTop: 0,
+          height: 54 + safeBottom,
+          paddingTop: 2,
           paddingBottom: safeBottom,
           shadowColor: '#000000',
           shadowOffset: { width: 0, height: -2 },
@@ -283,8 +283,8 @@ export default function TabsLayout() {
               </TouchableOpacity>
             </View>
           ),
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" size={size} color={color} />
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="home-outline" size={26} color={color} />
           ),
         }}
         listeners={() => ({
@@ -298,8 +298,8 @@ export default function TabsLayout() {
         options={{
           title: 'Shorts',
           headerShown: false,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="play-circle-outline" size={size} color={color} />
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="play-circle-outline" size={26} color={color} />
           ),
         }}
         listeners={() => ({
@@ -329,8 +329,8 @@ export default function TabsLayout() {
         name="followings"
         options={{
           title: 'Following',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="copy-outline" size={size} color={color} />
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="copy-outline" size={25} color={color} />
           ),
         }}
       />
@@ -346,8 +346,8 @@ export default function TabsLayout() {
               }}
             />
           ),
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="library-outline" size={size} color={color} />
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="library-outline" size={25} color={color} />
           ),
         }}
       />
@@ -374,9 +374,9 @@ const styles = StyleSheet.create({
   },
   // Sized like the other tab icons so the row lines up
   uploadButtonGradient: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 1,
