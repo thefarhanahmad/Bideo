@@ -30,6 +30,7 @@ import Payouts from './pages/Payouts';
 import ErrorLogs from './pages/ErrorLogs';
 import Conversations from './pages/Conversations';
 import Stories from './pages/Stories';
+import Playlists from './pages/Playlists';
 import LoadingSkeleton from './components/LoadingSkeleton';
 import { BlogIndex, BlogPost, BlogCategory } from './pages/blog';
 import './App.css';
@@ -87,6 +88,7 @@ function App() {
           <Route path="categories" element={<Categories />} />
           <Route path="videos" element={<Videos />} />
           <Route path="stories" element={<Stories />} />
+          <Route path="playlists" element={<Playlists />} />
           <Route path="server-videos" element={<ServerVideos />} />
           <Route path="conversations" element={<Conversations />} />
           <Route path="reports" element={<Reports />} />

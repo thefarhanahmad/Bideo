@@ -445,6 +445,106 @@ const scoreUserRelevance = (u, { phrase, terms }) => {
 
 const SEARCH_RESULT_TYPES = new Set(["videos", "shorts", "channels", "posts", "playlists"]);
 
+// Fields a search term is matched against. Email and phone are matched only for admins:
+// for everyone else searching someone's phone number or email must not reveal their channel.
+const CHANNEL_SEARCH_FIELDS = ["channelName", "name"];
+const ADMIN_CHANNEL_SEARCH_FIELDS = ["channelName", "name", "email", "phone"];
+const SEARCH_LIMITS = { channelsScan: 30, channels: 20, videos: 60, posts: 40, playlists: 30 };
+
+const matchClauses = (fields, { phraseRegex, regexes }) => {
+  const clauses = [];
+  if (phraseRegex) fields.forEach((f) => clauses.push({ [f]: phraseRegex }));
+  regexes.forEach((r) => fields.forEach((f) => clauses.push({ [f]: r })));
+  return clauses;
+};
+
+const searchVideoDocs = ({ keywords, channelIds, q, isObjectId, isAdmin, blockedUserIds, type }) => {
+  const clauses = matchClauses(["title", "description", "tags"], keywords);
+  if (channelIds.length > 0) clauses.push({ owner: { $in: channelIds } });
+  if (isObjectId) clauses.push({ _id: q });
+
+  const query = { $or: clauses };
+  if (!isAdmin) {
+    query.visibility = "public";
+    if (blockedUserIds.length > 0) query.owner = { $nin: blockedUserIds };
+  }
+  if (type === "shorts") query.isShort = true;
+  if (type === "videos") query.isShort = { $ne: true };
+
+  return Video.find(query)
+    .populate("owner", "name avatar channelName followersCount isVerified")
+    .populate("category", "name")
+    .limit(SEARCH_LIMITS.videos)
+    .lean();
+};
+
+const searchPostDocs = ({ keywords, channelIds, q, isObjectId, isAdmin, blockedUserIds }) => {
+  const clauses = matchClauses(["text"], keywords);
+  if (channelIds.length > 0) clauses.push({ owner: { $in: channelIds } });
+  if (isObjectId) clauses.push({ _id: q });
+  if (!clauses.length) return Promise.resolve([]);
+
+  const query = { $or: clauses, visibility: "public" };
+  if (!isAdmin && blockedUserIds.length > 0) query.owner = { $nin: blockedUserIds };
+
+  return Post.find(query)
+    .populate("owner", "name avatar channelName isVerified")
+    .sort("-createdAt")
+    .limit(SEARCH_LIMITS.posts)
+    .lean();
+};
+
+const searchPlaylistDocs = async ({ keywords, channelIds, q, isObjectId, isAdmin, blockedUserIds, viewerId }) => {
+  const clauses = matchClauses(["name"], keywords);
+  if (channelIds.length > 0) clauses.push({ owner: { $in: channelIds } });
+  if (isObjectId) clauses.push({ _id: q });
+  if (!clauses.length) return [];
+
+  const query = { $or: clauses };
+  if (!isAdmin) {
+    query.isPrivate = { $ne: true };
+    if (blockedUserIds.length > 0) query.owner = { $nin: blockedUserIds };
+  }
+
+  const playlists = await Playlist.find(query)
+    .populate("owner", "name channelName avatar isVerified")
+    .populate({ path: "videos", select: "thumbnail visibility owner", populate: { path: "owner", select: "isBlocked" } })
+    .sort("-createdAt")
+    .limit(SEARCH_LIMITS.playlists)
+    .lean();
+
+  return playlists
+    .map((p) => {
+      const isOwner = Boolean(viewerId) && String(p.owner?._id || p.owner) === String(viewerId);
+      // Other people only see (and count) public videos from channels that are not blocked
+      const visibleVideos = (p.videos || []).filter(
+        (v) => v && (isOwner || (v.visibility === "public" && !(v.owner && v.owner.isBlocked)))
+      );
+      const cover = visibleVideos.length ? visibleVideos[visibleVideos.length - 1] : null;
+      return {
+        _id: p._id,
+        name: p.name,
+        isPrivate: Boolean(p.isPrivate),
+        createdAt: p.createdAt,
+        videoCount: visibleVideos.length,
+        thumbnail: cover ? cover.thumbnail : null,
+        owner: p.owner,
+        isOwner,
+      };
+    })
+    .filter((p) => p.isOwner || p.videoCount > 0)
+    .map(({ isOwner, ...rest }) => rest);
+};
+
+// One query for the viewer's follow status of all listed channels (was one query per channel)
+const followedChannelIds = async (viewerId, channels) => {
+  if (!viewerId || channels.length === 0) return new Set();
+  const follows = await Follower.find({ follower: viewerId, channel: { $in: channels.map((c) => c._id) } })
+    .select("channel")
+    .lean();
+  return new Set(follows.map((f) => String(f.channel)));
+};
+
 exports.searchVideos = async (req, res, next) => {
   try {
     const rawQ = req.query.q || req.query.search || "";
@@ -455,207 +555,49 @@ exports.searchVideos = async (req, res, next) => {
         .json({ success: true, count: 0, data: { channels: [], videos: [], posts: [], playlists: [] } });
 
     const { phrase, terms, regexes, phraseRegex } = parseSearchKeywords(q);
+    const keywords = { regexes, phraseRegex };
     const isObjectId = mongoose.Types.ObjectId.isValid(q);
     const isAdmin = req.user && req.user.role === "admin";
+    const viewerId = req.user ? req.user.id : null;
     const blockedUserIds = isAdmin ? [] : await getBlockedUserIds();
-    // Optional result filter from the app's search chips; without it the response is unchanged
+    // Optional result filter from the app's search chips; without it every result type is returned
     const type = SEARCH_RESULT_TYPES.has(req.query.type) ? req.query.type : null;
+    const wants = (t) => !type || type === t;
 
-    // 1. Search channels (users with a channelName or matching name/email/phone)
-    const channelOrClauses = [];
-    if (phraseRegex) {
-      channelOrClauses.push({ channelName: phraseRegex });
-      channelOrClauses.push({ name: phraseRegex });
-      channelOrClauses.push({ email: phraseRegex });
-      channelOrClauses.push({ phone: phraseRegex });
-    }
-    regexes.forEach((tRegex) => {
-      channelOrClauses.push({ channelName: tRegex });
-      channelOrClauses.push({ name: tRegex });
-      channelOrClauses.push({ email: tRegex });
-      channelOrClauses.push({ phone: tRegex });
-    });
-    if (isObjectId) {
-      channelOrClauses.push({ _id: q });
-    }
+    // 1. Channels (their ids also find the channel's videos, posts and playlists)
+    const channelQuery = { $or: matchClauses(isAdmin ? ADMIN_CHANNEL_SEARCH_FIELDS : CHANNEL_SEARCH_FIELDS, keywords) };
+    if (isObjectId) channelQuery.$or.push({ _id: q });
+    if (!isAdmin) channelQuery.isBlocked = { $ne: true };
 
-    const channelFindQuery = { $or: channelOrClauses };
-    if (!isAdmin) {
-      channelFindQuery.isBlocked = { $ne: true };
-    }
-
-    const channels = await User.find(channelFindQuery)
+    const channels = await User.find(channelQuery)
       .select("name avatar channelName followersCount about isVerified role")
-      .limit(30)
+      .limit(SEARCH_LIMITS.channelsScan)
       .lean();
-
     const channelIds = channels.map((c) => c._id);
 
-    // 2. Search videos (matches title, description, tags, matching channel/creator, or ID)
-    const videoOrClauses = [];
-    if (phraseRegex) {
-      videoOrClauses.push({ title: phraseRegex });
-      videoOrClauses.push({ description: phraseRegex });
-      videoOrClauses.push({ tags: phraseRegex });
-      videoOrClauses.push({ tags: { $in: [phraseRegex] } });
-    }
-    regexes.forEach((tRegex) => {
-      videoOrClauses.push({ title: tRegex });
-      videoOrClauses.push({ description: tRegex });
-      videoOrClauses.push({ tags: tRegex });
-      videoOrClauses.push({ tags: { $in: [tRegex] } });
-    });
-    if (channelIds.length > 0) {
-      videoOrClauses.push({ owner: { $in: channelIds } });
-    }
-    if (isObjectId) {
-      videoOrClauses.push({ _id: q });
-    }
+    const scoredChannels = wants("channels")
+      ? channels
+          .map((c) => ({ ...c, _score: scoreUserRelevance(c, { phrase, terms }) }))
+          .sort((a, b) => b._score - a._score)
+          .slice(0, SEARCH_LIMITS.channels)
+      : [];
 
-    const videoQuery = { $or: videoOrClauses };
+    // 2. Everything else in parallel
+    const ctx = { keywords, channelIds, q, isObjectId, isAdmin, blockedUserIds, type, viewerId };
+    const wantsVideos = !type || type === "videos" || type === "shorts";
+    const [videos, postsData, playlistsData, followed] = await Promise.all([
+      wantsVideos ? searchVideoDocs(ctx) : [],
+      wants("posts") ? searchPostDocs(ctx) : [],
+      wants("playlists") ? searchPlaylistDocs(ctx) : [],
+      followedChannelIds(viewerId, scoredChannels),
+    ]);
 
-    if (!isAdmin) {
-      videoQuery.visibility = "public";
-      if (blockedUserIds.length > 0) {
-        videoQuery.owner = { ...(videoQuery.owner || {}), $nin: blockedUserIds };
-      }
-    }
+    const channelsData = scoredChannels.map((c) => ({ ...c, isFollowing: followed.has(String(c._id)) }));
 
-    if (type === "shorts") videoQuery.isShort = true;
-    if (type === "videos") videoQuery.isShort = { $ne: true };
-
-    const videos =
-      type === "channels" || type === "posts" || type === "playlists"
-        ? []
-        : await Video.find(videoQuery)
-            .populate("owner", "name avatar channelName followersCount isVerified")
-            .populate("category", "name")
-            .limit(60)
-            .lean();
-
-    // Score and rank channels
-    const scoredChannels = channels
-      .map((c) => ({ ...c, _score: scoreUserRelevance(c, { phrase, terms }) }))
-      .sort((a, b) => b._score - a._score)
-      .slice(0, 20);
-
-    const channelsData = [];
-    const channelsToReturn =
-      type === "videos" || type === "shorts" || type === "posts" || type === "playlists"
-        ? []
-        : scoredChannels;
-    for (let c of channelsToReturn) {
-      const channelObj = typeof c === "object" ? { ...c } : c;
-      if (req.user) {
-        const isFollowing = await Follower.findOne({
-          follower: req.user.id,
-          channel: c._id,
-        });
-        channelObj.isFollowing = !!isFollowing;
-      } else {
-        channelObj.isFollowing = false;
-      }
-      channelsData.push(channelObj);
-    }
-
-    // Score and rank videos
     const scoredVideos = videos
       .map((v) => ({ ...v, _score: scoreVideoRelevance(v, { phrase, terms }) }))
       .sort((a, b) => b._score - a._score);
-
     const results = await decorateVideos(scoredVideos, req);
-
-    // 3. Search posts (matches text, creator, or post ID)
-    let postsData = [];
-    if (!type || type === "posts") {
-      const postOrClauses = [];
-      if (phraseRegex) {
-        postOrClauses.push({ text: phraseRegex });
-      }
-      regexes.forEach((tRegex) => {
-        postOrClauses.push({ text: tRegex });
-      });
-      if (channelIds.length > 0) {
-        postOrClauses.push({ owner: { $in: channelIds } });
-      }
-      if (isObjectId) {
-        postOrClauses.push({ _id: q });
-      }
-
-      if (postOrClauses.length > 0) {
-        const postQuery = { $or: postOrClauses, visibility: "public" };
-        if (!isAdmin && blockedUserIds.length > 0) {
-          postQuery.owner = { ...(postQuery.owner || {}), $nin: blockedUserIds };
-        }
-
-        postsData = await Post.find(postQuery)
-          .populate("owner", "name avatar channelName isVerified")
-          .sort("-createdAt")
-          .limit(40)
-          .lean();
-      }
-    }
-
-    // 4. Search playlists (matches name, creator, or playlist ID)
-    let playlistsData = [];
-    if (!type || type === "playlists") {
-      const playlistOrClauses = [];
-      if (phraseRegex) {
-        playlistOrClauses.push({ name: phraseRegex });
-      }
-      regexes.forEach((tRegex) => {
-        playlistOrClauses.push({ name: tRegex });
-      });
-      if (channelIds.length > 0) {
-        playlistOrClauses.push({ owner: { $in: channelIds } });
-      }
-      if (isObjectId) {
-        playlistOrClauses.push({ _id: q });
-      }
-
-      if (playlistOrClauses.length > 0) {
-        const playlistQuery = { $or: playlistOrClauses };
-        if (!isAdmin) {
-          playlistQuery.isPrivate = { $ne: true };
-          if (blockedUserIds.length > 0) {
-            playlistQuery.owner = { ...(playlistQuery.owner || {}), $nin: blockedUserIds };
-          }
-        }
-
-        const rawPlaylists = await Playlist.find(playlistQuery)
-          .populate("owner", "name channelName avatar isVerified")
-          .populate({
-            path: "videos",
-            select: "thumbnail visibility owner",
-            populate: { path: "owner", select: "isBlocked" },
-          })
-          .sort("-createdAt")
-          .limit(30)
-          .lean();
-
-        playlistsData = rawPlaylists
-          .map((p) => {
-            const isOwner = req.user && String(p.owner?._id || p.owner) === String(req.user.id);
-            const pVideos = (p.videos || []).filter(
-              (v) => v && (isOwner || (v.visibility === "public" && !(v.owner && v.owner.isBlocked)))
-            );
-            const cover = pVideos.length ? pVideos[pVideos.length - 1] : null;
-            return {
-              _id: p._id,
-              name: p.name,
-              isPrivate: Boolean(p.isPrivate),
-              createdAt: p.createdAt,
-              videoCount: pVideos.length,
-              thumbnail: cover ? cover.thumbnail : null,
-              owner: p.owner,
-            };
-          })
-          .filter((p) => {
-            const isOwner = req.user && String(p.owner?._id || p.owner) === String(req.user.id);
-            return isOwner || p.videoCount > 0;
-          });
-      }
-    }
 
     res.status(200).json({
       success: true,
