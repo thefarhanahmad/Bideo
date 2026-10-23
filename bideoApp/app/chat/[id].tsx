@@ -1688,11 +1688,11 @@ export default function ChatRoomScreen() {
       <Modal
         visible={menuVisible}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setMenuVisible(false)}
       >
         <TouchableOpacity
-          style={styles.modalOverlay}
+          style={[styles.modalOverlay, { paddingTop: insets.top + 50 }]}
           activeOpacity={1}
           onPress={() => setMenuVisible(false)}
         >
@@ -1788,7 +1788,7 @@ export default function ChatRoomScreen() {
       <Modal
         visible={messageActionModalVisible}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => {
           setMessageActionModalVisible(false);
           setSelectedMessage(null);
