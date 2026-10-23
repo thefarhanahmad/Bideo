@@ -33,6 +33,13 @@ const {
 } = require('../controllers/admin');
 const { getUserOverview, getUserProfileTab } = require('../controllers/adminUserProfile');
 const { protect, authorize } = require('../middlewares/auth');
+const {
+  getAdminPlaylists,
+  getAdminPlaylist,
+  updateAdminPlaylist,
+  deleteAdminPlaylist,
+  removeAdminPlaylistVideo,
+} = require('../controllers/adminPlaylists');
 
 const router = express.Router();
 
@@ -50,6 +57,13 @@ router.get('/earnings', getUserEarnings);
 router.get('/boost', getAdminBoostData);
 router.get('/boost/user/:userId', getAdminUserBoostDetails);
 router.get('/boost/verified-purchases', getAdminVerifiedBadgePurchases);
+
+// Playlists management
+router.get('/playlists', getAdminPlaylists);
+router.get('/playlists/:id', getAdminPlaylist);
+router.put('/playlists/:id', updateAdminPlaylist);
+router.delete('/playlists/:id', deleteAdminPlaylist);
+router.delete('/playlists/:id/videos/:videoId', removeAdminPlaylistVideo);
 router.get('/posts', getAdminPosts);
 router.get('/reports/videos', getVideoReports);
 router.put('/reports/videos/:id', updateVideoReport);
