@@ -20,8 +20,9 @@ import { RootState } from '../redux/store';
 import VerifiedBadge from '../components/VerifiedBadge';
 import { formatViews } from '../utils/formatDate';
 import { AppAdBanner } from '../components/AppAds';
+import { PLACEHOLDER_AVATAR } from '../constants/placeholders';
 
-const FALLBACK_AVATAR = 'https://via.placeholder.com/100x100.png?text=User';
+const FALLBACK_AVATAR = PLACEHOLDER_AVATAR;
 
 interface LeaderboardUser {
   _id: string;

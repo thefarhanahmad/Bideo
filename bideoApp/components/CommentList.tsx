@@ -12,8 +12,9 @@ import { RootState } from '../redux/store';
 import { formatTimeAgo } from '../utils/formatDate';
 import VerifiedBadge from './VerifiedBadge';
 import HashtagText from './HashtagText';
+import { PLACEHOLDER_AVATAR } from '../constants/placeholders';
 
-const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
+const FALLBACK_AVATAR = PLACEHOLDER_AVATAR;
 
 interface CommentListProps {
   videoId?: string;

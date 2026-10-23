@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const User = require('../models/User');
@@ -6,6 +7,8 @@ const Post = require('../models/Post');
 const { getIO, isUserOnline, isUserInConversation } = require('../socket');
 const { sendPushNotification } = require('../utils/pushNotification');
 const { saveLocalFile } = require('../utils/localUpload');
+
+const MESSAGES_PAGE_MAX = 100;
 
 /**
  * Format conversation for client consumption
@@ -218,17 +221,34 @@ exports.getMessages = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Conversation not found' });
     }
 
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 50;
-    const skip = (page - 1) * limit;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(MESSAGES_PAGE_MAX, Math.max(1, parseInt(req.query.limit, 10) || 50));
+    const visible = { conversationId: conversation._id, deletedFor: { $ne: currentUserId } };
 
-    const messages = await Message.find({
-      conversationId: conversation._id,
-      deletedFor: { $ne: currentUserId },
-    })
-      .sort({ createdAt: -1 })
+    // ?before=<messageId> loads the messages older than that one. Unlike page numbers it does
+    // not skip or repeat messages when new ones arrive while the user scrolls back.
+    const { before } = req.query;
+    let olderThan = null;
+    if (before !== undefined) {
+      const anchor = mongoose.Types.ObjectId.isValid(before)
+        ? await Message.findOne({ _id: before, conversationId: conversation._id }).select('createdAt').lean()
+        : null;
+      if (!anchor) {
+        return res.status(400).json({ success: false, message: 'Invalid message to load before' });
+      }
+      olderThan = {
+        $or: [
+          { createdAt: { $lt: anchor.createdAt } },
+          { createdAt: anchor.createdAt, _id: { $lt: anchor._id } },
+        ],
+      };
+    }
+    const skip = olderThan ? 0 : (page - 1) * limit;
+
+    const messages = await Message.find(olderThan ? { ...visible, ...olderThan } : visible)
+      .sort({ createdAt: -1, _id: -1 })
       .skip(skip)
-      .limit(limit)
+      .limit(olderThan ? limit + 1 : limit)
       .populate('sender', '_id name channelName avatar isVerified')
       .populate({
         path: 'video',
@@ -242,10 +262,19 @@ exports.getMessages = async (req, res, next) => {
       })
       .lean();
 
-    const total = await Message.countDocuments({
-      conversationId: conversation._id,
-      deletedFor: { $ne: currentUserId },
-    });
+    if (olderThan) {
+      // One extra row was read only to tell whether even older messages exist
+      const hasMore = messages.length > limit;
+      const pageRows = messages.slice(0, limit);
+      return res.status(200).json({
+        success: true,
+        count: pageRows.length,
+        hasMore,
+        data: pageRows.reverse(), // Send in chronological order
+      });
+    }
+
+    const total = await Message.countDocuments(visible);
 
     res.status(200).json({
       success: true,

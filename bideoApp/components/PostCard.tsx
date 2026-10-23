@@ -18,8 +18,9 @@ import { sharePost } from '../utils/shareHelper';
 import ShareModal from './ShareModal';
 import BottomSheet, { SheetItem, SheetCancel } from './BottomSheet';
 import { PostLinkPreview } from './PostLinkPreview';
+import { PLACEHOLDER_AVATAR } from '../constants/placeholders';
 
-const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
+const FALLBACK_AVATAR = PLACEHOLDER_AVATAR;
 
 interface PostCardProps {
   post: any;

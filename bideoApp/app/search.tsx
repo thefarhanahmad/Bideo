@@ -16,8 +16,9 @@ import { RootState } from '../redux/store';
 import AuthModal from '../components/AuthModal';
 import { showAlert } from '../components/AppAlert';
 import { hapticLight } from '../utils/haptics';
+import { PLACEHOLDER_AVATAR } from '../constants/placeholders';
 
-const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
+const FALLBACK_AVATAR = PLACEHOLDER_AVATAR;
 
 function ChannelSearchResultCard({ channel }: { channel: any }) {
   const router = useRouter();

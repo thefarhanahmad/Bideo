@@ -1,59 +1,76 @@
 import { showAlert } from '../components/AppAlert';
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, Share } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import Colors from '../constants/Colors';
-import api from '../services/api';
+import api, { normalizeVideo } from '../services/api';
 import { formatTimeAgo, formatViews } from '../utils/formatDate';
 import { shareVideo } from '../utils/shareHelper';
 import ShareModal from '../components/ShareModal';
 import BottomSheet, { SheetItem, SheetCancel } from '../components/BottomSheet';
+import { LoadMoreFooter } from '../components/ListStates';
+import usePagedList from '../hooks/usePagedList';
+
+const PAGE_SIZE = 24;
 
 export default function YourVideosScreen() {
   const router = useRouter();
   const { autoOpenId } = useLocalSearchParams<{ autoOpenId?: string }>();
-  const [videos, setVideos] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedVideo, setSelectedVideo] = useState<any>(null);
   const [menuVisible, setMenuVisible] = useState(false);
   const [shareModalVisible, setShareModalVisible] = useState(false);
   const [filter, setFilter] = useState<'videos' | 'shorts'>('videos');
 
+  // Newest first, one page per tab (the server filters videos / shorts)
+  const fetchPage = useCallback(
+    async (offset: number, limit: number) => {
+      const type = filter === 'shorts' ? 'short' : 'video';
+      const res = await api.get('/videos/me', { params: { type, offset, limit } });
+      return { items: res.data?.data || [], hasMore: Boolean(res.data?.hasMore) };
+    },
+    [filter]
+  );
+  const {
+    items: filteredVideos,
+    loading,
+    refreshing,
+    loadingMore,
+    reload,
+    loadMore,
+    updateItems,
+  } = usePagedList<any>(fetchPage, PAGE_SIZE, 'your videos');
+
+  // Switching tab starts that tab from its first page
+  const shownFilterRef = useRef<string | null>(null);
   useFocusEffect(
     useCallback(() => {
-      loadMyVideos();
-    }, [])
+      const tabChanged = shownFilterRef.current !== filter;
+      shownFilterRef.current = filter;
+      reload(tabChanged ? 'initial' : 'silent', { reset: tabChanged });
+    }, [filter, reload])
   );
 
-  const loadMyVideos = async () => {
-    setLoading(true);
-    try {
-      const res = await api.get('/videos/me');
-      if (res.data.success) {
-        const data = res.data.data || [];
-        // Sort by latest by default
-        const sortedData = [...data].sort((a: any, b: any) => 
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
-        setVideos(sortedData);
-        if (autoOpenId) {
-          const video = sortedData.find((v: any) => v._id === autoOpenId);
-          if (video) {
-            setSelectedVideo(video);
-            setMenuVisible(true);
-          }
-        }
-      }
-    } catch (err) {
-      console.error('Failed to load your videos', err);
-    } finally {
-      setLoading(false);
+  // Opened from the Library ⋮ button: show that video's menu once
+  const autoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (!autoOpenId || autoOpenedRef.current || loading) return;
+    autoOpenedRef.current = true;
+    const openFor = (video: any) => {
+      setSelectedVideo(video);
+      setMenuVisible(true);
+    };
+    const loaded = filteredVideos.find((v: any) => v._id === autoOpenId);
+    if (loaded) {
+      openFor(loaded);
+      return;
     }
-  };
-
-  const filteredVideos = videos.filter(v => filter === 'shorts' ? v.isShort : !v.isShort);
+    api
+      .get(`/videos/${autoOpenId}`)
+      .then((res) => res.data?.data && openFor(normalizeVideo(res.data.data)))
+      .catch((err) => console.error('Failed to open video menu', err));
+  }, [autoOpenId, loading, filteredVideos]);
 
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -76,7 +93,7 @@ export default function YourVideosScreen() {
           onPress: async () => {
             try {
               await api.delete(`/videos/${id}`);
-              setVideos(videos.filter(v => v._id !== id));
+              updateItems((prev) => prev.filter((v) => v._id !== id));
               showAlert('Success', 'Video deleted');
             } catch (err) {
               showAlert('Error', 'Failed to delete video');
@@ -201,8 +218,11 @@ export default function YourVideosScreen() {
               <Text style={styles.emptyText}>You haven't uploaded any {filter} yet</Text>
             </View>
           }
-          refreshing={loading}
-          onRefresh={loadMyVideos}
+          refreshing={refreshing}
+          onRefresh={() => reload('refresh')}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={<LoadMoreFooter visible={loadingMore} />}
         />
       )}
 

@@ -13,7 +13,8 @@ import AuthModal from '../../components/AuthModal';
 import { showAlert } from '../../components/AppAlert';
 import { EmptyState } from '../../components/ListStates';
 import VerifiedBadge from '../../components/VerifiedBadge';
-const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
+import { PLACEHOLDER_AVATAR } from '../../constants/placeholders';
+const FALLBACK_AVATAR = PLACEHOLDER_AVATAR;
 
 export default function FollowingsScreen() {
   const router = useRouter();

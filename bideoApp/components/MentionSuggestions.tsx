@@ -13,8 +13,9 @@ import Colors from '../constants/Colors';
 import api from '../services/api';
 import VerifiedBadge from './VerifiedBadge';
 import { formatViews } from '../utils/formatDate';
+import { PLACEHOLDER_AVATAR } from '../constants/placeholders';
 
-const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
+const FALLBACK_AVATAR = PLACEHOLDER_AVATAR;
 
 interface MentionSuggestionsProps {
   visible: boolean;

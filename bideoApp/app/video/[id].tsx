@@ -33,8 +33,9 @@ import {
   isVideoFinished,
 } from '../../utils/watchProgress';
 import { logVideoStart, trackVideoWatched } from '../../services/analytics';
+import { PLACEHOLDER_AVATAR } from '../../constants/placeholders';
 
-const FALLBACK_IMAGE = 'https://via.placeholder.com/80x80.png?text=User';
+const FALLBACK_IMAGE = PLACEHOLDER_AVATAR;
 const REQUIRED_WATCH_TIME = 3; // 3 seconds minimum watch time to count a view
 const MIDROLL_INTERVAL_SECONDS = 300; // 5 minutes (300 seconds) mid-roll ad interval
 

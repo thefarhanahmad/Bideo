@@ -6,14 +6,23 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSelector } from 'react-redux';
 import Colors from '../constants/Colors';
 import api, { resolveMediaUrl } from '../services/api';
-import { EmptyState } from '../components/ListStates';
+import { EmptyState, LoadMoreFooter } from '../components/ListStates';
+import usePagedList from '../hooks/usePagedList';
 import { formatTimeAgo } from '../utils/formatDate';
 import { RootState } from '../redux/store';
 import AuthModal from '../components/AuthModal';
 import VerifiedBadge from '../components/VerifiedBadge';
 import { AppAdBanner } from '../components/AppAds';
+import { PLACEHOLDER_AVATAR } from '../constants/placeholders';
 
-const FALLBACK_AVATAR = 'https://via.placeholder.com/100x100.png?text=User';
+const FALLBACK_AVATAR = PLACEHOLDER_AVATAR;
+const PAGE_SIZE = 30;
+
+const fetchNotificationsPage = async (offset: number, limit: number) => {
+  const res = await api.get('/notifications', { params: { offset, limit } });
+  if (offset === 0) DeviceEventEmitter.emit('notificationsViewed');
+  return { items: res.data?.data || [], hasMore: Boolean(res.data?.hasMore) };
+};
 
 // Server messages start with "Recommended for you: …"; users read that as the title, so drop it.
 const RECOMMENDED_PREFIX = /^\s*recommended for you\s*:\s*/i;
@@ -22,9 +31,17 @@ const stripRecommendedPrefix = (msg: string) => msg.replace(RECOMMENDED_PREFIX, 
 export default function NotificationsScreen() {
   const router = useRouter();
   const { isAuthenticated } = useSelector((state: RootState) => state.auth);
-  const [items, setItems] = useState<any[]>([]);
+  const {
+    items,
+    hasMore,
+    loading,
+    refreshing,
+    loadingMore,
+    reload,
+    loadMore,
+    updateItems,
+  } = usePagedList<any>(fetchNotificationsPage, PAGE_SIZE, 'notifications');
   const [activeTab, setActiveTab] = useState<'all' | 'activity' | 'recommendations'>('all');
-  const [loading, setLoading] = useState(false);
   const [authModalVisible, setAuthModalVisible] = useState(false);
   const isNavigatingRef = useRef(false);
 
@@ -43,21 +60,12 @@ export default function NotificationsScreen() {
     return true;
   });
 
-  const loadNotifications = useCallback(async () => {
-    if (!isAuthenticated) return;
-    setLoading(true);
-    try {
-      const res = await api.get('/notifications');
-      if (res.data.success) {
-        setItems(res.data.data || []);
-        DeviceEventEmitter.emit('notificationsViewed');
-      }
-    } catch (err) {
-      console.error('Failed to load notifications', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [isAuthenticated]);
+  const loadNotifications = useCallback(
+    (mode: 'initial' | 'refresh' | 'silent' = 'initial') => {
+      if (isAuthenticated) reload(mode);
+    },
+    [isAuthenticated, reload]
+  );
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -68,6 +76,14 @@ export default function NotificationsScreen() {
     }
   }, [isAuthenticated, loadNotifications]);
 
+  // The Activity / Recommendations tabs filter the loaded rows. If a page held none of them,
+  // scrolling would not ask for more, so keep loading until the tab has a screenful.
+  useEffect(() => {
+    if (activeTab !== 'all' && filteredItems.length < PAGE_SIZE && hasMore && !loading && !loadingMore) {
+      loadMore();
+    }
+  }, [activeTab, filteredItems.length, hasMore, loading, loadingMore, loadMore]);
+
   const openItem = async (item: any) => {
     if (isNavigatingRef.current) return;
     isNavigatingRef.current = true;
@@ -77,7 +93,7 @@ export default function NotificationsScreen() {
 
     if (!item.read) {
       api.put(`/notifications/${item._id}/read`).catch(() => {});
-      setItems((prev) =>
+      updateItems((prev) =>
         prev.map((n) => (n._id === item._id ? { ...n, read: true } : n))
       );
     }
@@ -198,7 +214,7 @@ export default function NotificationsScreen() {
         <Text style={styles.title}>Notifications</Text>
         <TouchableOpacity
           onPress={() => {
-            api.put('/notifications/read-all').then(loadNotifications).catch(() => {});
+            api.put('/notifications/read-all').then(() => loadNotifications('silent')).catch(() => {});
           }}
         >
           <Text style={styles.readAll}>Read all</Text>
@@ -230,7 +246,7 @@ export default function NotificationsScreen() {
         })}
       </View>
 
-      {loading && items.length === 0 ? (
+      {isAuthenticated && loading && items.length === 0 ? (
         <View style={styles.center}><ActivityIndicator color={Colors.primary} /></View>
       ) : (
         <FlatList
@@ -335,8 +351,11 @@ export default function NotificationsScreen() {
               />
             )
           }
-          refreshing={loading}
-          onRefresh={loadNotifications}
+          refreshing={refreshing}
+          onRefresh={() => loadNotifications('refresh')}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={<LoadMoreFooter visible={loadingMore} />}
         />
       )}
 

@@ -8,6 +8,7 @@ import api, { resolveMediaUrl } from '../services/api';
 import VerifiedBadge from './VerifiedBadge';
 import { formatViews } from '../utils/formatDate';
 import { hapticLight } from '../utils/haptics';
+import { PLACEHOLDER_AVATAR, PLACEHOLDER_THUMBNAIL } from '../constants/placeholders';
 
 export interface BideoLinkInfo {
   type: 'video' | 'short' | 'channel' | 'post';
@@ -152,8 +153,8 @@ interface PostLinkPreviewProps {
   style?: any;
 }
 
-const FALLBACK_THUMB = 'https://via.placeholder.com/480x270.png?text=Bideo';
-const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
+const FALLBACK_THUMB = PLACEHOLDER_THUMBNAIL;
+const FALLBACK_AVATAR = PLACEHOLDER_AVATAR;
 
 function PostLinkPreviewComponent({
   previewData: propPreviewData,

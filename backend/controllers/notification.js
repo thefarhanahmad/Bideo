@@ -1,20 +1,29 @@
 const Notification = require('../models/Notification');
 const User = require('../models/User');
+const { readOffsetPage, toPage } = require('../utils/pagination');
 
 exports.getNotifications = async (req, res, next) => {
   try {
-    const notifications = await Notification.find({ recipient: req.user.id })
+    const paging = readOffsetPage(req.query);
+    const rows = await Notification.find({ recipient: req.user.id })
       .populate('actor', 'name avatar channelName isVerified')
       .populate('video', 'title thumbnail duration isShort')
       .populate('post', 'text image imageUrl')
       .populate('comment', 'text')
-      .sort('-createdAt')
-      .limit(100);
+      .sort({ createdAt: -1, _id: -1 })
+      .skip(paging ? paging.offset : 0)
+      .limit(paging ? paging.limit + 1 : 100);
 
-    // Update lastNotificationViewedAt checkpoint when user loads notifications
-    User.findByIdAndUpdate(req.user.id, { lastNotificationViewedAt: new Date() }).exec().catch(() => {});
+    // Update lastNotificationViewedAt checkpoint when user loads notifications (first page only)
+    if (!paging || paging.offset === 0) {
+      User.findByIdAndUpdate(req.user.id, { lastNotificationViewedAt: new Date() }).exec().catch(() => {});
+    }
 
-    res.status(200).json({ success: true, count: notifications.length, data: notifications });
+    if (paging) {
+      const { rows: data, hasMore } = toPage(rows, paging.limit);
+      return res.status(200).json({ success: true, count: data.length, hasMore, data });
+    }
+    res.status(200).json({ success: true, count: rows.length, data: rows });
   } catch (err) {
     next(err);
   }

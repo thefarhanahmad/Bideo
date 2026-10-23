@@ -28,10 +28,11 @@ import VerifiedBadge from './VerifiedBadge';
 import { formatTimeAgo } from '../utils/formatDate';
 import { hapticLight, hapticMedium } from '../utils/haptics';
 import api, { resolveMediaUrl, chatService, storyService } from '../services/api';
+import { PLACEHOLDER_AVATAR } from '../constants/placeholders';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const STORY_DURATION = 5000; // 5 seconds per photo story
-const FALLBACK_AVATAR = 'https://via.placeholder.com/100x100.png?text=User';
+const FALLBACK_AVATAR = PLACEHOLDER_AVATAR;
 
 interface StoryVideoItemProps {
   uri: string;

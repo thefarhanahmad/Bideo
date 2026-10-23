@@ -16,6 +16,9 @@ import { AppAdBanner } from '../../components/AppAds';
 import PlaylistFormModal from '../../components/PlaylistFormModal';
 import { showAlert } from '../../components/AppAlert';
 
+// The rows here are previews ("View all" opens the full list), so only the latest are loaded
+const PREVIEW_PAGE = { offset: 0, limit: 20 };
+
 const getAvatarUri = (avatar?: string) => {
   if (!avatar) return null;
   const value = avatar.trim();
@@ -93,7 +96,7 @@ export default function LibraryScreen() {
   const loadMyVideos = async () => {
     setLoadingMyVideos(true);
     try {
-      const res = await api.get('/videos/me');
+      const res = await api.get('/videos/me', { params: PREVIEW_PAGE });
       if (res.data.success) {
         setMyVideos(res.data.data || []);
       }
@@ -128,7 +131,7 @@ export default function LibraryScreen() {
 
   const loadLikedVideos = async () => {
     try {
-      const res = await api.get('/users/liked-videos');
+      const res = await api.get('/users/liked-videos', { params: PREVIEW_PAGE });
       if (res.data.success) setLikedVideos(res.data.data || []);
     } catch (err) {
       console.error('Failed to load liked videos', err);

@@ -22,8 +22,9 @@ import VerifiedBadge from '../components/VerifiedBadge';
 import AuthModal from '../components/AuthModal';
 import { hapticLight } from '../utils/haptics';
 import { formatViews } from '../utils/formatDate';
+import { PLACEHOLDER_AVATAR } from '../constants/placeholders';
 
-const FALLBACK_AVATAR = 'https://via.placeholder.com/100x100.png?text=User';
+const FALLBACK_AVATAR = PLACEHOLDER_AVATAR;
 
 interface ConnectionUser {
   _id: string;

@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const Video = require("../models/Video");
+const { readOffsetPage, toPage } = require("../utils/pagination");
 const User = require("../models/User");
 const Category = require("../models/Category");
 const Follower = require("../models/Follower");
@@ -1430,6 +1431,18 @@ exports.getFollowedVideos = async (req, res, next) => {
 exports.getMyVideos = async (req, res, next) => {
   try {
     const query = applyVideoTypeFilter({ owner: req.user.id }, req.query.type);
+    const paging = readOffsetPage(req.query);
+    if (paging) {
+      const rows = await Video.find(query)
+        .populate("owner", "name avatar channelName isVerified")
+        .populate("category", "name")
+        .sort({ createdAt: -1, _id: -1 })
+        .skip(paging.offset)
+        .limit(paging.limit + 1);
+      const { rows: data, hasMore } = toPage(rows, paging.limit);
+      return res.status(200).json({ success: true, count: data.length, hasMore, data });
+    }
+
     const videos = await Video.find(query)
       .populate("owner", "name avatar channelName isVerified")
       .populate("category", "name")

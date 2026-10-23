@@ -19,8 +19,9 @@ import VerifiedBadge from './VerifiedBadge';
 import { showAlert } from './AppAlert';
 import { hapticLight, hapticSelection } from '../utils/haptics';
 import { chatService, resolveMediaUrl } from '../services/api';
+import { PLACEHOLDER_AVATAR } from '../constants/placeholders';
 
-const FALLBACK_AVATAR = 'https://via.placeholder.com/100x100.png?text=User';
+const FALLBACK_AVATAR = PLACEHOLDER_AVATAR;
 
 interface AddGroupMembersModalProps {
   visible: boolean;
