@@ -9,6 +9,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import api, { clearAuthSession, setAuthToken } from '../services/api';
 import { loginSuccess, loginStart, loginFailure, logout } from '../redux/slices/authSlice';
 import { AlertHost, showAlert } from '../components/AppAlert';
+import AppErrorScreen from '../components/AppErrorScreen';
 import Constants from 'expo-constants';
 import { registerForPushNotificationsAsync, setupNotificationListeners } from '../services/notifications';
 import { initSocket, disconnectSocket } from '../services/socket';
@@ -263,6 +264,9 @@ function ScreenTracker({ children }: { children: React.ReactNode }) {
 
   return <>{children}</>;
 }
+
+// A crash in any screen shows a "Try again" screen instead of closing the app
+export { AppErrorScreen as ErrorBoundary };
 
 export default function RootLayout() {
   const handleAppReady = useCallback(async () => {
