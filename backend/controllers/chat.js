@@ -821,7 +821,7 @@ exports.unblockUser = async (req, res, next) => {
 };
 
 /**
- * Helper to compute total unread messages count for a user
+ * Helper: number of chats with unread messages for a user (the chat badge count)
  */
 exports.computeTotalUnreadCount = async (userId) => {
   try {
@@ -832,22 +832,21 @@ exports.computeTotalUnreadCount = async (userId) => {
       'lastMessage.text': { $exists: true, $ne: '' },
     }).select('unreadCounts');
 
-    let total = 0;
+    // Badge = number of chats with unread messages (not the total of unread messages)
     const uIdStr = userId.toString();
-    conversations.forEach((conv) => {
+    return conversations.filter((conv) => {
       const map = conv.unreadCounts instanceof Map
         ? conv.unreadCounts
         : new Map(Object.entries(conv.unreadCounts || {}));
-      total += (map.get(uIdStr) || 0);
-    });
-    return total;
+      return (map.get(uIdStr) || 0) > 0;
+    }).length;
   } catch {
     return 0;
   }
 };
 
 /**
- * @desc    Get total unread messages count for badge
+ * @desc    Get the number of chats with unread messages, for the badge
  * @route   GET /api/chat/unread-count
  * @access  Private
  */
