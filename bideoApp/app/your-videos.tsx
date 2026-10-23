@@ -1,6 +1,6 @@
 import { showAlert } from '../components/AppAlert';
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, Modal, Pressable, Share } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, Share } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -9,6 +9,7 @@ import api from '../services/api';
 import { formatTimeAgo, formatViews } from '../utils/formatDate';
 import { shareVideo } from '../utils/shareHelper';
 import ShareModal from '../components/ShareModal';
+import BottomSheet, { SheetItem, SheetCancel } from '../components/BottomSheet';
 
 export default function YourVideosScreen() {
   const router = useRouter();
@@ -206,38 +207,12 @@ export default function YourVideosScreen() {
       )}
 
       {/* Action Menu Modal */}
-      <Modal
-        visible={menuVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setMenuVisible(false)}
-      >
-        <Pressable 
-          style={styles.modalOverlay} 
-          onPress={() => setMenuVisible(false)}
-        >
-          <View style={styles.menuContent}>
-            <TouchableOpacity style={styles.menuItem} onPress={handleEdit}>
-              <Ionicons name="pencil-outline" size={24} color={Colors.text} />
-              <Text style={styles.menuText}>Edit Video</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.menuItem} onPress={handleShare}>
-              <Ionicons name="share-social-outline" size={24} color={Colors.text} />
-              <Text style={styles.menuText}>Share Video</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={[styles.menuItem, styles.deleteItem]} onPress={handleDelete}>
-              <Ionicons name="trash-outline" size={24} color={Colors.primary} />
-              <Text style={[styles.menuText, { color: Colors.primary }]}>Delete Video</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.cancelItem} onPress={() => setMenuVisible(false)}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </Pressable>
-      </Modal>
+      <BottomSheet visible={menuVisible} onClose={() => setMenuVisible(false)} title={selectedVideo?.title}>
+        <SheetItem icon="pencil-outline" label="Edit Video" onPress={handleEdit} />
+        <SheetItem icon="share-social-outline" label="Share Video" onPress={handleShare} />
+        <SheetItem icon="trash-outline" label="Delete Video" destructive onPress={handleDelete} />
+        <SheetCancel onPress={() => setMenuVisible(false)} />
+      </BottomSheet>
 
       <ShareModal
         visible={shareModalVisible}
@@ -428,42 +403,4 @@ const styles = StyleSheet.create({
     textShadowRadius: 4,
   },
 
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  menuContent: {
-    backgroundColor: Colors.white,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  menuText: {
-    fontSize: 16,
-    marginLeft: 15,
-    color: Colors.text,
-  },
-  deleteItem: {
-    borderBottomWidth: 0,
-  },
-  cancelItem: {
-    marginTop: 10,
-    paddingVertical: 15,
-    alignItems: 'center',
-    backgroundColor: Colors.background,
-    borderRadius: 10,
-  },
-  cancelText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: Colors.textGray,
-  },
 });

@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -16,6 +15,7 @@ import {
   Modal,
   Linking,
 } from 'react-native';
+import { showAlert } from '../components/AppAlert';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -202,7 +202,7 @@ export default function ForgotPasswordScreen() {
     const sanitized = cleanPhoneInput(phone);
     if (!sanitized || sanitized.length !== 10) {
       hapticLight();
-      return Alert.alert('Invalid Phone', 'Please enter a valid 10-digit mobile number.');
+      return showAlert('Invalid Phone', 'Please enter a valid 10-digit mobile number.');
     }
 
     setLoading(true);
@@ -225,7 +225,7 @@ export default function ForgotPasswordScreen() {
         err.response?.data?.errors?.[0]?.msg ||
         err.response?.data?.errors?.[0]?.message ||
         'Failed to request verification code. Please check your phone number.';
-      Alert.alert('Unable to Request Code', apiError);
+      showAlert('Unable to Request Code', apiError);
     } finally {
       setLoading(false);
     }
@@ -251,7 +251,7 @@ export default function ForgotPasswordScreen() {
     Linking.openURL(
       'mailto:bideoapps@gmail.com?subject=Bideo%20Password%20Reset%20Help&body=Hi%20Bideo%20Support%2C%0A%0AI%20am%20having%20trouble%20resetting%20my%20password.%0ARegistered%20Phone%3A%20%0A%0AThank%20you!'
     ).catch(() => {
-      Alert.alert(
+      showAlert(
         'Unable to Open Mail App',
         'Please send an email directly to: bideoapps@gmail.com'
       );
@@ -269,11 +269,11 @@ export default function ForgotPasswordScreen() {
         router.push(`/video/${match[0]}`);
       } else {
         Linking.openURL(guideConfig.videoUrl).catch(() => {
-          Alert.alert('Unable to Open Video', 'Could not open the guide video link.');
+          showAlert('Unable to Open Video', 'Could not open the guide video link.');
         });
       }
     } else {
-      Alert.alert('Notice', 'Guide video is currently not available.');
+      showAlert('Notice', 'Guide video is currently not available.');
     }
   };
 
@@ -322,17 +322,17 @@ export default function ForgotPasswordScreen() {
 
     if (enteredOtp.length < 4) {
       hapticLight();
-      return Alert.alert('Incomplete Code', 'Please enter the complete 4-digit verification code.');
+      return showAlert('Incomplete Code', 'Please enter the complete 4-digit verification code.');
     }
 
     if (enteredOtp !== generatedOtp) {
       hapticLight();
-      return Alert.alert('Invalid Code', 'The verification code you entered is incorrect. Please check and try again.');
+      return showAlert('Invalid Code', 'The verification code you entered is incorrect. Please check and try again.');
     }
 
     if (!trimmedPassword || trimmedPassword.length < 6) {
       hapticLight();
-      return Alert.alert('Short Password', 'New password must be at least 6 characters long.');
+      return showAlert('Short Password', 'New password must be at least 6 characters long.');
     }
 
     setLoading(true);
@@ -360,7 +360,7 @@ export default function ForgotPasswordScreen() {
 
       if (res?.success) {
         hapticSuccess();
-        Alert.alert(
+        showAlert(
           'Password Reset Successful',
           'Your password has been successfully updated. You can now log in with your new password.',
           [{ text: 'Log In Now', onPress: () => router.back() }]
@@ -373,7 +373,7 @@ export default function ForgotPasswordScreen() {
         err.response?.data?.errors?.[0]?.msg ||
         err.response?.data?.errors?.[0]?.message ||
         'Failed to reset password. Please try again.';
-      Alert.alert('Reset Failed', apiError);
+      showAlert('Reset Failed', apiError);
     } finally {
       setLoading(false);
     }

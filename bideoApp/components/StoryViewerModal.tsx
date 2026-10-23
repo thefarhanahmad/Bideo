@@ -10,13 +10,13 @@ import {
   Animated,
   StatusBar,
   ActivityIndicator,
-  Alert,
   Platform,
   TextInput,
   KeyboardAvoidingView,
   Keyboard,
   FlatList,
 } from 'react-native';
+import { showAlert } from './AppAlert';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
@@ -285,7 +285,7 @@ export default function StoryViewerModal({
       setTimeout(() => setReplySentToast(false), 2500);
     } catch (err: any) {
       console.warn('Failed to send reply:', err?.message || err);
-      Alert.alert('Could not send reply', err?.response?.data?.message || 'Please check your connection and try again.');
+      showAlert('Could not send reply', err?.response?.data?.message || 'Please check your connection and try again.');
     } finally {
       setSendingReply(false);
       setIsPaused(false);
@@ -521,7 +521,7 @@ export default function StoryViewerModal({
 
     handlePressIn(); // Pause while alert is shown
 
-    Alert.alert(
+    showAlert(
       'Delete Story',
       'Are you sure you want to delete this story? It will be permanently removed from your feed and storage.',
       [

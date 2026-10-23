@@ -1,10 +1,9 @@
 import { showAlert } from './AppAlert';
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Dimensions, Share, Pressable, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Dimensions, Share, Alert } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '../constants/Colors';
 import { formatTimeAgo } from '../utils/formatDate';
 import { hapticLight, hapticSelection } from '../utils/haptics';
@@ -17,6 +16,7 @@ import VerifiedBadge from './VerifiedBadge';
 import HashtagText from './HashtagText';
 import { sharePost } from '../utils/shareHelper';
 import ShareModal from './ShareModal';
+import BottomSheet, { SheetItem, SheetCancel } from './BottomSheet';
 import { PostLinkPreview } from './PostLinkPreview';
 
 const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
@@ -28,7 +28,6 @@ interface PostCardProps {
 
 const PostCard = ({ post, onDelete }: PostCardProps) => {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
   const [likes, setLikes] = useState(post.likes || []);
   const [commentsCount, setCommentsCount] = useState(post.commentsCount || 0);
@@ -164,39 +163,12 @@ const PostCard = ({ post, onDelete }: PostCardProps) => {
       </View>
 
       {/* Action Menu Modal */}
-      <Modal
-        visible={menuVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setMenuVisible(false)}
-      >
-        <Pressable style={styles.modalOverlay} onPress={() => setMenuVisible(false)}>
-          <Pressable style={[styles.menuContent, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.grabber} />
-            {isOwner && (
-              <>
-                <TouchableOpacity style={styles.menuItem} onPress={handleEdit}>
-                  <Ionicons name="pencil-outline" size={24} color={Colors.text} />
-                  <Text style={styles.menuText}>Edit Post</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.menuItem} onPress={handleDelete}>
-                  <Ionicons name="trash-outline" size={24} color={Colors.primary} />
-                  <Text style={[styles.menuText, { color: Colors.primary }]}>Delete Post</Text>
-                </TouchableOpacity>
-              </>
-            )}
-
-            <TouchableOpacity style={styles.menuItem} onPress={handleShare}>
-              <Ionicons name="share-social-outline" size={24} color={Colors.text} />
-              <Text style={styles.menuText}>Share</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.cancelItem} onPress={() => setMenuVisible(false)}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <BottomSheet visible={menuVisible} onClose={() => setMenuVisible(false)}>
+        {isOwner && <SheetItem icon="pencil-outline" label="Edit Post" onPress={handleEdit} />}
+        {isOwner && <SheetItem icon="trash-outline" label="Delete Post" destructive onPress={handleDelete} />}
+        <SheetItem icon="share-social-outline" label="Share" onPress={handleShare} />
+        <SheetCancel onPress={() => setMenuVisible(false)} />
+      </BottomSheet>
 
       <Modal
         visible={showComments}
@@ -363,50 +335,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginLeft: 15,
     color: Colors.text,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  menuContent: {
-    backgroundColor: Colors.white,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 10,
-  },
-  grabber: {
-    alignSelf: 'center',
-    width: 40,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: Colors.border,
-    marginBottom: 10,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  menuText: {
-    fontSize: 16,
-    marginLeft: 15,
-    color: Colors.text,
-  },
-  cancelItem: {
-    marginTop: 10,
-    paddingVertical: 15,
-    alignItems: 'center',
-    backgroundColor: Colors.background,
-    borderRadius: 10,
-  },
-  cancelText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: Colors.textGray,
   },
 });
 

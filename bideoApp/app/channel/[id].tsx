@@ -18,6 +18,7 @@ import { hapticLight, hapticSelection } from '../../utils/haptics';
 import { shareChannel, shareVideo } from '../../utils/shareHelper';
 import { detectSocialPlatform, toSocialUrl } from '../../utils/socialLinks';
 import ShareModal, { ShareModalItem } from '../../components/ShareModal';
+import VideoActionsMenu from '../../components/VideoActionsMenu';
 
 const { width, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const FALLBACK_AVATAR = 'https://via.placeholder.com/100x100.png?text=User';
@@ -188,22 +189,6 @@ export default function ChannelScreen() {
     const videoId = selectedVideo?._id;
     setMenuVisible(false);
     router.push({ pathname: '/upload-video', params: { editId: videoId }});
-  };
-
-  const handleShareVideo = () => {
-    if (!selectedVideo) return;
-    setMenuVisible(false);
-    hapticLight();
-    setShareItem({
-      type: 'video',
-      _id: selectedVideo._id,
-      title: selectedVideo.title,
-      thumbnail: selectedVideo.thumbnail,
-      isShort: Boolean(selectedVideo.isShort),
-      owner: channel,
-      duration: selectedVideo.duration,
-    });
-    setShareModalVisible(true);
   };
 
   const handleDeleteVideo = async () => {
@@ -643,42 +628,17 @@ export default function ChannelScreen() {
       />
 
       {/* Action Menu Modal for Videos/Shorts */}
-      <Modal
-        visible={menuVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setMenuVisible(false)}
-      >
-        <Pressable 
-          style={styles.modalOverlay} 
-          onPress={() => setMenuVisible(false)}
-        >
-          <View style={styles.menuContent}>
-            {isOwner && (
-              <TouchableOpacity style={styles.menuItem} onPress={handleEdit}>
-                <Ionicons name="pencil-outline" size={24} color={Colors.text} />
-                <Text style={styles.menuText}>Edit Video</Text>
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity style={styles.menuItem} onPress={handleShareVideo}>
-              <Ionicons name="share-social-outline" size={24} color={Colors.text} />
-              <Text style={styles.menuText}>Share Video</Text>
-            </TouchableOpacity>
-
-            {isOwner && (
-              <TouchableOpacity style={[styles.menuItem, styles.deleteItem]} onPress={handleDeleteVideo}>
-                <Ionicons name="trash-outline" size={24} color={Colors.primary} />
-                <Text style={[styles.menuText, { color: Colors.primary }]}>Delete Video</Text>
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity style={styles.cancelItem} onPress={() => setMenuVisible(false)}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </Pressable>
-      </Modal>
+      {/* Same video menu as every other screen (Add to playlist, Share, Report; Edit/Delete for the owner) */}
+      {selectedVideo && (
+        <VideoActionsMenu
+          visible={menuVisible}
+          onClose={() => setMenuVisible(false)}
+          video={{ ...selectedVideo, owner: selectedVideo.owner || channel }}
+          isOwner={isOwner}
+          onEdit={handleEdit}
+          onDelete={handleDeleteVideo}
+        />
+      )}
 
       <ShareModal
         visible={shareModalVisible}
@@ -1341,44 +1301,6 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontWeight: '700',
     fontSize: 15,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  menuContent: {
-    backgroundColor: Colors.white,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  menuText: {
-    fontSize: 16,
-    marginLeft: 15,
-    color: Colors.text,
-  },
-  deleteItem: {
-    borderBottomWidth: 0,
-  },
-  cancelItem: {
-    marginTop: 10,
-    paddingVertical: 15,
-    alignItems: 'center',
-    backgroundColor: Colors.background,
-    borderRadius: 10,
-  },
-  cancelText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: Colors.textGray,
   },
   gridMenuDots: {
     position: 'absolute',
