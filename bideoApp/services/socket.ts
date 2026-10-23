@@ -40,8 +40,8 @@ export const initSocket = async (tokenOverride?: string): Promise<Socket | null>
     isConnecting = true;
 
     socket = io(socketUrl, {
+      // Sent in the handshake only, never in the URL (URLs end up in server logs)
       auth: { token },
-      query: { token },
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: 20,

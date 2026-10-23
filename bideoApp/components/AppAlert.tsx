@@ -33,7 +33,14 @@ const pickIcon = (data: AlertData | null): { name: any; color: string; bg: strin
   if (t.includes('success') || t.includes('published') || t.includes('uploaded') || t.includes('updated')) {
     return { name: 'checkmark-circle', color: '#10B981', bg: '#D1FAE5' };
   }
-  if (t.includes('fail') || t.includes('error') || t.includes('denied') || t.includes('invalid')) {
+  if (
+    t.includes('fail') ||
+    t.includes('error') ||
+    t.includes('denied') ||
+    t.includes('invalid') ||
+    t.includes('unable') ||
+    t.includes('limit')
+  ) {
     return { name: 'alert-circle', color: '#EF4444', bg: '#FEE2E2' };
   }
   return { name: 'information-circle', color: Colors.primary, bg: Colors.primary + '1A' };

@@ -126,6 +126,24 @@ export const normalizeVideo = (video: any) => {
   };
 };
 
+// Created once and shared, so two calls at the same time can never make two different ids
+let deviceIdPromise: Promise<string> | null = null;
+const getDeviceId = (): Promise<string> => {
+  if (!deviceIdPromise) {
+    deviceIdPromise = (async () => {
+      const saved = await AsyncStorage.getItem('device_id');
+      if (saved) return saved;
+      const created = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      await AsyncStorage.setItem('device_id', created);
+      return created;
+    })().catch((err) => {
+      deviceIdPromise = null; // let the next call try again
+      throw err;
+    });
+  }
+  return deviceIdPromise;
+};
+
 export const videoService = {
   getVideos: async (params?: any): Promise<any[]> => {
     const response = await api.get('/videos', { params });
@@ -141,22 +159,14 @@ export const videoService = {
     return response.data;
   },
   recordView: async (id: string) => {
-    let deviceId = await AsyncStorage.getItem('device_id');
-    if (!deviceId) {
-      deviceId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      await AsyncStorage.setItem('device_id', deviceId);
-    }
+    const deviceId = await getDeviceId();
     const response = await api.post(`/videos/${id}/view`, { deviceId }, {
       headers: { 'X-Device-Id': deviceId },
     });
     return response.data;
   },
   recordWatchTime: async (id: string, seconds: number = 60) => {
-    let deviceId = await AsyncStorage.getItem('device_id');
-    if (!deviceId) {
-      deviceId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      await AsyncStorage.setItem('device_id', deviceId);
-    }
+    const deviceId = await getDeviceId();
     const response = await api.post(`/videos/${id}/watch-time`, { seconds, deviceId }, {
       headers: { 'X-Device-Id': deviceId },
     });
