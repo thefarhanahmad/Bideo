@@ -1,13 +1,13 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Modal, Pressable } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSelector } from 'react-redux';
 import Colors from '../../constants/Colors';
 import VideoCard from '../../components/VideoCard';
 import { VideoMenuItem } from '../../components/VideoActionsMenu';
 import PlaylistFormModal from '../../components/PlaylistFormModal';
+import BottomSheet, { SheetItem, SheetCancel } from '../../components/BottomSheet';
 import { showAlert } from '../../components/AppAlert';
 import { RootState } from '../../redux/store';
 import { hapticLight, hapticSelection } from '../../utils/haptics';
@@ -23,7 +23,6 @@ interface PlaylistInfo {
 export default function PlaylistDetailsScreen() {
   const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { isAuthenticated } = useSelector((state: RootState) => state.auth);
 
   const [info, setInfo] = useState<PlaylistInfo>({ name: name || 'Playlist', isPrivate: false, isOwner: false });
@@ -214,50 +213,26 @@ export default function PlaylistDetailsScreen() {
       )}
 
       {/* Top Header Playlist Level Options Bottom Overlay Modal */}
-      <Modal
-        visible={playlistMenuVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setPlaylistMenuVisible(false)}
-      >
-        <Pressable style={styles.modalOverlay} onPress={() => setPlaylistMenuVisible(false)}>
-          <Pressable
-            style={[styles.menuContent, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <View style={styles.grabber} />
-            <Text style={styles.sheetTitle} numberOfLines={1}>
-              {info.name}
-            </Text>
-
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                setPlaylistMenuVisible(false);
-                setEditVisible(true);
-              }}
-            >
-              <Ionicons name="pencil-outline" size={22} color={Colors.text} />
-              <Text style={styles.menuText}>Edit name & visibility</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                setPlaylistMenuVisible(false);
-                confirmDelete();
-              }}
-            >
-              <Ionicons name="trash-outline" size={22} color={Colors.primary} />
-              <Text style={[styles.menuText, { color: Colors.primary }]}>Delete playlist</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.cancelItem} onPress={() => setPlaylistMenuVisible(false)}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <BottomSheet visible={playlistMenuVisible} onClose={() => setPlaylistMenuVisible(false)} title={info.name}>
+        <SheetItem
+          icon="pencil-outline"
+          label="Edit name & visibility"
+          onPress={() => {
+            setPlaylistMenuVisible(false);
+            setEditVisible(true);
+          }}
+        />
+        <SheetItem
+          icon="trash-outline"
+          label="Delete playlist"
+          destructive
+          onPress={() => {
+            setPlaylistMenuVisible(false);
+            confirmDelete();
+          }}
+        />
+        <SheetCancel onPress={() => setPlaylistMenuVisible(false)} />
+      </BottomSheet>
 
       {/* Edit Playlist Modal */}
       <PlaylistFormModal
@@ -337,57 +312,5 @@ const styles = StyleSheet.create({
     color: Colors.textGray,
     fontSize: 16,
     textAlign: 'center',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  menuContent: {
-    backgroundColor: Colors.white,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 10,
-  },
-  grabber: {
-    alignSelf: 'center',
-    width: 40,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: Colors.border,
-    marginBottom: 12,
-  },
-  sheetTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.text,
-    marginBottom: 8,
-    paddingHorizontal: 4,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-  },
-  menuText: {
-    fontSize: 15.5,
-    marginLeft: 14,
-    color: Colors.text,
-    fontWeight: '500',
-  },
-  cancelItem: {
-    marginTop: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    backgroundColor: Colors.background,
-    borderRadius: 14,
-  },
-  cancelText: {
-    fontSize: 15.5,
-    fontWeight: 'bold',
-    color: Colors.textGray,
   },
 });
