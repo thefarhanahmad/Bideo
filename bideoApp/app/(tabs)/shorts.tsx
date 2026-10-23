@@ -578,7 +578,7 @@ export default function ShortsScreen() {
       <Modal
         visible={menuVisible}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setMenuVisible(false)}
       >
         <Pressable style={styles.modalOverlay} onPress={() => setMenuVisible(false)}>

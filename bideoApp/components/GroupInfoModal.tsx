@@ -6,7 +6,6 @@ import {
   Modal,
   TouchableOpacity,
   FlatList,
-  Alert,
   ActivityIndicator,
   TextInput,
   Platform,
@@ -161,7 +160,7 @@ export default function GroupInfoModal({
     if (!selectedMember?._id) return;
     const memberName = selectedMember.channelName || selectedMember.name || 'Member';
 
-    Alert.alert(
+    showAlert(
       'Remove Member',
       `Are you sure you want to remove ${memberName} from this group?`,
       [
@@ -185,7 +184,7 @@ export default function GroupInfoModal({
   };
 
   const handleLeaveGroup = () => {
-    Alert.alert(
+    showAlert(
       'Leave Group',
       'Are you sure you want to leave this group? You will no longer receive messages or be able to participate unless an admin adds you back.',
       [
@@ -405,7 +404,7 @@ export default function GroupInfoModal({
         <Modal
           visible={memberActionVisible}
           transparent
-          animationType="fade"
+          animationType="slide"
           onRequestClose={() => setMemberActionVisible(false)}
         >
           <TouchableOpacity

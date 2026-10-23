@@ -12,7 +12,6 @@ import {
   DeviceEventEmitter,
   StatusBar,
   Modal,
-  Alert,
   Keyboard,
   Linking,
   Animated,
@@ -723,7 +722,7 @@ export default function ChatRoomScreen() {
   // Decline / Dismiss message request or conversation
   const handleDecline = () => {
     setMenuVisible(false);
-    Alert.alert(
+    showAlert(
       'Dismiss Chat',
       'Are you sure you want to dismiss this chat? It will be removed from your active conversations list.',
       [
@@ -752,7 +751,7 @@ export default function ChatRoomScreen() {
     setMessageActionModalVisible(false);
     setSelectedMessage(null);
 
-    Alert.alert(
+    showAlert(
       'Unsend Message',
       'Are you sure you want to unsend this message? It will be removed for everyone in this chat.',
       [
@@ -781,7 +780,7 @@ export default function ChatRoomScreen() {
     setMessageActionModalVisible(false);
     setSelectedMessage(null);
 
-    Alert.alert(
+    showAlert(
       'Delete Message',
       'This message will be deleted for you. Other participants will still be able to see it.',
       [
@@ -817,7 +816,7 @@ export default function ChatRoomScreen() {
   // Block user
   const handleBlock = async () => {
     setMenuVisible(false);
-    Alert.alert(
+    showAlert(
       'Block User',
       'Are you sure you want to block this user? They will not be able to message you again.',
       [
@@ -1641,7 +1640,7 @@ export default function ChatRoomScreen() {
       <Modal
         visible={menuVisible}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setMenuVisible(false)}
       >
         <TouchableOpacity
@@ -1741,7 +1740,7 @@ export default function ChatRoomScreen() {
       <Modal
         visible={messageActionModalVisible}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => {
           setMessageActionModalVisible(false);
           setSelectedMessage(null);
