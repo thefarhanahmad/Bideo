@@ -21,6 +21,7 @@ import {
   MessageSquareIcon,
   StoryIcon,
   MegaphoneIcon,
+  ListIcon,
 } from "./Icons";
 
 const nav = [
@@ -29,6 +30,7 @@ const nav = [
   { to: "/admin/categories", label: "Categories", icon: TagIcon },
   { to: "/admin/videos", label: "Videos", icon: PlayIcon },
   { to: "/admin/stories", label: "Stories", icon: StoryIcon },
+  { to: "/admin/playlists", label: "Playlists", icon: ListIcon },
   { to: "/admin/server-videos", label: "Server Videos", icon: ServerIcon },
   { to: "/admin/conversations", label: "Conversations", icon: MessageSquareIcon },
   { to: "/admin/reports", label: "Reports", icon: FlagIcon },
