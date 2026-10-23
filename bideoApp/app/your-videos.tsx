@@ -209,7 +209,7 @@ export default function YourVideosScreen() {
       <Modal
         visible={menuVisible}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setMenuVisible(false)}
       >
         <Pressable 
