@@ -217,7 +217,7 @@ export default function PlaylistDetailsScreen() {
       <Modal
         visible={playlistMenuVisible}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setPlaylistMenuVisible(false)}
       >
         <Pressable style={styles.modalOverlay} onPress={() => setPlaylistMenuVisible(false)}>

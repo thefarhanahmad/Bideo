@@ -93,7 +93,7 @@ export default function VideoActionsMenu({
 
   return (
     <>
-      <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
         <Pressable style={styles.modalOverlay} onPress={onClose}>
           <Pressable
             style={[styles.menuContent, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}
