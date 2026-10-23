@@ -955,7 +955,7 @@ export default function BoostScreen() {
       </Modal>
 
       {/* Reward Earned Celebration Modal */}
-      <Modal visible={rewardModal.visible} transparent animationType="slide">
+      <Modal visible={rewardModal.visible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.celebrationBox}>
             <Text style={{ fontSize: 50, textAlign: 'center' }}>🎉</Text>
