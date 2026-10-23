@@ -6,9 +6,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSelector } from 'react-redux';
 import Colors from '../../constants/Colors';
 import VideoCard from '../../components/VideoCard';
+import { VideoMenuItem } from '../../components/VideoActionsMenu';
 import PlaylistFormModal from '../../components/PlaylistFormModal';
-import PlaylistModal from '../../components/PlaylistModal';
-import ShareModal from '../../components/ShareModal';
 import { showAlert } from '../../components/AppAlert';
 import { RootState } from '../../redux/store';
 import { hapticLight, hapticSelection } from '../../utils/haptics';
@@ -35,12 +34,6 @@ export default function PlaylistDetailsScreen() {
   // Modals state
   const [editVisible, setEditVisible] = useState(false);
   const [playlistMenuVisible, setPlaylistMenuVisible] = useState(false);
-  const [videoMenuVisible, setVideoMenuVisible] = useState(false);
-  const [selectedVideo, setSelectedVideo] = useState<any>(null);
-  const [shareModalVisible, setShareModalVisible] = useState(false);
-  const [shareItem, setShareItem] = useState<any>(null);
-  const [playlistModalVisible, setPlaylistModalVisible] = useState(false);
-  const [targetPlaylistVideoId, setTargetPlaylistVideoId] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -119,21 +112,32 @@ export default function PlaylistDetailsScreen() {
     setPlaylistMenuVisible(true);
   };
 
-  const openVideoMenu = (video: any) => {
-    hapticSelection();
-    setSelectedVideo(video);
-    setVideoMenuVisible(true);
+  const confirmRemoveVideo = (video: any) => {
+    showAlert('Remove from playlist?', video.title, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await api.delete(`/playlists/${id}/videos/${video._id}`);
+            setVideos((prev) => prev.filter((v) => v._id !== video._id));
+          } catch (err: any) {
+            showAlert('Error', err?.response?.data?.message || 'Failed to remove video');
+          }
+        },
+      },
+    ]);
   };
 
-  const handleRemoveVideo = async (video: any) => {
-    setVideoMenuVisible(false);
-    try {
-      await api.delete(`/playlists/${id}/videos/${video._id}`);
-      setVideos((prev) => prev.filter((v) => v._id !== video._id));
-    } catch (err: any) {
-      showAlert('Error', err?.response?.data?.message || 'Failed to remove video');
-    }
-  };
+  // Shared video menu (Add to playlist, Share, Report) plus "Remove" for the playlist owner
+  const ownerMenuItems = useCallback(
+    (video: any): VideoMenuItem[] =>
+      info.isOwner
+        ? [{ key: 'remove', label: 'Remove from playlist', icon: 'trash-outline', destructive: true, onPress: () => confirmRemoveVideo(video) }]
+        : [],
+    [info.isOwner, id]
+  );
 
   const ownerName = info.owner?.channelName || info.owner?.name;
 
@@ -192,7 +196,11 @@ export default function PlaylistDetailsScreen() {
           data={videos}
           keyExtractor={(item) => item._id}
           renderItem={({ item }) => (
-            <VideoCard video={item} onMenuPress={() => openVideoMenu(item)} />
+            <VideoCard
+              video={item}
+              extraMenuItems={ownerMenuItems(item)}
+              playlistMenuLabel={info.isOwner ? 'Add to another playlist' : 'Add to Playlist'}
+            />
           )}
           contentContainerStyle={styles.list}
           refreshing={loading}
@@ -251,80 +259,6 @@ export default function PlaylistDetailsScreen() {
         </Pressable>
       </Modal>
 
-      {/* Video Level Options Bottom Overlay Modal */}
-      <Modal
-        visible={videoMenuVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setVideoMenuVisible(false)}
-      >
-        <Pressable style={styles.modalOverlay} onPress={() => setVideoMenuVisible(false)}>
-          <Pressable
-            style={[styles.menuContent, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <View style={styles.grabber} />
-            {selectedVideo && (
-              <Text style={styles.sheetTitle} numberOfLines={1}>
-                {selectedVideo.title}
-              </Text>
-            )}
-
-            {info.isOwner && (
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => {
-                  if (selectedVideo) {
-                    handleRemoveVideo(selectedVideo);
-                  }
-                }}
-              >
-                <Ionicons name="trash-outline" size={22} color={Colors.primary} />
-                <Text style={[styles.menuText, { color: Colors.primary }]}>Remove from playlist</Text>
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                setVideoMenuVisible(false);
-                if (selectedVideo) {
-                  setShareItem({
-                    type: 'video',
-                    _id: selectedVideo._id,
-                    title: selectedVideo.title,
-                    thumbnail: selectedVideo.thumbnail,
-                    isShort: Boolean(selectedVideo.isShort),
-                  });
-                  setShareModalVisible(true);
-                }
-              }}
-            >
-              <Ionicons name="share-social-outline" size={22} color={Colors.text} />
-              <Text style={styles.menuText}>Share video</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                setVideoMenuVisible(false);
-                if (selectedVideo) {
-                  setTargetPlaylistVideoId(selectedVideo._id);
-                  setPlaylistModalVisible(true);
-                }
-              }}
-            >
-              <Ionicons name="add-circle-outline" size={22} color={Colors.text} />
-              <Text style={styles.menuText}>Add to another playlist</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.cancelItem} onPress={() => setVideoMenuVisible(false)}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
       {/* Edit Playlist Modal */}
       <PlaylistFormModal
         visible={editVisible}
@@ -335,24 +269,6 @@ export default function PlaylistDetailsScreen() {
         onSubmit={handleEdit}
       />
 
-      {/* Share Modal */}
-      <ShareModal
-        visible={shareModalVisible}
-        onClose={() => setShareModalVisible(false)}
-        item={shareItem}
-      />
-
-      {/* Add To Playlist Modal */}
-      {targetPlaylistVideoId && (
-        <PlaylistModal
-          visible={playlistModalVisible}
-          videoId={targetPlaylistVideoId}
-          onClose={() => {
-            setPlaylistModalVisible(false);
-            setTargetPlaylistVideoId(null);
-          }}
-        />
-      )}
     </View>
   );
 }

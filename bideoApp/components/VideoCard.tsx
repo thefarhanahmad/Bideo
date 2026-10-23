@@ -1,11 +1,10 @@
 import { showAlert } from './AppAlert';
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, Alert, Pressable, Share } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '../constants/Colors';
 import { useRouter } from 'expo-router';
 import { formatTimeAgo, formatViews } from '../utils/formatDate';
@@ -15,8 +14,7 @@ import { useSelector } from 'react-redux';
 import { RootState } from '../redux/store';
 import VerifiedBadge from './VerifiedBadge';
 import HashtagText from './HashtagText';
-import { shareVideo } from '../utils/shareHelper';
-import ShareModal from './ShareModal';
+import VideoActionsMenu, { VideoMenuItem } from './VideoActionsMenu';
 
 const FALLBACK_IMAGE = 'https://via.placeholder.com/640x360?text=No+Image';
 const FALLBACK_AVATAR = 'https://via.placeholder.com/80x80.png?text=User';
@@ -45,14 +43,15 @@ interface VideoCardProps {
   onReportPress?: (video: any) => void;
   onEditPress?: (video: any) => void;
   onDeletePress?: (video: any) => void;
+  /** Screen-specific menu actions shown first (e.g. "Remove from playlist") */
+  extraMenuItems?: VideoMenuItem[];
+  playlistMenuLabel?: string;
 }
 
-const VideoCard: React.FC<VideoCardProps> = ({ video, onMenuPress, onPlaylistPress, onReportPress, onEditPress, onDeletePress }) => {
+const VideoCard: React.FC<VideoCardProps> = ({ video, onMenuPress, onPlaylistPress, onReportPress, onEditPress, onDeletePress, extraMenuItems, playlistMenuLabel }) => {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
   const [menuVisible, setMenuVisible] = useState(false);
-  const [shareModalVisible, setShareModalVisible] = useState(false);
   const [watchProgress, setWatchProgress] = useState<number>(video.progress || 0);
 
   useEffect(() => {
@@ -107,28 +106,7 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, onMenuPress, onPlaylistPre
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
-  const handleShare = () => {
-    setMenuVisible(false);
-    hapticSelection();
-    setShareModalVisible(true);
-  };
-
-  const handleReport = () => {
-    setMenuVisible(false);
-    if (onReportPress) {
-      onReportPress(video);
-    }
-  };
-
-  const handlePlaylist = () => {
-    setMenuVisible(false);
-    if (onPlaylistPress) {
-      onPlaylistPress(video._id);
-    }
-  };
-
   const handleEdit = () => {
-    setMenuVisible(false);
     if (onEditPress) {
       onEditPress(video);
     } else {
@@ -137,7 +115,6 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, onMenuPress, onPlaylistPre
   };
 
   const handleDelete = () => {
-    setMenuVisible(false);
     if (onDeletePress) {
       onDeletePress(video);
     } else {
@@ -239,68 +216,18 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, onMenuPress, onPlaylistPre
         </TouchableOpacity>
       </View>
 
-      {/* Action Menu Modal */}
-      <Modal
+      {/* ⋮ menu (shared with every screen): owner actions, extras, playlist, share, report */}
+      <VideoActionsMenu
         visible={menuVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setMenuVisible(false)}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setMenuVisible(false)}
-        >
-          <Pressable style={[styles.menuContent, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.grabber} />
-            {isOwner && (
-              <>
-                <TouchableOpacity style={styles.menuItem} onPress={handleEdit}>
-                  <Ionicons name="pencil-outline" size={24} color={Colors.text} />
-                  <Text style={styles.menuText}>Edit Video</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.menuItem} onPress={handleDelete}>
-                  <Ionicons name="trash-outline" size={24} color={Colors.primary} />
-                  <Text style={[styles.menuText, { color: Colors.primary }]}>Delete Video</Text>
-                </TouchableOpacity>
-              </>
-            )}
-
-            <TouchableOpacity style={styles.menuItem} onPress={handlePlaylist}>
-              <Ionicons name="add-circle-outline" size={24} color={Colors.text} />
-              <Text style={styles.menuText}>Add to Playlist</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.menuItem} onPress={handleShare}>
-              <Ionicons name="share-social-outline" size={24} color={Colors.text} />
-              <Text style={styles.menuText}>Share</Text>
-            </TouchableOpacity>
-
-            {!isOwner && (
-              <TouchableOpacity style={styles.menuItem} onPress={handleReport}>
-                <Ionicons name="flag-outline" size={24} color={Colors.text} />
-                <Text style={styles.menuText}>Report</Text>
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity style={styles.cancelItem} onPress={() => setMenuVisible(false)}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      <ShareModal
-        visible={shareModalVisible}
-        onClose={() => setShareModalVisible(false)}
-        item={{
-          type: 'video',
-          _id: video._id,
-          title: video.title,
-          thumbnail: video.thumbnail,
-          isShort: Boolean(video.isShort),
-          owner: video.owner,
-          duration: video.duration,
-        }}
+        onClose={() => setMenuVisible(false)}
+        video={video}
+        isOwner={isOwner}
+        extraItems={extraMenuItems}
+        playlistLabel={playlistMenuLabel}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        onPlaylistPress={onPlaylistPress}
+        onReportPress={onReportPress}
       />
     </TouchableOpacity>
   );
@@ -412,50 +339,6 @@ const styles = StyleSheet.create({
   menuButton: {
     paddingLeft: 8,
     alignSelf: 'flex-start',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  menuContent: {
-    backgroundColor: Colors.white,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 10,
-  },
-  grabber: {
-    alignSelf: 'center',
-    width: 40,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: Colors.border,
-    marginBottom: 10,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  menuText: {
-    fontSize: 16,
-    marginLeft: 15,
-    color: Colors.text,
-  },
-  cancelItem: {
-    marginTop: 12,
-    paddingVertical: 15,
-    alignItems: 'center',
-    backgroundColor: Colors.background,
-    borderRadius: 14,
-  },
-  cancelText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: Colors.textGray,
   },
 });
 
