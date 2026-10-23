@@ -877,16 +877,8 @@ export default function VideoScreen() {
         data={recommendedVideos}
         keyExtractor={(item) => item._id}
         renderItem={({ item }) => (
-          <VideoCard
-            video={item}
-            onPlaylistPress={(vId) => {
-              setSelectedPlaylistVideoId(vId);
-              setPlaylistModalVisible(true);
-            }}
-            onReportPress={(v) => {
-              showAlert('Report', 'Thank you. We will review this video.');
-            }}
-          />
+          // The card's shared menu handles "Add to Playlist" (with login prompt) and sends real reports
+          <VideoCard video={item} />
         )}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}

@@ -1,6 +1,6 @@
 import { showAlert } from '../../components/AppAlert';
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { View, FlatList, StyleSheet, ActivityIndicator, Text, Modal, TouchableOpacity, TextInput, Alert, Platform, DeviceEventEmitter } from 'react-native';
+import { View, FlatList, StyleSheet, ActivityIndicator, Text, TouchableOpacity, DeviceEventEmitter } from 'react-native';
 import { useScrollToTop, useNavigation } from '@react-navigation/native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -17,8 +17,6 @@ import { videoService, categoryService } from '../../services/api';
 import { fetchVideosStart, fetchVideosSuccess, appendVideos, fetchVideosFailure } from '../../redux/slices/videoSlice';
 import { RootState } from '../../redux/store';
 import api from '../../services/api';
-import AuthModal from '../../components/AuthModal';
-import PlaylistModal from '../../components/PlaylistModal';
 import { formatViews } from '../../utils/formatDate';
 import { AppAdBanner } from '../../components/AppAds';
 import AnnouncementModal from '../../components/AnnouncementModal';
@@ -61,11 +59,6 @@ export default function HomeScreen() {
     };
   }, [navigation]);
 
-  const [selectedVideo, setSelectedVideo] = useState<any>(null);
-  const [reportModalVisible, setReportModalVisible] = useState(false);
-  const [playlistModalVisible, setPlaylistModalVisible] = useState(false);
-  const [authModalVisible, setAuthModalVisible] = useState(false);
-  const [reportReason, setReportReason] = useState('');
 
   useEffect(() => {
     // 1. Instant cache hydration: if cached videos exist from previous sessions, display immediately (0ms)
@@ -202,19 +195,6 @@ export default function HomeScreen() {
   const handleDeletePost = useCallback((postId: string) => {
     setPosts((prev) => prev.filter((p) => p._id !== postId));
   }, []);
-
-  const handlePlaylistPress = useCallback((videoId: string) => {
-    if (!isAuthenticated) return setAuthModalVisible(true);
-    const v = videos.find((item: any) => item._id === videoId);
-    setSelectedVideo(v || { _id: videoId });
-    setPlaylistModalVisible(true);
-  }, [isAuthenticated, videos]);
-
-  const handleReportPress = useCallback((v: any) => {
-    if (!isAuthenticated) return setAuthModalVisible(true);
-    setSelectedVideo(v);
-    setReportModalVisible(true);
-  }, [isAuthenticated]);
 
   // Same wrapper object per video/post across rebuilds, so loading more only renders the new cards
   const feedItemCache = useRef(new WeakMap<object, any>());
@@ -391,13 +371,10 @@ export default function HomeScreen() {
       return <PostCard post={item} onDelete={handleDeletePost} />;
     }
     return (
-      <VideoCard
-        video={item}
-        onPlaylistPress={handlePlaylistPress}
-        onReportPress={handleReportPress}
-      />
+      // "Add to Playlist" and "Report" are handled by the card's shared menu (with login prompt)
+      <VideoCard video={item} />
     );
-  }, [renderShortsShelf, handleDeletePost, handlePlaylistPress, handleReportPress]);
+  }, [renderShortsShelf, handleDeletePost]);
 
   const feedKeyExtractor = useCallback((item: any) => item._id, []);
 
@@ -465,57 +442,6 @@ export default function HomeScreen() {
           }
         />
       )}
-
-      <AuthModal
-        visible={authModalVisible}
-        onClose={() => setAuthModalVisible(false)}
-      />
-
-      <PlaylistModal
-        visible={playlistModalVisible}
-        onClose={() => {
-          setPlaylistModalVisible(false);
-          setSelectedVideo(null);
-        }}
-        videoId={selectedVideo?._id}
-      />
-
-      <Modal visible={reportModalVisible} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.reportBox}>
-            <Text style={styles.reportTitle}>Report video</Text>
-            <TextInput
-              style={styles.reportInput}
-              placeholder="Tell us what is wrong"
-              placeholderTextColor={Colors.textGray}
-              value={reportReason}
-              onChangeText={setReportReason}
-              multiline
-            />
-            <View style={styles.reportActions}>
-              <TouchableOpacity onPress={() => { setReportModalVisible(false); setSelectedVideo(null); setReportReason(''); }}>
-                <Text style={styles.cancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.submitReport}
-                onPress={async () => {
-                  try {
-                    await api.post(`/videos/${selectedVideo?._id}/report`, { reason: reportReason });
-                    showAlert('Report sent', 'Thanks for helping keep Bideo safe.');
-                    setReportModalVisible(false);
-                    setSelectedVideo(null);
-                    setReportReason('');
-                  } catch (err: any) {
-                    showAlert('Report failed', err.response?.data?.message || 'Please try again');
-                  }
-                }}
-              >
-                <Text style={styles.submitReportText}>Submit</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       <AnnouncementModal />
     </View>
@@ -590,42 +516,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  reportBox: {
-    backgroundColor: Colors.white,
-    borderRadius: 20,
-    padding: 20,
-  },
-  reportTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: Colors.text,
-    marginBottom: 12,
-  },
-  reportInput: {
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    minHeight: 90,
-    padding: 12,
-    textAlignVertical: 'top',
-    backgroundColor: Colors.background,
-  },
-  reportActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    marginTop: 16,
-    gap: 18,
-  },
-  cancelText: { color: Colors.textGray, fontWeight: '600' },
-  submitReport: { backgroundColor: Colors.primary, borderRadius: 999, paddingHorizontal: 22, paddingVertical: 11 },
-  submitReportText: { color: Colors.white, fontWeight: 'bold' },
   // Shorts Shelf Styles
   shortsShelf: {
     paddingVertical: 14,
