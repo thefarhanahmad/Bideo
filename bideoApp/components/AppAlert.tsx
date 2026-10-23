@@ -68,7 +68,7 @@ export function AlertHost() {
       <View style={styles.overlay}>
         <View style={styles.card}>
           <View style={[styles.iconWrap, { backgroundColor: icon.bg }]}>
-            <Ionicons name={icon.name} size={30} color={icon.color} />
+            <Ionicons name={icon.name} size={22} color={icon.color} />
           </View>
 
           {!!data?.title && <Text style={styles.title}>{data.title}</Text>}
@@ -107,55 +107,56 @@ export function AlertHost() {
   );
 }
 
+// Compact dialog: 16px corners, 44px icon, 17/14px text, 42px buttons with 10px corners
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(17,17,17,0.45)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 28,
+    padding: 32,
   },
   card: {
     width: '100%',
-    maxWidth: 360,
+    maxWidth: 320,
     backgroundColor: Colors.white,
-    borderRadius: 24,
-    paddingHorizontal: 24,
-    paddingTop: 28,
-    paddingBottom: 20,
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingTop: 22,
+    paddingBottom: 16,
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18,
-    shadowRadius: 24,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 6,
   },
   iconWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 18,
+    marginBottom: 12,
   },
   title: {
-    fontSize: 19,
-    fontWeight: '800',
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: '700',
     color: Colors.text,
     textAlign: 'center',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   message: {
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 14,
+    lineHeight: 20,
     color: Colors.textGray,
     textAlign: 'center',
-    marginBottom: 8,
   },
   actions: {
     width: '100%',
-    marginTop: 16,
-    gap: 10,
+    marginTop: 18,
+    gap: 8,
   },
   actionsRow: {
     flexDirection: 'row',
@@ -164,9 +165,10 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   btn: {
-    borderRadius: 999,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
+    minHeight: 42,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -180,13 +182,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#EF4444',
   },
   btnCancel: {
-    backgroundColor: Colors.background,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: '#F3F4F6',
   },
   btnText: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '600',
   },
   btnSolidText: {
     color: Colors.white,
