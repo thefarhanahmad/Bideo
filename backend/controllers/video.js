@@ -11,6 +11,7 @@ const MonetizationApplication = require("../models/MonetizationApplication");
 const Comment = require("../models/Comment");
 const Playlist = require("../models/Playlist");
 const Post = require("../models/Post");
+const { createTtlCache: createSharedTtlCache } = require("../utils/ttlCache");
 const CoinTransaction = require("../models/CoinTransaction");
 const fs = require("fs");
 const { saveLocalFile, deleteLocalFile } = require("../utils/localUpload");
@@ -609,6 +610,116 @@ exports.searchVideos = async (req, res, next) => {
         playlists: playlistsData,
       },
     });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ---------------- Search suggestions (as the user types) ----------------
+// Keystrokes never hit MongoDB: public video titles (most viewed first) and channel names are
+// held in a small in-memory index, rebuilt in the background every few minutes.
+const SUGGEST = {
+  minChars: 2,
+  maxChars: 80,
+  limit: 10,
+  maxChannels: 3,
+  textMax: 60,
+  indexRefreshMs: 10 * 60 * 1000,
+  indexMaxVideos: 200000,
+  indexMaxChannels: 50000,
+  queryCacheMs: 60 * 1000,
+  queryCacheKeys: 1000,
+};
+const suggestionIndexCache = createSharedTtlCache(SUGGEST.indexRefreshMs, 1, { staleWhileRevalidate: true });
+const suggestionQueryCache = createSharedTtlCache(SUGGEST.queryCacheMs, SUGGEST.queryCacheKeys);
+
+// Video titles carry hashtags and emojis; suggestions read better as plain phrases
+const toSuggestionText = (raw) => {
+  const text = String(raw || "")
+    .replace(/#[^\s#]+/g, " ")
+    .replace(/\p{Extended_Pictographic}|️|‍/gu, " ")
+    .replace(/[|•·]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (text.length <= SUGGEST.textMax) return text;
+  const cut = text.slice(0, SUGGEST.textMax);
+  const lastSpace = cut.lastIndexOf(" ");
+  return (lastSpace > 20 ? cut.slice(0, lastSpace) : cut).trim();
+};
+
+const toIndexEntries = (items, field, type) => {
+  const seen = new Set();
+  const entries = [];
+  for (const item of items) {
+    const text = toSuggestionText(item[field]);
+    const lower = text.toLowerCase();
+    if (text.length < SUGGEST.minChars || seen.has(lower)) continue;
+    seen.add(lower);
+    entries.push({ text, lower, type });
+  }
+  return entries;
+};
+
+const buildSuggestionIndex = async () => {
+  const blockedUserIds = await getBlockedUserIds();
+  const [videos, channels] = await Promise.all([
+    Video.find({ visibility: "public", ...(blockedUserIds.length ? { owner: { $nin: blockedUserIds } } : {}) })
+      .select("title -_id")
+      .sort({ views: -1 })
+      .limit(SUGGEST.indexMaxVideos)
+      .lean(),
+    User.find({ isBlocked: { $ne: true }, channelName: { $exists: true, $ne: "" } })
+      .select("channelName -_id")
+      .sort({ followersCount: -1 })
+      .limit(SUGGEST.indexMaxChannels)
+      .lean(),
+  ]);
+  return {
+    videos: toIndexEntries(videos, "title", "video"),
+    channels: toIndexEntries(channels, "channelName", "channel"),
+  };
+};
+
+// Ranking: channel names starting with the text, then titles starting with it, then titles with a
+// word starting with it, then titles containing it. Lists are already ordered by popularity.
+const matchSuggestions = (index, q) => {
+  const needle = q.toLowerCase();
+  const channels = [];
+  for (const c of index.channels) {
+    if (c.lower.startsWith(needle)) channels.push(c);
+    if (channels.length >= SUGGEST.maxChannels) break;
+  }
+  const starts = [];
+  const words = [];
+  const contains = [];
+  for (const v of index.videos) {
+    if (starts.length >= SUGGEST.limit) break;
+    if (v.lower.startsWith(needle)) starts.push(v);
+    else if (words.length < SUGGEST.limit && v.lower.includes(` ${needle}`)) words.push(v);
+    else if (contains.length < SUGGEST.limit && v.lower.includes(needle)) contains.push(v);
+  }
+  const seen = new Set();
+  const out = [];
+  for (const e of [...channels, ...starts, ...words, ...contains]) {
+    if (out.length >= SUGGEST.limit) break;
+    if (seen.has(e.lower)) continue;
+    seen.add(e.lower);
+    out.push({ text: e.text, type: e.type });
+  }
+  return out;
+};
+
+// @desc    Suggestions while typing in search (public titles and channel names only)
+// @route   GET /api/videos/search/suggestions?q=
+// @access  Public
+exports.searchSuggestions = async (req, res, next) => {
+  try {
+    const q = String(req.query.q || "").trim().replace(/\s+/g, " ").slice(0, SUGGEST.maxChars);
+    if (q.length < SUGGEST.minChars) return res.status(200).json({ success: true, data: [] });
+    const data = await suggestionQueryCache(`s:${q.toLowerCase()}`, async () =>
+      matchSuggestions(await suggestionIndexCache("index", buildSuggestionIndex), q)
+    );
+    res.status(200).json({ success: true, data });
   } catch (err) {
     next(err);
   }

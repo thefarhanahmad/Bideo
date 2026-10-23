@@ -7,6 +7,7 @@ const {
   deleteVideo,
   bulkDeleteVideos,
   searchVideos,
+  searchSuggestions,
   toggleLike,
   toggleDislike,
   getMyVideos,
@@ -26,6 +27,7 @@ const { videoValidationRules, validate } = require('../validators');
 router.route('/')
   .get(softProtect, getVideos);
 
+router.get('/search/suggestions', searchSuggestions);
 router.get('/search', softProtect, searchVideos);
 router.get('/me', protect, getMyVideos);
 router.get('/followed', protect, getFollowedVideos);
