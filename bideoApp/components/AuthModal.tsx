@@ -520,7 +520,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
                   </TouchableOpacity>
                 )}
 
-                {/* Primary Action Button (Login / Sign Up) */}
+                {/* Primary Action Button (Login / Create Account) */}
                 <TouchableOpacity
                   style={[styles.primaryButton, authLoading && { opacity: 0.8 }]}
                   onPress={handlePhoneAuth}
@@ -536,7 +536,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
                     {authLoading ? (
                       <ActivityIndicator color={Colors.white} size="small" />
                     ) : (
-                      <Text style={styles.primaryButtonText}>{isSignup ? 'Sign Up' : 'Login'}</Text>
+                      <Text style={styles.primaryButtonText}>{isSignup ? 'Create Account' : 'Login'}</Text>
                     )}
                   </LinearGradient>
                 </TouchableOpacity>
@@ -550,7 +550,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
                   <Text style={styles.switchLineText}>
                     {isSignup ? 'Already have an account? ' : 'New user? '}
                     <Text style={styles.switchLineAction}>
-                      {isSignup ? 'Login' : 'Sign up with phone'}
+                      {isSignup ? 'Login' : 'Create Account'}
                     </Text>
                   </Text>
                 </TouchableOpacity>

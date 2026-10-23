@@ -763,7 +763,7 @@ export default function ForgotPasswordScreen() {
                   activeOpacity={0.8}
                 >
                   <Ionicons name="person-add" size={14} color="#92400E" />
-                  <Text style={styles.guideAlertSignupText}>Go to Sign Up</Text>
+                  <Text style={styles.guideAlertSignupText}>Create Account</Text>
                   <Ionicons name="arrow-forward" size={13} color="#92400E" />
                 </TouchableOpacity>
               </View>
