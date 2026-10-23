@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -14,6 +14,8 @@ import { EmptyState } from '../components/ListStates';
 import api, { resolveMediaUrl } from '../services/api';
 import { RootState } from '../redux/store';
 import AuthModal from '../components/AuthModal';
+import PlaylistModal from '../components/PlaylistModal';
+import ReportVideoModal from '../components/ReportVideoModal';
 import { showAlert } from '../components/AppAlert';
 import { hapticLight } from '../utils/haptics';
 
@@ -196,6 +198,23 @@ export default function SearchScreen() {
   // Ignore responses from older searches when the user switches filters quickly
   const latestSearchId = useRef(0);
   const [suggestions, setSuggestions] = useState<Array<{ text: string; type: string }>>([]);
+  // Video card menu: "Save to playlist" and "Report" (same flow as the home feed)
+  const [menuVideoId, setMenuVideoId] = useState<string | null>(null);
+  const [playlistModalVisible, setPlaylistModalVisible] = useState(false);
+  const [reportModalVisible, setReportModalVisible] = useState(false);
+  const [screenAuthVisible, setScreenAuthVisible] = useState(false);
+
+  const handlePlaylistPress = useCallback((videoId: string) => {
+    if (!isAuthenticated) return setScreenAuthVisible(true);
+    setMenuVideoId(videoId);
+    setPlaylistModalVisible(true);
+  }, [isAuthenticated]);
+
+  const handleReportPress = useCallback((video: any) => {
+    if (!isAuthenticated) return setScreenAuthVisible(true);
+    setMenuVideoId(video?._id || null);
+    setReportModalVisible(true);
+  }, [isAuthenticated]);
   const latestSuggestId = useRef(0);
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -560,7 +579,7 @@ export default function SearchScreen() {
                 </View>
               );
             }
-            return <VideoCard video={item} />;
+            return <VideoCard video={item} onPlaylistPress={handlePlaylistPress} onReportPress={handleReportPress} />;
           }}
           contentContainerStyle={[styles.list, !showResults && styles.historyList]}
           ListEmptyComponent={
@@ -584,6 +603,24 @@ export default function SearchScreen() {
           }
         />
       )}
+
+      <AuthModal visible={screenAuthVisible} onClose={() => setScreenAuthVisible(false)} />
+      <PlaylistModal
+        visible={playlistModalVisible}
+        onClose={() => {
+          setPlaylistModalVisible(false);
+          setMenuVideoId(null);
+        }}
+        videoId={menuVideoId || ''}
+      />
+      <ReportVideoModal
+        visible={reportModalVisible}
+        videoId={menuVideoId}
+        onClose={() => {
+          setReportModalVisible(false);
+          setMenuVideoId(null);
+        }}
+      />
     </View>
   );
 }
