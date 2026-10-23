@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, ActivityIndicator, Alert, ScrollView } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -160,6 +160,9 @@ function PlaylistSearchResultCard({ playlist }: { playlist: any }) {
 }
 
 const SEARCH_HISTORY_KEY = '@bideo_search_history';
+// Suggestions while typing: wait for a short pause, and only from 2 characters
+const SUGGEST_DEBOUNCE_MS = 250;
+const SUGGEST_MIN_CHARS = 2;
 
 const getTerm = (item: any): string => {
   if (!item) return '';
@@ -192,6 +195,31 @@ export default function SearchScreen() {
   const [searchType, setSearchType] = useState<SearchType>('all');
   // Ignore responses from older searches when the user switches filters quickly
   const latestSearchId = useRef(0);
+  const [suggestions, setSuggestions] = useState<Array<{ text: string; type: string }>>([]);
+  const latestSuggestId = useRef(0);
+  const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (suggestTimer.current) clearTimeout(suggestTimer.current);
+  }, []);
+
+  const cancelSuggestions = () => {
+    if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    latestSuggestId.current += 1;
+    setSuggestions([]);
+  };
+
+  const fetchSuggestions = async (text: string) => {
+    const requestId = ++latestSuggestId.current;
+    try {
+      const res = await api.get('/videos/search/suggestions', { params: { q: text } });
+      if (requestId !== latestSuggestId.current) return;
+      setSuggestions(res.data?.success && Array.isArray(res.data.data) ? res.data.data : []);
+    } catch {
+      // Older servers have no suggestions; typing still works with recent searches only
+      if (requestId === latestSuggestId.current) setSuggestions([]);
+    }
+  };
 
   useEffect(() => {
     loadHistory();
@@ -260,6 +288,7 @@ export default function SearchScreen() {
     const cleanTerm = term.trim();
     if (!cleanTerm) return;
     const searchId = ++latestSearchId.current;
+    cancelSuggestions();
     setQuery(cleanTerm);
     saveToHistory(cleanTerm);
     setLoading(true);
@@ -336,6 +365,7 @@ export default function SearchScreen() {
   };
 
   const clearSearch = () => {
+    cancelSuggestions();
     setQuery('');
     setResults([]);
     setShowResults(false);
@@ -344,12 +374,38 @@ export default function SearchScreen() {
   const onQueryChange = (text: string) => {
     setQuery(text);
     if (showResults) setShowResults(false);
+    if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    const trimmed = text.trim();
+    if (trimmed.length < SUGGEST_MIN_CHARS) {
+      latestSuggestId.current += 1;
+      setSuggestions([]);
+      return;
+    }
+    suggestTimer.current = setTimeout(() => fetchSuggestions(trimmed), SUGGEST_DEBOUNCE_MS);
+  };
+
+  // Put a suggestion in the box to keep typing (like YouTube's ↖ arrow)
+  const fillQuery = (text: string) => {
+    hapticLight();
+    onQueryChange(`${text} `);
   };
 
   const filteredHistory = history.filter((h) => {
     const t = getTerm(h);
     return t.length > 0 && (!query.trim() || t.toLowerCase().includes(query.toLowerCase().trim()));
   });
+
+  // While typing: matching recent searches first, then server suggestions (no duplicates)
+  const isTyping = query.trim().length > 0;
+  const historyTerms = new Set(filteredHistory.map((h) => getTerm(h).toLowerCase()));
+  const typingItems = [
+    ...filteredHistory.map((h) => ({ kind: 'history', term: getTerm(h), key: `h-${getTerm(h)}` })),
+    ...(isTyping
+      ? suggestions
+          .filter((sg) => !historyTerms.has(sg.text.toLowerCase()))
+          .map((sg) => ({ kind: 'suggestion', term: sg.text, key: `s-${sg.text}` }))
+      : []),
+  ];
 
   return (
     <View style={styles.container}>
@@ -413,14 +469,17 @@ export default function SearchScreen() {
         </View>
       ) : (
         <FlatList
-          data={showResults ? results : filteredHistory}
+          data={showResults ? results : typingItems}
+          keyboardShouldPersistTaps="handled"
           keyExtractor={(item, index) =>
-            item._id
+            !showResults
+              ? item.key || `${getTerm(item)}-${index}`
+              : item._id
               ? `${item.isPost ? 'post' : item.isPlaylist ? 'playlist' : item.isChannel ? 'channel' : 'video'}-${item._id}`
               : `${getTerm(item)}-${index}`
           }
           ListHeaderComponent={
-            !showResults && filteredHistory.length > 0 ? (
+            !showResults && !isTyping && filteredHistory.length > 0 ? (
               <View style={styles.historyHeaderRow}>
                 <Text style={styles.historyHeaderTitle}>Recent searches</Text>
                 <TouchableOpacity
@@ -438,6 +497,31 @@ export default function SearchScreen() {
             if (!showResults) {
               const termStr = getTerm(item);
               if (!termStr) return null;
+              if (item.kind === 'suggestion') {
+                return (
+                  <View style={styles.historyRow}>
+                    <TouchableOpacity
+                      style={styles.historyMainContent}
+                      onPress={() => handleSearch(termStr)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="search-outline" size={19} color={Colors.textGray} />
+                      <Text style={styles.historyText} numberOfLines={1}>
+                        {termStr}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.historyDeleteBtn}
+                      onPress={() => fillQuery(termStr)}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      activeOpacity={0.7}
+                      accessibilityLabel={`Use ${termStr}`}
+                    >
+                      <MaterialCommunityIcons name="arrow-top-left" size={20} color={Colors.textGray} />
+                    </TouchableOpacity>
+                  </View>
+                );
+              }
               return (
                 <View style={styles.historyRow}>
                   <TouchableOpacity
