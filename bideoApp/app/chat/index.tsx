@@ -571,9 +571,9 @@ export default function ChatListScreen() {
 
 
 
-  // Total unread count across all chats
-  const totalUnreadCount = useMemo(() => {
-    return conversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+  // Number of chats with unread messages (matches the Unread tab's list and the home badge)
+  const unreadChatsCount = useMemo(() => {
+    return conversations.filter((c) => (c.unreadCount || 0) > 0).length;
   }, [conversations]);
 
   // Total pending message requests count
@@ -801,9 +801,9 @@ export default function ChatListScreen() {
 
         <View style={styles.headerTitleContainer}>
           <Text style={styles.headerTitle}>Messages</Text>
-          {totalUnreadCount > 0 && (
+          {unreadChatsCount > 0 && (
             <View style={styles.headerUnreadPill}>
-              <Text style={styles.headerUnreadPillText}>{totalUnreadCount} new</Text>
+              <Text style={styles.headerUnreadPillText}>{unreadChatsCount} new</Text>
             </View>
           )}
         </View>
@@ -1060,7 +1060,7 @@ export default function ChatListScreen() {
               >
                 Unread
               </Text>
-              {totalUnreadCount > 0 && (
+              {unreadChatsCount > 0 && (
                 <View
                   style={[
                     styles.tabBadge,
@@ -1075,7 +1075,7 @@ export default function ChatListScreen() {
                         : styles.tabBadgeTextInactive,
                     ]}
                   >
-                    {totalUnreadCount}
+                    {unreadChatsCount}
                   </Text>
                 </View>
               )}
