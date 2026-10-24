@@ -13,6 +13,7 @@ import AppErrorScreen from '../components/AppErrorScreen';
 import Constants from 'expo-constants';
 import { registerForPushNotificationsAsync, setupNotificationListeners } from '../services/notifications';
 import { initSocket, disconnectSocket } from '../services/socket';
+import { migrateExistingSession, saveAccount } from '../services/accountManager';
 import { AppState, AppStateStatus, StatusBar, LogBox } from 'react-native';
 
 LogBox.ignoreLogs([
@@ -39,6 +40,9 @@ function Startup({ onReady }: { onReady: () => void }) {
 
     const init = async () => {
       try {
+        // 0. Migrate existing single-account session to multi-account registry (no-op if already done)
+        await migrateExistingSession().catch(() => {});
+
         // 1. Initialize AdMob non-blocking in background (skip in Expo Go)
         const isExpoGo =
           Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
@@ -132,6 +136,7 @@ function Startup({ onReady }: { onReady: () => void }) {
                 }
                 dispatch(loginSuccess({ user: freshUser, token } as any));
                 AsyncStorage.setItem('cached_user', JSON.stringify(freshUser)).catch(() => {});
+                saveAccount(freshUser, token).catch(() => {});
               }
             })
             .catch((err) => {

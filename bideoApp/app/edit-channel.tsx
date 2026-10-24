@@ -15,6 +15,7 @@ import { RootState } from '../redux/store';
 import { loginSuccess, updateUser } from '../redux/slices/authSlice';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
+import { saveAccount } from '../services/accountManager';
 
 const getAvatarUri = (avatar?: string) => {
   if (!avatar) return null;
@@ -403,6 +404,7 @@ export default function EditChannelScreen() {
         const updatedUser = res.data.data;
         dispatch(loginSuccess({ user: updatedUser, token: token! }));
         AsyncStorage.setItem('cached_user', JSON.stringify(updatedUser)).catch(() => {});
+        saveAccount(updatedUser, token!).catch(() => {});
         showAlert('Success', 'Channel customization saved');
         router.back();
       }

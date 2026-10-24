@@ -97,6 +97,7 @@ export function AlertHost() {
                   ]}
                 >
                   <Text
+                    numberOfLines={1}
                     style={[
                       styles.btnText,
                       cancel ? styles.btnCancelText : styles.btnSolidText,
@@ -125,10 +126,10 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '100%',
-    maxWidth: 320,
+    maxWidth: 330,
     backgroundColor: Colors.white,
     borderRadius: 16,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingTop: 22,
     paddingBottom: 16,
     alignItems: 'center',
@@ -172,10 +173,10 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   btn: {
-    minHeight: 42,
+    minHeight: 40,
     borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+    paddingVertical: 9,
+    paddingHorizontal: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -192,7 +193,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
   },
   btnText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
   },
   btnSolidText: {

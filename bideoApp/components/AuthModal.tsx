@@ -24,13 +24,15 @@ import * as AuthSession from "expo-auth-session";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "../constants/Colors";
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
+import { RootState } from '../redux/store';
 import { loginStart, loginSuccess, loginFailure } from '../redux/slices/authSlice';
 import { authService, setAuthToken } from '../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from "expo-router";
 import { registerForPushNotificationsAsync } from '../services/notifications';
 import { setAnalyticsUser, logSignUp } from '../services/analytics';
+import { saveAccount } from '../services/accountManager';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -145,6 +147,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
 }) => {
   const dispatch = useDispatch();
   const router = useRouter();
+  const { isAuthenticated } = useSelector((state: RootState) => state.auth);
   const insets = useSafeAreaInsets();
   const [isSignup, setIsSignup] = useState(initialMode === 'signup');
   const [name, setName] = useState('');
@@ -210,6 +213,8 @@ const AuthModal: React.FC<AuthModalProps> = ({
       await AsyncStorage.setItem('cached_user', JSON.stringify(userData));
       setAuthToken(token);
     }
+    // Save to multi-account registry (upserts — safe if account already exists)
+    await saveAccount(userData, token).catch(() => {});
     dispatch(loginSuccess({ user: userData, token } as any));
     setAnalyticsUser(userData._id, {
       name: userData.name || '',
@@ -233,7 +238,9 @@ const AuthModal: React.FC<AuthModalProps> = ({
     try {
       const res = await fetch("https://www.googleapis.com/userinfo/v2/me", { headers: { Authorization: `Bearer ${accessToken}` } });
       const user = await res.json();
-      dispatch(loginStart());
+      if (!isAuthenticated) {
+        dispatch(loginStart());
+      }
       try {
         const backendRes = await authService.googleLogin({
           name: user.name,
@@ -243,13 +250,15 @@ const AuthModal: React.FC<AuthModalProps> = ({
         await persistAuth(backendRes);
       }
       catch (err: any) {
-        dispatch(loginFailure('Backend login failed'));
+        if (!isAuthenticated) {
+          dispatch(loginFailure('Backend login failed'));
+        }
         showAlert('Login Failed', 'Unable to complete login with backend');
       }
     } catch {
       showAlert("Login Failed", "Could not fetch user info");
     }
-  }, [dispatch, persistAuth]);
+  }, [dispatch, persistAuth, isAuthenticated]);
 
   useEffect(() => {
     if (response?.type === "success") {
@@ -288,14 +297,18 @@ const AuthModal: React.FC<AuthModalProps> = ({
     if (isSignup && trimmedPassword.length < 6) return showAlert('Short Password', 'Password must be at least 6 characters.');
 
     setAuthLoading(true);
-    dispatch(loginStart());
+    if (!isAuthenticated) {
+      dispatch(loginStart());
+    }
     try {
       const backendRes = isSignup 
         ? await authService.signupWithPhone({ name: trimmedName, phone: sanitizedPhone, password: trimmedPassword }) 
         : await authService.loginWithPhone({ phone: sanitizedPhone, password: trimmedPassword });
       await persistAuth(backendRes);
     } catch (err: any) {
-      dispatch(loginFailure('Phone auth failed'));
+      if (!isAuthenticated) {
+        dispatch(loginFailure('Phone auth failed'));
+      }
       const apiError =
         err?.response?.data?.message ||
         err?.response?.data?.errors?.[0]?.msg ||
@@ -308,7 +321,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
     } finally {
       setAuthLoading(false);
     }
-  }, [isSignup, name, phone, password, cleanPhoneInput, dispatch, persistAuth]);
+  }, [isSignup, name, phone, password, cleanPhoneInput, dispatch, persistAuth, isAuthenticated]);
 
   const handleGoogleLogin = useCallback(async () => {
     if (Platform.OS === 'android' && !ANDROID_CLIENT_ID) return showAlert('Google Login Not Configured', 'Set EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID in your app env to enable Google login on Android.');

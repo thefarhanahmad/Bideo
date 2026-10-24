@@ -15,6 +15,7 @@ import { formatViews } from '../../utils/formatDate';
 import { AppAdBanner } from '../../components/AppAds';
 import PlaylistFormModal from '../../components/PlaylistFormModal';
 import { showAlert } from '../../components/AppAlert';
+import SwitchAccountModal from '../../components/SwitchAccountModal';
 
 // The rows here are previews ("View all" opens the full list), so only the latest are loaded
 const PREVIEW_PAGE = { offset: 0, limit: 20 };
@@ -41,6 +42,7 @@ export default function LibraryScreen() {
   const dispatch = useDispatch();
   const { isAuthenticated, user, loading: authLoading } = useSelector((state: RootState) => state.auth);
   const [authModalVisible, setAuthModalVisible] = useState(false);
+  const [switchAccountVisible, setSwitchAccountVisible] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [myVideos, setMyVideos] = useState<any[]>([]);
@@ -59,7 +61,6 @@ export default function LibraryScreen() {
             return;
           }
           loadAllData();
-          setAuthModalVisible(false);
         } else {
           setAuthModalVisible(true);
         }
@@ -67,17 +68,58 @@ export default function LibraryScreen() {
     }, [isAuthenticated, authLoading, user?.deletionScheduled])
   );
 
+  // When active user switches, immediately reset previous user's cached rows and reload fresh data
+  useEffect(() => {
+    if (isAuthenticated && user?._id) {
+      setHistory([]);
+      setMyVideos([]);
+      setLikedVideos([]);
+      setPlaylists([]);
+      loadAllData();
+    }
+  }, [user?._id, isAuthenticated]);
+
   useEffect(() => {
     navigation.setOptions({
+      headerTitleAlign: 'center',
+      headerLeft: () => (
+        <Text style={styles.headerTitleText}>Library</Text>
+      ),
+      headerTitle: isAuthenticated
+        ? () => (
+            <TouchableOpacity
+              style={styles.headerAccordion}
+              onPress={() => setSwitchAccountVisible(true)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Switch account"
+            >
+              <Text style={styles.headerAccordionName} numberOfLines={1}>
+                {user?.channelName || user?.name || 'Account'}
+              </Text>
+              <Ionicons
+                name="chevron-down"
+                size={13}
+                color="#9CA3AF"
+                style={{ marginLeft: 4 }}
+              />
+            </TouchableOpacity>
+          )
+        : () => null,
       headerRight: isAuthenticated
         ? () => (
-            <TouchableOpacity style={{ marginRight: 15 }} onPress={() => router.push('/settings')}>
+            <TouchableOpacity
+              style={{ marginRight: 15, padding: 4 }}
+              onPress={() => router.push('/settings')}
+              accessibilityRole="button"
+              accessibilityLabel="Settings"
+            >
               <Ionicons name="settings-outline" size={24} color={Colors.primary} />
             </TouchableOpacity>
           )
         : () => null,
     });
-  }, [navigation, isAuthenticated]);
+  }, [navigation, isAuthenticated, user?.name, user?.channelName, user?.avatar]);
 
   const loadHistory = async () => {
     setLoadingHistory(true);
@@ -223,7 +265,18 @@ export default function LibraryScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
       }
     >
-      <AuthModal visible={authModalVisible} onClose={() => setAuthModalVisible(false)} />
+      <AuthModal
+        visible={authModalVisible}
+        onClose={() => setAuthModalVisible(false)}
+        onLoginSuccess={() => {
+          loadAllData();
+        }}
+      />
+      <SwitchAccountModal
+        visible={switchAccountVisible}
+        onClose={() => setSwitchAccountVisible(false)}
+        onAddAccount={() => setAuthModalVisible(true)}
+      />
       
       {/* Profile Header */}
       <View style={styles.profileHeader}>
@@ -466,7 +519,7 @@ export default function LibraryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.white,
+    backgroundColor: Colors.background,
   },
   center: {
     flex: 1,
@@ -548,8 +601,9 @@ const styles = StyleSheet.create({
   },
   profileHeader: {
     padding: 20,
+    backgroundColor: Colors.white,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: '#EEEEEE',
   },
   profileRow: {
     flexDirection: 'row',
@@ -737,7 +791,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: Colors.border,
+    backgroundColor: '#EEEEEE',
   },
   headerActions: {
     flexDirection: 'row',
@@ -781,5 +835,28 @@ const styles = StyleSheet.create({
     fontSize: 10,
     marginRight: 4,
     fontWeight: 'bold',
+  },
+  headerTitleText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.text,
+    marginLeft: 15,
+  },
+  headerAccordion: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+    paddingVertical: 5,
+    paddingHorizontal: 11,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#EEEEEE',
+    maxWidth: 160,
+  },
+  headerAccordionName: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#4B5563',
+    maxWidth: 125,
   },
 });

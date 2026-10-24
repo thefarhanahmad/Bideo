@@ -11,6 +11,9 @@ import { logout } from '../../redux/slices/authSlice';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api, { clearAuthSession, setAuthToken } from '../../services/api';
 import { AppAdBanner } from '../../components/AppAds';
+import SwitchAccountModal from '../../components/SwitchAccountModal';
+import AuthModal from '../../components/AuthModal';
+import { getStoredAccounts, logoutCurrentAccount, logoutAllAccounts } from '../../services/accountManager';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -19,8 +22,17 @@ export default function SettingsScreen() {
 
   const [monetizationInfo, setMonetizationInfo] = useState<any>(null);
   const [loadingMonetization, setLoadingMonetization] = useState(true);
+  const [switchAccountVisible, setSwitchAccountVisible] = useState(false);
+  const [authModalVisible, setAuthModalVisible] = useState(false);
+  const [accountsCount, setAccountsCount] = useState(1);
 
   const { user } = useSelector((state: RootState) => state.auth);
+
+  useEffect(() => {
+    getStoredAccounts().then((accounts) => {
+      setAccountsCount(accounts.length);
+    }).catch(() => {});
+  }, [user?._id, switchAccountVisible, authModalVisible]);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -47,22 +59,52 @@ export default function SettingsScreen() {
     fetchMonetization();
   }, [isAuthenticated, user]);
 
-  const handleLogout = () => {
+  const handleLogoutCurrent = () => {
+    const handle = user?.name ? `@${user.name}` : 'this account';
     showAlert(
-      'Logout',
-      'Are you sure you want to logout?',
+      'Log Out',
+      `Are you sure you want to log out of ${handle}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         { 
-          text: 'Logout', 
+          text: 'Log Out', 
           style: 'destructive',
           onPress: async () => {
             try {
-              await clearAuthSession();
-              dispatch(logout());
-              router.replace('/');
+              if (user?._id) {
+                const switched = await logoutCurrentAccount(dispatch, user._id);
+                if (!switched) {
+                  router.replace('/');
+                }
+              } else {
+                await clearAuthSession();
+                dispatch(logout());
+                router.replace('/');
+              }
             } catch (err) {
               console.error('Logout failed', err);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleLogoutAll = () => {
+    showAlert(
+      'Log Out of All Accounts',
+      'Are you sure you want to log out of all accounts on this device?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Log Out All', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await logoutAllAccounts(dispatch);
+              router.replace('/');
+            } catch (err) {
+              console.error('Logout all failed', err);
             }
           }
         }
@@ -187,14 +229,61 @@ export default function SettingsScreen() {
         <View style={styles.menuSection}>
           <Text style={styles.sectionTitle}>Account Actions</Text>
           <View style={styles.menuCard}>
-            <TouchableOpacity style={[styles.menuItem, styles.noBorder]} onPress={handleLogout}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => setSwitchAccountVisible(true)}
+            >
+              <View style={styles.menuItemLeft}>
+                <View style={[styles.iconContainer, { backgroundColor: Colors.primary + '15' }]}>
+                  <Ionicons name="swap-horizontal" size={22} color={Colors.primary} />
+                </View>
+                <Text style={styles.menuItemTitle}>Switch Account</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={Colors.textGray} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => setAuthModalVisible(true)}
+            >
+              <View style={styles.menuItemLeft}>
+                <View style={[styles.iconContainer, { backgroundColor: '#4A90E215' }]}>
+                  <Ionicons name="person-add-outline" size={22} color="#4A90E2" />
+                </View>
+                <Text style={styles.menuItemTitle}>Add Account</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={Colors.textGray} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.menuItem, accountsCount <= 1 && styles.noBorder]}
+              onPress={handleLogoutCurrent}
+            >
               <View style={styles.menuItemLeft}>
                 <View style={[styles.iconContainer, { backgroundColor: Colors.primary + '15' }]}>
                   <Ionicons name="log-out-outline" size={22} color={Colors.primary} />
                 </View>
-                <Text style={[styles.menuItemTitle, { color: Colors.primary }]}>Logout</Text>
+                <Text style={[styles.menuItemTitle, { color: Colors.primary }]}>
+                  {user?.name ? `Log out @${user.name}` : 'Log out'}
+                </Text>
               </View>
             </TouchableOpacity>
+
+            {accountsCount > 1 && (
+              <TouchableOpacity
+                style={[styles.menuItem, styles.noBorder]}
+                onPress={handleLogoutAll}
+              >
+                <View style={styles.menuItemLeft}>
+                  <View style={[styles.iconContainer, { backgroundColor: '#FF3B3015' }]}>
+                    <Ionicons name="log-out-outline" size={22} color="#FF3B30" />
+                  </View>
+                  <Text style={[styles.menuItemTitle, { color: '#FF3B30' }]}>
+                    Log out of all accounts
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -205,6 +294,16 @@ export default function SettingsScreen() {
           </Text>
         </View>
       </ScrollView>
+
+      <SwitchAccountModal
+        visible={switchAccountVisible}
+        onClose={() => setSwitchAccountVisible(false)}
+        onAddAccount={() => setAuthModalVisible(true)}
+      />
+      <AuthModal
+        visible={authModalVisible}
+        onClose={() => setAuthModalVisible(false)}
+      />
     </View>
   );
 }

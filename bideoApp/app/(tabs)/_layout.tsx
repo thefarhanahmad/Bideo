@@ -162,21 +162,26 @@ export default function TabsLayout() {
         },
         tabBarStyle: {
           backgroundColor: '#FFFFFF',
-          borderTopWidth: StyleSheet.hairlineWidth,
-          borderTopColor: 'rgba(0, 0, 0, 0.08)',
+          borderTopWidth: 1,
+          borderTopColor: '#EEEEEE',
           height: 54 + safeBottom,
           paddingTop: 2,
           paddingBottom: safeBottom,
           shadowColor: '#000000',
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.04,
-          shadowRadius: 6,
+          shadowOffset: { width: 0, height: -3 },
+          shadowOpacity: 0.05,
+          shadowRadius: 8,
           elevation: 8,
           overflow: 'visible',
         },
         headerStyle: {
           backgroundColor: Colors.white,
+          borderBottomWidth: 1,
+          borderBottomColor: '#EEEEEE',
+          elevation: 0,
+          shadowOpacity: 0,
         },
+        headerShadowVisible: false,
         headerTitleStyle: {
           color: Colors.text,
           fontWeight: 'bold',
@@ -338,14 +343,6 @@ export default function TabsLayout() {
         name="library"
         options={{
           title: 'Library',
-          headerRight: () => (
-            <TouchableOpacity 
-              style={{ marginRight: 15 }} 
-              onPress={() => {
-                // Logout or custom header action
-              }}
-            />
-          ),
           tabBarIcon: ({ color }) => (
             <Ionicons name="library-outline" size={25} color={color} />
           ),
