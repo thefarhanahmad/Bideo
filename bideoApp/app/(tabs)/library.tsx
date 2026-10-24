@@ -82,8 +82,21 @@ export default function LibraryScreen() {
   useEffect(() => {
     navigation.setOptions({
       headerTitleAlign: 'center',
+      headerLeftContainerStyle: {
+        minWidth: 80,
+        paddingLeft: 0,
+      },
+      headerTitleContainerStyle: {
+        maxWidth: '50%',
+        marginHorizontal: 0,
+      },
+      headerRightContainerStyle: {
+        paddingRight: 0,
+      },
       headerLeft: () => (
-        <Text style={styles.headerTitleText}>Library</Text>
+        <Text style={styles.headerTitleText} numberOfLines={1}>
+          Library
+        </Text>
       ),
       headerTitle: isAuthenticated
         ? () => (
@@ -94,14 +107,18 @@ export default function LibraryScreen() {
               accessibilityRole="button"
               accessibilityLabel="Switch account"
             >
-              <Text style={styles.headerAccordionName} numberOfLines={1}>
+              <Text
+                style={styles.headerAccordionName}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
                 {user?.channelName || user?.name || 'Account'}
               </Text>
               <Ionicons
                 name="chevron-down"
                 size={13}
                 color="#9CA3AF"
-                style={{ marginLeft: 4 }}
+                style={{ marginLeft: 3 }}
               />
             </TouchableOpacity>
           )
@@ -837,26 +854,28 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   headerTitleText: {
-    fontSize: 20,
+    fontSize: 19,
     fontWeight: '700',
     color: Colors.text,
     marginLeft: 15,
+    flexShrink: 0,
   },
   headerAccordion: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#F8F9FA',
-    paddingVertical: 5,
-    paddingHorizontal: 11,
+    paddingVertical: 4.5,
+    paddingHorizontal: 9,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: '#EEEEEE',
-    maxWidth: 160,
+    maxWidth: 135,
   },
   headerAccordionName: {
     fontSize: 12.5,
     fontWeight: '600',
     color: '#4B5563',
-    maxWidth: 125,
+    maxWidth: 88,
   },
 });
