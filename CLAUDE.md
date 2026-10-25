@@ -11,6 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `adminDashboard/` — Vite + React (JavaScript) admin web panel for moderation/management.
 
 `projectPlan.md` is the original master spec; `improvement.md` is the current backlog of fixes/enhancements. Read both when picking up feature work — they capture intent and theme decisions not derivable from code.
+Production infrastructure and network setup (Cloudflare CDN, R2 storage, VPS details) are documented in `docs/INFRASTRUCTURE_SETUP.md`.
 
 ## Commands
 
