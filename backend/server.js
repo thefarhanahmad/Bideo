@@ -18,6 +18,7 @@ const { initBoostQueueScheduler } = require("./utils/boostQueueScheduler");
 const { initVerifiedBadgeScheduler } = require("./utils/verifiedBadgeScheduler");
 const { initMonetizationScheduler } = require("./utils/monetizationScheduler");
 const { initStoryCleanupScheduler } = require("./utils/storyCleanupScheduler");
+const { initUploadPushScheduler } = require("./utils/uploadPushScheduler");
 
 // Connect to database
 connectDB();
@@ -45,6 +46,9 @@ initMonetizationScheduler();
 
 // Initialize 24-hour story auto-cleanup scheduler (DB & media storage purge)
 initStoryCleanupScheduler();
+
+// Send upload pushes held overnight (10 PM - 8 AM IST) from 8 AM
+initUploadPushScheduler();
 
 const PORT = process.env.PORT || 5000;
 
