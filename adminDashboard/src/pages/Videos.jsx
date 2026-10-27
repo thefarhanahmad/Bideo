@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Modal from "../components/Modal";
 import ConfirmModal from "../components/ConfirmModal";
 import DataTableToolbar from "../components/DataTableToolbar";
@@ -8,6 +8,7 @@ import ChannelSelect from "../components/ChannelSelect";
 import UserLink from "../components/UserLink";
 import { useTableParams } from "../hooks/useTableParams";
 import { API_URL } from "../config";
+import { DirectVideoUpload, DirectUploadUnavailableError } from "../lib/directUpload";
 
 const resolveMediaUrl = (url) => {
   if (!url) return "https://via.placeholder.com/640x360.png?text=No+Thumbnail";
@@ -439,8 +440,38 @@ const Videos = ({ isServerOnly = false }) => {
     }
   }, [showAdd, showEdit, showAddPost, fetchUsers]);
 
-  const handleUpload = async (formData) => {
+  // Kept between attempts, so "Upload" after a failure continues instead of starting again
+  const directUploadRef = useRef(null);
+
+  const handleUpload = async (formData, onProgress) => {
     const token = localStorage.getItem("admin_token");
+
+    // Normal upload page: straight to cloud storage in parts. The "server only" page and servers
+    // without direct upload use the server upload below, exactly as before.
+    if (!isServerOnly) {
+      const videoFile = formData.get("video");
+      const thumbnailFile = formData.get("thumbnail") || null;
+      const details = {};
+      for (const [key, value] of formData.entries()) {
+        if (typeof value === "string") details[key] = value;
+      }
+      let uploader = directUploadRef.current;
+      if (!uploader || !uploader.canContinue(videoFile, thumbnailFile)) {
+        uploader?.cancel();
+        uploader = new DirectVideoUpload({ apiUrl: API, token }, videoFile, thumbnailFile);
+        directUploadRef.current = uploader;
+      }
+      try {
+        await uploader.run(details, (fraction) => onProgress?.(fraction));
+        directUploadRef.current = null;
+        setShowAdd(false);
+        await fetchVideos();
+        return;
+      } catch (err) {
+        if (!(err instanceof DirectUploadUnavailableError)) throw err;
+        directUploadRef.current = null;
+      }
+    }
     const endpoint = isServerOnly
       ? `${API}/api/videos/upload?storage=server`
       : `${API}/api/videos/upload`;
@@ -1790,6 +1821,7 @@ const UploadForm = ({
   const [thumbnailPreview, setThumbnailPreview] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const handleVideoChange = async (e) => {
     const file = e.target.files[0];
@@ -1818,6 +1850,7 @@ const UploadForm = ({
 
     setUploading(true);
     setUploadError("");
+    setUploadProgress(0);
 
     try {
       let finalDuration = videoDuration;
@@ -1853,7 +1886,7 @@ const UploadForm = ({
         fd.append("owner", owner);
       }
 
-      await onSubmit(fd);
+      await onSubmit(fd, setUploadProgress);
     } catch (err) {
       setUploadError(err.message || "Failed to upload video");
       setUploading(false);
@@ -2096,7 +2129,11 @@ const UploadForm = ({
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              <span>{isServerOnly ? "Saving to Server Disk..." : "Uploading Video..."}</span>
+              <span>
+                {isServerOnly
+                  ? "Saving to Server Disk..."
+                  : `Uploading Video...${uploadProgress > 0 ? ` ${Math.round(uploadProgress * 100)}%` : ""}`}
+              </span>
             </>
           ) : (
             isServerOnly
