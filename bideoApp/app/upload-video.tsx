@@ -19,11 +19,13 @@ import { AppAdBanner } from '../components/AppAds';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { logVideoUploaded } from '../services/analytics';
 import { DirectVideoUpload, DirectUploadUnavailableError, DirectUploadError } from '../services/directUpload';
+import { canKeepOriginal, KEEP_ORIGINAL_BELOW_BPS, KEEP_ORIGINAL_IF_SMALLER_BELOW_BPS } from '../utils/keepOriginalVideo';
 
 // Upload through the server (older servers): backend multer + nginx client_max_body_size
 const MAX_UPLOAD_BYTES = 500 * 1024 * 1024;
 // Direct upload to cloud storage: must match DIRECT_UPLOAD_MAX_MB on the server
 const MAX_DIRECT_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024;
+
 
 // Uploading needs a signed-in user; signed-out users see the sign-in card instead
 export default function UploadVideoScreen() {
@@ -55,7 +57,7 @@ function UploadVideoScreenContent() {
   const [uploadProgress, setUploadProgress] = useState(0);
   // Kept between attempts on this screen, so "Upload" after a failure continues instead of
   // compressing and uploading everything again
-  const compressedVideoRef = useRef<{ source: string; uri: string } | null>(null);
+  const compressedVideoRef = useRef<{ source: string; uri: string; compressed: boolean } | null>(null);
   const preparedThumbnailRef = useRef<{ source: string; uri: string } | null>(null);
   const directUploadRef = useRef<DirectVideoUpload | null>(null);
   const [bottomAdLoaded, setBottomAdLoaded] = useState(false);
@@ -289,11 +291,28 @@ function UploadVideoScreenContent() {
       let finalVideoUri = video.uri;
       let hasCompression = false;
 
-      // Compress video silently (skip if in Expo Go). A retry reuses the file compressed earlier.
+      // Compress video silently (skip if in Expo Go). A retry reuses the file prepared earlier.
       const isExpoGo = Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
+
+      // The original file's real size (the picker's fileSize is sometimes missing or wrong)
+      let originalBytes = 0;
+      if (!isExpoGo) {
+        try {
+          const { getFileSize } = require('react-native-compressor');
+          originalBytes = Number(await getFileSize(video.uri)) || 0;
+        } catch {
+          // fall back to the picker's size below
+        }
+      }
+      if (!originalBytes) originalBytes = Number(video.fileSize) || 0;
+
       if (compressedVideoRef.current?.source === video.uri) {
         finalVideoUri = compressedVideoRef.current.uri;
-        hasCompression = true;
+        hasCompression = compressedVideoRef.current.compressed;
+      } else if (!isExpoGo && canKeepOriginal(video, originalBytes, KEEP_ORIGINAL_BELOW_BPS)) {
+        // Already smaller than compression would make it: upload the original as it is
+        compressedVideoRef.current = { source: video.uri, uri: video.uri, compressed: false };
+        console.log('Video already small, uploading the original');
       } else if (!isExpoGo) {
         try {
           const { Video } = require('react-native-compressor');
@@ -313,8 +332,21 @@ function UploadVideoScreenContent() {
           );
           if (compressedUri) {
             finalVideoUri = compressedUri;
-            compressedVideoRef.current = { source: video.uri, uri: compressedUri };
-            console.log('Video compressed successfully:', finalVideoUri);
+            // Never upload a compressed file bigger than an original that can be kept as it is
+            let newBytes = 0;
+            try {
+              const { getFileSize } = require('react-native-compressor');
+              newBytes = Number(await getFileSize(compressedUri)) || 0;
+            } catch {
+              // size unknown: keep the compressed file
+            }
+            if (newBytes >= originalBytes && canKeepOriginal(video, originalBytes, KEEP_ORIGINAL_IF_SMALLER_BELOW_BPS)) {
+              finalVideoUri = video.uri;
+              console.log('Compressed video was not smaller, uploading the original');
+            } else {
+              console.log('Video compressed successfully:', finalVideoUri);
+            }
+            compressedVideoRef.current = { source: video.uri, uri: finalVideoUri, compressed: true };
           }
         } catch (compressErr) {
           console.warn('Video compression failed, uploading raw video:', compressErr);
@@ -362,8 +394,8 @@ function UploadVideoScreenContent() {
       if (video.height) {
         details.height = String(video.height);
       }
-      if (video.fileSize) {
-        details.originalVideoSize = String(video.fileSize);
+      if (originalBytes) {
+        details.originalVideoSize = String(originalBytes);
       }
       if (thumbnail && thumbnail.fileSize) {
         details.originalThumbnailSize = String(thumbnail.fileSize);

@@ -576,7 +576,13 @@ const Videos = ({ isServerOnly = false }) => {
   const getCompressionText = (orig, comp) => {
     if (!orig || !comp) return null;
     const pct = Math.round((1 - comp / orig) * 100);
-    return `${formatSize(orig)} → ${formatSize(comp)} (${pct}% saved)`;
+    if (pct >= 0) return `${formatSize(orig)} → ${formatSize(comp)} (${pct}% saved)`;
+    // The uploaded file is bigger than the original (re-encoding an already small video)
+    return (
+      <span className="text-amber-600">
+        {formatSize(orig)} → {formatSize(comp)} (+{-pct}% larger)
+      </span>
+    );
   };
 
   const videoFilterOptions = [
