@@ -1623,6 +1623,96 @@ exports.toggleDislike = async (req, res, next) => {
   }
 };
 
+// Shape details sent with an upload (used by server uploads and direct-to-R2 uploads alike)
+const SHORT_NOT_PORTRAIT_MESSAGE = "Shorts must be portrait 9:16 videos";
+const readUploadShape = (body) => {
+  const uploadType = body.uploadType === "short" ? "short" : "video";
+  const width = Number(body.width || 0);
+  const height = Number(body.height || 0);
+  const aspectRatio = width && height ? width / height : null;
+  let duration = Number(body.duration || 0);
+  if (duration > 1000) {
+    duration = Math.round(duration / 1000);
+  }
+  // Auto-detect if a video uploaded under "Video" (long-form) is actually a short vertical video
+  // (portrait ratio ~9:16 or aspect < 0.8 and duration <= 60 seconds)
+  const isPortraitShort = (isNineBySixteen(aspectRatio) || (aspectRatio && aspectRatio < 0.8)) && (!duration || duration <= 60);
+  return {
+    aspectRatio,
+    duration,
+    shortNotPortrait: uploadType === "short" && !isNineBySixteen(aspectRatio),
+    effectiveIsShort: uploadType === "short" || isPortraitShort,
+  };
+};
+
+// Creates the video for a finished upload and starts everything that follows an upload:
+// monetization review, moderation and follower / recommendation notifications.
+const createUploadedVideo = async (
+  req,
+  { videoUrl, thumbnail, shape, compressedVideoSize, originalThumbnailSize, compressedThumbnailSize },
+) => {
+  let targetOwnerId = req.user.id;
+  if (req.user.role === "admin" && req.body.owner) {
+    const targetUser = await User.findById(req.body.owner);
+    if (targetUser) {
+      targetOwnerId = targetUser._id;
+    }
+  }
+
+  let isPinned = false;
+  if (
+    req.user.role === "admin" &&
+    (req.body.isPinned === "true" || req.body.isPinned === true)
+  ) {
+    isPinned = true;
+  }
+
+  const video = await Video.create({
+    title: req.body.title || formatDefaultTitle(),
+    description: req.body.description || "",
+    category: req.body.category || undefined,
+    tags: normalizeTags(req.body.tags),
+    videoUrl,
+    thumbnail,
+    duration: shape.duration,
+    isShort: shape.effectiveIsShort,
+    isPinned,
+    boostType: isPinned ? "admin" : "none",
+    boostExpiresAt: null,
+    aspectRatio: shape.aspectRatio,
+    owner: targetOwnerId,
+    visibility: req.body.visibility || "public",
+    originalVideoSize: Number(req.body.originalVideoSize || 0),
+    compressedVideoSize,
+    originalThumbnailSize,
+    compressedThumbnailSize,
+  });
+
+  // Auto-create pending monetization review
+  await VideoMonetizationReview.create({
+    video: video._id,
+    user: targetOwnerId,
+    status: "pending",
+  });
+
+  // Automatically audit for adult/NSFW content and purge within 10 seconds if detected
+  scheduleVideoModeration(video, 10000);
+
+  // Asynchronously notify creator's followers and interested non-followers of the new video upload
+  setImmediate(() => {
+    notifyFollowersOfUpload({
+      creatorId: targetOwnerId,
+      video,
+    }).catch((notifErr) => console.error("Failed to notify followers of video upload:", notifErr));
+  });
+
+  return video;
+};
+exports.readUploadShape = readUploadShape;
+exports.createUploadedVideo = createUploadedVideo;
+exports.SHORT_NOT_PORTRAIT_MESSAGE = SHORT_NOT_PORTRAIT_MESSAGE;
+exports.FALLBACK_THUMBNAIL = FALLBACK_THUMBNAIL;
+
 exports.uploadVideo = async (req, res, next) => {
   const tempFiles = [];
   let savedVideoUrl = null;
@@ -1647,39 +1737,21 @@ exports.uploadVideo = async (req, res, next) => {
       tempFiles.push(req.files.thumbnail[0].path);
     }
 
-    const uploadType = req.body.uploadType === "short" ? "short" : "video";
-
     // Save video locally
     const videoResult = await saveLocalFile(req, req.files.video[0], "video");
     savedVideoUrl = videoResult.url;
     const videoIdx = tempFiles.indexOf(req.files.video[0].path);
     if (videoIdx !== -1) tempFiles.splice(videoIdx, 1);
 
-    // Read details passed from frontend or default to 0
-    const width = Number(req.body.width || 0);
-    const height = Number(req.body.height || 0);
-    const aspectRatio = width && height ? width / height : null;
-    let duration = Number(req.body.duration || 0);
-    if (duration > 1000) {
-      duration = Math.round(duration / 1000);
-    }
-
-    if (uploadType === "short" && !isNineBySixteen(aspectRatio)) {
+    const shape = readUploadShape(req.body);
+    if (shape.shortNotPortrait) {
       await deleteLocalFile(videoResult.url);
       savedVideoUrl = null;
       return res.status(400).json({
         success: false,
-        message: "Shorts must be portrait 9:16 videos",
+        message: SHORT_NOT_PORTRAIT_MESSAGE,
       });
     }
-
-    // Auto-detect if a video uploaded under "Video" (long-form) is actually a short vertical video
-    // (portrait ratio ~9:16 or aspect < 0.8 and duration <= 60 seconds)
-    const isPortraitShort = (isNineBySixteen(aspectRatio) || (aspectRatio && aspectRatio < 0.8)) && (!duration || duration <= 60);
-    const effectiveIsShort = uploadType === "short" || isPortraitShort;
-
-    const originalVideoSize = Number(req.body.originalVideoSize || 0);
-    const compressedVideoSize = req.files.video[0].size || 0;
 
     let originalThumbnailSize = 0;
     let compressedThumbnailSize = 0;
@@ -1700,59 +1772,13 @@ exports.uploadVideo = async (req, res, next) => {
       if (thumbIdx !== -1) tempFiles.splice(thumbIdx, 1);
     }
 
-    let targetOwnerId = req.user.id;
-    if (req.user.role === "admin" && req.body.owner) {
-      const targetUser = await User.findById(req.body.owner);
-      if (targetUser) {
-        targetOwnerId = targetUser._id;
-      }
-    }
-
-    let isPinned = false;
-    if (
-      req.user.role === "admin" &&
-      (req.body.isPinned === "true" || req.body.isPinned === true)
-    ) {
-      isPinned = true;
-    }
-
-    const video = await Video.create({
-      title: req.body.title || formatDefaultTitle(),
-      description: req.body.description || "",
-      category: req.body.category || undefined,
-      tags: normalizeTags(req.body.tags),
+    const video = await createUploadedVideo(req, {
       videoUrl: videoResult.url,
-      thumbnail: thumbnail,
-      duration: duration,
-      isShort: effectiveIsShort,
-      isPinned,
-      boostType: isPinned ? "admin" : "none",
-      boostExpiresAt: null,
-      aspectRatio,
-      owner: targetOwnerId,
-      visibility: req.body.visibility || "public",
-      originalVideoSize,
-      compressedVideoSize,
+      thumbnail,
+      shape,
+      compressedVideoSize: req.files.video[0].size || 0,
       originalThumbnailSize,
       compressedThumbnailSize,
-    });
-
-    // Auto-create pending monetization review
-    await VideoMonetizationReview.create({
-      video: video._id,
-      user: targetOwnerId,
-      status: "pending",
-    });
-
-    // Automatically audit for adult/NSFW content and purge within 10 seconds if detected
-    scheduleVideoModeration(video, 10000);
-
-    // Asynchronously notify creator's followers and interested non-followers of the new video upload
-    setImmediate(() => {
-      notifyFollowersOfUpload({
-        creatorId: targetOwnerId,
-        video,
-      }).catch((notifErr) => console.error("Failed to notify followers of video upload:", notifErr));
     });
 
     res.status(201).json({ success: true, data: video });

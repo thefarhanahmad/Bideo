@@ -19,6 +19,7 @@ const { initVerifiedBadgeScheduler } = require("./utils/verifiedBadgeScheduler")
 const { initMonetizationScheduler } = require("./utils/monetizationScheduler");
 const { initStoryCleanupScheduler } = require("./utils/storyCleanupScheduler");
 const { initUploadPushScheduler } = require("./utils/uploadPushScheduler");
+const { initDirectUploadCleanup } = require("./utils/directUploadCleanup");
 
 // Connect to database
 connectDB();
@@ -49,6 +50,9 @@ initStoryCleanupScheduler();
 
 // Send upload pushes held overnight (10 PM - 8 AM IST) from 8 AM
 initUploadPushScheduler();
+
+// Cancel direct-to-R2 uploads left unfinished for over a day
+initDirectUploadCleanup();
 
 const PORT = process.env.PORT || 5000;
 
