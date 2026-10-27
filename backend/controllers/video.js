@@ -451,7 +451,7 @@ const SEARCH_RESULT_TYPES = new Set(["videos", "shorts", "channels", "posts", "p
 // for everyone else searching someone's phone number or email must not reveal their channel.
 const CHANNEL_SEARCH_FIELDS = ["channelName", "name"];
 const ADMIN_CHANNEL_SEARCH_FIELDS = ["channelName", "name", "email", "phone"];
-const SEARCH_LIMITS = { channelsScan: 30, channels: 20, videos: 60, posts: 40, playlists: 30 };
+const SEARCH_LIMITS = { channelsScan: 30, channels: 20, videos: 60, videoCandidates: 300, channelVideos: 30, posts: 40, playlists: 30 };
 
 const matchClauses = (fields, { phraseRegex, regexes }) => {
   const clauses = [];
@@ -460,24 +460,67 @@ const matchClauses = (fields, { phraseRegex, regexes }) => {
   return clauses;
 };
 
-const searchVideoDocs = ({ keywords, channelIds, q, isObjectId, isAdmin, blockedUserIds, type }) => {
-  const clauses = matchClauses(["title", "description", "tags"], keywords);
-  if (channelIds.length > 0) clauses.push({ owner: { $in: channelIds } });
-  if (isObjectId) clauses.push({ _id: q });
+const SEARCH_VIDEO_POPULATE = [
+  { path: "owner", select: "name avatar channelName followersCount isVerified" },
+  { path: "category", select: "name" },
+];
 
-  const query = { $or: clauses };
+// Candidate videos for a search, from the whole library (not just the first matches found):
+// 1. best word matches from the text index (title > tags > description), more words = higher
+// 2. the most viewed videos of channels whose name matched
+// 3. a pasted video id
+// 4. only when that finds too few: the old partial-word match (e.g. "son" finds "song")
+// They are then ranked by scoreVideoRelevance in searchVideos.
+const searchVideoDocs = async ({ keywords, terms, channelIds, q, isObjectId, isAdmin, blockedUserIds, type }) => {
+  const base = {};
   if (!isAdmin) {
-    query.visibility = "public";
-    if (blockedUserIds.length > 0) query.owner = { $nin: blockedUserIds };
+    base.visibility = "public";
+    if (blockedUserIds.length > 0) base.owner = { $nin: blockedUserIds };
   }
-  if (type === "shorts") query.isShort = true;
-  if (type === "videos") query.isShort = { $ne: true };
+  if (type === "shorts") base.isShort = true;
+  if (type === "videos") base.isShort = { $ne: true };
 
-  return Video.find(query)
-    .populate("owner", "name avatar channelName followersCount isVerified")
-    .populate("category", "name")
-    .limit(SEARCH_LIMITS.videos)
-    .lean();
+  const [byText, byChannel, byId] = await Promise.all([
+    terms.length > 0
+      ? Video.find({ ...base, $text: { $search: terms.join(" ") } }, { score: { $meta: "textScore" } })
+          .sort({ score: { $meta: "textScore" } })
+          .limit(SEARCH_LIMITS.videoCandidates)
+          .lean()
+      : [],
+    channelIds.length > 0
+      ? Video.find({ ...base, owner: { ...(base.owner || {}), $in: channelIds } })
+          .sort({ views: -1 })
+          .limit(SEARCH_LIMITS.channelVideos)
+          .lean()
+      : [],
+    isObjectId ? Video.find({ ...base, _id: q }).lean() : [],
+  ]);
+
+  const seen = new Set();
+  const merged = [];
+  for (const v of [...byId, ...byText, ...byChannel]) {
+    const id = String(v._id);
+    if (!seen.has(id)) {
+      seen.add(id);
+      merged.push(v);
+    }
+  }
+
+  if (merged.length < SEARCH_LIMITS.videos) {
+    const partial = await Video.find({ ...base, $or: matchClauses(["title", "tags"], keywords) })
+      .sort({ views: -1 })
+      .limit(SEARCH_LIMITS.videos)
+      .lean();
+    for (const v of partial) {
+      const id = String(v._id);
+      if (!seen.has(id)) {
+        seen.add(id);
+        merged.push(v);
+      }
+    }
+  }
+
+  return Video.populate(merged, SEARCH_VIDEO_POPULATE);
 };
 
 const searchPostDocs = ({ keywords, channelIds, q, isObjectId, isAdmin, blockedUserIds }) => {
@@ -585,7 +628,7 @@ exports.searchVideos = async (req, res, next) => {
       : [];
 
     // 2. Everything else in parallel
-    const ctx = { keywords, channelIds, q, isObjectId, isAdmin, blockedUserIds, type, viewerId };
+    const ctx = { keywords, terms, channelIds, q, isObjectId, isAdmin, blockedUserIds, type, viewerId };
     const wantsVideos = !type || type === "videos" || type === "shorts";
     const [videos, postsData, playlistsData, followed] = await Promise.all([
       wantsVideos ? searchVideoDocs(ctx) : [],
@@ -597,8 +640,9 @@ exports.searchVideos = async (req, res, next) => {
     const channelsData = scoredChannels.map((c) => ({ ...c, isFollowing: followed.has(String(c._id)) }));
 
     const scoredVideos = videos
-      .map((v) => ({ ...v, _score: scoreVideoRelevance(v, { phrase, terms }) }))
-      .sort((a, b) => b._score - a._score);
+      .map(({ score, ...v }) => ({ ...v, _score: scoreVideoRelevance(v, { phrase, terms }) }))
+      .sort((a, b) => b._score - a._score)
+      .slice(0, SEARCH_LIMITS.videos);
     const results = await decorateVideos(scoredVideos, req);
 
     res.status(200).json({
@@ -893,6 +937,17 @@ exports.getVideos = async (req, res, next) => {
       // so all boosted videos get equal chance to appear at Position #1, #3, #4, #5 upon refresh
       const shuffledUserPinned = shuffle(userPinnedCandidates).slice(0, 4);
 
+      // Home feed, page 1: one random unpinned long video joins the shuffled boosted videos, so
+      // other creators also get a top spot (a different video on every refresh). Only when there
+      // is something pinned; the admin-pinned video keeps its fixed place.
+      const isHomeFeed = !req.query.type && !req.query.filter;
+      let randomTopPick = null;
+      if (isHomeFeed && page === 1 && pinnedCandidates.length > 0) {
+        const longPool = rawRegularCandidates.filter((v) => !v.isShort);
+        if (longPool.length > 0) randomTopPick = longPool[Math.floor(Math.random() * longPool.length)];
+      }
+      const shuffledTop = randomTopPick ? shuffle([...shuffledUserPinned, randomTopPick]) : shuffledUserPinned;
+
       // Build ordered pinned highlights:
       // - If Admin pinned video exists: Admin pinned video is FIXED at Position #2 (index 1) without shuffling.
       // - Shuffled user boosted videos occupy Positions #1, #3, #4, #5.
@@ -902,14 +957,14 @@ exports.getVideos = async (req, res, next) => {
 
       if (adminPinnedCandidates.length > 0) {
         const primaryAdmin = adminPinnedCandidates[0];
-        if (shuffledUserPinned.length >= 1) {
-          // Position 1: 1st shuffled user boosted video
+        if (shuffledTop.length >= 1) {
+          // Position 1: 1st of the shuffled group (boosted videos + the random pick)
           // Position 2: Admin-pinned video (fixed at position #2)
-          // Position 3, 4, 5: Remaining shuffled user boosted videos
+          // Position 3 onwards: the rest of the shuffled group
           orderedPinned = [
-            shuffledUserPinned[0]._id,
+            shuffledTop[0]._id,
             primaryAdmin._id,
-            ...shuffledUserPinned.slice(1).map((v) => v._id),
+            ...shuffledTop.slice(1).map((v) => v._id),
           ];
         } else {
           // 0 user boosts: admin pinned video at Position 1
@@ -921,7 +976,7 @@ exports.getVideos = async (req, res, next) => {
           orderedPinned.push(...adminPinnedCandidates.slice(1).map((v) => v._id));
         }
       } else {
-        orderedPinned = shuffledUserPinned.map((v) => v._id);
+        orderedPinned = shuffledTop.map((v) => v._id);
       }
 
       const pinnedList = page === 1 ? orderedPinned : [];
@@ -929,12 +984,15 @@ exports.getVideos = async (req, res, next) => {
       // If any pinned videos remain beyond the selected list, include them in regular feed so no videos are dropped
       const pinnedIdSet = new Set(orderedPinned.map((id) => id.toString()));
       const extraPinned = pinnedCandidates.filter((v) => !pinnedIdSet.has(v._id.toString()));
-      const regularCandidates = [...rawRegularCandidates, ...extraPinned];
+      // The random top pick is already in the top group; keep it out of the rest of the page
+      const regularCandidates = [
+        ...(randomTopPick ? rawRegularCandidates.filter((v) => v !== randomTopPick) : rawRegularCandidates),
+        ...extraPinned,
+      ];
 
       let chosenIds = [];
 
       // If Home feed (no explicit type or filter), ensure a balanced mix of long videos and shorts
-      const isHomeFeed = !req.query.type && !req.query.filter;
       if (isHomeFeed) {
         const longRegular = regularCandidates.filter((v) => !v.isShort);
         const shortRegular = regularCandidates.filter((v) => v.isShort);

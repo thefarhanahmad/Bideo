@@ -1,6 +1,7 @@
 import { showAlert } from '../../components/AppAlert';
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, Dimensions, TouchableOpacity, ActivityIndicator, ScrollView, Platform, Modal, Pressable, Share, TextInput, Animated, BackHandler, DeviceEventEmitter } from 'react-native';
+import { showCoinReward } from '../../components/CoinRewardToast';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -66,9 +67,10 @@ export default function ShortsScreen() {
   const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
   const router = useRouter();
 
-  const handleCoinsEarned = useCallback((totalCoins: number) => {
+  const handleCoinsEarned = useCallback((totalCoins: number, coinsEarned?: number) => {
     if (totalCoins !== undefined) {
       dispatch(updateUser({ coins: totalCoins }));
+      showCoinReward(coinsEarned);
       AsyncStorage.getItem('cached_user').then((raw) => {
         if (raw) {
           const parsed = JSON.parse(raw);

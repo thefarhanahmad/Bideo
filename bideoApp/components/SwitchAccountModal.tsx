@@ -17,7 +17,9 @@ import {
   ActivityIndicator,
   Animated,
   Dimensions,
+  ScrollView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
@@ -30,6 +32,7 @@ import {
   removeStoredAccount,
   logoutCurrentAccount,
   logoutAllAccounts,
+  MAX_ACCOUNTS,
 } from '../services/accountManager';
 import { showAlert } from './AppAlert';
 import VerifiedBadge from './VerifiedBadge';
@@ -65,6 +68,7 @@ const SwitchAccountModal: React.FC<SwitchAccountModalProps> = ({
   onAddAccount,
 }) => {
   const dispatch = useDispatch();
+  const insets = useSafeAreaInsets();
   const { user } = useSelector((state: RootState) => state.auth);
   const [accounts, setAccounts] = useState<StoredAccount[]>([]);
   const [switching, setSwitching] = useState<string | null>(null);
@@ -177,12 +181,19 @@ const SwitchAccountModal: React.FC<SwitchAccountModalProps> = ({
   }, [dispatch, onClose]);
 
   const handleAddAccount = useCallback(() => {
+    if (accounts.length >= MAX_ACCOUNTS) {
+      showAlert(
+        'Account limit reached',
+        `You can add up to ${MAX_ACCOUNTS} accounts on this device. Remove one to add another.`,
+      );
+      return;
+    }
     onClose();
     // Small delay to let the modal close animation finish
     setTimeout(() => {
       onAddAccount();
     }, 300);
-  }, [onClose, onAddAccount]);
+  }, [accounts.length, onClose, onAddAccount]);
 
   const activeId = user?._id;
   const otherAccounts = accounts.filter((a) => a.id !== activeId);
@@ -223,6 +234,8 @@ const SwitchAccountModal: React.FC<SwitchAccountModalProps> = ({
                 )}
               </View>
 
+              {/* Accounts scroll when there are many; title and buttons below stay visible */}
+              <ScrollView style={styles.accountList} bounces={false} showsVerticalScrollIndicator={false}>
               {/* Active account */}
               {activeAccount && (
                 <View style={styles.accountRow}>
@@ -335,6 +348,7 @@ const SwitchAccountModal: React.FC<SwitchAccountModalProps> = ({
                   )}
                 </TouchableOpacity>
               ))}
+              </ScrollView>
 
               {/* Add account button */}
               <TouchableOpacity
@@ -366,8 +380,8 @@ const SwitchAccountModal: React.FC<SwitchAccountModalProps> = ({
                 </TouchableOpacity>
               )}
 
-              {/* Bottom safe area padding */}
-              <View style={{ height: 20 }} />
+              {/* Keeps the buttons above the phone's navigation bar */}
+              <View style={{ height: Math.max(insets.bottom, 12) + 8 }} />
             </Animated.View>
           </TouchableWithoutFeedback>
         </View>
@@ -391,6 +405,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 10,
     maxHeight: SCREEN_HEIGHT * 0.65,
+  },
+  accountList: {
+    flexGrow: 0,
+    flexShrink: 1,
   },
   handleBar: {
     width: 40,

@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const Video = require('../models/Video');
@@ -5,6 +6,12 @@ const Post = require('../models/Post');
 const Comment = require('../models/Comment');
 const Follower = require('../models/Follower');
 const { extractKeywords } = require('./recommendation');
+const {
+  isQuietHours,
+  claimRecommendationQuota,
+  holdFollowerPushes,
+  holdRecommendationPushes,
+} = require('./uploadPushPolicy');
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
@@ -17,6 +24,24 @@ function isValidPushToken(token) {
   if (t.startsWith('ExponentPushToken[') || t.startsWith('ExpoPushToken[')) return true;
   if (/^[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}$/i.test(t)) return true;
   return false;
+}
+
+/**
+ * One Expo message per valid device token of each user ({ pushToken, pushTokens })
+ */
+function buildPushMessages(users, { title, body, data = {} }) {
+  const messages = [];
+  (users || []).forEach((u) => {
+    const tokens = new Set();
+    if (u.pushToken) tokens.add(u.pushToken);
+    if (Array.isArray(u.pushTokens)) u.pushTokens.forEach((t) => t && tokens.add(t));
+    tokens.forEach((to) => {
+      if (isValidPushToken(to)) {
+        messages.push({ to, sound: 'default', title, body, data, priority: 'high', channelId: 'default' });
+      }
+    });
+  });
+  return messages;
 }
 
 /**
@@ -390,238 +415,166 @@ async function notifyFollowersOfUpload({ creatorId, video, post }) {
         ],
       }).select('pushToken pushTokens').lean();
 
-      const pushMessages = [];
-      followerUsers.forEach((u) => {
-        const tokens = new Set();
-        if (u.pushToken) tokens.add(u.pushToken);
-        if (Array.isArray(u.pushTokens)) {
-          u.pushTokens.forEach((t) => t && tokens.add(t));
+      if (isQuietHours()) {
+        // Night (10 PM - 8 AM IST): followers still get every upload, but the push waits until 8 AM
+        await holdFollowerPushes(followerUsers.map((u) => u._id), { title: pushTitle, body: pushBody, data: pushData });
+      } else {
+        const pushMessages = buildPushMessages(followerUsers, { title: pushTitle, body: pushBody, data: pushData });
+        if (pushMessages.length > 0) {
+          await sendBatchPushNotifications(pushMessages);
         }
-        tokens.forEach((to) => {
-          if (isValidPushToken(to)) {
-            pushMessages.push({
-              to,
-              sound: 'default',
-              title: pushTitle,
-              body: pushBody,
-              data: pushData,
-              priority: 'high',
-              channelId: 'default',
-            });
-          }
-        });
-      });
-
-      if (pushMessages.length > 0) {
-        await sendBatchPushNotifications(pushMessages);
       }
     }
 
-    // 3. Asynchronously notify interested non-followers (for both video and post uploads)
-    notifyInterestedNonFollowersOfUpload({
-      creatorId,
-      video,
-      post,
-      followerIds,
-    }).catch((nonFollowerErr) =>
-      console.error('Failed to notify non-followers of upload:', nonFollowerErr?.message || nonFollowerErr)
-    );
+    // 3. Recommend the video to interested non-followers (queued, see enqueueRecommendation)
+    enqueueRecommendation({ creatorId, video, post, followerIds });
   } catch (err) {
     console.error('Failed to notify followers of upload:', err?.message || err);
   }
 }
 
+// "Recommended for you" pushes go only to people whose watch history really matches the new
+// video (no random users), best matches first, at most MAX_RECOMMENDED_PUSHES_PER_DAY (10) per
+// person per India day. Posts are not recommended: there is no watch history to match them with.
+const RECOMMEND = {
+  maxPerUpload: parseInt(process.env.MAX_RECOMMENDED_NOTIF_COUNT, 10) || 200,
+  topicVideos: 300, // most relevant videos on the same topic, used to read people's interests
+  minMatches: 2, // watched at least this many of those videos
+  maxKeywords: 8,
+  concurrency: 2,
+  maxQueued: 500,
+};
+
+/** Videos on the same topic as the upload (word search over title, tags, description) */
+async function findTopicVideoIds(video) {
+  const tags = Array.isArray(video.tags)
+    ? video.tags.map((t) => (typeof t === 'string' ? t.toLowerCase().trim() : '')).filter(Boolean)
+    : [];
+  const keywords = Array.from(
+    new Set([...extractKeywords(video.title || ''), ...tags, ...extractKeywords(video.description || '')])
+  ).slice(0, RECOMMEND.maxKeywords);
+  if (keywords.length === 0) return [];
+
+  const found = await Video.find(
+    { _id: { $ne: video._id }, visibility: 'public', $text: { $search: keywords.join(' ') } },
+    { score: { $meta: 'textScore' } }
+  )
+    .sort({ score: { $meta: 'textScore' } })
+    .limit(RECOMMEND.topicVideos)
+    .select('_id')
+    .lean();
+  return found.map((v) => v._id);
+}
+
+// Recommendation work runs at most RECOMMEND.concurrency at a time, so a burst of uploads can't
+// pile heavy queries on the database. Recommendations are optional: when the queue is full the
+// extra ones are skipped (follower notifications and the uploads themselves are never affected).
+const recommendationQueue = [];
+let recommendationsRunning = 0;
+function runNextRecommendation() {
+  while (recommendationsRunning < RECOMMEND.concurrency && recommendationQueue.length > 0) {
+    const job = recommendationQueue.shift();
+    recommendationsRunning++;
+    notifyInterestedNonFollowersOfUpload(job)
+      .catch((err) => console.error('Failed to notify non-followers of upload:', err?.message || err))
+      .finally(() => {
+        recommendationsRunning--;
+        runNextRecommendation();
+      });
+  }
+}
+function enqueueRecommendation(job) {
+  if (!job?.video) return;
+  if (recommendationQueue.length >= RECOMMEND.maxQueued) return;
+  recommendationQueue.push(job);
+  runNextRecommendation();
+}
+
 /**
- * Automatically notify interested non-followers when a creator uploads content.
- * Production-ready, indexed, capped, and anti-spam protected.
+ * Notify interested non-followers when a creator uploads a video.
  */
 async function notifyInterestedNonFollowersOfUpload({ creatorId, video, post, followerIds = [] }) {
-  if (!creatorId || (!video && !post)) return;
+  if (!creatorId || !video) return;
 
   try {
     const creator = await User.findById(creatorId).select('name channelName').lean();
     if (!creator) return;
     const creatorName = creator.channelName || creator.name || 'A creator';
 
-    const excludedUserIds = new Set((followerIds || []).map((id) => id.toString()));
-    excludedUserIds.add(creatorId.toString());
+    const topicIds = await findTopicVideoIds(video);
+    if (topicIds.length === 0) return;
 
-    // Configurable safe cap of non-followers to notify per upload (default 200)
-    const MAX_NON_FOLLOWER_NOTIFICATIONS = parseInt(process.env.MAX_RECOMMENDED_NOTIF_COUNT, 10) || 200;
+    // 1. People who watched the most videos on this topic (followers and the creator excluded)
+    const excluded = [creatorId, ...(followerIds || [])].map((id) => new mongoose.Types.ObjectId(String(id)));
+    const matched = await User.aggregate([
+      {
+        $match: {
+          watchHistory: { $in: topicIds },
+          _id: { $nin: excluded },
+          isBlocked: { $ne: true },
+          $or: [{ pushToken: { $exists: true, $nin: [null, ''] } }, { 'pushTokens.0': { $exists: true } }],
+        },
+      },
+      {
+        $project: {
+          pushToken: 1,
+          pushTokens: 1,
+          score: { $size: { $setIntersection: [{ $ifNull: ['$watchHistory', []] }, topicIds] } },
+        },
+      },
+      { $match: { score: { $gte: RECOMMEND.minMatches } } },
+      { $sort: { score: -1 } },
+      { $limit: RECOMMEND.maxPerUpload },
+    ]);
+    if (matched.length === 0) return;
 
-    const targetUsersMap = new Map();
-    const candidateUserIds = [];
-
-    // 1. If video: try keyword and watch-history topic matching
-    if (video) {
-      const titleKeywords = extractKeywords(video.title || '');
-      const descKeywords = extractKeywords(video.description || '');
-      const tagKeywords = Array.isArray(video.tags)
-        ? video.tags.map((t) => (typeof t === 'string' ? t.toLowerCase().trim() : '')).filter(Boolean)
-        : [];
-
-      const combinedKeywords = Array.from(new Set([...titleKeywords, ...tagKeywords, ...descKeywords])).slice(0, 8);
-      if (combinedKeywords.length > 0) {
-        const keywordRegexes = combinedKeywords.map((kw) => new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'));
-        const matchingVideos = await Video.find({
-          _id: { $ne: video._id },
-          visibility: 'public',
-          $or: [
-            { tags: { $in: combinedKeywords } },
-            { title: { $in: keywordRegexes } },
-          ],
-        })
-          .select('_id')
-          .limit(50)
-          .lean();
-
-        if (matchingVideos && matchingVideos.length > 0) {
-          const matchingVideoIds = matchingVideos.map((v) => v._id);
-          const topicUsers = await User.find({
-            _id: { $nin: Array.from(excludedUserIds) },
-            isBlocked: { $ne: true },
-            watchHistory: { $in: matchingVideoIds },
-            $or: [
-              { pushToken: { $exists: true, $nin: [null, ''] } },
-              { 'pushTokens.0': { $exists: true } },
-            ],
-          })
-            .select('_id pushToken pushTokens')
-            .limit(MAX_NON_FOLLOWER_NOTIFICATIONS)
-            .lean();
-
-          topicUsers.forEach((u) => {
-            const uidStr = u._id.toString();
-            if (!targetUsersMap.has(uidStr)) {
-              targetUsersMap.set(uidStr, u);
-              candidateUserIds.push(u._id);
-            }
-          });
-        }
-      }
-    }
-
-    // 2. If topic users pool is smaller than target limit (or for community post upload),
-    // supplement with recently active users who have push tokens enabled
-    if (candidateUserIds.length < MAX_NON_FOLLOWER_NOTIFICATIONS) {
-      const needed = MAX_NON_FOLLOWER_NOTIFICATIONS - candidateUserIds.length;
-      const alreadyIncluded = new Set([...Array.from(excludedUserIds), ...candidateUserIds.map((id) => id.toString())]);
-
-      const activeUsers = await User.find({
-        _id: { $nin: Array.from(alreadyIncluded) },
-        isBlocked: { $ne: true },
-        $or: [
-          { pushToken: { $exists: true, $nin: [null, ''] } },
-          { 'pushTokens.0': { $exists: true } },
-        ],
-      })
-        .select('_id pushToken pushTokens')
-        .sort({ updatedAt: -1 })
-        .limit(needed)
-        .lean();
-
-      activeUsers.forEach((u) => {
-        const uidStr = u._id.toString();
-        if (!targetUsersMap.has(uidStr)) {
-          targetUsersMap.set(uidStr, u);
-          candidateUserIds.push(u._id);
-        }
-      });
-    }
-
-    if (candidateUserIds.length === 0) {
-      return;
-    }
-
-    // 3. Anti-Spam protection: filter out users who already received an upload notification from THIS SAME creator within 1 hour
+    // 2. Skip people who already got an upload notification from this creator in the last hour
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    const recentNotifUsers = await Notification.distinct('recipient', {
-      recipient: { $in: candidateUserIds },
+    const recent = await Notification.distinct('recipient', {
+      recipient: { $in: matched.map((u) => u._id) },
       actor: creatorId,
       type: { $in: ['video_upload', 'post_upload'] },
       createdAt: { $gte: oneHourAgo },
     });
-    const recentNotifUserSet = new Set(recentNotifUsers.map((id) => id.toString()));
+    const recentSet = new Set(recent.map(String));
+    const candidates = matched.filter((u) => !recentSet.has(String(u._id)));
+    if (candidates.length === 0) return;
 
-    const targetUserIds = candidateUserIds.filter((uid) => !recentNotifUserSet.has(uid.toString()));
-    if (targetUserIds.length === 0) {
+    // 3. Message (same wording as before)
+    const isShort = video.isShort === true || video.isShort === 'true';
+    const cleanTitle = video.title ? (video.title.length > 70 ? `${video.title.substring(0, 70)}...` : video.title) : 'New video';
+    const pushTitle = cleanTitle;
+    const pushBody = `${creatorName} uploaded a new ${isShort ? 'Short' : 'video'}`;
+    const pushData = {
+      type: 'video_upload',
+      videoId: video._id.toString(),
+      isShort,
+      screen: isShort ? `/shorts?initialShortId=${video._id}` : `/video/${video._id}`,
+    };
+    const inApp = (recipient) => ({
+      recipient,
+      actor: creatorId,
+      type: 'video_upload',
+      video: video._id,
+      message: `${cleanTitle}\n${creatorName} • ${isShort ? 'Short' : 'video'}`,
+    });
+
+    // 4. Night: hold; at 8 AM each person gets only their single best match (counted then)
+    if (isQuietHours()) {
+      await holdRecommendationPushes(
+        candidates.map((u) => ({ recipient: u._id, score: u.score, notification: inApp(u._id) })),
+        { title: pushTitle, body: pushBody, data: pushData }
+      );
       return;
     }
 
-    // 4. Prepare notification payload
-    let notifMessage = '';
-    let pushTitle = '💡 Recommended for you';
-    let pushBody = '';
-    let pushData = {};
+    // 5. Day: only people who still have one of today's recommendation pushes left
+    const allowed = await claimRecommendationQuota(candidates.map((u) => u._id));
+    const targets = candidates.filter((u) => allowed.has(String(u._id)));
+    if (targets.length === 0) return;
 
-    if (video) {
-      const isShort = video.isShort === true || video.isShort === 'true';
-      const cleanTitle = video.title
-        ? video.title.length > 70
-          ? `${video.title.substring(0, 70)}...`
-          : video.title
-        : 'New video';
-
-      notifMessage = `${cleanTitle}\n${creatorName} • ${isShort ? 'Short' : 'video'}`;
-      pushTitle = cleanTitle;
-      pushBody = `${creatorName} uploaded a new ${isShort ? 'Short' : 'video'}`;
-      pushData = {
-        type: 'video_upload',
-        videoId: video._id.toString(),
-        isShort,
-        screen: isShort ? `/shorts?initialShortId=${video._id}` : `/video/${video._id}`,
-      };
-    } else if (post) {
-      const cleanSnippet = post.text ? (post.text.length > 70 ? `${post.text.substring(0, 70)}...` : post.text) : 'New community post';
-      notifMessage = `${cleanSnippet}\n${creatorName} • post`;
-      pushTitle = cleanSnippet;
-      pushBody = `${creatorName} shared a new post`;
-      pushData = {
-        type: 'post_upload',
-        postId: post._id.toString(),
-        screen: `/post/${post._id}`,
-      };
-    }
-
-    // 5. Batch insert in-app notifications
-    const notificationsToInsert = targetUserIds.map((uId) => ({
-      recipient: uId,
-      actor: creatorId,
-      type: video ? 'video_upload' : 'post_upload',
-      video: video?._id || undefined,
-      post: post?._id || undefined,
-      message: notifMessage,
-    }));
-
-    await Notification.insertMany(notificationsToInsert, { ordered: false }).catch(() => {});
-
-    // 6. Batch send push notifications to target devices
-    const pushMessages = [];
-    targetUserIds.forEach((uId) => {
-      const u = targetUsersMap.get(uId.toString());
-      if (!u) return;
-
-      const tokens = new Set();
-      if (u.pushToken) tokens.add(u.pushToken);
-      if (Array.isArray(u.pushTokens)) {
-        u.pushTokens.forEach((t) => t && tokens.add(t));
-      }
-
-      tokens.forEach((to) => {
-        if (isValidPushToken(to)) {
-          pushMessages.push({
-            to,
-            sound: 'default',
-            title: pushTitle,
-            body: pushBody,
-            data: pushData,
-            priority: 'high',
-            channelId: 'default',
-          });
-        }
-      });
-    });
-
+    await Notification.insertMany(targets.map((u) => inApp(u._id)), { ordered: false }).catch(() => {});
+    const pushMessages = buildPushMessages(targets, { title: pushTitle, body: pushBody, data: pushData });
     if (pushMessages.length > 0) {
       await sendBatchPushNotifications(pushMessages);
     }
@@ -681,6 +634,7 @@ async function checkAndNotifyViewMilestone({ creatorId, video }) {
 module.exports = {
   sendPushNotification,
   sendBatchPushNotifications,
+  buildPushMessages,
   notifyAndPush,
   sendPushForEvent,
   notifyFollowersOfUpload,

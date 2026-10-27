@@ -19,6 +19,7 @@ import api from '../services/api';
 import { RootState } from '../redux/store';
 import { formatViews } from '../utils/formatDate';
 import { AppInterstitialAd, AppAdBanner } from '../components/AppAds';
+import StickyBannerAd from '../components/StickyBannerAd';
 
 type FilterType = 'views' | 'revenue' | 'newest' | 'oldest';
 
@@ -406,6 +407,7 @@ export default function AnalyticsScreen() {
           </View>
         </ScrollView>
       )}
+      <StickyBannerAd />
       <AppInterstitialAd visible={showingAd} onClose={() => setShowingAd(false)} />
     </View>
   );

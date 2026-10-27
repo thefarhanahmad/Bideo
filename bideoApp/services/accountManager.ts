@@ -20,7 +20,8 @@ import { setAnalyticsUser } from './analytics';
 
 const STORED_ACCOUNTS_KEY = 'stored_accounts';
 const ACTIVE_ACCOUNT_KEY = 'active_account_id';
-const MAX_ACCOUNTS = 5;
+/** How many accounts can be saved on one device */
+export const MAX_ACCOUNTS = 10;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

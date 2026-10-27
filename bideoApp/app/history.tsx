@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
+import StickyBannerAd from '../components/StickyBannerAd';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import Colors from '../constants/Colors';
@@ -61,6 +62,7 @@ export default function HistoryScreen() {
           onRefresh={loadHistory}
         />
       )}
+      <StickyBannerAd />
     </View>
   );
 }

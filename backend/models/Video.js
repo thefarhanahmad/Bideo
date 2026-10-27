@@ -114,5 +114,11 @@ videoSchema.index({ visibility: 1, isShort: 1 });
 videoSchema.index({ owner: 1, isShort: 1, createdAt: -1 });
 videoSchema.index({ category: 1 });
 videoSchema.index({ isPinned: 1 });
+// Word search over title, tags and description (search page and "recommended" matching).
+// default_language 'none' keeps Hindi / Hinglish words as typed (no English word-stemming).
+videoSchema.index(
+  { title: 'text', tags: 'text', description: 'text' },
+  { name: 'video_text_search', weights: { title: 10, tags: 5, description: 1 }, default_language: 'none' }
+);
 
 module.exports = mongoose.model('Video', videoSchema);
