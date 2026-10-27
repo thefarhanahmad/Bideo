@@ -937,6 +937,17 @@ exports.getVideos = async (req, res, next) => {
       // so all boosted videos get equal chance to appear at Position #1, #3, #4, #5 upon refresh
       const shuffledUserPinned = shuffle(userPinnedCandidates).slice(0, 4);
 
+      // Home feed, page 1: one random unpinned long video joins the shuffled boosted videos, so
+      // other creators also get a top spot (a different video on every refresh). Only when there
+      // is something pinned; the admin-pinned video keeps its fixed place.
+      const isHomeFeed = !req.query.type && !req.query.filter;
+      let randomTopPick = null;
+      if (isHomeFeed && page === 1 && pinnedCandidates.length > 0) {
+        const longPool = rawRegularCandidates.filter((v) => !v.isShort);
+        if (longPool.length > 0) randomTopPick = longPool[Math.floor(Math.random() * longPool.length)];
+      }
+      const shuffledTop = randomTopPick ? shuffle([...shuffledUserPinned, randomTopPick]) : shuffledUserPinned;
+
       // Build ordered pinned highlights:
       // - If Admin pinned video exists: Admin pinned video is FIXED at Position #2 (index 1) without shuffling.
       // - Shuffled user boosted videos occupy Positions #1, #3, #4, #5.
@@ -946,14 +957,14 @@ exports.getVideos = async (req, res, next) => {
 
       if (adminPinnedCandidates.length > 0) {
         const primaryAdmin = adminPinnedCandidates[0];
-        if (shuffledUserPinned.length >= 1) {
-          // Position 1: 1st shuffled user boosted video
+        if (shuffledTop.length >= 1) {
+          // Position 1: 1st of the shuffled group (boosted videos + the random pick)
           // Position 2: Admin-pinned video (fixed at position #2)
-          // Position 3, 4, 5: Remaining shuffled user boosted videos
+          // Position 3 onwards: the rest of the shuffled group
           orderedPinned = [
-            shuffledUserPinned[0]._id,
+            shuffledTop[0]._id,
             primaryAdmin._id,
-            ...shuffledUserPinned.slice(1).map((v) => v._id),
+            ...shuffledTop.slice(1).map((v) => v._id),
           ];
         } else {
           // 0 user boosts: admin pinned video at Position 1
@@ -965,7 +976,7 @@ exports.getVideos = async (req, res, next) => {
           orderedPinned.push(...adminPinnedCandidates.slice(1).map((v) => v._id));
         }
       } else {
-        orderedPinned = shuffledUserPinned.map((v) => v._id);
+        orderedPinned = shuffledTop.map((v) => v._id);
       }
 
       const pinnedList = page === 1 ? orderedPinned : [];
@@ -973,12 +984,15 @@ exports.getVideos = async (req, res, next) => {
       // If any pinned videos remain beyond the selected list, include them in regular feed so no videos are dropped
       const pinnedIdSet = new Set(orderedPinned.map((id) => id.toString()));
       const extraPinned = pinnedCandidates.filter((v) => !pinnedIdSet.has(v._id.toString()));
-      const regularCandidates = [...rawRegularCandidates, ...extraPinned];
+      // The random top pick is already in the top group; keep it out of the rest of the page
+      const regularCandidates = [
+        ...(randomTopPick ? rawRegularCandidates.filter((v) => v !== randomTopPick) : rawRegularCandidates),
+        ...extraPinned,
+      ];
 
       let chosenIds = [];
 
       // If Home feed (no explicit type or filter), ensure a balanced mix of long videos and shorts
-      const isHomeFeed = !req.query.type && !req.query.filter;
       if (isHomeFeed) {
         const longRegular = regularCandidates.filter((v) => !v.isShort);
         const shortRegular = regularCandidates.filter((v) => v.isShort);
