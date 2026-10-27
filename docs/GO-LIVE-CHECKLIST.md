@@ -45,6 +45,10 @@ the app on a real phone. Check:
 - [ ] Upload from the app: a small video, a video over 100 MB, and one where you switch the
       internet off half-way, then tap Upload again (it should continue, not restart)
 - [ ] Upload from the admin dashboard: normal page (shows %), and the "Server only" page
+- [ ] Upload 3 kinds of video from the app and check they play on the phone and on bideo.in:
+      a WhatsApp / downloaded video (uploads the original, no compression), a camera recording
+      (compressed as before) and, on an iPhone, a camera video (compressed as before)
+- [ ] A video longer than 17 minutes shows its real length (e.g. 23:18, not 0:01)
 - [ ] Log out — the upload screens show "Sign In / Sign Up"
 
 Tell Claude the screen and what you see if anything looks wrong.
@@ -73,7 +77,12 @@ Tell Claude the screen and what you see if anything looks wrong.
    - [ ] bideo.in loads, admin login works
    - [ ] the **current** app (old version) logs in, plays videos, searches
    - [ ] `docker logs --tail 100 bideo-backend` — no errors
-6. If something is wrong: go back to `bad2c88` and run `deploy.sh` again.
+6. Fix the length of long videos uploaded before this deploy (369 were already fixed on 27 Oct;
+   the old server kept saving new long uploads wrong until now):
+   `docker compose exec backend node scripts/repairVideoDurations.js` (shows what it would
+   change), then the same with `--apply`. It reads the real length from each video file and
+   only changes wrong ones; running it again is safe.
+7. If something is wrong: go back to `bad2c88` and run `deploy.sh` again.
 
 Optional settings in `backend/.env` (defaults are fine):
 
