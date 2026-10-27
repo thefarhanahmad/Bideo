@@ -18,9 +18,12 @@ import MentionSuggestions from '../components/MentionSuggestions';
 import { AppAdBanner } from '../components/AppAds';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { logVideoUploaded } from '../services/analytics';
+import { DirectVideoUpload, DirectUploadUnavailableError, DirectUploadError } from '../services/directUpload';
 
-// Must match the server's upload limit (backend multer + nginx client_max_body_size)
+// Upload through the server (older servers): backend multer + nginx client_max_body_size
 const MAX_UPLOAD_BYTES = 500 * 1024 * 1024;
+// Direct upload to cloud storage: must match DIRECT_UPLOAD_MAX_MB on the server
+const MAX_DIRECT_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024;
 
 // Uploading needs a signed-in user; signed-out users see the sign-in card instead
 export default function UploadVideoScreen() {
@@ -50,6 +53,11 @@ function UploadVideoScreenContent() {
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [thumbnailChanged, setThumbnailChanged] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  // Kept between attempts on this screen, so "Upload" after a failure continues instead of
+  // compressing and uploading everything again
+  const compressedVideoRef = useRef<{ source: string; uri: string } | null>(null);
+  const preparedThumbnailRef = useRef<{ source: string; uri: string } | null>(null);
+  const directUploadRef = useRef<DirectVideoUpload | null>(null);
   const [bottomAdLoaded, setBottomAdLoaded] = useState(false);
 
   // @mention autocomplete states
@@ -281,9 +289,12 @@ function UploadVideoScreenContent() {
       let finalVideoUri = video.uri;
       let hasCompression = false;
 
-      // Compress video silently (skip if in Expo Go)
+      // Compress video silently (skip if in Expo Go). A retry reuses the file compressed earlier.
       const isExpoGo = Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
-      if (!isExpoGo) {
+      if (compressedVideoRef.current?.source === video.uri) {
+        finalVideoUri = compressedVideoRef.current.uri;
+        hasCompression = true;
+      } else if (!isExpoGo) {
         try {
           const { Video } = require('react-native-compressor');
           const compressedUri = await Video.compress(
@@ -302,6 +313,7 @@ function UploadVideoScreenContent() {
           );
           if (compressedUri) {
             finalVideoUri = compressedUri;
+            compressedVideoRef.current = { source: video.uri, uri: compressedUri };
             console.log('Video compressed successfully:', finalVideoUri);
           }
         } catch (compressErr) {
@@ -311,50 +323,53 @@ function UploadVideoScreenContent() {
         console.log('Expo Go detected: skipping video compression');
       }
 
-      // The server accepts up to 500MB per upload, so check the compressed file before sending it
+      // Check the compressed file's size before sending it
+      let compressedBytes = 0;
       if (!isExpoGo) {
-        let compressedBytes = 0;
         try {
           const { getFileSize } = require('react-native-compressor');
           compressedBytes = Number(await getFileSize(finalVideoUri)) || 0;
         } catch {
           // size unknown: let the server decide
         }
-        if (compressedBytes > MAX_UPLOAD_BYTES) {
+        if (compressedBytes > MAX_DIRECT_UPLOAD_BYTES) {
           showAlert(
             'Video Too Large',
-            'This video is still over 500MB after compression. Please trim it or upload a shorter video.'
+            'This video is still over 2GB after compression. Please trim it or upload a shorter video.'
           );
           return;
         }
       }
 
-      const formData = new FormData();
-      formData.append('uploadType', uploadType);
+      // Video details (the same for both ways of uploading)
+      const details: Record<string, string> = { uploadType };
       const safeTitle = title.trim().slice(0, 100);
       const safeDescription = description.trim().slice(0, 1000);
-      if (safeTitle) formData.append('title', safeTitle);
-      if (safeDescription) formData.append('description', safeDescription);
-      if (category) formData.append('category', category);
-      if (tags.trim()) formData.append('tags', tags.trim());
-      formData.append('visibility', visibility);
+      if (safeTitle) details.title = safeTitle;
+      if (safeDescription) details.description = safeDescription;
+      if (category) details.category = category;
+      if (tags.trim()) details.tags = tags.trim();
+      details.visibility = visibility;
 
       if (video.duration !== undefined && video.duration !== null) {
         const durationSec = video.duration > 10000 ? video.duration / 1000 : video.duration;
-        formData.append('duration', String(durationSec));
+        details.duration = String(durationSec);
       }
       if (video.width) {
-        formData.append('width', String(video.width));
+        details.width = String(video.width);
       }
       if (video.height) {
-        formData.append('height', String(video.height));
+        details.height = String(video.height);
       }
       if (video.fileSize) {
-        formData.append('originalVideoSize', String(video.fileSize));
+        details.originalVideoSize = String(video.fileSize);
       }
       if (thumbnail && thumbnail.fileSize) {
-        formData.append('originalThumbnailSize', String(thumbnail.fileSize));
+        details.originalThumbnailSize = String(thumbnail.fileSize);
       }
+
+      const formData = new FormData();
+      Object.entries(details).forEach(([key, value]) => formData.append(key, value));
 
       // @ts-ignore
       formData.append('video', {
@@ -364,7 +379,10 @@ function UploadVideoScreenContent() {
       });
 
       let finalThumbnailUri = thumbnail?.uri;
-      if (finalThumbnailUri) {
+      const thumbnailSource = thumbnail?.uri || `auto:${video.uri}`;
+      if (preparedThumbnailRef.current?.source === thumbnailSource) {
+        finalThumbnailUri = preparedThumbnailRef.current.uri;
+      } else if (finalThumbnailUri) {
         // Compress custom thumbnail (skip if in Expo Go)
         if (!isExpoGo) {
           try {
@@ -397,6 +415,7 @@ function UploadVideoScreenContent() {
       }
 
       if (finalThumbnailUri) {
+        preparedThumbnailRef.current = { source: thumbnailSource, uri: finalThumbnailUri };
         // @ts-ignore
         formData.append('thumbnail', {
           uri: finalThumbnailUri,
@@ -405,22 +424,53 @@ function UploadVideoScreenContent() {
         });
       }
 
-      await api.post('/videos/upload', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-        timeout: 900000, // 15 minutes timeout for large video uploads
-        onUploadProgress: (event) => {
-          if (event.total) {
-            const raw = event.loaded / event.total;
-            const uploadPercent = hasCompression
-              ? 25 + Math.round(raw * 70)
-              : Math.round(raw * 95);
-            setUploadProgress(Math.min(Math.max(uploadPercent, 1), 95));
-          }
-        },
-      });
+      const showSendProgress = (raw: number) => {
+        const uploadPercent = hasCompression ? 25 + Math.round(raw * 70) : Math.round(raw * 95);
+        setUploadProgress(Math.min(Math.max(uploadPercent, 1), 95));
+      };
 
+      // 1. Direct to cloud storage in parts (continues an interrupted attempt of the same files)
+      let usedDirectUpload = false;
+      let uploader = directUploadRef.current;
+      if (!uploader || !uploader.canContinue(finalVideoUri, finalThumbnailUri || null)) {
+        uploader?.cancel();
+        uploader = new DirectVideoUpload(
+          { uri: finalVideoUri, name: 'video.mp4', type: 'video/mp4' },
+          finalThumbnailUri ? { uri: finalThumbnailUri, name: 'thumbnail.jpg', type: 'image/jpeg' } : null
+        );
+        directUploadRef.current = uploader;
+      }
+      try {
+        await uploader.run(details, showSendProgress);
+        usedDirectUpload = true;
+      } catch (directErr) {
+        if (!(directErr instanceof DirectUploadUnavailableError)) throw directErr;
+        directUploadRef.current = null;
+      }
+
+      // 2. Server without direct upload: upload through the server as before
+      if (!usedDirectUpload) {
+        if (compressedBytes > MAX_UPLOAD_BYTES) {
+          showAlert(
+            'Video Too Large',
+            'This video is still over 500MB after compression. Please trim it or upload a shorter video.'
+          );
+          return;
+        }
+        await api.post('/videos/upload', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+          timeout: 900000, // 15 minutes timeout for large video uploads
+          onUploadProgress: (event) => {
+            if (event.total) showSendProgress(event.loaded / event.total);
+          },
+        });
+      }
+
+      directUploadRef.current = null;
+      compressedVideoRef.current = null;
+      preparedThumbnailRef.current = null;
       setUploadProgress(100);
       logVideoUploaded(uploadType === 'short', category);
       showAlert('Success', 'Video uploaded successfully!');
@@ -433,7 +483,9 @@ function UploadVideoScreenContent() {
       const serverMessage = err.response?.data?.message;
       const validationErrors = err.response?.data?.errors;
       let displayMsg = 'Something went wrong';
-      if (serverMessage) {
+      if (err instanceof DirectUploadError) {
+        displayMsg = err.message;
+      } else if (serverMessage) {
         displayMsg = serverMessage;
       } else if (validationErrors && Array.isArray(validationErrors)) {
         displayMsg = validationErrors.map((e: any) => e.msg).join('\n');
