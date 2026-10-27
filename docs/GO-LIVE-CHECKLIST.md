@@ -128,6 +128,13 @@ Ask Claude to check: errors in the logs, upload failures, push volume, disk spac
       a blank thumbnail; small server fix
 - [ ] Chat list: stop reloading all chats on every message (step 1), then search and counts
       on the server (step 2)
+- [ ] **Decide: duplicate usernames.** 625 users share 286 usernames (most from renaming on
+      Edit Channel before this release's fix). Sign-in by username finds only one of them; the
+      others must use their phone number. Option: after the deploy, rename the later accounts
+      in each group with `_2`, `_3` (first account keeps its name), dry run first. Ask Claude.
+- [ ] **Decide: admin boost rewards are not recorded.** The money reaches the creator's wallet,
+      but its record is silently dropped (type `admin_boost` is not accepted). Fixing it makes
+      boost rewards show in the earnings list and count in "today's earnings". Small server fix.
 
 ## 8. Clean-up on the server (when everything is fine)
 
