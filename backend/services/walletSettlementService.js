@@ -309,6 +309,7 @@ exports.getUserEarningsSummary = async (userId) => {
         user: user._id,
         status: { $in: ['pending', 'credited'] },
         createdAt: { $gte: startOfToday },
+        source: { $ne: 'adjustment' }, // earnings taken back on deletion are not today's earnings
       },
     },
     {

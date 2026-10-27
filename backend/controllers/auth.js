@@ -15,26 +15,26 @@ const normalizeAvatar = (avatar) => {
   return value;
 };
 
+const USERNAME_TAKEN = 'Username already exists. Please choose another username.';
+
+// Username rules shared by sign-up and Edit Channel: the error message, or null when the name is fine
+const usernameError = (name) => {
+  if (!name) return 'Username is required';
+  if (/\s/.test(name)) return 'Username cannot contain spaces';
+  if (!/^[a-zA-Z0-9._]+$/.test(name)) return 'Username can only contain letters, numbers, underscores, and periods';
+  if (name.length < 3 || name.length > 30) return 'Username must be between 3 and 30 characters';
+  return null;
+};
+
 exports.signupWithPhone = async (req, res, next) => {
   try {
     const password = (req.body.password || '').trim();
     const name = (req.body.name || '').trim();
     const phone = cleanPhone(req.body.phone);
 
-    if (!name) {
-      return res.status(400).json({ success: false, message: 'Username is required' });
-    }
-
-    if (/\s/.test(name)) {
-      return res.status(400).json({ success: false, message: 'Username cannot contain spaces' });
-    }
-
-    if (!/^[a-zA-Z0-9._]+$/.test(name)) {
-      return res.status(400).json({ success: false, message: 'Username can only contain letters, numbers, underscores, and periods' });
-    }
-
-    if (name.length < 3 || name.length > 30) {
-      return res.status(400).json({ success: false, message: 'Username must be between 3 and 30 characters' });
+    const nameError = usernameError(name);
+    if (nameError) {
+      return res.status(400).json({ success: false, message: nameError });
     }
 
     if (!phone || phone.length !== 10) {
@@ -53,7 +53,7 @@ exports.signupWithPhone = async (req, res, next) => {
       { name: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') } },
     ]);
     if (existingUsername) {
-      return res.status(400).json({ success: false, message: 'Username already exists. Please choose another username.' });
+      return res.status(400).json({ success: false, message: USERNAME_TAKEN });
     }
 
     const user = await User.create({
@@ -435,6 +435,25 @@ exports.updateChannel = async (req, res, next) => {
             }
           }
         }
+      }
+    }
+
+    // A new username follows the sign-up rules and must not belong to anyone else (any letter case).
+    // An unchanged one is not checked, so older names (with spaces etc.) can still save other edits.
+    if (typeof name === 'string' && name.trim() && name.trim() !== (user.name || '').trim()) {
+      const newName = name.trim();
+      let nameError = usernameError(newName);
+      if (!nameError) {
+        const taken = await User.exists({
+          _id: { $ne: user._id },
+          name: { $regex: new RegExp(`^${escapeRegex(newName)}$`, 'i') },
+        });
+        if (taken) nameError = USERNAME_TAKEN;
+      }
+      if (nameError) {
+        if (savedAvatarUrl) deleteLocalFile(savedAvatarUrl);
+        if (savedCoverImageUrl) deleteLocalFile(savedCoverImageUrl);
+        return res.status(400).json({ success: false, message: nameError });
       }
     }
 
