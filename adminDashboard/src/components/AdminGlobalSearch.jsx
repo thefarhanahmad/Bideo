@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_URL } from "../config";
+import { formatDuration } from "../lib/format";
 import {
   PlayIcon,
   UsersIcon,
@@ -21,13 +22,6 @@ const resolveMediaUrl = (url) => {
   return `${API_URL}${url.startsWith("/") ? "" : "/"}${url}`;
 };
 
-const formatDuration = (seconds) => {
-  let totalSecs = Math.round(Number(seconds) || 0);
-  if (totalSecs > 1000) totalSecs = Math.round(totalSecs / 1000);
-  const mins = Math.floor(totalSecs / 60);
-  const secs = Math.floor(totalSecs % 60);
-  return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
-};
 
 const highlightMatch = (text, query) => {
   if (!text) return "";

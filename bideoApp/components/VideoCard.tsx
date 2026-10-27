@@ -7,7 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../constants/Colors';
 import { useRouter } from 'expo-router';
-import { formatTimeAgo, formatViews } from '../utils/formatDate';
+import { formatTimeAgo, formatViews, formatDuration } from '../utils/formatDate';
 import { hapticSelection } from '../utils/haptics';
 import api, { resolveMediaUrl } from '../services/api';
 import { useSelector } from 'react-redux';
@@ -96,16 +96,6 @@ const VideoCard: React.FC<VideoCardProps> = ({ video, onMenuPress, onPlaylistPre
 
   const isOwner = user?._id === video.owner?._id;
 
-  const formatDuration = (seconds: number) => {
-    let totalSecs = Math.round(Number(seconds) || 0);
-    // If stored as milliseconds (e.g. 7625 for 7.6s), convert to seconds
-    if (totalSecs > 1000) {
-      totalSecs = Math.round(totalSecs / 1000);
-    }
-    const mins = Math.floor(totalSecs / 60);
-    const secs = Math.floor(totalSecs % 60);
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-  };
 
   const handleEdit = () => {
     if (onEditPress) {

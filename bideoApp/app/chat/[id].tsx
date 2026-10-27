@@ -18,6 +18,7 @@ import {
   PanResponder,
   ScrollView,
 } from 'react-native';
+import { formatDuration } from '../../utils/formatDate';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -920,13 +921,6 @@ export default function ChatRoomScreen() {
   const isBlockedByMe = isBlocked && Boolean(conversation?.isBlockedByMe || (conversation?.blockedBy ? conversation.blockedBy.toString() === currentUserId : true));
   const isBlockedByOther = isBlocked && !isBlockedByMe;
 
-  const formatDuration = (seconds: number) => {
-    let totalSecs = Math.round(Number(seconds) || 0);
-    if (totalSecs > 1000) totalSecs = Math.round(totalSecs / 1000);
-    const mins = Math.floor(totalSecs / 60);
-    const secs = Math.floor(totalSecs % 60);
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-  };
 
   const parseTextWithLinks = (text: string) => {
     if (!text) return [];

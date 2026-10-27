@@ -352,8 +352,9 @@ function UploadVideoScreenContent() {
       details.visibility = visibility;
 
       if (video.duration !== undefined && video.duration !== null) {
-        const durationSec = video.duration > 10000 ? video.duration / 1000 : video.duration;
-        details.duration = String(durationSec);
+        // The image picker reports milliseconds (Android and iOS); the server stores seconds
+        details.duration = String(video.duration / 1000);
+        details.durationUnit = 'seconds';
       }
       if (video.width) {
         details.width = String(video.width);

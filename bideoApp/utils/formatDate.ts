@@ -65,14 +65,13 @@ export const formatTimeAgo = (date: string | Date): string => {
   return `${years}y ago`;
 };
 
+/** Video length (stored in seconds) as m:ss, or h:mm:ss from one hour */
 export const formatDuration = (seconds: number | string | undefined | null): string => {
-  let totalSecs = Math.round(Number(seconds) || 0);
-  if (totalSecs > 1000) {
-    totalSecs = Math.round(totalSecs / 1000);
-  }
-  const mins = Math.floor(totalSecs / 60);
-  const secs = Math.floor(totalSecs % 60);
-  return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  const total = Math.max(0, Math.round(Number(seconds) || 0));
+  const hours = Math.floor(total / 3600);
+  const mins = Math.floor((total % 3600) / 60);
+  const secs = String(total % 60).padStart(2, '0');
+  return hours > 0 ? `${hours}:${String(mins).padStart(2, '0')}:${secs}` : `${mins}:${secs}`;
 };
 
 export const formatJoinedDate = (date: string | Date | undefined | null): string => {
