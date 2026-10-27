@@ -551,12 +551,14 @@ async function notifyInterestedNonFollowersOfUpload({ creatorId, video, post, fo
       isShort,
       screen: isShort ? `/shorts?initialShortId=${video._id}` : `/video/${video._id}`,
     };
+    // The app shows the "Recommended" pill (and the Recommendations tab) for messages starting with
+    // "Recommended for you:", and hides that prefix from the text
     const inApp = (recipient) => ({
       recipient,
       actor: creatorId,
       type: 'video_upload',
       video: video._id,
-      message: `${cleanTitle}\n${creatorName} • ${isShort ? 'Short' : 'video'}`,
+      message: `Recommended for you: ${cleanTitle}\n${creatorName} • ${isShort ? 'Short' : 'video'}`,
     });
 
     // 4. Night: hold; at 8 AM each person gets only their single best match (counted then)
