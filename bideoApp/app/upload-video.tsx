@@ -10,6 +10,7 @@ import { RootState } from '../redux/store';
 import Colors from '../constants/Colors';
 import api from '../services/api';
 import { showAlert } from '../components/AppAlert';
+import LoginRequired from '../components/LoginRequired';
 import { hapticSelection } from '../utils/haptics';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import Constants from 'expo-constants';
@@ -21,7 +22,16 @@ import { logVideoUploaded } from '../services/analytics';
 // Must match the server's upload limit (backend multer + nginx client_max_body_size)
 const MAX_UPLOAD_BYTES = 500 * 1024 * 1024;
 
+// Uploading needs a signed-in user; signed-out users see the sign-in card instead
 export default function UploadVideoScreen() {
+  return (
+    <LoginRequired>
+      <UploadVideoScreenContent />
+    </LoginRequired>
+  );
+}
+
+function UploadVideoScreenContent() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useSelector((state: RootState) => state.auth);

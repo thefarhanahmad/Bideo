@@ -6,15 +6,16 @@ import { store, RootState } from '../redux/store';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SplashScreen from 'expo-splash-screen';
-import api, { clearAuthSession, setAuthToken } from '../services/api';
-import { loginSuccess, loginStart, loginFailure, logout } from '../redux/slices/authSlice';
+import api, { clearAuthSession, setAuthToken, SESSION_EXPIRED_EVENT } from '../services/api';
+import { loginSuccess, loginStart, logout } from '../redux/slices/authSlice';
 import { AlertHost, showAlert } from '../components/AppAlert';
 import AppErrorScreen from '../components/AppErrorScreen';
 import Constants from 'expo-constants';
 import { registerForPushNotificationsAsync, setupNotificationListeners } from '../services/notifications';
 import { initSocket, disconnectSocket } from '../services/socket';
 import { migrateExistingSession, saveAccount } from '../services/accountManager';
-import { AppState, AppStateStatus, StatusBar, LogBox } from 'react-native';
+import { endExpiredSession, renewTokenIfDue } from '../services/session';
+import { AppState, AppStateStatus, StatusBar, LogBox, DeviceEventEmitter } from 'react-native';
 
 LogBox.ignoreLogs([
   '`expo-notifications` functionality is not fully supported in Expo Go',
@@ -120,7 +121,7 @@ function Startup({ onReady }: { onReady: () => void }) {
 
           // Background verification of current user profile (timeout in 6s)
           api
-            .get('/auth/me', { timeout: 6000 })
+            .get('/auth/me', { timeout: 6000, skipSessionExpiry: true })
             .then((res) => {
               const freshUser = res.data && res.data.data ? res.data.data : res.data;
               if (freshUser) {
@@ -150,11 +151,10 @@ function Startup({ onReady }: { onReady: () => void }) {
                 );
                 return;
               }
-              // Only clear token if server explicitly rejected with HTTP 401
+              // Only sign out if the server explicitly rejected the login (expired / invalid)
               if (err?.response?.status === 401) {
                 console.log('Token expired or invalid on server. Logging out.');
-                clearAuthSession().catch(() => {});
-                dispatch(loginFailure('Session expired'));
+                endExpiredSession(dispatch, initialUser?._id, token);
               } else {
                 console.log('Background auth check offline / network lag (retaining cached session):', err?.message || err);
               }
@@ -175,6 +175,46 @@ function Startup({ onReady }: { onReady: () => void }) {
       clearTimeout(fallbackTimer);
     };
   }, [dispatch, onReady]);
+
+  return null;
+}
+
+// Signs the user out properly when the server stops accepting their login (anywhere in the
+// app), and renews the login at most once a day when the app opens or comes back to the front.
+function SessionManager() {
+  const dispatch = useDispatch();
+  const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
+  const userRef = useRef(user);
+  userRef.current = user;
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener(SESSION_EXPIRED_EVENT, (expiredToken?: string) => {
+      endExpiredSession(dispatch, userRef.current?._id, expiredToken);
+    });
+    return () => sub.remove();
+  }, [dispatch]);
+
+  const renew = useCallback(async () => {
+    const signedIn = userRef.current;
+    if (!signedIn?._id) return;
+    const fresh = await renewTokenIfDue(signedIn._id);
+    const current = userRef.current;
+    if (fresh && current?._id === signedIn._id) {
+      dispatch(loginSuccess({ user: current, token: fresh } as any));
+      saveAccount(current, fresh).catch(() => {});
+    }
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (isAuthenticated && user?._id) renew();
+  }, [isAuthenticated, user?._id, renew]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
+      if (next === 'active') renew();
+    });
+    return () => sub.remove();
+  }, [renew]);
 
   return null;
 }
@@ -287,6 +327,7 @@ export default function RootLayout() {
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent={false} />
       <Provider store={store}>
         <Startup onReady={handleAppReady} />
+        <SessionManager />
         <DeletionGuard>
           <NotificationManager>
             <ChatPresenceManager>

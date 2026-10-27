@@ -1,5 +1,23 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { DeviceEventEmitter } from 'react-native';
+
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    /** The caller handles an expired login itself, so don't announce it app-wide */
+    skipSessionExpiry?: boolean;
+  }
+}
+
+/** Emitted with the rejected token when the server no longer accepts the signed-in user's login */
+export const SESSION_EXPIRED_EVENT = 'sessionExpired';
+// The exact reply of the server's login check (middlewares/auth.js protect). Other 401s,
+// such as "Not authorized to delete this video" or a wrong password, are not a logged-out session.
+const SESSION_INVALID_MESSAGE = 'Not authorized to access this route';
+
+/** True when this error means the token sent with the request is no longer accepted */
+export const isSessionInvalidError = (error: any) =>
+  error?.response?.status === 401 && error?.response?.data?.message === SESSION_INVALID_MESSAGE;
 
 // EXPO_PUBLIC_API_URL is inlined at build time. In dev it comes from .env (LAN IP);
 // for standalone builds it is injected per-profile via eas.json. The fallback is the
@@ -62,6 +80,15 @@ api.interceptors.response.use(
   async (error) => {
     if (error?.response?.status === 403 && error?.response?.data?.isBlocked) {
       await clearAuthSession().catch(() => {});
+    } else if (isSessionInvalidError(error) && !error.config?.skipSessionExpiry) {
+      // Only when the rejected token is the one currently signed in (not a stale request
+      // from before an account switch)
+      const headers: any = error.config?.headers;
+      const sent = headers?.get?.('Authorization') ?? headers?.Authorization;
+      const current = await AsyncStorage.getItem('token').catch(() => null);
+      if (current && sent === `Bearer ${current}`) {
+        DeviceEventEmitter.emit(SESSION_EXPIRED_EVENT, current);
+      }
     }
     return Promise.reject(error);
   }

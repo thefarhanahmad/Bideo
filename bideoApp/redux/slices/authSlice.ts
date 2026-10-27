@@ -38,6 +38,7 @@ const authSlice = createSlice({
       state.user = null;
       state.token = null;
       state.isAuthenticated = false;
+      state.loading = false;
     },
     updateUser: (state, action: PayloadAction<any>) => {
       if (state.user) {
