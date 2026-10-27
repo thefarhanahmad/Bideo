@@ -451,7 +451,7 @@ const SEARCH_RESULT_TYPES = new Set(["videos", "shorts", "channels", "posts", "p
 // for everyone else searching someone's phone number or email must not reveal their channel.
 const CHANNEL_SEARCH_FIELDS = ["channelName", "name"];
 const ADMIN_CHANNEL_SEARCH_FIELDS = ["channelName", "name", "email", "phone"];
-const SEARCH_LIMITS = { channelsScan: 30, channels: 20, videos: 60, posts: 40, playlists: 30 };
+const SEARCH_LIMITS = { channelsScan: 30, channels: 20, videos: 60, videoCandidates: 300, channelVideos: 30, posts: 40, playlists: 30 };
 
 const matchClauses = (fields, { phraseRegex, regexes }) => {
   const clauses = [];
@@ -460,24 +460,67 @@ const matchClauses = (fields, { phraseRegex, regexes }) => {
   return clauses;
 };
 
-const searchVideoDocs = ({ keywords, channelIds, q, isObjectId, isAdmin, blockedUserIds, type }) => {
-  const clauses = matchClauses(["title", "description", "tags"], keywords);
-  if (channelIds.length > 0) clauses.push({ owner: { $in: channelIds } });
-  if (isObjectId) clauses.push({ _id: q });
+const SEARCH_VIDEO_POPULATE = [
+  { path: "owner", select: "name avatar channelName followersCount isVerified" },
+  { path: "category", select: "name" },
+];
 
-  const query = { $or: clauses };
+// Candidate videos for a search, from the whole library (not just the first matches found):
+// 1. best word matches from the text index (title > tags > description), more words = higher
+// 2. the most viewed videos of channels whose name matched
+// 3. a pasted video id
+// 4. only when that finds too few: the old partial-word match (e.g. "son" finds "song")
+// They are then ranked by scoreVideoRelevance in searchVideos.
+const searchVideoDocs = async ({ keywords, terms, channelIds, q, isObjectId, isAdmin, blockedUserIds, type }) => {
+  const base = {};
   if (!isAdmin) {
-    query.visibility = "public";
-    if (blockedUserIds.length > 0) query.owner = { $nin: blockedUserIds };
+    base.visibility = "public";
+    if (blockedUserIds.length > 0) base.owner = { $nin: blockedUserIds };
   }
-  if (type === "shorts") query.isShort = true;
-  if (type === "videos") query.isShort = { $ne: true };
+  if (type === "shorts") base.isShort = true;
+  if (type === "videos") base.isShort = { $ne: true };
 
-  return Video.find(query)
-    .populate("owner", "name avatar channelName followersCount isVerified")
-    .populate("category", "name")
-    .limit(SEARCH_LIMITS.videos)
-    .lean();
+  const [byText, byChannel, byId] = await Promise.all([
+    terms.length > 0
+      ? Video.find({ ...base, $text: { $search: terms.join(" ") } }, { score: { $meta: "textScore" } })
+          .sort({ score: { $meta: "textScore" } })
+          .limit(SEARCH_LIMITS.videoCandidates)
+          .lean()
+      : [],
+    channelIds.length > 0
+      ? Video.find({ ...base, owner: { ...(base.owner || {}), $in: channelIds } })
+          .sort({ views: -1 })
+          .limit(SEARCH_LIMITS.channelVideos)
+          .lean()
+      : [],
+    isObjectId ? Video.find({ ...base, _id: q }).lean() : [],
+  ]);
+
+  const seen = new Set();
+  const merged = [];
+  for (const v of [...byId, ...byText, ...byChannel]) {
+    const id = String(v._id);
+    if (!seen.has(id)) {
+      seen.add(id);
+      merged.push(v);
+    }
+  }
+
+  if (merged.length < SEARCH_LIMITS.videos) {
+    const partial = await Video.find({ ...base, $or: matchClauses(["title", "tags"], keywords) })
+      .sort({ views: -1 })
+      .limit(SEARCH_LIMITS.videos)
+      .lean();
+    for (const v of partial) {
+      const id = String(v._id);
+      if (!seen.has(id)) {
+        seen.add(id);
+        merged.push(v);
+      }
+    }
+  }
+
+  return Video.populate(merged, SEARCH_VIDEO_POPULATE);
 };
 
 const searchPostDocs = ({ keywords, channelIds, q, isObjectId, isAdmin, blockedUserIds }) => {
@@ -585,7 +628,7 @@ exports.searchVideos = async (req, res, next) => {
       : [];
 
     // 2. Everything else in parallel
-    const ctx = { keywords, channelIds, q, isObjectId, isAdmin, blockedUserIds, type, viewerId };
+    const ctx = { keywords, terms, channelIds, q, isObjectId, isAdmin, blockedUserIds, type, viewerId };
     const wantsVideos = !type || type === "videos" || type === "shorts";
     const [videos, postsData, playlistsData, followed] = await Promise.all([
       wantsVideos ? searchVideoDocs(ctx) : [],
@@ -597,8 +640,9 @@ exports.searchVideos = async (req, res, next) => {
     const channelsData = scoredChannels.map((c) => ({ ...c, isFollowing: followed.has(String(c._id)) }));
 
     const scoredVideos = videos
-      .map((v) => ({ ...v, _score: scoreVideoRelevance(v, { phrase, terms }) }))
-      .sort((a, b) => b._score - a._score);
+      .map(({ score, ...v }) => ({ ...v, _score: scoreVideoRelevance(v, { phrase, terms }) }))
+      .sort((a, b) => b._score - a._score)
+      .slice(0, SEARCH_LIMITS.videos);
     const results = await decorateVideos(scoredVideos, req);
 
     res.status(200).json({
