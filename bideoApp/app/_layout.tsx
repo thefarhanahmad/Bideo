@@ -10,6 +10,7 @@ import api, { clearAuthSession, setAuthToken, SESSION_EXPIRED_EVENT } from '../s
 import { loginSuccess, loginStart, logout } from '../redux/slices/authSlice';
 import { AlertHost, showAlert } from '../components/AppAlert';
 import AppErrorScreen from '../components/AppErrorScreen';
+import { CoinRewardHost } from '../components/CoinRewardToast';
 import Constants from 'expo-constants';
 import { registerForPushNotificationsAsync, setupNotificationListeners } from '../services/notifications';
 import { initSocket, disconnectSocket } from '../services/socket';
@@ -346,6 +347,7 @@ export default function RootLayout() {
                   <Stack.Screen name="account-recovery" />
                 </Stack>
                 <AlertHost />
+                <CoinRewardHost />
               </ScreenTracker>
             </ChatPresenceManager>
           </NotificationManager>

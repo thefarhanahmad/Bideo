@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, FlatList, Share, useWindowDimensions, StatusBar, BackHandler, Modal, Pressable } from 'react-native';
+import { showCoinReward } from '../../components/CoinRewardToast';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSelector, useDispatch } from 'react-redux';
@@ -409,6 +410,7 @@ export default function VideoScreen() {
                   }
                   if (res?.viewerCoinsEarned > 0 && res?.viewerTotalCoins !== undefined) {
                     dispatch(updateUser({ coins: res.viewerTotalCoins }));
+                    showCoinReward(res.viewerCoinsEarned);
                     AsyncStorage.getItem('cached_user').then((raw) => {
                       if (raw) {
                         const parsed = JSON.parse(raw);
@@ -431,6 +433,7 @@ export default function VideoScreen() {
                 .then((res: any) => {
                   if (res?.coinsEarned > 0 && res?.totalCoins !== undefined) {
                     dispatch(updateUser({ coins: res.totalCoins }));
+                    showCoinReward(res.coinsEarned);
                     AsyncStorage.getItem('cached_user').then((raw) => {
                       if (raw) {
                         const parsed = JSON.parse(raw);
