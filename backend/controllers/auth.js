@@ -599,6 +599,21 @@ exports.getMe = async (req, res, next) => {
   }
 };
 
+// @desc    Give the signed-in app user a fresh token, so active users stay signed in
+//          (the app calls this at most once a day; older app versions never call it)
+// @route   POST /api/auth/renew-token
+// @access  Private (app users; blocked / deletion-scheduled users are stopped by protect)
+exports.renewToken = async (req, res, next) => {
+  try {
+    if (req.isAdminToken || req.user.role === 'admin') {
+      return res.status(403).json({ success: false, message: 'This session cannot be renewed here' });
+    }
+    res.status(200).json({ success: true, token: req.user.getSignedJwtToken() });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // Get token from model, create cookie and send response
 const sendTokenResponse = (user, statusCode, res) => {
   // Create token

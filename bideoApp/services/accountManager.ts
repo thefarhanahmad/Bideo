@@ -178,7 +178,8 @@ export const switchToAccount = async (
     // 3. Validate token & get fresh user data from server
     let freshUser: any = null;
     try {
-      const res = await api.get('/auth/me', { timeout: 8000 });
+      // This step handles an invalid token itself (removes the account), so no app-wide alert
+      const res = await api.get('/auth/me', { timeout: 8000, skipSessionExpiry: true });
       freshUser = res.data?.data || res.data;
     } catch (err: any) {
       if (err?.response?.status === 401 || err?.response?.status === 403) {

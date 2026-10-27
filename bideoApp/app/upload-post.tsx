@@ -10,13 +10,23 @@ import { RootState } from '../redux/store';
 import Colors from '../constants/Colors';
 import api from '../services/api';
 import { showAlert } from '../components/AppAlert';
+import LoginRequired from '../components/LoginRequired';
 import Constants from 'expo-constants';
 import MentionSuggestions from '../components/MentionSuggestions';
 import { PostLinkPreview, PreviewData, detectBideoLink } from '../components/PostLinkPreview';
 import { AppAdBanner } from '../components/AppAds';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 
+// Uploading needs a signed-in user; signed-out users see the sign-in card instead
 export default function UploadPostScreen() {
+  return (
+    <LoginRequired>
+      <UploadPostScreenContent />
+    </LoginRequired>
+  );
+}
+
+function UploadPostScreenContent() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useSelector((state: RootState) => state.auth);
