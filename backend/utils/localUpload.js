@@ -49,6 +49,53 @@ const getS3Client = () => {
   return s3ClientInstance;
 };
 
+let presignClientInstance = null;
+
+/**
+ * S3 client used only to sign direct-upload links. Automatic checksums are off: otherwise the SDK
+ * writes a checksum of an empty body into signed upload links and R2 rejects the real upload.
+ */
+const getPresignClient = () => {
+  if (!presignClientInstance && isR2Configured()) {
+    presignClientInstance = new S3Client({
+      region: 'auto',
+      endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+      credentials: {
+        accessKeyId: process.env.R2_ACCESS_KEY_ID,
+        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+      },
+      requestChecksumCalculation: 'WHEN_REQUIRED',
+      responseChecksumValidation: 'WHEN_REQUIRED',
+    });
+  }
+  return presignClientInstance;
+};
+
+/**
+ * Unique stored file name parts: "<timestamp>-<random>" and a whitelisted extension
+ * (unknown extensions become .mp4 / .jpg). Shared by server uploads and direct-to-R2 uploads.
+ */
+const newStorageName = (originalName, isVideo) => {
+  const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+  const rawExt = path.extname(originalName || '').toLowerCase();
+  let safeExt = isVideo ? '.mp4' : '.jpg';
+  if (isVideo && ALLOWED_VIDEO_EXTENSIONS.has(rawExt)) {
+    safeExt = rawExt;
+  } else if (!isVideo && ALLOWED_IMAGE_EXTENSIONS.has(rawExt)) {
+    safeExt = rawExt;
+  }
+  return { uniqueSuffix, safeExt };
+};
+
+/** Public URL of an R2 object key (same form as files uploaded through the server) */
+const r2PublicUrl = (key) => {
+  const publicBase = (
+    process.env.R2_PUBLIC_URL ||
+    `https://${process.env.R2_BUCKET_NAME}.${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
+  ).replace(/\/+$/, '');
+  return `${publicBase}/${key}`;
+};
+
 /**
  * Determines appropriate MIME content type.
  */
@@ -90,14 +137,7 @@ const saveLocalFile = async (req, file, type, options = {}) => {
   const forceLocal = isServerRequested && (!req?.user || req.user.role === 'admin' || options?.forceLocal);
 
   // Generate unique file name with strictly whitelisted extension
-  const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-  const rawExt = path.extname(file.originalname || '').toLowerCase();
-  let safeExt = isVideo ? '.mp4' : '.jpg';
-  if (isVideo && ALLOWED_VIDEO_EXTENSIONS.has(rawExt)) {
-    safeExt = rawExt;
-  } else if (!isVideo && ALLOWED_IMAGE_EXTENSIONS.has(rawExt)) {
-    safeExt = rawExt;
-  }
+  const { uniqueSuffix, safeExt } = newStorageName(file.originalname, isVideo);
 
   const filename = `${uniqueSuffix}${safeExt}`;
   const key = `${folderName}/${filename}`;
@@ -130,12 +170,7 @@ const saveLocalFile = async (req, file, type, options = {}) => {
         }
       }
 
-      const publicBase = (
-        process.env.R2_PUBLIC_URL ||
-        `https://${process.env.R2_BUCKET_NAME}.${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
-      ).replace(/\/+$/, '');
-
-      const fileUrl = `${publicBase}/${key}`;
+      const fileUrl = r2PublicUrl(key);
 
       console.log(`[Storage] Uploaded to Cloudflare R2: ${fileUrl}`);
       return {
@@ -268,4 +303,8 @@ module.exports = {
   deleteFile: deleteLocalFile,
   isR2Configured,
   getS3Client,
+  getPresignClient,
+  getContentType,
+  newStorageName,
+  r2PublicUrl,
 };

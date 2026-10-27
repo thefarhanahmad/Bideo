@@ -19,6 +19,12 @@ const {
 const { protect, softProtect } = require('../middlewares/auth');
 const upload = require('../middlewares/multer');
 const uploadMaintenance = require('../middlewares/uploadMaintenance');
+const {
+  startDirectUpload,
+  signDirectUploadParts,
+  completeDirectUpload,
+  abortDirectUpload,
+} = require('../controllers/directUpload');
 
 const router = express.Router();
 
@@ -31,6 +37,12 @@ router.get('/search/suggestions', searchSuggestions);
 router.get('/search', softProtect, searchVideos);
 router.get('/me', protect, getMyVideos);
 router.get('/followed', protect, getFollowedVideos);
+
+// Direct-to-R2 upload in parts (controllers/directUpload.js); POST /upload below is unchanged
+router.post('/direct-upload', protect, uploadMaintenance, videoValidationRules(), validate, startDirectUpload);
+router.post('/direct-upload/:id/parts', protect, signDirectUploadParts);
+router.post('/direct-upload/:id/complete', protect, videoValidationRules(), validate, completeDirectUpload);
+router.post('/direct-upload/:id/abort', protect, abortDirectUpload);
 
 router.post('/:id/like', protect, toggleLike);
 router.post('/:id/dislike', protect, toggleDislike);
