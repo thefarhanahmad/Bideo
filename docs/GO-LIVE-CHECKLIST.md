@@ -49,6 +49,15 @@ the app on a real phone. Check:
 
 Tell Claude the screen and what you see if anything looks wrong.
 
+**Testing uploads locally**
+- Direct upload needs the R2 keys (`R2_*`) in your local `backend/.env`. Without them the app
+  and admin simply use the old upload (that is the fallback working, not a bug).
+- With the keys, test videos go to the real R2 bucket: delete them from the admin dashboard
+  after testing.
+- The admin dashboard on `http://localhost:5173` uses the old upload unless you also add
+  `"http://localhost:5173"` to `AllowedOrigins` in the CORS rule (section 1). Remove it again
+  after testing if you like.
+
 ---
 
 ## 3. Deploy the server
@@ -110,6 +119,8 @@ Ask Claude to check: errors in the logs, upload failures, push volume, disk spac
 
 ## 8. Clean-up on the server (when everything is fine)
 
-- [ ] Old backups: `/root/adminauth-backup-20261021-1330`, `/var/www/bideo-prev-20261021-1344`
+- [ ] Old backups (the first one holds old secrets):
+      `rm -r /root/adminauth-backup-20261021-1330 /var/www/bideo-prev-20261021-1344`
+- [ ] Unused Docker leftovers (~850 MB): `docker image prune -f && docker builder prune -f`
 - [ ] After the video move is finished: `/root/bideo-migrate.js`, `/root/bideo-migration/`
       (also holds the nginx backup from before the R2 redirect rule)
