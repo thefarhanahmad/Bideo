@@ -8,7 +8,7 @@ import Colors from '../constants/Colors';
 import api from '../services/api';
 import { EmptyState, LoadMoreFooter } from '../components/ListStates';
 import usePagedList from '../hooks/usePagedList';
-import { formatTimeAgo, formatViews } from '../utils/formatDate';
+import { formatTimeAgo, formatViews, formatDuration } from '../utils/formatDate';
 
 const PAGE_SIZE = 20;
 
@@ -37,11 +37,6 @@ export default function LikedVideosScreen() {
     }, [reload])
   );
 
-  const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-  };
 
   const renderHorizontalCard = (item: any) => {
     return (

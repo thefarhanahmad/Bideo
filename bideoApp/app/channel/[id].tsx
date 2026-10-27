@@ -13,7 +13,7 @@ import { RootState } from '../../redux/store';
 import { updateUser } from '../../redux/slices/authSlice';
 import AuthModal from '../../components/AuthModal';
 import VerifiedBadge from '../../components/VerifiedBadge';
-import { formatTimeAgo, formatViews, formatJoinedDate } from '../../utils/formatDate';
+import { formatTimeAgo, formatViews, formatJoinedDate, formatDuration } from '../../utils/formatDate';
 import { hapticLight, hapticSelection } from '../../utils/haptics';
 import { shareChannel, shareVideo } from '../../utils/shareHelper';
 import { detectSocialPlatform, toSocialUrl } from '../../utils/socialLinks';
@@ -218,11 +218,6 @@ export default function ChannelScreen() {
     );
   };
 
-  const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-  };
 
   const renderHorizontalVideoCard = (item: any) => {
     return (

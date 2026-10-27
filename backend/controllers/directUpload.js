@@ -130,7 +130,7 @@ exports.startDirectUpload = async (req, res, next) => {
       }
     }
     // Shorts must be 9:16: say so now rather than after a long upload
-    if (readUploadShape(req.body).shortNotPortrait) return fail(res, 400, SHORT_NOT_PORTRAIT_MESSAGE);
+    if (readUploadShape(req.body, videoSize).shortNotPortrait) return fail(res, 400, SHORT_NOT_PORTRAIT_MESSAGE);
 
     const partSize = Math.max(LIMITS.partSize, Math.ceil(videoSize / LIMITS.maxParts));
     const partCount = Math.ceil(videoSize / partSize);
@@ -248,7 +248,7 @@ exports.completeDirectUpload = async (req, res, next) => {
     }
     session = claimed;
 
-    const shape = readUploadShape(req.body);
+    const shape = readUploadShape(req.body, session.videoSize);
     if (shape.shortNotPortrait) {
       await abortParts(session);
       await removeObject(session.thumbnailKey);

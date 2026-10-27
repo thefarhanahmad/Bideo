@@ -11,7 +11,7 @@ import VerifiedBadge from '../../components/VerifiedBadge';
 import api, { setAuthToken } from '../../services/api';
 import { useRouter, useNavigation, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { formatViews } from '../../utils/formatDate';
+import { formatViews, formatDuration } from '../../utils/formatDate';
 import { AppAdBanner } from '../../components/AppAds';
 import PlaylistFormModal from '../../components/PlaylistFormModal';
 import { showAlert } from '../../components/AppAlert';
@@ -227,11 +227,6 @@ export default function LibraryScreen() {
     loadLikedVideos();
   };
 
-  const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-  };
 
   const onRefresh = async () => {
     setRefreshing(true);

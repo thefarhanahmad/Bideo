@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import Colors from '../constants/Colors';
 import api, { normalizeVideo } from '../services/api';
-import { formatTimeAgo, formatViews } from '../utils/formatDate';
+import { formatTimeAgo, formatViews, formatDuration } from '../utils/formatDate';
 import { shareVideo } from '../utils/shareHelper';
 import ShareModal from '../components/ShareModal';
 import BottomSheet, { SheetItem, SheetCancel } from '../components/BottomSheet';
@@ -73,11 +73,6 @@ export default function YourVideosScreen() {
       .catch((err) => console.error('Failed to open video menu', err));
   }, [autoOpenId, loading, filteredVideos]);
 
-  const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-  };
 
   const handleDelete = async () => {
     const id = selectedVideo?._id;

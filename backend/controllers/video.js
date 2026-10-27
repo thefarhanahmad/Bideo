@@ -1623,17 +1623,29 @@ exports.toggleDislike = async (req, res, next) => {
   }
 };
 
+// Video length in seconds. The app and admin send durationUnit=seconds. Older app versions
+// don't: they send seconds for clips over 10 s but milliseconds for clips up to 10 s. For those,
+// a value above 1000 is read as milliseconds only when, read as seconds, the file's bitrate
+// would be unbelievably low ("8000 seconds" for a 3 MB file is really 8000 ms). This replaces
+// "anything above 1000 is milliseconds", which cut every video over 16m40s to a few seconds.
+const MIN_BELIEVABLE_BITRATE = 32000; // bits per second
+const readDurationSeconds = (body, fileBytes) => {
+  const raw = Number(body.duration || 0);
+  if (!Number.isFinite(raw) || raw <= 0) return 0;
+  if (body.durationUnit === "seconds" || raw <= 1000) return raw;
+  const bytes = Number(fileBytes) || 0;
+  if (bytes > 0 && (bytes * 8) / raw >= MIN_BELIEVABLE_BITRATE) return raw;
+  return Math.round(raw / 1000);
+};
+
 // Shape details sent with an upload (used by server uploads and direct-to-R2 uploads alike)
 const SHORT_NOT_PORTRAIT_MESSAGE = "Shorts must be portrait 9:16 videos";
-const readUploadShape = (body) => {
+const readUploadShape = (body, fileBytes) => {
   const uploadType = body.uploadType === "short" ? "short" : "video";
   const width = Number(body.width || 0);
   const height = Number(body.height || 0);
   const aspectRatio = width && height ? width / height : null;
-  let duration = Number(body.duration || 0);
-  if (duration > 1000) {
-    duration = Math.round(duration / 1000);
-  }
+  const duration = readDurationSeconds(body, fileBytes);
   // Auto-detect if a video uploaded under "Video" (long-form) is actually a short vertical video
   // (portrait ratio ~9:16 or aspect < 0.8 and duration <= 60 seconds)
   const isPortraitShort = (isNineBySixteen(aspectRatio) || (aspectRatio && aspectRatio < 0.8)) && (!duration || duration <= 60);
@@ -1709,6 +1721,7 @@ const createUploadedVideo = async (
   return video;
 };
 exports.readUploadShape = readUploadShape;
+exports.readDurationSeconds = readDurationSeconds;
 exports.createUploadedVideo = createUploadedVideo;
 exports.SHORT_NOT_PORTRAIT_MESSAGE = SHORT_NOT_PORTRAIT_MESSAGE;
 exports.FALLBACK_THUMBNAIL = FALLBACK_THUMBNAIL;
@@ -1743,7 +1756,7 @@ exports.uploadVideo = async (req, res, next) => {
     const videoIdx = tempFiles.indexOf(req.files.video[0].path);
     if (videoIdx !== -1) tempFiles.splice(videoIdx, 1);
 
-    const shape = readUploadShape(req.body);
+    const shape = readUploadShape(req.body, req.files.video[0].size);
     if (shape.shortNotPortrait) {
       await deleteLocalFile(videoResult.url);
       savedVideoUrl = null;
@@ -1865,9 +1878,7 @@ exports.updateVideo = async (req, res, next) => {
     }
 
     if (req.body.duration !== undefined && req.body.duration !== null) {
-      let dur = Number(req.body.duration);
-      if (dur > 1000) dur = Math.round(dur / 1000);
-      updates.duration = dur;
+      updates.duration = readDurationSeconds(req.body, video.compressedVideoSize);
     }
 
     if (req.files && req.files.thumbnail && req.files.thumbnail[0]) {

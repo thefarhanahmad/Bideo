@@ -9,6 +9,7 @@ import UserLink from "../components/UserLink";
 import { MessageSquareIcon, UsersIcon, ShieldIcon, AlertOctagonIcon } from "../components/Icons";
 import { useTableParams } from "../hooks/useTableParams";
 import { API_URL } from "../config";
+import { formatDuration } from "../lib/format";
 
 const resolveMediaUrl = (url) => {
   if (!url) return "https://via.placeholder.com/100x100.png?text=User";
@@ -32,13 +33,6 @@ const formatTimeAgo = (dateStr) => {
   });
 };
 
-const formatDuration = (seconds) => {
-  let totalSecs = Math.round(Number(seconds) || 0);
-  if (totalSecs > 1000) totalSecs = Math.round(totalSecs / 1000);
-  const mins = Math.floor(totalSecs / 60);
-  const secs = Math.floor(totalSecs % 60);
-  return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
-};
 
 const Conversations = () => {
   const [conversations, setConversations] = useState([]);

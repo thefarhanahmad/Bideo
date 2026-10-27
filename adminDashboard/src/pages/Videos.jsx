@@ -9,6 +9,7 @@ import UserLink from "../components/UserLink";
 import { useTableParams } from "../hooks/useTableParams";
 import { API_URL } from "../config";
 import { DirectVideoUpload, DirectUploadUnavailableError } from "../lib/directUpload";
+import { formatDuration } from "../lib/format";
 
 const resolveMediaUrl = (url) => {
   if (!url) return "https://via.placeholder.com/640x360.png?text=No+Thumbnail";
@@ -31,15 +32,6 @@ const resolveMediaUrl = (url) => {
   return `${API_URL}${finalUrl.startsWith("/") ? "" : "/"}${finalUrl}`;
 };
 
-const formatDuration = (seconds) => {
-  let totalSecs = Math.round(Number(seconds) || 0);
-  if (totalSecs > 1000) {
-    totalSecs = Math.round(totalSecs / 1000);
-  }
-  const mins = Math.floor(totalSecs / 60);
-  const secs = Math.floor(totalSecs % 60);
-  return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
-};
 
 const getVideoMetadata = (file) => {
   return new Promise((resolve) => {
@@ -1878,6 +1870,7 @@ const UploadForm = ({
         fd.append("storage", "server");
       }
       fd.append("duration", Number(finalDuration) || 0);
+      fd.append("durationUnit", "seconds");
       if (finalWidth && finalHeight) {
         fd.append("width", finalWidth);
         fd.append("height", finalHeight);
