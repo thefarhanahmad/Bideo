@@ -10,6 +10,7 @@ import {
   RefreshControl,
   StatusBar,
 } from 'react-native';
+import StickyBannerAd from '../components/StickyBannerAd';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -448,6 +449,7 @@ export default function ChannelConnectionsScreen() {
           }
         />
       )}
+      <StickyBannerAd />
     </SafeAreaView>
   );
 }

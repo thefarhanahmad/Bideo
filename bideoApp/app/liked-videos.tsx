@@ -1,5 +1,6 @@
 import React, { useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
+import StickyBannerAd from '../components/StickyBannerAd';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -101,6 +102,7 @@ export default function LikedVideosScreen() {
           ListFooterComponent={<LoadMoreFooter visible={loadingMore} />}
         />
       )}
+      <StickyBannerAd />
     </View>
   );
 }

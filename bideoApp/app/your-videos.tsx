@@ -1,6 +1,7 @@
 import { showAlert } from '../components/AppAlert';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert, Share } from 'react-native';
+import StickyBannerAd from '../components/StickyBannerAd';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -225,6 +226,8 @@ export default function YourVideosScreen() {
           ListFooterComponent={<LoadMoreFooter visible={loadingMore} />}
         />
       )}
+
+      <StickyBannerAd />
 
       {/* Action Menu Modal */}
       <BottomSheet visible={menuVisible} onClose={() => setMenuVisible(false)} title={selectedVideo?.title}>

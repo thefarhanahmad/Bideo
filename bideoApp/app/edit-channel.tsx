@@ -1,6 +1,7 @@
 import { showAlert } from '../components/AppAlert';
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Modal } from 'react-native';
+import StickyBannerAd from '../components/StickyBannerAd';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
@@ -426,22 +427,23 @@ export default function EditChannelScreen() {
       style={{ flex: 1 }} 
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Ionicons name="close" size={26} color={Colors.text} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>{isCreateMode ? 'Setup Channel' : 'Customize Channel'}</Text>
-          <TouchableOpacity 
-            onPress={handleSave} 
-            disabled={loading}
-            style={[styles.saveHeaderBtn, loading && { opacity: 0.5 }]}
-          >
-            {loading ? <ActivityIndicator size="small" color={Colors.primary} /> : <Text style={styles.saveHeaderBtnText}>Save</Text>}
-          </TouchableOpacity>
-        </View>
+      {/* Header (fixed) and banner stay at the top while the form scrolls */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <Ionicons name="close" size={26} color={Colors.text} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{isCreateMode ? 'Setup Channel' : 'Customize Channel'}</Text>
+        <TouchableOpacity 
+          onPress={handleSave} 
+          disabled={loading}
+          style={[styles.saveHeaderBtn, loading && { opacity: 0.5 }]}
+        >
+          {loading ? <ActivityIndicator size="small" color={Colors.primary} /> : <Text style={styles.saveHeaderBtnText}>Save</Text>}
+        </TouchableOpacity>
+      </View>
+      <StickyBannerAd position="top" />
 
+      <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Live Preview Section */}
         <View style={styles.previewCard}>
           <View style={styles.previewContainer}>
