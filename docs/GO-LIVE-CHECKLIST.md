@@ -65,12 +65,15 @@ Tell Claude the screen and what you see if anything looks wrong.
 1. Note the version to go back to if needed: **`bad2c88`**
 2. Free some disk first (safe, removes only unused Docker items):
    `docker image prune -f && docker builder prune -f`
-3. `cd /root/Bideo && ./deploy.sh`
-4. Check straight away:
+3. **App logins last 30 days instead of 7** (decided 27 Oct): in `/root/Bideo/backend/.env` set
+   `JWT_EXPIRE=30d` (currently `7d`). Takes effect with this deploy. Logins made before keep
+   their 7 days; active users move to 30 days within a day through the daily renewal.
+4. `cd /root/Bideo && ./deploy.sh`
+5. Check straight away:
    - [ ] bideo.in loads, admin login works
    - [ ] the **current** app (old version) logs in, plays videos, searches
    - [ ] `docker logs --tail 100 bideo-backend` — no errors
-5. If something is wrong: go back to `bad2c88` and run `deploy.sh` again.
+6. If something is wrong: go back to `bad2c88` and run `deploy.sh` again.
 
 Optional settings in `backend/.env` (defaults are fine):
 
