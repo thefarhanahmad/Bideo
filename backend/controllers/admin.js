@@ -1786,6 +1786,7 @@ exports.getUserEarnings = async (req, res, next) => {
           $match: {
             createdAt: { $gte: startOfToday },
             status: { $in: ['pending', 'credited'] },
+            source: { $ne: 'adjustment' }, // earnings taken back on deletion are not today's earnings
           },
         },
         {
@@ -1851,6 +1852,7 @@ exports.getUserEarnings = async (req, res, next) => {
         $match: {
           createdAt: { $gte: startOfToday },
           status: { $in: ['pending', 'credited'] },
+          source: { $ne: 'adjustment' }, // earnings taken back on deletion are not today's earnings
         },
       },
       {

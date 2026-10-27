@@ -15,7 +15,13 @@ const walletCreditSchema = new mongoose.Schema({
   amount: {
     type: Number,
     required: true,
-    min: 0,
+    // Only an adjustment may be negative (e.g. earnings taken back when a video is deleted)
+    validate: {
+      validator(value) {
+        return value >= 0 || this.source === 'adjustment';
+      },
+      message: 'Amount cannot be negative',
+    },
   },
   source: {
     type: String,

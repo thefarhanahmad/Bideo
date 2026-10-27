@@ -52,7 +52,7 @@ const EARNINGS_VIEWS = {
     row: (c, onPlay) => [
       <VideoCell key="v" video={c.video} onPlay={onPlay} />,
       <Badge key="s">{String(c.source || "").replace(/_/g, " ")}</Badge>,
-      <Amount key="a" value={formatINR(c.amount)} positive={c.status === "credited"} />,
+      <Amount key="a" value={formatINR(c.amount)} positive={c.status === "credited" && c.amount >= 0} />,
       <StatusBadge key="st" status={c.status} />,
       <span key="av" className="text-xs text-muted">{formatDateTime(c.availableAt)}</span>,
       <span key="d" className="text-xs text-muted">{formatDateTime(c.createdAt)}</span>,
