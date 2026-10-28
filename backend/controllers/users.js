@@ -1550,6 +1550,90 @@ exports.applyMonetization = async (req, res, next) => {
   }
 };
 
+const PAYMENT_ACCOUNT_FIELDS = 'status name phone adharNumber upiId bankDetails updatedAt';
+
+const PAYMENT_ACCOUNT_RULES = {
+  phone: /^[6-9]\d{9}$/,
+  adharNumber: /^\d{12}$/,
+  upiId: /^[a-zA-Z0-9._-]{2,256}@[a-zA-Z][a-zA-Z0-9]{1,63}$/,
+  accountNumber: /^\d{9,18}$/,
+  ifscCode: /^[A-Z]{4}0[A-Z0-9]{6}$/,
+};
+
+const cleanString = (value, maxLength = 100) => (typeof value === 'string' ? value.trim().slice(0, maxLength) : '');
+
+// @desc    Get the payout account details submitted in monetization step 2
+// @route   GET /api/users/monetization/payment-account
+// @access  Private
+exports.getPaymentAccount = async (req, res, next) => {
+  try {
+    const application = await MonetizationApplication.findOne({ user: req.user.id })
+      .select(PAYMENT_ACCOUNT_FIELDS)
+      .lean();
+
+    res.status(200).json({ success: true, data: application || null });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Update payout account details without resetting the monetization review status.
+//          Withdrawals already requested keep the details they were submitted with.
+// @route   PUT /api/users/monetization/payment-account
+// @access  Private
+exports.updatePaymentAccount = async (req, res, next) => {
+  try {
+    const body = req.body || {};
+    const bank = body.bankDetails || {};
+
+    const update = {
+      name: cleanString(body.name),
+      phone: cleanString(body.phone, 10),
+      adharNumber: cleanString(body.adharNumber, 12),
+      upiId: cleanString(body.upiId, 320),
+      bankDetails: {
+        bankName: cleanString(bank.bankName),
+        accountNumber: cleanString(bank.accountNumber, 18),
+        ifscCode: cleanString(bank.ifscCode, 11).toUpperCase(),
+      },
+    };
+
+    const errors = {};
+    if (update.name.length < 2) errors.name = 'Enter the account holder name';
+    if (!PAYMENT_ACCOUNT_RULES.phone.test(update.phone)) errors.phone = 'Enter a valid 10-digit mobile number';
+    if (update.adharNumber && !PAYMENT_ACCOUNT_RULES.adharNumber.test(update.adharNumber)) {
+      errors.adharNumber = 'Aadhaar must be 12 digits';
+    }
+    if (update.upiId && !PAYMENT_ACCOUNT_RULES.upiId.test(update.upiId)) errors.upiId = 'Enter a valid UPI ID (e.g. name@okhdfcbank)';
+    if (update.bankDetails.bankName.length < 2) errors.bankName = 'Enter your bank name';
+    if (!PAYMENT_ACCOUNT_RULES.accountNumber.test(update.bankDetails.accountNumber)) {
+      errors.accountNumber = 'Account number must be 9 to 18 digits';
+    }
+    if (!PAYMENT_ACCOUNT_RULES.ifscCode.test(update.bankDetails.ifscCode)) errors.ifscCode = 'Enter a valid 11-character IFSC code';
+
+    if (Object.keys(errors).length) {
+      return res.status(400).json({ success: false, message: Object.values(errors)[0], errors });
+    }
+
+    const application = await MonetizationApplication.findOneAndUpdate(
+      { user: req.user.id },
+      { $set: { ...update, updatedAt: Date.now() } },
+      { new: true, runValidators: true }
+    ).select(PAYMENT_ACCOUNT_FIELDS);
+
+    if (!application) {
+      return res.status(404).json({
+        success: false,
+        message: 'Complete monetization step 2 before adding a payment account',
+      });
+    }
+
+    res.status(200).json({ success: true, message: 'Payment account updated', data: application });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // @desc    Schedule profile deletion (5-day grace period)
 // @route   POST /api/users/schedule-deletion
 // @access  Private

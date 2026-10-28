@@ -333,6 +333,23 @@ export default function LibraryScreen() {
         </View>
       </View>
 
+      <TouchableOpacity
+        style={styles.paymentAccountRow}
+        activeOpacity={0.7}
+        onPress={() => router.push('/payment-account')}
+        accessibilityRole="button"
+        accessibilityLabel="Payment Account"
+      >
+        <View style={styles.paymentAccountIcon}>
+          <Ionicons name="wallet-outline" size={20} color={Colors.primary} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.paymentAccountTitle}>Payment Account</Text>
+          <Text style={styles.paymentAccountSub}>Manage your UPI and bank details for payouts</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={Colors.textGray} />
+      </TouchableOpacity>
+
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <View style={styles.headerLeft}>
@@ -718,6 +735,39 @@ const styles = StyleSheet.create({
   },
   section: {
     paddingVertical: 15,
+  },
+  paymentAccountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 15,
+    marginTop: 15,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: Colors.white,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  paymentAccountIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  paymentAccountTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  paymentAccountSub: {
+    fontSize: 12,
+    color: Colors.textGray,
+    marginTop: 2,
   },
   sectionHeader: {
     flexDirection: 'row',

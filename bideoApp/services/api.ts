@@ -248,6 +248,27 @@ export const userService = {
     const response = await api.post('/users/verify-email-otp', { email, otp });
     return response.data;
   },
+  getPaymentAccount: async (): Promise<PaymentAccount | null> => {
+    const response = await api.get('/users/monetization/payment-account');
+    return response.data?.data || null;
+  },
+  updatePaymentAccount: async (payload: PaymentAccountInput): Promise<PaymentAccount> => {
+    const response = await api.put('/users/monetization/payment-account', payload);
+    return response.data?.data;
+  },
+};
+
+export type PaymentAccountInput = {
+  name: string;
+  phone: string;
+  adharNumber: string;
+  upiId: string;
+  bankDetails: { bankName: string; accountNumber: string; ifscCode: string };
+};
+
+export type PaymentAccount = PaymentAccountInput & {
+  status: 'pending' | 'approved' | 'rejected';
+  updatedAt?: string;
 };
 
 export const chatService = {
