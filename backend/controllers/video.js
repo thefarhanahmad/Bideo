@@ -1652,9 +1652,36 @@ const readUploadShape = (body, fileBytes) => {
   return {
     aspectRatio,
     duration,
+    isExplicitShort: uploadType === "short",
     shortNotPortrait: uploadType === "short" && !isNineBySixteen(aspectRatio),
     effectiveIsShort: uploadType === "short" || isPortraitShort,
   };
+};
+
+// Upload rules checked by both upload routes before the video is stored
+const MAX_SHORT_SECONDS = 60;
+const SHORT_DURATION_TOLERANCE_SECONDS = 1; // phones report lengths like 60.4 s for a 60 s clip
+const SHORT_TOO_LONG_MESSAGE = "Shorts can be up to 60 seconds. Please trim it or upload it as a video.";
+// The app compresses videos to about 1.5 Mbps and keeps an original only up to 2.5 Mbps
+// (bideoApp/utils/keepOriginalVideo.ts). Short or fast-moving clips can come out higher after
+// compression (up to about 5.6 Mbps seen on real uploads), so the limit leaves room for those.
+// Anything above it is an uncompressed camera file (9-18 Mbps seen): it buffers on slow mobile
+// data and uses a lot of every viewer's data.
+const MAX_UPLOAD_BITS_PER_SECOND = 8 * 1000 * 1000;
+const VIDEO_TOO_HEAVY_MESSAGE =
+  "We couldn't upload this video. Please update the app to the latest version and try again, or pick a different video.";
+
+/** A message saying why this upload is not accepted, or null when it is fine */
+const getUploadRejection = (shape, fileBytes) => {
+  if (shape.shortNotPortrait) return SHORT_NOT_PORTRAIT_MESSAGE;
+  if (shape.isExplicitShort && shape.duration > MAX_SHORT_SECONDS + SHORT_DURATION_TOLERANCE_SECONDS) {
+    return SHORT_TOO_LONG_MESSAGE;
+  }
+  const bytes = Number(fileBytes) || 0;
+  if (shape.duration >= 1 && bytes > 0 && (bytes * 8) / shape.duration > MAX_UPLOAD_BITS_PER_SECOND) {
+    return VIDEO_TOO_HEAVY_MESSAGE;
+  }
+  return null;
 };
 
 // Creates the video for a finished upload and starts everything that follows an upload:
@@ -1721,6 +1748,7 @@ const createUploadedVideo = async (
   return video;
 };
 exports.readUploadShape = readUploadShape;
+exports.getUploadRejection = getUploadRejection;
 exports.readDurationSeconds = readDurationSeconds;
 exports.createUploadedVideo = createUploadedVideo;
 exports.SHORT_NOT_PORTRAIT_MESSAGE = SHORT_NOT_PORTRAIT_MESSAGE;
@@ -1750,21 +1778,18 @@ exports.uploadVideo = async (req, res, next) => {
       tempFiles.push(req.files.thumbnail[0].path);
     }
 
+    // Check the upload before storing it (the temp files are removed in finally)
+    const shape = readUploadShape(req.body, req.files.video[0].size);
+    const rejection = getUploadRejection(shape, req.files.video[0].size);
+    if (rejection) {
+      return res.status(400).json({ success: false, message: rejection });
+    }
+
     // Save video locally
     const videoResult = await saveLocalFile(req, req.files.video[0], "video");
     savedVideoUrl = videoResult.url;
     const videoIdx = tempFiles.indexOf(req.files.video[0].path);
     if (videoIdx !== -1) tempFiles.splice(videoIdx, 1);
-
-    const shape = readUploadShape(req.body, req.files.video[0].size);
-    if (shape.shortNotPortrait) {
-      await deleteLocalFile(videoResult.url);
-      savedVideoUrl = null;
-      return res.status(400).json({
-        success: false,
-        message: SHORT_NOT_PORTRAIT_MESSAGE,
-      });
-    }
 
     let originalThumbnailSize = 0;
     let compressedThumbnailSize = 0;

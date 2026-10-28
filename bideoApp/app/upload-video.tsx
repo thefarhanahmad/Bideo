@@ -19,12 +19,23 @@ import { AppAdBanner } from '../components/AppAds';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { logVideoUploaded } from '../services/analytics';
 import { DirectVideoUpload, DirectUploadUnavailableError, DirectUploadError } from '../services/directUpload';
-import { canKeepOriginal, KEEP_ORIGINAL_BELOW_BPS, KEEP_ORIGINAL_IF_SMALLER_BELOW_BPS } from '../utils/keepOriginalVideo';
+import {
+  canKeepOriginal,
+  isLightEnoughToUploadRaw,
+  KEEP_ORIGINAL_BELOW_BPS,
+  KEEP_ORIGINAL_IF_SMALLER_BELOW_BPS,
+} from '../utils/keepOriginalVideo';
 
 // Upload through the server (older servers): backend multer + nginx client_max_body_size
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024;
 // Direct upload to cloud storage: must match DIRECT_UPLOAD_MAX_MB on the server
 const MAX_DIRECT_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024;
+// Shorts are up to 60 seconds (the server checks the same; phones report e.g. 60.4 s for a 60 s clip)
+const MAX_SHORT_SECONDS = 60;
+const SHORT_DURATION_TOLERANCE_SECONDS = 1;
+const SHORT_TOO_LONG_MESSAGE = 'Shorts can be up to 60 seconds. Please trim it or upload it as a video.';
+const isShortTooLong = (asset: ImagePicker.ImagePickerAsset) =>
+  Number(asset.duration) / 1000 > MAX_SHORT_SECONDS + SHORT_DURATION_TOLERANCE_SECONDS;
 
 
 // Uploading needs a signed-in user; signed-out users see the sign-in card instead
@@ -50,6 +61,8 @@ function UploadVideoScreenContent() {
   const [video, setVideo] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [thumbnail, setThumbnail] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [uploading, setUploading] = useState(false);
+  // Blocks a second upload from a quick double tap (state updates too late to stop it)
+  const uploadingRef = useRef(false);
   const [categories, setCategories] = useState<any[]>([]);
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [visibilityOpen, setVisibilityOpen] = useState(false);
@@ -235,6 +248,10 @@ function UploadVideoScreenContent() {
             showAlert('Invalid short', 'Shorts must be portrait 9:16 videos.');
             return;
           }
+          if (isShortTooLong(asset)) {
+            showAlert('Short too long', SHORT_TOO_LONG_MESSAGE);
+            return;
+          }
         }
         setVideo(asset);
       }
@@ -278,6 +295,13 @@ function UploadVideoScreenContent() {
       return;
     }
 
+    if (uploadType === 'short' && isShortTooLong(video)) {
+      showAlert('Short too long', SHORT_TOO_LONG_MESSAGE);
+      return;
+    }
+
+    if (uploadingRef.current) return;
+    uploadingRef.current = true;
     setUploading(true);
     setUploadProgress(1);
 
@@ -349,7 +373,14 @@ function UploadVideoScreenContent() {
             compressedVideoRef.current = { source: video.uri, uri: finalVideoUri, compressed: true };
           }
         } catch (compressErr) {
-          console.warn('Video compression failed, uploading raw video:', compressErr);
+          // Uploading the original instead is fine only if it is already light; a raw camera file
+          // would use a lot of every viewer's mobile data (tapping Upload again retries compression)
+          if (!isLightEnoughToUploadRaw(video, originalBytes)) {
+            console.warn('Video compression failed, original too heavy to upload:', compressErr);
+            showAlert('Upload Failed', "We couldn't upload this video. Please tap Upload to try again, or pick a different video.");
+            return;
+          }
+          console.warn('Video compression failed, uploading the light original:', compressErr);
         }
       } else {
         console.log('Expo Go detected: skipping video compression');
@@ -367,7 +398,7 @@ function UploadVideoScreenContent() {
         if (compressedBytes > MAX_DIRECT_UPLOAD_BYTES) {
           showAlert(
             'Video Too Large',
-            'This video is still over 2GB after compression. Please trim it or upload a shorter video.'
+            'This video is too large to upload (max 2GB). Please trim it or upload a shorter video.'
           );
           return;
         }
@@ -486,7 +517,7 @@ function UploadVideoScreenContent() {
         if (compressedBytes > MAX_UPLOAD_BYTES) {
           showAlert(
             'Video Too Large',
-            'This video is still over 2GB after compression. Please trim it or upload a shorter video.'
+            'This video is too large to upload (max 2GB). Please trim it or upload a shorter video.'
           );
           return;
         }
@@ -530,6 +561,7 @@ function UploadVideoScreenContent() {
       } catch {
         // ignore
       }
+      uploadingRef.current = false;
       setUploading(false);
     }
   };

@@ -13,6 +13,18 @@ const isMp4 = (asset: ImagePickerAsset) =>
   /\.mp4$/i.test(asset.fileName || '') ||
   /\.mp4$/i.test((asset.uri || '').split('?')[0]);
 
+/**
+ * True when an original that could not be compressed may be uploaded as it is: the same bitrate
+ * limit as keeping an original whose compressed copy came out bigger. Camera recordings are far
+ * heavier (10-20 Mbps); they buffer on slow mobile data and use a lot of every viewer's data.
+ */
+export const isLightEnoughToUploadRaw = (asset: ImagePickerAsset, originalBytes: number) => {
+  const seconds = Number(asset.duration) / 1000; // the image picker reports milliseconds
+  // Length or size unknown: can't judge here, the server checks the uploaded file
+  if (!originalBytes || !seconds) return true;
+  return (originalBytes * 8) / seconds <= KEEP_ORIGINAL_IF_SMALLER_BELOW_BPS;
+};
+
 /** True when the original file can be uploaded as it is (MP4, full HD at most, bitrate up to maxBps) */
 export const canKeepOriginal = (asset: ImagePickerAsset, originalBytes: number, maxBps: number) => {
   const seconds = Number(asset.duration) / 1000; // the image picker reports milliseconds

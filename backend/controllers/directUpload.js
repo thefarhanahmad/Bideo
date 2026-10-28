@@ -21,7 +21,7 @@ const {
   newStorageName,
   r2PublicUrl,
 } = require('../utils/localUpload');
-const { readUploadShape, createUploadedVideo, SHORT_NOT_PORTRAIT_MESSAGE, FALLBACK_THUMBNAIL } = require('./video');
+const { readUploadShape, getUploadRejection, createUploadedVideo, FALLBACK_THUMBNAIL } = require('./video');
 
 // Direct-to-R2 video upload. The video never passes through Cloudflare's proxy, nginx or this
 // server's disk: the client uploads it in parts straight to R2 with short-lived signed links, then
@@ -129,8 +129,9 @@ exports.startDirectUpload = async (req, res, next) => {
         return fail(res, 400, 'The thumbnail must be an image up to 10 MB');
       }
     }
-    // Shorts must be 9:16: say so now rather than after a long upload
-    if (readUploadShape(req.body, videoSize).shortNotPortrait) return fail(res, 400, SHORT_NOT_PORTRAIT_MESSAGE);
+    // Shape, Shorts length and file weight: say so now rather than after a long upload
+    const rejection = getUploadRejection(readUploadShape(req.body, videoSize), videoSize);
+    if (rejection) return fail(res, 400, rejection);
 
     const partSize = Math.max(LIMITS.partSize, Math.ceil(videoSize / LIMITS.maxParts));
     const partCount = Math.ceil(videoSize / partSize);
@@ -249,11 +250,12 @@ exports.completeDirectUpload = async (req, res, next) => {
     session = claimed;
 
     const shape = readUploadShape(req.body, session.videoSize);
-    if (shape.shortNotPortrait) {
+    const rejection = getUploadRejection(shape, session.videoSize);
+    if (rejection) {
       await abortParts(session);
       await removeObject(session.thumbnailKey);
       await UploadSession.updateOne({ _id: session._id }, { $set: { status: 'aborted' } });
-      return fail(res, 400, SHORT_NOT_PORTRAIT_MESSAGE);
+      return fail(res, 400, rejection);
     }
 
     // Trust only what R2 has: every part present and the sizes adding up to the declared size

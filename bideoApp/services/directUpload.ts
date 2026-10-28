@@ -31,8 +31,37 @@ const PART_TIMEOUT_MS = 5 * 60 * 1000;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const CONNECTION_MESSAGE = 'Upload interrupted. Please check your internet connection and tap Upload again to continue.';
 
-/** PUT a blob to a signed link, reporting bytes sent so far */
-const putBlob = (url: string, body: Blob, contentType: string | null, onProgress?: (sent: number) => void) =>
+/**
+ * Reads the video one part at a time straight from storage, so even a 2 GB file never has to fit in
+ * the phone's memory. (A Blob made with fetch(uri).blob() holds the whole file in memory on Android,
+ * which crashes the app for large videos.) Returns null when the file can't be read this way; the
+ * caller then falls back to a Blob.
+ */
+const openPartReader = (uri: string): { size: number; read: (start: number, length: number) => Uint8Array } | null => {
+  try {
+    const { File } = require('expo-file-system');
+    const file = new File(uri);
+    const size = Number(file.size);
+    if (!file.exists || !Number.isFinite(size) || size <= 0) return null;
+    return {
+      size,
+      read: (start: number, length: number) => {
+        const handle = file.open();
+        try {
+          handle.offset = start;
+          return handle.readBytes(length);
+        } finally {
+          handle.close();
+        }
+      },
+    };
+  } catch {
+    return null;
+  }
+};
+
+/** PUT a blob (or bytes) to a signed link, reporting bytes sent so far */
+const putBlob = (url: string, body: Blob | Uint8Array, contentType: string | null, onProgress?: (sent: number) => void) =>
   new Promise<void>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('PUT', url);
@@ -59,7 +88,9 @@ export class DirectVideoUpload {
   private thumbnailUrl: string | null = null;
   private thumbnailContentType: string | null = null;
   private thumbnailDone = false;
+  private reader: { size: number; read: (start: number, length: number) => Uint8Array } | null = null;
   private blob: Blob | null = null;
+  private size = 0;
   private done = new Set<number>();
   private links = new Map<number, string>();
   private inFlight = new Map<number, number>();
@@ -78,7 +109,15 @@ export class DirectVideoUpload {
   /** Uploads (or continues) and returns the created video. onProgress gets 0..1 */
   async run(details: Record<string, any>, onProgress: (fraction: number) => void) {
     if (this.result) return this.result;
-    if (!this.blob) this.blob = await (await fetch(this.video.uri)).blob();
+    if (!this.reader && !this.blob) {
+      this.reader = openPartReader(this.video.uri);
+      if (this.reader) {
+        this.size = this.reader.size;
+      } else {
+        this.blob = await (await fetch(this.video.uri)).blob();
+        this.size = this.blob.size;
+      }
+    }
     if (!this.uploadId) await this.start(details);
     if (this.thumbnailUrl && !this.thumbnailDone) await this.uploadThumbnail();
     await this.uploadParts(onProgress);
@@ -93,11 +132,10 @@ export class DirectVideoUpload {
   }
 
   private async start(details: Record<string, any>) {
-    const blob = this.blob as Blob;
     try {
       const res = await api.post('/videos/direct-upload', {
         ...details,
-        video: { name: this.video.name, size: blob.size, type: this.video.type },
+        video: { name: this.video.name, size: this.size, type: this.video.type },
         thumbnail: this.thumbnail ? await this.thumbnailInfo() : undefined,
       });
       const data = res.data?.data;
@@ -148,14 +186,22 @@ export class DirectVideoUpload {
     (res.data?.data?.parts || []).forEach((p: any) => this.links.set(p.partNumber, p.url));
   }
 
-  private async uploadPart(partNumber: number, report: () => void) {
-    const blob = this.blob as Blob;
+  // This part's bytes: read from storage only while it is being sent
+  private partBody(partNumber: number): Blob | Uint8Array {
     const start = (partNumber - 1) * this.partSize;
-    const body = blob.slice(start, Math.min(start + this.partSize, blob.size));
+    const end = Math.min(start + this.partSize, this.size);
+    if (this.reader) return this.reader.read(start, end - start);
+    return (this.blob as Blob).slice(start, end);
+  }
+
+  private async uploadPart(partNumber: number, report: () => void) {
     for (let attempt = 0; ; attempt++) {
       try {
         if (!this.links.has(partNumber)) await this.ensureLinks(partNumber);
-        await putBlob(this.links.get(partNumber) as string, body, null, (sent) => {
+        // Raw bytes need a content type on Android; the signed link does not cover this header
+        const body = this.partBody(partNumber);
+        const contentType = body instanceof Uint8Array ? 'application/octet-stream' : null;
+        await putBlob(this.links.get(partNumber) as string, body, contentType, (sent) => {
           this.inFlight.set(partNumber, sent);
           report();
         });
@@ -174,12 +220,11 @@ export class DirectVideoUpload {
   }
 
   private async uploadParts(onProgress: (fraction: number) => void) {
-    const blob = this.blob as Blob;
     const report = () => {
       let sent = 0;
-      this.done.forEach((n) => (sent += Math.min(this.partSize, blob.size - (n - 1) * this.partSize)));
+      this.done.forEach((n) => (sent += Math.min(this.partSize, this.size - (n - 1) * this.partSize)));
       this.inFlight.forEach((bytes) => (sent += bytes));
-      onProgress(Math.min(0.99, sent / blob.size));
+      onProgress(Math.min(0.99, sent / this.size));
     };
     const queue: number[] = [];
     for (let n = 1; n <= this.partCount; n++) if (!this.done.has(n)) queue.push(n);
