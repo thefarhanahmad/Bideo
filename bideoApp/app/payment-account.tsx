@@ -12,7 +12,7 @@ import {
   TextInputProps,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRouter } from 'expo-router';
+import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '../constants/Colors';
 import StickyBannerAd from '../components/StickyBannerAd';
@@ -60,15 +60,19 @@ const STATUS_META: Record<PaymentAccount['status'], { label: string; color: stri
   rejected: { label: 'Application rejected', color: '#DC2626', icon: 'close-circle' },
 };
 
+const digitsOnly = (value?: string) => String(value || '').replace(/\D/g, '');
+
+// Step 2 accepted free text, so saved values can hold a +91 prefix or spaces: show them the way
+// the fields here expect them
 const toForm = (account: PaymentAccount): FormState => ({
-  name: account.name || '',
-  phone: account.phone || '',
-  adharNumber: account.adharNumber || '',
-  upiId: account.upiId || '',
-  bankName: account.bankDetails?.bankName || '',
-  accountNumber: account.bankDetails?.accountNumber || '',
+  name: (account.name || '').trim(),
+  phone: digitsOnly(account.phone).slice(-10),
+  adharNumber: digitsOnly(account.adharNumber).slice(0, 12),
+  upiId: (account.upiId || '').replace(/\s/g, ''),
+  bankName: (account.bankDetails?.bankName || '').trim(),
+  accountNumber: digitsOnly(account.bankDetails?.accountNumber).slice(0, 18),
   confirmAccountNumber: '',
-  ifscCode: (account.bankDetails?.ifscCode || '').toUpperCase(),
+  ifscCode: (account.bankDetails?.ifscCode || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 11),
 });
 
 const toPayload = (form: FormState): PaymentAccountInput => ({
@@ -138,15 +142,22 @@ export default function PaymentAccountScreen() {
   const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showAccountNumber, setShowAccountNumber] = useState(false);
+  // iOS clears a hidden (secure) field when typing starts again, so the number shows while edited
+  const [accountNumberFocused, setAccountNumberFocused] = useState(false);
 
   // Lets the unsaved-changes guard skip the prompt after a successful save
   const allowLeaveRef = useRef(false);
 
+  const hasLoadedRef = useRef(false);
+
+  // First load shows the spinner; later refreshes (coming back to the screen) happen quietly
   const loadAccount = useCallback(async () => {
-    setLoading(true);
+    const quiet = hasLoadedRef.current;
+    if (!quiet) setLoading(true);
     setLoadError(false);
     try {
       const data = await userService.getPaymentAccount();
+      hasLoadedRef.current = true;
       setAccount(data);
       if (data) {
         const next = toForm(data);
@@ -155,20 +166,26 @@ export default function PaymentAccountScreen() {
       }
     } catch (err) {
       console.error('Error loading payment account:', err);
-      setLoadError(true);
+      if (!quiet) setLoadError(true);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    loadAccount();
-  }, [loadAccount]);
-
   const accountNumberChanged = form.accountNumber.trim() !== initialForm.accountNumber;
   const isDirty = useMemo(
     () => (Object.keys(EMPTY_FORM) as FieldKey[]).some((k) => k !== 'confirmAccountNumber' && form[k] !== initialForm[k]),
     [form, initialForm]
+  );
+  const isDirtyRef = useRef(isDirty);
+  isDirtyRef.current = isDirty;
+
+  // Load on open and refresh on return (e.g. after completing step 2 on the Earnings screen),
+  // but never overwrite edits that are not saved yet
+  useFocusEffect(
+    useCallback(() => {
+      if (!isDirtyRef.current) loadAccount();
+    }, [loadAccount])
   );
 
   // Warn before leaving with unsaved edits (back button, gesture or hardware back)
@@ -366,7 +383,9 @@ export default function PaymentAccountScreen() {
             placeholder="9 to 18 digits"
             keyboardType="number-pad"
             maxLength={18}
-            secureTextEntry={!showAccountNumber}
+            secureTextEntry={!showAccountNumber && !accountNumberFocused}
+            onFocus={() => setAccountNumberFocused(true)}
+            onBlur={() => setAccountNumberFocused(false)}
             error={errors.accountNumber}
             right={
               <TouchableOpacity
