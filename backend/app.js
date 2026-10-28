@@ -226,7 +226,7 @@ app.use((err, req, res, next) => {
   if (err && err.name === "MulterError") {
     const messages = {
       LIMIT_FILE_SIZE:
-        "This file is too large. Please upload a video or media file under 500MB.",
+        "This file is too large. Please upload a video or media file under 2GB.",
       LIMIT_UNEXPECTED_FILE: "Unexpected file field in upload.",
     };
     return res.status(413).json({

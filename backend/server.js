@@ -57,6 +57,9 @@ initDirectUploadCleanup();
 const PORT = process.env.PORT || 5000;
 
 const server = http.createServer(app);
+// Node 20 aborts a request that takes longer than 5 minutes to arrive; large video uploads
+// through the server need longer (matches the app's 60-minute upload timeout)
+server.requestTimeout = 60 * 60 * 1000;
 initSocket(server);
 
 server.listen(PORT, () => {

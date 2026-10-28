@@ -47,7 +47,7 @@ const upload = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: 500 * 1024 * 1024, // 500MB limit
+    fileSize: 2 * 1024 * 1024 * 1024, // 2GB limit, same as the direct-to-R2 upload
   },
 });
 

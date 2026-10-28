@@ -7,7 +7,7 @@ cat << 'EOF' > /etc/nginx/sites-available/bideo
 # 1. Main Bideo server (HTTPS)
 server {
     server_name bideo.in;
-    client_max_body_size 500M;
+    client_max_body_size 2048M;
     root /var/www/bideo;
     index index.html;
 
@@ -47,6 +47,45 @@ server {
     }
 
     # 3. Backend API
+    # Bideo media moved to Cloudflare R2: files still on this server are served as before;
+    # a file that is no longer here is redirected to its R2 copy, so old links keep working.
+    location ~ ^/api/uploads/(videos|images)/([A-Za-z0-9._-]+)$ {
+        set $bideo_media_folder $1;
+        set $bideo_media_file $2;
+        proxy_pass http://127.0.0.1:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header If-None-Match "";
+        proxy_set_header If-Modified-Since "";
+        proxy_connect_timeout 300s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+        proxy_intercept_errors on;
+        error_page 404 = @bideo_media_r2;
+    }
+    location @bideo_media_r2 {
+        return 302 https://pub-39d197c890b64644a9a1869b8f6740b1.r2.dev/$bideo_media_folder/$bideo_media_file;
+    }
+
+    # Video upload through the server (used when direct-to-R2 upload is unavailable): stream the
+    # body straight to the backend instead of first buffering up to 2GB in nginx's temp files
+    location = /api/videos/upload {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_request_buffering off;
+        client_body_timeout 300s;
+        proxy_connect_timeout 300s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 600s;
+    }
+
     location /api/ {
         proxy_pass http://127.0.0.1:5000;
         proxy_http_version 1.1;

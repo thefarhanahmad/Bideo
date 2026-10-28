@@ -22,7 +22,7 @@ import { DirectVideoUpload, DirectUploadUnavailableError, DirectUploadError } fr
 import { canKeepOriginal, KEEP_ORIGINAL_BELOW_BPS, KEEP_ORIGINAL_IF_SMALLER_BELOW_BPS } from '../utils/keepOriginalVideo';
 
 // Upload through the server (older servers): backend multer + nginx client_max_body_size
-const MAX_UPLOAD_BYTES = 500 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024;
 // Direct upload to cloud storage: must match DIRECT_UPLOAD_MAX_MB on the server
 const MAX_DIRECT_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024;
 
@@ -486,7 +486,7 @@ function UploadVideoScreenContent() {
         if (compressedBytes > MAX_UPLOAD_BYTES) {
           showAlert(
             'Video Too Large',
-            'This video is still over 500MB after compression. Please trim it or upload a shorter video.'
+            'This video is still over 2GB after compression. Please trim it or upload a shorter video.'
           );
           return;
         }
@@ -494,7 +494,7 @@ function UploadVideoScreenContent() {
           headers: {
             'Content-Type': 'multipart/form-data',
           },
-          timeout: 900000, // 15 minutes timeout for large video uploads
+          timeout: 60 * 60 * 1000, // 60 minutes: a 2GB video on a slow mobile connection
           onUploadProgress: (event) => {
             if (event.total) showSendProgress(event.loaded / event.total);
           },
