@@ -64,6 +64,7 @@ router.get('/monetization/status', getMonetizationStatus);
 router.post('/monetization/apply', applyMonetization);
 router.get('/monetization/payment-account', getPaymentAccount);
 router.put('/monetization/payment-account', updatePaymentAccount);
+router.post('/monetization/payment-account', updatePaymentAccount);
 router.post('/monetization/watch-review-ad/:reviewId', watchReviewAd);
 router.post('/withdraw', requestWithdrawal);
 router.get('/withdrawals', getWithdrawalHistory);

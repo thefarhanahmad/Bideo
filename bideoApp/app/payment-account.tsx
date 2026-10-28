@@ -14,6 +14,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSelector } from 'react-redux';
+import { RootState } from '../redux/store';
+import AuthModal from '../components/AuthModal';
 import Colors from '../constants/Colors';
 import StickyBannerAd from '../components/StickyBannerAd';
 import { showAlert } from '../components/AppAlert';
@@ -45,7 +48,6 @@ const EMPTY_FORM: FormState = {
   ifscCode: '',
 };
 
-// Same rules the backend enforces on PUT /users/monetization/payment-account
 const RULES = {
   phone: /^[6-9]\d{9}$/,
   adharNumber: /^\d{12}$/,
@@ -55,15 +57,13 @@ const RULES = {
 };
 
 const STATUS_META: Record<PaymentAccount['status'], { label: string; color: string; icon: keyof typeof Ionicons.glyphMap }> = {
-  approved: { label: 'Monetization active', color: '#16A34A', icon: 'checkmark-circle' },
-  pending: { label: 'Under review', color: '#D97706', icon: 'time' },
-  rejected: { label: 'Application rejected', color: '#DC2626', icon: 'close-circle' },
+  approved: { label: 'Active', color: '#16A34A', icon: 'checkmark-circle' },
+  pending: { label: 'Under review', color: '#D97706', icon: 'time-outline' },
+  rejected: { label: 'Rejected', color: '#DC2626', icon: 'close-circle' },
 };
 
 const digitsOnly = (value?: string) => String(value || '').replace(/\D/g, '');
 
-// Step 2 accepted free text, so saved values can hold a +91 prefix or spaces: show them the way
-// the fields here expect them
 const toForm = (account: PaymentAccount): FormState => ({
   name: (account.name || '').trim(),
   phone: digitsOnly(account.phone).slice(-10),
@@ -87,7 +87,7 @@ const toPayload = (form: FormState): PaymentAccountInput => ({
   },
 });
 
-const validate = (form: FormState, accountNumberChanged: boolean): FormErrors => {
+const validate = (form: FormState, accountNumberChanged: boolean, isEditMode: boolean): FormErrors => {
   const p = toPayload(form);
   const errors: FormErrors = {};
   if (p.name.length < 2) errors.name = 'Enter the account holder name';
@@ -96,9 +96,15 @@ const validate = (form: FormState, accountNumberChanged: boolean): FormErrors =>
   if (p.upiId && !RULES.upiId.test(p.upiId)) errors.upiId = 'Enter a valid UPI ID (e.g. name@okhdfcbank)';
   if (p.bankDetails.bankName.length < 2) errors.bankName = 'Enter your bank name';
   if (!RULES.accountNumber.test(p.bankDetails.accountNumber)) errors.accountNumber = 'Account number must be 9 to 18 digits';
-  if (accountNumberChanged && form.confirmAccountNumber.trim() !== p.bankDetails.accountNumber) {
-    errors.confirmAccountNumber = 'Account numbers do not match';
+
+  if (!isEditMode || accountNumberChanged) {
+    if (!form.confirmAccountNumber.trim()) {
+      errors.confirmAccountNumber = 'Please confirm account number';
+    } else if (form.confirmAccountNumber.trim() !== p.bankDetails.accountNumber) {
+      errors.confirmAccountNumber = 'Account numbers do not match';
+    }
   }
+
   if (!RULES.ifscCode.test(p.bankDetails.ifscCode)) errors.ifscCode = 'Enter a valid 11-character IFSC code';
   return errors;
 };
@@ -113,18 +119,34 @@ type FieldProps = TextInputProps & {
   right?: React.ReactNode;
 };
 
-const Field = React.memo(function Field({ label, error, hint, optional, right, style, ...inputProps }: FieldProps) {
+const Field = React.memo(function Field({
+  label,
+  error,
+  hint,
+  optional,
+  right,
+  style,
+  ...inputProps
+}: FieldProps) {
   return (
-    <View style={styles.field}>
-      <Text style={styles.label}>
-        {label}
-        {optional && <Text style={styles.optional}>  (Optional)</Text>}
-      </Text>
-      <View style={[styles.inputWrap, error ? styles.inputWrapError : null]}>
-        <TextInput placeholderTextColor="#9CA3AF" style={[styles.input, style]} {...inputProps} />
+    <View style={styles.fieldContainer}>
+      <View style={styles.labelRow}>
+        <Text style={styles.fieldLabel}>{label}</Text>
+        {optional && <Text style={styles.optionalBadge}>Optional</Text>}
+      </View>
+      <View style={[styles.inputBox, error ? styles.inputBoxError : null]}>
+        <TextInput
+          placeholderTextColor="#9CA3AF"
+          style={[styles.textInput, style]}
+          {...inputProps}
+        />
         {right}
       </View>
-      {error ? <Text style={styles.errorText}>{error}</Text> : hint ? <Text style={styles.hintText}>{hint}</Text> : null}
+      {error ? (
+        <Text style={styles.errorText}>{error}</Text>
+      ) : hint ? (
+        <Text style={styles.hintText}>{hint}</Text>
+      ) : null}
     </View>
   );
 });
@@ -133,62 +155,102 @@ export default function PaymentAccountScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
 
+  const [authModalVisible, setAuthModalVisible] = useState(false);
   const [account, setAccount] = useState<PaymentAccount | null>(null);
   const [initialForm, setInitialForm] = useState<FormState>(EMPTY_FORM);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [errors, setErrors] = useState<FormErrors>({});
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showAccountNumber, setShowAccountNumber] = useState(false);
-  // iOS clears a hidden (secure) field when typing starts again, so the number shows while edited
   const [accountNumberFocused, setAccountNumberFocused] = useState(false);
 
-  // Lets the unsaved-changes guard skip the prompt after a successful save
   const allowLeaveRef = useRef(false);
-
   const hasLoadedRef = useRef(false);
 
-  // First load shows the spinner; later refreshes (coming back to the screen) happen quietly
+  const isEditMode = Boolean(account);
+
   const loadAccount = useCallback(async () => {
-    const quiet = hasLoadedRef.current;
-    if (!quiet) setLoading(true);
-    setLoadError(false);
+    if (!isAuthenticated) {
+      setInitialLoading(false);
+      return;
+    }
     try {
-      const data = await userService.getPaymentAccount();
+      // 4-second timeout race so network never leaves the screen hanging
+      const fetchPromise = userService.getPaymentAccount();
+      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000));
+      const data = await Promise.race([fetchPromise, timeoutPromise]);
+
       hasLoadedRef.current = true;
-      setAccount(data);
       if (data) {
+        setAccount(data);
         const next = toForm(data);
         setInitialForm(next);
         setForm(next);
+      } else {
+        setAccount(null);
+        setInitialForm(EMPTY_FORM);
+        setForm((prev) => ({
+          ...EMPTY_FORM,
+          name: prev.name || (user?.name || '').trim(),
+          phone: prev.phone || digitsOnly(user?.phone).slice(-10),
+        }));
       }
-    } catch (err) {
-      console.error('Error loading payment account:', err);
-      if (!quiet) setLoadError(true);
+    } catch (err: any) {
+      console.log('Payment account load result:', err?.message || err);
+      hasLoadedRef.current = true;
+      setAccount(null);
+      setInitialForm(EMPTY_FORM);
+      setForm((prev) => ({
+        ...EMPTY_FORM,
+        name: prev.name || (user?.name || '').trim(),
+        phone: prev.phone || digitsOnly(user?.phone).slice(-10),
+      }));
     } finally {
-      setLoading(false);
+      setInitialLoading(false);
     }
-  }, []);
+  }, [isAuthenticated, user?.name, user?.phone]);
+
+  // Initial load on mount
+  useEffect(() => {
+    loadAccount();
+  }, [loadAccount]);
+
+  // Pre-fill user profile info if empty
+  useEffect(() => {
+    if (!account && isAuthenticated && user) {
+      setForm((prev) => ({
+        ...prev,
+        name: prev.name || (user.name || '').trim(),
+        phone: prev.phone || digitsOnly(user.phone).slice(-10),
+      }));
+    }
+  }, [account, isAuthenticated, user]);
 
   const accountNumberChanged = form.accountNumber.trim() !== initialForm.accountNumber;
-  const isDirty = useMemo(
-    () => (Object.keys(EMPTY_FORM) as FieldKey[]).some((k) => k !== 'confirmAccountNumber' && form[k] !== initialForm[k]),
-    [form, initialForm]
-  );
+
+  const isDirty = useMemo(() => {
+    if (!account) {
+      return (Object.keys(EMPTY_FORM) as FieldKey[]).some((k) => form[k].trim() !== '');
+    }
+    return (Object.keys(EMPTY_FORM) as FieldKey[]).some(
+      (k) => k !== 'confirmAccountNumber' && form[k] !== initialForm[k]
+    );
+  }, [form, initialForm, account]);
+
   const isDirtyRef = useRef(isDirty);
   isDirtyRef.current = isDirty;
 
-  // Load on open and refresh on return (e.g. after completing step 2 on the Earnings screen),
-  // but never overwrite edits that are not saved yet
   useFocusEffect(
     useCallback(() => {
-      if (!isDirtyRef.current) loadAccount();
+      if (!isDirtyRef.current && !hasLoadedRef.current) {
+        loadAccount();
+      }
     }, [loadAccount])
   );
 
-  // Warn before leaving with unsaved edits (back button, gesture or hardware back)
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
       if (!isDirty || saving || allowLeaveRef.current) return;
@@ -214,8 +276,10 @@ export default function PaymentAccountScreen() {
   }, []);
 
   const handleSave = useCallback(async () => {
-    if (!isDirty || saving) return;
-    const nextErrors = validate(form, accountNumberChanged);
+    if (saving) return;
+    if (isEditMode && !isDirty) return;
+
+    const nextErrors = validate(form, accountNumberChanged, isEditMode);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) {
       hapticLight();
@@ -231,7 +295,12 @@ export default function PaymentAccountScreen() {
       setForm(next);
       setShowAccountNumber(false);
       hapticSuccess();
-      showAlert('Payment account updated', 'Your new details will be used for future withdrawals.');
+      showAlert(
+        isEditMode ? 'Payment account updated' : 'Payment account saved',
+        isEditMode
+          ? 'Your new details will be used for future withdrawals.'
+          : 'Your payment details have been saved for withdrawals.'
+      );
     } catch (err: any) {
       const serverErrors = err?.response?.data?.errors;
       if (serverErrors && typeof serverErrors === 'object') setErrors(serverErrors);
@@ -239,234 +308,234 @@ export default function PaymentAccountScreen() {
     } finally {
       setSaving(false);
     }
-  }, [form, isDirty, saving, accountNumberChanged]);
+  }, [form, isDirty, isEditMode, saving, accountNumberChanged]);
 
-  const canSave = isDirty && !saving;
-
-  const renderBody = () => {
-    if (loading) {
-      return (
-        <View style={styles.centerState}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-        </View>
-      );
-    }
-
-    if (loadError) {
-      return (
-        <View style={styles.centerState}>
-          <Ionicons name="cloud-offline-outline" size={48} color={Colors.textGray} />
-          <Text style={styles.stateTitle}>Couldn't load your payment account</Text>
-          <Text style={styles.stateText}>Check your connection and try again.</Text>
-          <TouchableOpacity style={styles.primaryBtn} onPress={loadAccount}>
-            <Text style={styles.primaryBtnText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      );
-    }
-
-    if (!account) {
-      return (
-        <View style={styles.centerState}>
-          <View style={styles.stateIcon}>
-            <Ionicons name="wallet-outline" size={40} color={Colors.primary} />
-          </View>
-          <Text style={styles.stateTitle}>No payment account yet</Text>
-          <Text style={styles.stateText}>
-            Your payment account is created when you submit monetization step 2 (Aadhaar, UPI & bank details) on the
-            Earnings screen.
-          </Text>
-          <TouchableOpacity style={styles.primaryBtn} onPress={() => router.push('/earnings')}>
-            <Text style={styles.primaryBtnText}>Go to Earnings</Text>
-          </TouchableOpacity>
-        </View>
-      );
-    }
-
-    const status = STATUS_META[account.status] || STATUS_META.pending;
-
-    return (
-      <ScrollView
-        style={styles.flex}
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryTop}>
-            <View style={styles.summaryIcon}>
-              <Ionicons name="wallet" size={22} color={Colors.primary} />
-            </View>
-            <View style={styles.flex}>
-              <Text style={styles.summaryTitle}>{initialForm.bankName || 'Bank account'}</Text>
-              <Text style={styles.summarySub}>A/C {maskTail(initialForm.accountNumber)}  ·  {initialForm.ifscCode}</Text>
-            </View>
-          </View>
-          <View style={[styles.statusPill, { backgroundColor: status.color + '15' }]}>
-            <Ionicons name={status.icon} size={14} color={status.color} />
-            <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
-          </View>
-          <View style={styles.noteRow}>
-            <Ionicons name="information-circle-outline" size={16} color={Colors.textGray} />
-            <Text style={styles.noteText}>
-              {account.status === 'rejected'
-                ? 'Updating details here does not resubmit your application. Re-apply from the Earnings screen.'
-                : 'Changes apply to future withdrawals. Withdrawals already requested keep the details they were sent with.'}
-            </Text>
-          </View>
-        </View>
-
-        <Text style={styles.sectionTitle}>Account holder</Text>
-        <View style={styles.card}>
-          <Field
-            label="Full legal name (as per bank)"
-            value={form.name}
-            onChangeText={(v) => setField('name', v)}
-            placeholder="e.g. Rahul Kumar"
-            autoCapitalize="words"
-            maxLength={100}
-            error={errors.name}
-          />
-          <Field
-            label="Mobile number"
-            value={form.phone}
-            onChangeText={(v) => setField('phone', v.replace(/\D/g, '').slice(0, 10))}
-            placeholder="e.g. 9876543210"
-            keyboardType="phone-pad"
-            maxLength={10}
-            error={errors.phone}
-          />
-          <Field
-            label="Aadhaar number"
-            optional
-            value={form.adharNumber}
-            onChangeText={(v) => setField('adharNumber', v.replace(/\D/g, '').slice(0, 12))}
-            placeholder="12-digit Aadhaar UID"
-            keyboardType="number-pad"
-            maxLength={12}
-            error={errors.adharNumber}
-          />
-        </View>
-
-        <Text style={styles.sectionTitle}>UPI</Text>
-        <View style={styles.card}>
-          <Field
-            label="UPI ID"
-            optional
-            value={form.upiId}
-            onChangeText={(v) => setField('upiId', v.replace(/\s/g, ''))}
-            placeholder="e.g. name@okhdfcbank"
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="email-address"
-            maxLength={320}
-            error={errors.upiId}
-            hint="Fastest way to receive payouts"
-          />
-        </View>
-
-        <Text style={styles.sectionTitle}>Bank account</Text>
-        <View style={styles.card}>
-          <Field
-            label="Bank name"
-            value={form.bankName}
-            onChangeText={(v) => setField('bankName', v)}
-            placeholder="e.g. State Bank of India"
-            autoCapitalize="words"
-            maxLength={100}
-            error={errors.bankName}
-          />
-          <Field
-            label="Account number"
-            value={form.accountNumber}
-            onChangeText={(v) => setField('accountNumber', v.replace(/\D/g, '').slice(0, 18))}
-            placeholder="9 to 18 digits"
-            keyboardType="number-pad"
-            maxLength={18}
-            secureTextEntry={!showAccountNumber && !accountNumberFocused}
-            onFocus={() => setAccountNumberFocused(true)}
-            onBlur={() => setAccountNumberFocused(false)}
-            error={errors.accountNumber}
-            right={
-              <TouchableOpacity
-                onPress={() => setShowAccountNumber((s) => !s)}
-                style={styles.eyeBtn}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                accessibilityLabel={showAccountNumber ? 'Hide account number' : 'Show account number'}
-              >
-                <Ionicons name={showAccountNumber ? 'eye-off-outline' : 'eye-outline'} size={20} color={Colors.textGray} />
-              </TouchableOpacity>
-            }
-          />
-          {accountNumberChanged && (
-            <Field
-              label="Confirm account number"
-              value={form.confirmAccountNumber}
-              onChangeText={(v) => setField('confirmAccountNumber', v.replace(/\D/g, '').slice(0, 18))}
-              placeholder="Re-enter account number"
-              keyboardType="number-pad"
-              maxLength={18}
-              secureTextEntry={!showAccountNumber}
-              contextMenuHidden
-              error={errors.confirmAccountNumber}
-            />
-          )}
-          <Field
-            label="IFSC code"
-            value={form.ifscCode}
-            onChangeText={(v) => setField('ifscCode', v.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 11))}
-            placeholder="e.g. SBIN0001234"
-            autoCapitalize="characters"
-            autoCorrect={false}
-            maxLength={11}
-            error={errors.ifscCode}
-          />
-        </View>
-
-        <TouchableOpacity
-          style={[styles.primaryBtn, styles.saveBtn, !canSave && styles.btnDisabled]}
-          onPress={handleSave}
-          disabled={!canSave}
-          accessibilityState={{ disabled: !canSave }}
-        >
-          {saving ? <ActivityIndicator color={Colors.white} /> : <Text style={styles.primaryBtnText}>Save changes</Text>}
-        </TouchableOpacity>
-
-        <View style={styles.secureRow}>
-          <Ionicons name="lock-closed-outline" size={13} color={Colors.textGray} />
-          <Text style={styles.secureText}>Your details are only used to send your Bideo payouts.</Text>
-        </View>
-      </ScrollView>
-    );
-  };
+  const canSave = !saving && (isEditMode ? isDirty : true);
+  const status = account ? STATUS_META[account.status] || STATUS_META.pending : null;
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      {/* Header and banner stay fixed at the top while the form scrolls */}
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+      {/* Short and clean header: "Payment Account" */}
+      <View style={[styles.header, { paddingTop: insets.top + 6 }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn} accessibilityLabel="Go back">
-          <Ionicons name="arrow-back" size={24} color={Colors.text} />
+          <Ionicons name="arrow-back" size={22} color={Colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Payment Account</Text>
-        {account && !loading ? (
-          <TouchableOpacity
-            onPress={handleSave}
-            disabled={!canSave}
-            style={[styles.saveHeaderBtn, !canSave && styles.btnDisabled]}
-          >
-            {saving ? (
-              <ActivityIndicator size="small" color={Colors.primary} />
-            ) : (
-              <Text style={styles.saveHeaderBtnText}>Save</Text>
-            )}
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.headerSpacer} />
-        )}
+        <TouchableOpacity
+          onPress={handleSave}
+          disabled={!canSave}
+          style={styles.saveHeaderBtn}
+        >
+          {saving ? (
+            <ActivityIndicator size="small" color={Colors.primary} />
+          ) : (
+            <Text
+              style={[
+                styles.saveHeaderBtnText,
+                !canSave && styles.saveHeaderBtnTextDisabled,
+              ]}
+            >
+              Save
+            </Text>
+          )}
+        </TouchableOpacity>
       </View>
+
       <StickyBannerAd position="top" />
 
-      {renderBody()}
+      {/* Subtle non-blocking loader */}
+      {initialLoading && (
+        <View style={styles.inlineLoader}>
+          <ActivityIndicator size="small" color={Colors.primary} />
+          <Text style={styles.inlineLoaderText}>Loading details...</Text>
+        </View>
+      )}
+
+      {!isAuthenticated ? (
+        <View style={styles.centerState}>
+          <View style={styles.stateIcon}>
+            <Ionicons name="wallet-outline" size={28} color={Colors.primary} />
+          </View>
+          <Text style={styles.stateTitle}>Sign In Required</Text>
+          <Text style={styles.stateText}>Please sign in to view and manage your payment account details.</Text>
+          <TouchableOpacity style={styles.submitBtn} onPress={() => setAuthModalVisible(true)}>
+            <Text style={styles.submitBtnText}>Sign In</Text>
+          </TouchableOpacity>
+          <AuthModal
+            visible={authModalVisible}
+            onClose={() => setAuthModalVisible(false)}
+            onLoginSuccess={() => loadAccount()}
+          />
+        </View>
+      ) : (
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Top Status / Info Banner */}
+          {account ? (
+            <View style={styles.summaryCard}>
+              <View style={styles.summaryRow}>
+                <View style={styles.bankIconWrap}>
+                  <Ionicons name="card-outline" size={18} color={Colors.primary} />
+                </View>
+                <View style={styles.summaryInfo}>
+                  <Text style={styles.summaryBankName}>{initialForm.bankName || 'Bank Account'}</Text>
+                  <Text style={styles.summaryAccountNum}>
+                    A/C {maskTail(initialForm.accountNumber)} · {initialForm.ifscCode}
+                  </Text>
+                </View>
+                {status && (
+                  <View style={[styles.statusBadge, { backgroundColor: status.color + '15' }]}>
+                    <Ionicons name={status.icon} size={11} color={status.color} />
+                    <Text style={[styles.statusBadgeText, { color: status.color }]}>{status.label}</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          ) : (
+            <View style={styles.infoBanner}>
+              <Ionicons name="information-circle-outline" size={16} color={Colors.primary} style={{ marginTop: 1 }} />
+              <Text style={styles.infoBannerText}>
+                Add your bank details and UPI ID to receive withdrawals and creator payouts.
+              </Text>
+            </View>
+          )}
+
+          {/* Section 1: Account Holder */}
+          <View style={styles.formCard}>
+            <Text style={styles.cardHeader}>Account Holder</Text>
+            <Field
+              label="Full Legal Name"
+              value={form.name}
+              onChangeText={(v) => setField('name', v)}
+              placeholder="Name as per bank account"
+              autoCapitalize="words"
+              maxLength={100}
+              error={errors.name}
+            />
+            <Field
+              label="Mobile Number"
+              value={form.phone}
+              onChangeText={(v) => setField('phone', v.replace(/\D/g, '').slice(0, 10))}
+              placeholder="10-digit mobile number"
+              keyboardType="phone-pad"
+              maxLength={10}
+              error={errors.phone}
+            />
+            <Field
+              label="Aadhaar Number"
+              optional
+              value={form.adharNumber}
+              onChangeText={(v) => setField('adharNumber', v.replace(/\D/g, '').slice(0, 12))}
+              placeholder="12-digit Aadhaar UID"
+              keyboardType="number-pad"
+              maxLength={12}
+              error={errors.adharNumber}
+            />
+          </View>
+
+          {/* Section 2: Bank Account */}
+          <View style={styles.formCard}>
+            <Text style={styles.cardHeader}>Bank Details</Text>
+            <Field
+              label="Bank Name"
+              value={form.bankName}
+              onChangeText={(v) => setField('bankName', v)}
+              placeholder="e.g. State Bank of India, HDFC"
+              autoCapitalize="words"
+              maxLength={100}
+              error={errors.bankName}
+            />
+            <Field
+              label="Account Number"
+              value={form.accountNumber}
+              onChangeText={(v) => setField('accountNumber', v.replace(/\D/g, '').slice(0, 18))}
+              placeholder="9 to 18 digits"
+              keyboardType="number-pad"
+              maxLength={18}
+              secureTextEntry={!showAccountNumber && !accountNumberFocused}
+              onFocus={() => setAccountNumberFocused(true)}
+              onBlur={() => setAccountNumberFocused(false)}
+              error={errors.accountNumber}
+              right={
+                <TouchableOpacity
+                  onPress={() => setShowAccountNumber((s) => !s)}
+                  style={styles.eyeBtn}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityLabel={showAccountNumber ? 'Hide' : 'Show'}
+                >
+                  <Ionicons name={showAccountNumber ? 'eye-off-outline' : 'eye-outline'} size={18} color="#6B7280" />
+                </TouchableOpacity>
+              }
+            />
+            {(!isEditMode || accountNumberChanged) && (
+              <Field
+                label="Confirm Account Number"
+                value={form.confirmAccountNumber}
+                onChangeText={(v) => setField('confirmAccountNumber', v.replace(/\D/g, '').slice(0, 18))}
+                placeholder="Re-enter account number"
+                keyboardType="number-pad"
+                maxLength={18}
+                secureTextEntry={!showAccountNumber}
+                contextMenuHidden
+                error={errors.confirmAccountNumber}
+              />
+            )}
+            <Field
+              label="IFSC Code"
+              value={form.ifscCode}
+              onChangeText={(v) => setField('ifscCode', v.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 11))}
+              placeholder="e.g. SBIN0001234"
+              autoCapitalize="characters"
+              autoCorrect={false}
+              maxLength={11}
+              error={errors.ifscCode}
+            />
+          </View>
+
+          {/* Section 3: UPI */}
+          <View style={styles.formCard}>
+            <Text style={styles.cardHeader}>UPI (Optional)</Text>
+            <Field
+              label="UPI ID"
+              optional
+              value={form.upiId}
+              onChangeText={(v) => setField('upiId', v.replace(/\s/g, ''))}
+              placeholder="e.g. username@okhdfcbank"
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              maxLength={320}
+              error={errors.upiId}
+              hint="Recommended for faster payouts"
+            />
+          </View>
+
+          {/* Action Button */}
+          <TouchableOpacity
+            style={[styles.submitBtn, !canSave && styles.submitBtnDisabled]}
+            onPress={handleSave}
+            disabled={!canSave}
+            activeOpacity={0.8}
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color={Colors.white} />
+            ) : (
+              <Text style={styles.submitBtnText}>
+                {isEditMode ? 'Save Changes' : 'Save Payment Account'}
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.secureRow}>
+            <Ionicons name="lock-closed-outline" size={12} color="#9CA3AF" />
+            <Text style={styles.secureText}>Details are encrypted & used strictly for withdrawals</Text>
+          </View>
+        </ScrollView>
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -474,7 +543,7 @@ export default function PaymentAccountScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#F9FAFB',
   },
   flex: {
     flex: 1,
@@ -483,220 +552,237 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 15,
-    paddingBottom: 12,
+    paddingHorizontal: 16,
+    paddingBottom: 10,
     backgroundColor: Colors.white,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: '#E5E7EB',
   },
   headerBtn: {
-    padding: 4,
+    padding: 6,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
     color: Colors.text,
   },
-  headerSpacer: {
-    width: 60,
-  },
   saveHeaderBtn: {
-    minWidth: 60,
-    alignItems: 'center',
-    paddingHorizontal: 15,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: Colors.primary + '10',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
   },
   saveHeaderBtnText: {
     color: Colors.primary,
     fontWeight: '700',
     fontSize: 15,
   },
+  saveHeaderBtnTextDisabled: {
+    color: '#9CA3AF',
+  },
+  inlineLoader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    backgroundColor: Colors.primary + '10',
+  },
+  inlineLoaderText: {
+    fontSize: 12,
+    color: Colors.primary,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
   content: {
-    padding: 16,
+    padding: 14,
   },
   centerState: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 32,
+    padding: 24,
   },
   stateIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: Colors.primary + '15',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Colors.primary + '12',
     alignItems: 'center',
     justifyContent: 'center',
   },
   stateTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
     color: Colors.text,
-    marginTop: 16,
+    marginTop: 12,
     textAlign: 'center',
   },
   stateText: {
-    fontSize: 14,
-    color: Colors.textGray,
+    fontSize: 13,
+    color: '#6B7280',
     textAlign: 'center',
-    lineHeight: 20,
-    marginTop: 8,
-    marginBottom: 20,
+    lineHeight: 18,
+    marginTop: 6,
+    marginBottom: 16,
+  },
+  infoBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+  },
+  infoBannerText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#4B5563',
+    lineHeight: 17,
+    marginLeft: 8,
   },
   summaryCard: {
     backgroundColor: Colors.white,
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    padding: 12,
+    marginBottom: 12,
   },
-  summaryTop: {
+  summaryRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  summaryIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.primary + '15',
+  bankIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: Colors.primary + '12',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 10,
   },
-  summaryTitle: {
-    fontSize: 16,
+  summaryInfo: {
+    flex: 1,
+  },
+  summaryBankName: {
+    fontSize: 14,
     fontWeight: '700',
     color: Colors.text,
   },
-  summarySub: {
-    fontSize: 13,
-    color: Colors.textGray,
+  summaryAccountNum: {
+    fontSize: 12,
+    color: '#6B7280',
     marginTop: 2,
   },
-  statusPill: {
+  statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    marginTop: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    marginLeft: 8,
   },
-  statusText: {
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginLeft: 3,
+  },
+  formCard: {
+    backgroundColor: Colors.white,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    padding: 14,
+    marginBottom: 12,
+  },
+  cardHeader: {
     fontSize: 12,
     fontWeight: '700',
-    marginLeft: 4,
-  },
-  noteRow: {
-    flexDirection: 'row',
-    marginTop: 12,
-  },
-  noteText: {
-    flex: 1,
-    fontSize: 12,
-    color: Colors.textGray,
-    lineHeight: 17,
-    marginLeft: 6,
-  },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.textGray,
+    color: '#6B7280',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginTop: 22,
-    marginBottom: 8,
-    marginLeft: 4,
+    marginBottom: 10,
   },
-  card: {
-    backgroundColor: Colors.white,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+  fieldContainer: {
+    marginBottom: 12,
   },
-  field: {
-    marginTop: 14,
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 5,
   },
-  label: {
+  fieldLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.text,
+    color: '#374151',
   },
-  optional: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: Colors.textGray,
+  optionalBadge: {
+    fontSize: 11,
+    color: '#9CA3AF',
   },
-  inputWrap: {
+  inputBox: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 10,
-    backgroundColor: '#FBFBFB',
-    marginTop: 6,
-  },
-  inputWrapError: {
-    borderColor: '#DC2626',
-  },
-  input: {
-    flex: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    backgroundColor: '#FAFAFA',
+    height: 44,
     paddingHorizontal: 12,
-    paddingVertical: Platform.OS === 'ios' ? 12 : 10,
-    fontSize: 15,
+  },
+  inputBoxError: {
+    borderColor: '#EF4444',
+    backgroundColor: '#FEF2F2',
+  },
+  textInput: {
+    flex: 1,
+    fontSize: 14,
     color: Colors.text,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 6,
   },
   eyeBtn: {
-    paddingHorizontal: 12,
+    paddingLeft: 8,
+    paddingVertical: 4,
   },
   errorText: {
-    fontSize: 12,
-    color: '#DC2626',
-    marginTop: 4,
+    fontSize: 11,
+    color: '#EF4444',
+    marginTop: 3,
+    marginLeft: 2,
   },
   hintText: {
-    fontSize: 12,
-    color: Colors.textGray,
-    marginTop: 4,
+    fontSize: 11,
+    color: '#9CA3AF',
+    marginTop: 3,
+    marginLeft: 2,
   },
-  primaryBtn: {
+  submitBtn: {
     backgroundColor: Colors.primary,
-    borderRadius: 999,
-    paddingVertical: 14,
-    paddingHorizontal: 32,
+    borderRadius: 8,
+    height: 46,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 4,
+    marginBottom: 12,
   },
-  primaryBtnText: {
-    color: Colors.white,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  saveBtn: {
-    marginTop: 24,
-  },
-  btnDisabled: {
+  submitBtnDisabled: {
     opacity: 0.5,
+  },
+  submitBtnText: {
+    color: Colors.white,
+    fontSize: 15,
+    fontWeight: '700',
   },
   secureRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 14,
+    paddingBottom: 16,
   },
   secureText: {
-    fontSize: 12,
-    color: Colors.textGray,
+    fontSize: 11,
+    color: '#9CA3AF',
     marginLeft: 4,
   },
 });

@@ -1617,18 +1617,14 @@ exports.updatePaymentAccount = async (req, res, next) => {
 
     const application = await MonetizationApplication.findOneAndUpdate(
       { user: req.user.id },
-      { $set: { ...update, updatedAt: Date.now() } },
-      { new: true, runValidators: true }
+      {
+        $set: { ...update, updatedAt: Date.now() },
+        $setOnInsert: { user: req.user.id, status: 'pending', createdAt: Date.now() },
+      },
+      { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
     ).select(PAYMENT_ACCOUNT_FIELDS);
 
-    if (!application) {
-      return res.status(404).json({
-        success: false,
-        message: 'Complete monetization step 2 before adding a payment account',
-      });
-    }
-
-    res.status(200).json({ success: true, message: 'Payment account updated', data: application });
+    res.status(200).json({ success: true, message: 'Payment account saved', data: application });
   } catch (err) {
     next(err);
   }

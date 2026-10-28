@@ -114,6 +114,12 @@ export default function SettingsScreen() {
 
   const settingsItems = [
     {
+      title: 'Payment Account',
+      icon: 'wallet-outline',
+      onPress: () => router.push('/payment-account'),
+      color: Colors.primary,
+    },
+    {
       title: 'Channel Analytics',
       icon: 'stats-chart-outline',
       onPress: () => router.push('/analytics'),
