@@ -277,27 +277,44 @@ exports.claimAdReward = async (req, res) => {
       ? Math.floor(Math.random() * 3) + 4 // 4, 5, 6
       : Math.floor(Math.random() * 3) + 1; // 1, 2, 3
 
-    user.coins = (user.coins || 0) + coinsEarned;
-
     const newDailyCount = adStatus.dailyCount + 1;
     const newSessionCount = adStatus.sessionCount + 1;
     const now = new Date();
 
-    user.adRewards = {
-      dailyCount: newDailyCount,
-      dailyDate: adStatus.todayStr,
-      sessionCount: newSessionCount,
-      lastAdWatchedAt: now,
-    };
+    // Atomic claim: only succeeds if no other claim landed since we read the user,
+    // so parallel requests cannot bypass the cooldown or overwrite other coin credits
+    const updatedUser = await User.findOneAndUpdate(
+      {
+        _id: user._id,
+        'adRewards.lastAdWatchedAt': user.adRewards?.lastAdWatchedAt || null,
+      },
+      {
+        $inc: { coins: coinsEarned },
+        $set: {
+          adRewards: {
+            dailyCount: newDailyCount,
+            dailyDate: adStatus.todayStr,
+            sessionCount: newSessionCount,
+            lastAdWatchedAt: now,
+          },
+        },
+      },
+      { new: true }
+    );
 
-    await user.save();
+    if (!updatedUser) {
+      return res.status(409).json({
+        success: false,
+        message: 'Reward already being claimed. Please try again.',
+      });
+    }
 
     // Record coin transaction
     await CoinTransaction.create({
-      user: user._id,
+      user: updatedUser._id,
       type: 'ad_reward',
       amount: coinsEarned,
-      balanceAfter: user.coins,
+      balanceAfter: updatedUser.coins,
       description: `Watched rewarded ad (+${coinsEarned} coins)`,
       metadata: {
         dailyCount: newDailyCount,
@@ -318,7 +335,7 @@ exports.claimAdReward = async (req, res) => {
       success: true,
       data: {
         coinsEarned,
-        totalCoins: user.coins,
+        totalCoins: updatedUser.coins,
         dailyWatched: newDailyCount,
         dailyTotal: DAILY_MAX_ADS,
         remainingDaily: Math.max(0, DAILY_MAX_ADS - newDailyCount),
@@ -393,16 +410,29 @@ exports.createVideoBoost = async (req, res) => {
       });
     }
 
-    // Deduct coins
-    user.coins -= tier.coins;
-    await user.save();
+    // Atomic deduction preventing race condition double-spending
+    const updatedUser = await User.findOneAndUpdate(
+      {
+        _id: user._id,
+        coins: { $gte: tier.coins },
+      },
+      { $inc: { coins: -tier.coins } },
+      { new: true }
+    );
+
+    if (!updatedUser) {
+      return res.status(400).json({
+        success: false,
+        message: 'Transaction could not be completed. Please check your coin balance.',
+      });
+    }
 
     // Record coin transaction
     await CoinTransaction.create({
       user: user._id,
       type: 'boost_spend',
       amount: -tier.coins,
-      balanceAfter: user.coins,
+      balanceAfter: updatedUser.coins,
       description: `Boosted video "${video.title}" for ${tier.hours}h (-${tier.coins} coins)`,
       metadata: {
         videoId: video._id,
@@ -488,7 +518,7 @@ exports.createVideoBoost = async (req, res) => {
         : `⏳ Success! "${video.title}" is queued (Position #${newBoost.queuePosition}).`,
       data: {
         boost: newBoost,
-        remainingCoins: user.coins,
+        remainingCoins: updatedUser.coins,
       },
     });
   } catch (err) {
