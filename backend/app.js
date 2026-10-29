@@ -40,7 +40,19 @@ const chat = require("./routes/chat");
 const stories = require("./routes/stories");
 
 // Middlewares
-app.use(express.json({ limit: "10mb" }));
+// The app posts a JSON `null` when a request has no data (e.g. POST /api/auth/renew-token).
+// Strict JSON parsing rejects a bare null with a 400, so treat exactly that body as empty;
+// any other invalid JSON is still rejected as before.
+const jsonParser = express.json({ limit: "10mb" });
+app.use((req, res, next) => {
+  jsonParser(req, res, (err) => {
+    if (err && err.type === "entity.parse.failed" && String(err.body).trim() === "null") {
+      req.body = {};
+      return next();
+    }
+    next(err);
+  });
+});
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
 app.use(noSqlSanitizer);
