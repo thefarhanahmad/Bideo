@@ -130,7 +130,7 @@ exports.startDirectUpload = async (req, res, next) => {
       }
     }
     // Shape, Shorts length and file weight: say so now rather than after a long upload
-    const rejection = getUploadRejection(readUploadShape(req.body, videoSize), videoSize);
+    const rejection = getUploadRejection(readUploadShape(req.body, videoSize), videoSize, { isAdmin: req.user.role === 'admin' });
     if (rejection) return fail(res, 400, rejection);
 
     const partSize = Math.max(LIMITS.partSize, Math.ceil(videoSize / LIMITS.maxParts));
@@ -250,7 +250,7 @@ exports.completeDirectUpload = async (req, res, next) => {
     session = claimed;
 
     const shape = readUploadShape(req.body, session.videoSize);
-    const rejection = getUploadRejection(shape, session.videoSize);
+    const rejection = getUploadRejection(shape, session.videoSize, { isAdmin: req.user.role === 'admin' });
     if (rejection) {
       await abortParts(session);
       await removeObject(session.thumbnailKey);

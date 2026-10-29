@@ -1671,14 +1671,17 @@ const MAX_UPLOAD_BITS_PER_SECOND = 8 * 1000 * 1000;
 const VIDEO_TOO_HEAVY_MESSAGE =
   "We couldn't upload this video. Please update the app to the latest version and try again, or pick a different video.";
 
-/** A message saying why this upload is not accepted, or null when it is fine */
-const getUploadRejection = (shape, fileBytes) => {
+/**
+ * A message saying why this upload is not accepted, or null when it is fine.
+ * Admins upload from the dashboard without the app's compression, so the bitrate limit is for app uploads only.
+ */
+const getUploadRejection = (shape, fileBytes, { isAdmin = false } = {}) => {
   if (shape.shortNotPortrait) return SHORT_NOT_PORTRAIT_MESSAGE;
   if (shape.isExplicitShort && shape.duration > MAX_SHORT_SECONDS + SHORT_DURATION_TOLERANCE_SECONDS) {
     return SHORT_TOO_LONG_MESSAGE;
   }
   const bytes = Number(fileBytes) || 0;
-  if (shape.duration >= 1 && bytes > 0 && (bytes * 8) / shape.duration > MAX_UPLOAD_BITS_PER_SECOND) {
+  if (!isAdmin && shape.duration >= 1 && bytes > 0 && (bytes * 8) / shape.duration > MAX_UPLOAD_BITS_PER_SECOND) {
     return VIDEO_TOO_HEAVY_MESSAGE;
   }
   return null;
@@ -1780,7 +1783,7 @@ exports.uploadVideo = async (req, res, next) => {
 
     // Check the upload before storing it (the temp files are removed in finally)
     const shape = readUploadShape(req.body, req.files.video[0].size);
-    const rejection = getUploadRejection(shape, req.files.video[0].size);
+    const rejection = getUploadRejection(shape, req.files.video[0].size, { isAdmin: req.user.role === "admin" });
     if (rejection) {
       return res.status(400).json({ success: false, message: rejection });
     }
