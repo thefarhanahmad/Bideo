@@ -20,7 +20,7 @@ export function useTableParams({ defaultFilter = "all", defaultLimit = 10 } = {}
         }
         next.set("page", "1");
         return next;
-      });
+      }, { replace: true }); // one history entry per search, not per keystroke
     },
     [setSearchParams]
   );

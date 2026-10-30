@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
 import Modal from "../components/Modal";
 import ConfirmModal from "../components/ConfirmModal";
@@ -28,7 +28,9 @@ const Users = () => {
     recovery: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [error, setError] = useState(null);
+  const requestRef = useRef(null);
 
   const [showAdd, setShowAdd] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
@@ -57,6 +59,11 @@ const Users = () => {
   } = useTableParams({ defaultFilter: "all", defaultLimit: 10 });
 
   const fetchUsers = useCallback(async () => {
+    // Cancel the previous request so a slow, older response can't overwrite newer results
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
+
     setLoading(true);
     setError(null);
     try {
@@ -74,6 +81,7 @@ const Users = () => {
           Authorization: `Bearer ${token}`,
         },
         credentials: "include",
+        signal: controller.signal,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to fetch users");
@@ -83,11 +91,15 @@ const Users = () => {
       if (data.filterCounts) {
         setFilterCounts(data.filterCounts);
       }
+      setHasLoaded(true);
     } catch (err) {
+      if (err.name === "AbortError") return;
       setError(err.message);
     }
-    setLoading(false);
+    if (requestRef.current === controller) setLoading(false);
   }, [page, limit, filter, search]);
+
+  useEffect(() => () => requestRef.current?.abort(), []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -462,7 +474,7 @@ const Users = () => {
       <DataTableToolbar
         search={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Search by name, channel, email, or phone..."
+        searchPlaceholder="Search by name, @channel, email, phone or user ID..."
         filter={filter}
         onFilterChange={setFilter}
         filters={filterOptions}
@@ -478,12 +490,17 @@ const Users = () => {
         }
       />
 
-      {loading ? (
+      {loading && !hasLoaded ? (
         <LoadingSkeleton type="table" rows={8} cols={8} />
       ) : error ? (
         <div className="rounded-2xl border border-red-100 bg-red-50 p-6 text-red-700">{error}</div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-card min-w-0">
+        <div
+          className={`overflow-hidden rounded-2xl border border-line bg-white shadow-card min-w-0 transition-opacity ${
+            loading ? "opacity-60" : ""
+          }`}
+          aria-busy={loading}
+        >
           <div className="overflow-x-auto">
             <table className="w-full min-w-[850px] text-sm">
               <thead>
@@ -796,8 +813,10 @@ const Users = () => {
                 })}
                 {users.length === 0 && (
                   <tr>
-                    <td colSpan="7" className="p-8 text-center text-muted">
-                      No matching users found.
+                    <td colSpan="8" className="p-8 text-center text-muted">
+                      {search.trim()
+                        ? `No users match "${search.trim()}". Try a name, @channel, email, phone or user ID.`
+                        : "No matching users found."}
                     </td>
                   </tr>
                 )}

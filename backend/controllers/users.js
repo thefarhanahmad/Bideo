@@ -583,6 +583,82 @@ exports.getLeaderboard = async (req, res, next) => {
   }
 };
 
+// Search input made only of digits and phone punctuation, e.g. "+91 98765-43210"
+const PHONE_INPUT = /^[\d\s+()-]+$/;
+
+// Matches the national number however it is stored: "+91 98765 43210" -> last 10
+// digits, with any non-digits allowed between them.
+const phoneDigitsRegex = (input) => {
+  let digits = input.replace(/\D/g, '');
+  if (digits.length > 10) digits = digits.slice(-10);
+  else digits = digits.replace(/^0+/, '') || digits;
+  return new RegExp(digits.split('').join('\\D*'));
+};
+
+// Every word must match at least one field, so "rahul kumar", "kumar rahul"
+// and "rahul 98765" all find the same user.
+const buildUserSearchConditions = (rawSearch) => {
+  const input = rawSearch.trim();
+  if (!input) return [];
+
+  if (/^[a-f0-9]{24}$/i.test(input)) {
+    return [{ _id: new mongoose.Types.ObjectId(input) }];
+  }
+
+  if (PHONE_INPUT.test(input) && input.replace(/\D/g, '').length >= 3) {
+    const rx = new RegExp(escapeRegex(input), 'i');
+    return [{
+      $or: [{ phone: phoneDigitsRegex(input) }, { name: rx }, { channelName: rx }, { email: rx }],
+    }];
+  }
+
+  const tokens = input
+    .split(/\s+/)
+    .map((t) => t.replace(/^@+/, ''))
+    .filter(Boolean)
+    .slice(0, 8);
+
+  return tokens.map((token) => {
+    const rx = new RegExp(escapeRegex(token), 'i');
+    const or = [{ name: rx }, { channelName: rx }, { email: rx }, { phone: rx }];
+    if (/^\d{3,}$/.test(token)) or.push({ phone: phoneDigitsRegex(token) });
+    return { $or: or };
+  });
+};
+
+// Exact matches first, then prefix matches, then a name word starting with the query.
+const buildSearchScore = (rawSearch) => {
+  const q = escapeRegex(rawSearch.trim().replace(/^@+/, ''));
+  const field = (f) => ({ $toString: { $ifNull: [`$${f}`, ''] } });
+  const matches = (f, regex) => ({ $regexMatch: { input: field(f), regex, options: 'i' } });
+  const anyOf = (regex, fields) => ({ $or: fields.map((f) => matches(f, regex)) });
+
+  return {
+    $add: [
+      { $cond: [anyOf(`^${q}$`, ['name', 'channelName', 'email', 'phone']), 100, 0] },
+      { $cond: [anyOf(`^${q}`, ['name', 'channelName', 'email']), 50, 0] },
+      { $cond: [matches('name', `(^|\\s)${q}`), 25, 0] },
+    ],
+  };
+};
+
+const rankedUserSearch = (query, rawSearch, fields, { skip = 0, limit }) =>
+  User.aggregate([
+    { $match: query },
+    { $addFields: { _searchScore: buildSearchScore(rawSearch) } },
+    { $sort: { _searchScore: -1, createdAt: -1, _id: -1 } },
+    { $skip: skip },
+    { $limit: limit },
+    { $project: Object.fromEntries(fields.map((f) => [f, 1])) },
+  ]);
+
+const USER_LIST_FIELDS = [
+  'name', 'channelName', 'avatar', 'email', 'phone', 'role', 'isVerified', 'isBlocked',
+  'blockedAt', 'blockReason', 'deletionScheduled', 'scheduledDeletionDate', 'deletionStatus',
+  'recoveryRequested', 'walletBalance', 'totalEarnings', 'coins', 'followersCount', 'createdAt',
+];
+const USER_SIMPLE_FIELDS = ['name', 'channelName', 'avatar', 'isVerified', 'email', 'phone', 'role'];
+
 // @desc Get users with server-side pagination, search, and tab filters
 // @route GET /api/users
 // @access Private/Admin
@@ -614,43 +690,23 @@ exports.getUsers = async (req, res, next) => {
       ];
     }
 
-    if (rawSearch) {
-      const cleanSearch = rawSearch.replace(/^@+/, '').trim();
-      const escaped = rawSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const cleanEscaped = cleanSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const regex = new RegExp(escaped, 'i');
-      const cleanRegex = cleanEscaped ? new RegExp(cleanEscaped, 'i') : regex;
-      const isObjectId = mongoose.Types.ObjectId.isValid(rawSearch);
-      const searchOr = [
-        { name: cleanRegex },
-        { channelName: cleanRegex },
-        { email: regex },
-        { phone: regex },
-        { about: cleanRegex },
-      ];
-      const phoneDigits = rawSearch.replace(/\D/g, '');
-      if (phoneDigits.length >= 4) {
-        searchOr.push({ phone: new RegExp(phoneDigits, 'i') });
-      }
-      if (isObjectId) {
-        searchOr.push({ _id: rawSearch });
-      }
-
-      if (query.$or) {
-        query.$and = [{ $or: query.$or }, { $or: searchOr }];
-        delete query.$or;
-      } else {
-        query.$or = searchOr;
-      }
+    const searchConditions = buildUserSearchConditions(rawSearch);
+    const isSearching = searchConditions.length > 0;
+    if (isSearching) {
+      const filterConditions = query.$or ? [{ $or: query.$or }] : [];
+      delete query.$or;
+      query.$and = [...filterConditions, ...searchConditions];
     }
 
     if (req.query.simple === 'true') {
       const limit = Math.min(parseInt(req.query.limit, 10) || 50, 500);
-      const simpleUsers = await User.find(query)
-        .select('name channelName avatar isVerified email phone role')
-        .sort('channelName name')
-        .limit(limit)
-        .lean();
+      const simpleUsers = isSearching
+        ? await rankedUserSearch(query, rawSearch, USER_SIMPLE_FIELDS, { limit })
+        : await User.find(query)
+            .select(USER_SIMPLE_FIELDS.join(' '))
+            .sort('channelName name')
+            .limit(limit)
+            .lean();
       return res.status(200).json({ success: true, count: simpleUsers.length, data: simpleUsers });
     }
 
@@ -659,16 +715,15 @@ exports.getUsers = async (req, res, next) => {
     const limit = fetchAll ? 10000 : Math.max(1, Math.min(parseInt(req.query.limit, 10) || 10, 100));
     const skip = (page - 1) * limit;
 
-    const USER_PROJECTION =
-      'name channelName avatar email phone role isVerified isBlocked blockedAt blockReason deletionScheduled scheduledDeletionDate deletionStatus recoveryRequested walletBalance totalEarnings coins followersCount createdAt';
-
     const [users, total, countsAgg, approvedApps] = await Promise.all([
-      User.find(query)
-        .select(USER_PROJECTION)
-        .sort('-createdAt')
-        .skip(skip)
-        .limit(limit)
-        .lean(),
+      isSearching
+        ? rankedUserSearch(query, rawSearch, USER_LIST_FIELDS, { skip, limit })
+        : User.find(query)
+            .select(USER_LIST_FIELDS.join(' '))
+            .sort('-createdAt')
+            .skip(skip)
+            .limit(limit)
+            .lean(),
       User.countDocuments(query),
       Promise.all([
         User.countDocuments(),
